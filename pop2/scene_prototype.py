@@ -2368,6 +2368,12 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         events = combat.step(
             time.perf_counter(), self.current_animation_interval_ms() / 1000,
         )
+        songs = getattr(combat, 'final_songs', None)
+        if songs:
+            if getattr(self, 'audio', None) is not None:
+                for song in songs:
+                    self.audio.add_song(song)
+            songs.clear()
         for event in events:
             sound = (event.sound if event.sound is not None else
                      11 if event.kind == "parry" else 12 if event.actor == "player" else

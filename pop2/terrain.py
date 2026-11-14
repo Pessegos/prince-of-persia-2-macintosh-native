@@ -1822,12 +1822,14 @@ class RooftopPhysics:
                 # HitFloor 6:0348-0444 makes an ordinary NPC's >=50 fall
                 # fatal; the Prince can survive 50..62 with one life lost.
                 # HitFloor 6:0358-0392: every opponent type (skeletons too) lands
-                # armed in SEQS:63 and dies from 50.
+                # armed in SEQS:63 and dies from 50, except types 1 and 6
+                # (6:036a-0374), which land in SEQS 17 like the unarmed Kid.
                 npc = state.actor_type not in (0, None)
                 fatal = not alive or not invulnerable and velocity >= (50 if npc else 63)
                 sequence = (22 if fatal else 20 if velocity >= 50
                             else 187 if state.actor_type == 2 and state.sequence_id == 186
-                            else 63 if sword_drawn or npc else 17)
+                            else 63 if (sword_drawn or npc) and state.actor_type not in (1, 6)
+                            else 17)
                 if frame_record is not None:
                     state.target_x += self.map.landing_offset(
                         motion.room, motion.row, state, frame_record)

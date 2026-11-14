@@ -499,10 +499,8 @@ type 6 in environment 6 instead of the generic scripted advance.
   native room 8 at native X 622 (1132 - 510), row 0, facing left, marked
   `final_path` for the path controller.
 
-Not yet ported: the 9:16fe path controller and its position routines
-(9:09ca, 0a42, 0b28, 0ba6, 0cac/0cec, 0d28, 0dac, 14c8), the row -3 /
-Y -254 drop through UpdateOppInfo 9:185a, and the room-6 random facing
-draw 6:39a2. A figure in room 8 therefore stands idle.
+The path controller that then drives this figure is described in the next
+section. The room-6 random facing draw 6:39a2 is still not ported.
 
 `tests.test_final_tower` covers the decision windows without the scene,
 then in a hidden level-14 scene: three hits dissolve three figures and the
@@ -510,3 +508,65 @@ last shimmers into room 8; a figure that kills the Prince stays while the
 others shimmer; a crouching Prince ahead of a figure is struck and the
 figure laughs. The earlier port played SEQS 2 without control, so these
 scene checks fail on it. No native CPU probe of 9:1526 is claimed yet.
+
+## Palace path controller (2026-11-14)
+
+`pop2/final_path.py` translates 9:16fe and its helpers for the figure that
+9:19fa moved to native room 8. The figure keeps actor type 6 and the Kid's
+frames. It runs the Kid's own control routines, so it climbs, hangs, drops
+and run-jumps like the Prince.
+
+- **Decision (9:16fe).** The opponent record holds +0x1c mode (1 fleeing,
+  2 closing in), +0x1e target position and +0x20 last position reached;
+  all three are zero in LEVL. Against the ordinary Prince (type 0): if his
+  ALIVE is 1 (just dead) and the figure is within 91 px (and not in poses
+  207-210 or 158), the body takes SEQS 241 with AddSong 264 and loses the
+  sword. Otherwise, on the figure's row while a5-0x5004 >= 4 (his turn
+  count, 4:1fb2), it flees if his life is above 2 or he is in SEQS 242.
+  Otherwise it closes in while he lives. Against the shadow (type 1) it
+  flees while his life is above 2 or he casts, and closes in otherwise.
+  SEQS 230 in mode 12 (burnt) increments a5-0x4f92.
+- **Positions.** DATA a5-0x2a06 gives four 22-byte entries (global column,
+  row, facing, arrival X1..X2 in the target room's coordinates, then the
+  ShadowInRange 9:1954 zones). In order: upper right of room 8, lower
+  right of room 8, lower left of room 7, upper left of room 7. Fleeing
+  (9:0b28) moves away from the side where the Prince stands. Closing in
+  (9:0a42) moves the other way. On arrival with the Prince in range
+  (9:0ba6), 9:09ca turns to face him or selects SEQS 242.
+- **Spell.** Pose 281 of SEQS 242 plays sound 289. At pose 282, with the
+  Prince still in range, 9:14c8 selects SEQS 244 for the figure. The
+  Prince gets SEQS 71, sound 12, 100 points of damage and death method 17.
+  In range means the same row, an exposed pose that is not the crouch
+  (109), and his life above zero. On the upper floor the figure must be at
+  global column <= 6 or >= 13. On the middle floor both must be on the same
+  side of column 13.
+- **Routes (9:0d28).** 0ed2/107c/11fe/136e choose the Kid routine from the
+  position, the row and the pose: forward 6:11a0, standing jump 6:15ea,
+  DoJumpUp 6:1600, climb 6:1998, release 6:1a84, DoRunJump(4) 6:1c14,
+  StairClimbing 6:0e8e (lower over the edge), DoStepFwd 6:1276. They also
+  select SEQS 5 (turn), 13 (stop) and 49 (rise). HoneIn 9:0dac steps into
+  the X window and sets the last position reached.
+- **Away from the palace.** JaffarUpdateOppInfo 9:185a puts a travelling
+  figure at its target (X1 + 10, the position's facing, SEQS 2). The port
+  applies this while the Prince is outside native rooms 7/8.
+
+HitFloor 6:036a-0374 lands types 1 and 6 in SEQS 17 (crouch) instead of
+the armed SEQS 63; the port's landing rule now follows that. The type-6
+figure's footsteps (`-15 1`) are played like the Kid's.
+
+Port choices, not recovered behaviour: the Kid routines reuse the Prince's
+terrain helpers (ledge, step, run-jump and release tests) with the figure's
+foot column. Out of the Prince's view the figure makes no AutoCtrl
+decision. A move already begun still finishes in the other palace room,
+so the figure does not freeze in the air. The video supports the view
+rule: the Prince crosses room 7's upper floor unharmed while the figure
+stands in room 8. The relocation's call site is assumed, not traced.
+`a5-0x5004` (turns) and the shadow are not yet ported, so the port's
+figure currently always closes in.
+
+`tests.test_final_path` covers decisions with a recording Kid. In a hidden
+scene it checks four cases: standing on the figure's floor is fatal
+(method 17); the figure waits in room 8 while the Prince is in room 7; a
+Prince below sends it through room 7's upper floor and down its ledge
+toward position 2; and relocation away from the palace. No native CPU
+probe of 9:16fe is claimed yet.

@@ -202,6 +202,10 @@ class Fighter:
     final_clone: bool = False
     # The last room-6 figure, moved to the palace by 9:19fa (path 9:16fe).
     final_path: bool = False
+    # 9:16fe's opponent-record path fields (+0x1c mode, +0x1e/+0x20).
+    final_info: object | None = None
+    # DoStepFwd's warning flag (+0x18) for the Kid routines it runs.
+    final_cautious: bool = True
 
     @property
     def state(self):
@@ -223,6 +227,122 @@ class CombatEvent:
     death_method: int | None = None
     # None keeps the host's ordinary hit/parry sound; 0 is silent.
     sound: int | None = None
+
+
+# Native rooms 7 and 8. Out of the Prince's view the final Jaffar makes no
+# AutoCtrl decision (the video's Prince crosses room 7's upper floor
+# unharmed), but a move begun in view, such as a running jump over the
+# border, still finishes instead of freezing in the air (a port choice).
+PALACE_ROOMS = (6, 7)
+
+
+class _FinalKid:
+    """The Kid control routines that 9:16fe calls on the Jaffar's record,
+    over the port's terrain helpers (port facing: 1 right)."""
+
+    def __init__(self, encounter, figure, frames):
+        self.encounter, self.figure, self.frames = encounter, figure, frames
+        self.terrain = encounter.terrain
+
+    @property
+    def state(self):
+        return self.figure.state
+
+    def _record(self):
+        return self.frames[self.state.action]
+
+    def _bounds(self):
+        return self.encounter.guard_art.bounds(self.state, floor_y(self.figure.row))
+
+    def _move(self, offset):
+        self.state.target_x += offset
+        self.state.current_x = self.state.target_x
+
+    def select(self, sequence):
+        select_sequence(self.figure, sequence)
+
+    def step(self, distance):
+        # DoStepFwd 6:1276; 0 measures GetBarrDistances (4:5eae).
+        from pop2.mac_input import StepBoundary, plan_cautious_step
+
+        figure = self.figure
+        boundary = (StepBoundary(distance) if distance else self.terrain.step_boundary(
+            figure.room, figure.row, self.state, self._record(), self._bounds(), cautious=True))
+        plan, figure.final_cautious = plan_cautious_step(boundary, figure.final_cautious)
+        self._move(plan.pre_offset if self.state.facing else -plan.pre_offset)
+        if plan.sequence_id is not None:
+            self.select(plan.sequence_id)
+
+    def forward(self):
+        # 6:11a0: within 27 pixels of a solid barrier, DoStepFwd(0);
+        # otherwise SEQS 1, the start of the run.
+        figure = self.figure
+        boundary = self.terrain.step_boundary(figure.room, figure.row, self.state,
+                                              self._record(), self._bounds())
+        if boundary.barrier_type == 1 and boundary.clearance < 27:
+            self.step(0)
+        else:
+            self.select(1)
+
+    def stand_jump(self):
+        # 6:15ea: JumpSeq(3).
+        self.select(3)
+
+    def jump_up(self):
+        # DoJumpUp 6:1600: a ledge ahead (SEQS 24), behind (24/16), or the
+        # vertical jump (28/14).
+        figure, state, record = self.figure, self.state, self._record()
+        offset = self.terrain.upper_ledge(figure.room, figure.row, state, record)
+        if offset is not None:
+            sequence = 24
+        else:
+            back = self.terrain.back_ledge_jump(figure.room, figure.row, state, record)
+            if back is not None:
+                sequence, offset = back
+            else:
+                sequence, offset = self.terrain.vertical_jump(
+                    figure.room, figure.row, state, record, self._bounds())
+        self._move(offset)
+        self.select(sequence)
+
+    def climb(self):
+        # 6:1998: SEQS 10 (73 below a low gate).
+        self.select(self.terrain.climb_sequence(self.figure.room, self.figure.row,
+                                                self.state, self._record()))
+
+    def release(self):
+        # 6:1a84: drop from the hang.
+        figure = self.figure
+        sequence, offset = self.terrain.release_ledge(
+            figure.room, figure.row, self.state, self._record(),
+            next_action=figure.runtime.peek_frame().action)
+        self._move(offset)
+        if figure.terrain_motion is not None:
+            figure.terrain_motion.falling = sequence in (23, 99)
+        self.select(sequence)
+
+    def run_jump(self):
+        # DoRunJump(4) 6:1c14 from run poses 7-14.
+        if not 7 <= self.state.action <= 14:
+            return
+        offset = self.terrain.run_jump_offset(self.figure.room, self.figure.row,
+                                              replace(self.state, actor_type=0))
+        if offset is not None:
+            self._move(offset)
+            self.select(4)
+
+    def descend(self):
+        # StairClimbing 6:0e8e: lower himself over the edge behind (SEQS 68).
+        offset = self.terrain.descend_ledge(self.figure.room, self.figure.row,
+                                            self.state, self._record())
+        if offset is not None:
+            self._move(offset)
+            self.select(68)
+
+    def add_x(self, distance):
+        # AddCharX 4:2bae: forward along the facing.
+        self._move(distance if self.state.facing else -distance)
+        return self.state.target_x
 
 
 @dataclass(frozen=True)
@@ -324,6 +444,9 @@ class CombatEncounter:
         self.reset()
 
     def reset(self):
+        # Final-path results for the host: Prince events and AddSong cues.
+        self.final_events = []
+        self.final_songs = []
         if self.spawn is None:
             if self.level is None:
                 raise ValueError("An encounter without an initial guard needs LEVL data")
@@ -612,9 +735,11 @@ class CombatEncounter:
         terrain = getattr(self, "terrain", None)
         if terrain is None:
             return list(self.guards)
+        palace = self.level_kind == 6 and self.player.room in PALACE_ROOMS
         active = [guard for room, (guards, _points) in self.room_encounters.items()
                 for guard in guards
-                if room == self.player.room or guard.bank_room == self.player.room]
+                if room == self.player.room or guard.bank_room == self.player.room
+                or palace and guard.final_path and room in PALACE_ROOMS]
         return sorted(active, key=lambda guard: guard.bank_slot)
 
     def _room_offset(self, source, destination):
@@ -1564,6 +1689,8 @@ class CombatEncounter:
 
     def advance_guard(self):
         terrain = getattr(self, "terrain", None)
+        if self.level_kind == 6 and self.player.room not in PALACE_ROOMS:
+            self._relocate_final_jaffar()
         for guard in self.active_guards():
             if guard.state.actor_type == 6 and self.level_kind == 6:
                 self._advance_final_figure(guard)
@@ -1634,6 +1761,9 @@ class CombatEncounter:
         from pop2.final_tower import COPY_ROOM, copy_control
 
         state = figure.state
+        if figure.final_path:
+            self._advance_final_path(figure)
+            return
         if figure.room == COPY_ROOM:
             frames = getattr(self, 'player_frames', None)
             count = len(self.room_encounters.get(figure.room, ([], []))[0])
@@ -1662,6 +1792,135 @@ class CombatEncounter:
         if state.sound_events:
             self.player.state.sound_events.extend(state.sound_events)
             state.sound_events.clear()
+
+    def _final_view(self, fighter, record):
+        from pop2.final_path import Figure
+
+        state = fighter.state
+        column = character_column(floor_contact_x(state.target_x, state.facing, record))
+        return Figure(state.action, state.selected_sequence_id, 0 if state.facing else -1,
+                      state.target_x + NATIVE_X_ORIGIN, column, fighter.row, fighter.room + 1,
+                      fighter.life, -1 if fighter.alive else 0, state.actor_type or 0,
+                      state.sequence_mode)
+
+    def _advance_final_path(self, figure):
+        """AutoCtrl 9:16fe for the final Jaffar, then AnimChar, the Kid's
+        terrain rules and the palace room crossing (UpdateOppInfo 6:30b0)."""
+        from pop2.final_path import Controller, PathInfo
+        from pop2.final_tower import FATAL_DAMAGE
+
+        frames = getattr(self, 'player_frames', None)
+        state = figure.state
+        if figure.final_info is None:
+            figure.final_info = PathInfo()
+        old_x = state.target_x
+        in_view = figure.room == self.player.room or figure.bank_room == self.player.room
+        if in_view and frames is not None and getattr(self, 'terrain', None) is not None:
+            view = self.final_prince_view()
+            player = self.player
+            prince = replace(self._final_view(player, frames[player.state.action]),
+                             alive=view.alive, turns=getattr(self, 'final_turns', 0))
+            jaffar = self._final_view(figure, frames[state.action])
+            kid = _FinalKid(self, figure, frames)
+            for event in Controller(jaffar, prince, figure.final_info, frames, kid).run():
+                if event[0] == 'sound':
+                    state.sound_events.append(event[1])
+                elif event[0] == 'hit':
+                    self.final_hits = getattr(self, 'final_hits', 0) + 1
+                elif event[0] == 'kill' and player.alive and not getattr(self, 'god_mode', False):
+                    # 9:14c8: the Prince takes SEQS 71, sound 12, 100 points
+                    # (DecLifePts 4:34f2) and death method 17 (4:3196).
+                    player.life = max(0, player.life - FATAL_DAMAGE)
+                    player.sword_drawn = False
+                    select_sequence(player, 71)
+                    player.runtime.next_frame()
+                    self.final_events.append(CombatEvent('death', 'player', 17))
+                elif event[0] == 'dissolve':
+                    # 9:177e-17bc: SEQS 241 and AddSong 264 for the body.
+                    player.sword_drawn = False
+                    player.sword_lost = True
+                    select_sequence(player, event[1])
+                    self.final_songs.append(event[2])
+        figure.runtime.rng = self.rng
+        figure.runtime.next_frame()
+        state.current_x = state.target_x
+        state.sequence_events.clear()
+        if frames is not None and getattr(self, 'terrain', None) is not None:
+            self._final_path_terrain(figure, frames, old_x)
+        if state.sound_events:
+            self.player.state.sound_events.extend(state.sound_events)
+            state.sound_events.clear()
+
+    def _final_path_terrain(self, figure, frames, old_x):
+        from pop2.final_path import LEDGE_SEQUENCES
+
+        state = figure.state
+        if state.engine_counter:
+            # SEQS -3/-4 change the floor row.
+            figure.row += state.engine_counter
+            state.current_y -= state.engine_counter * TILE_HEIGHT
+            state.engine_counter = 0
+        if figure.terrain_motion is None:
+            figure.terrain_motion = TerrainMotion(figure.room, figure.row)
+        motion = figure.terrain_motion
+        motion.room, motion.row = figure.room, figure.row
+        if not hasattr(self, 'final_physics'):
+            self.final_physics = RooftopPhysics(self.terrain, frames)
+        bounds = lambda view=None: self.guard_art.bounds(
+            state if view is None else view, floor_y(motion.row))
+        self.final_physics.advance(
+            motion, figure.runtime, old_x, bounds(), frame_record=frames[state.action],
+            bounds_for_state=bounds, cut_enabled=False,
+            protected=state.sequence_id in LEDGE_SEQUENCES)
+        state.current_x = state.target_x
+        figure.row = motion.row
+        # UpdateOppInfo 6:30b0: crossing a side moves the record to that room.
+        for side, delta in (('left', 510), ('right', -510)):
+            outside = state.target_x < 0 if side == 'left' else state.target_x >= 510
+            neighbor = self.terrain.neighbor(figure.room, side) if outside else None
+            if neighbor is not None:
+                if neighbor not in self.room_encounters:
+                    self._load_room(neighbor)
+                self.room_encounters[figure.room][0].remove(figure)
+                self.room_encounters[neighbor][0].append(figure)
+                figure.room = motion.room = neighbor
+                state.target_x += delta
+                state.current_x = state.target_x
+                if self.guard is figure:
+                    self.guard = None
+                break
+
+    def _relocate_final_jaffar(self):
+        """JaffarUpdateOppInfo 9:185a: away from the palace, a Jaffar
+        travelling to a position is put there at once, standing (SEQS 2)."""
+        from pop2.final_path import POSITIONS
+
+        for room in PALACE_ROOMS:
+            for figure in tuple(self.room_encounters.get(room, ([], []))[0]):
+                info = figure.final_info
+                if not figure.final_path or info is None or info.pos == info.prev:
+                    continue
+                info.prev = info.pos
+                target = POSITIONS[info.pos]
+                destination = PALACE_ROOMS[1] if target.column >= 10 else PALACE_ROOMS[0]
+                # 9:18ca-18d2: X + 10, which lies inside the arrival window
+                # HoneIn 9:0dac tests in the target room's coordinates. (The
+                # 18d6 room-8 adjustment applies to the record's own room.)
+                x = target.x1 + 10
+                if destination != room:
+                    if destination not in self.room_encounters:
+                        self._load_room(destination)
+                    self.room_encounters[room][0].remove(figure)
+                    self.room_encounters[destination][0].append(figure)
+                figure.room, figure.row = destination, target.row
+                state = figure.state
+                state.target_x = state.current_x = x - NATIVE_X_ORIGIN
+                state.current_y = 0
+                state.facing = 1 if target.facing == 0 else 0
+                if figure.terrain_motion is not None:
+                    figure.terrain_motion = TerrainMotion(destination, target.row)
+                select_sequence(figure, 2)
+                figure.runtime.next_frame()
 
     def _remove_final_figure(self, figure):
         """RemoveChar 4:48f8. In native room 6 of environment 6, the last
@@ -1695,6 +1954,11 @@ class CombatEncounter:
         figure.sword_drawn = False
         figure.targetable = True
         figure.final_path = True
+        from pop2.final_path import PathInfo
+
+        # The LEVL record's +0x1c/+0x1e/+0x20 words are zero for all four
+        # room-6 records; 9:19fa clears +0x22.
+        figure.final_info = PathInfo()
         select_sequence(figure, 2)
         figure.runtime.next_frame()
         figure.bank_room = None
@@ -2103,7 +2367,12 @@ class CombatEncounter:
                 self.last_guard_at = now
             else:
                 self.last_guard_at += interval_seconds
-        return self.resolve_contacts()
+        events = self.resolve_contacts()
+        final = getattr(self, 'final_events', None)
+        if final:
+            events[:0] = final
+            final.clear()
+        return events
 
     def advance_player_recovery(self):
         player = self.player
