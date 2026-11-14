@@ -147,16 +147,22 @@ def native_buffer_cells(bounds):
 
 
 def ledge_surface_clip(state, bounds):
-    """Approved port improvement: keep the climbing Prince behind the stone.
+    """Approved port improvement: use the supporting floor's real contour.
 
     The original pose-dependent half rectangles expose pixels inside the
     slab. Preserve the support line (hands/feet on top) and use the actual
     floor alpha below it, including transparent corners and the underside.
-    The drawn top stays on the climbed row across SEQS:10/68's row change.
+    The drawn top stays on the climbed row across SEQS:10/68's row change,
+    and on the upper platform when a temple walk-off starts SEQS:7.
     """
-    if (bounds is None or getattr(state, 'actor_type', None) != 0
-            or getattr(state, 'source_sequence_id', None) not in (10, 68)
-            or not 135 <= state.action <= 144):
+    if bounds is None or getattr(state, 'actor_type', None) != 0:
+        return None
+    sequence = getattr(state, 'source_sequence_id', None)
+    climbing = sequence in (10, 68) and 135 <= state.action <= 144
+    temple_fall = (getattr(state, 'level_kind', None) == 2 and sequence == 7
+                   and 102 <= state.action <= 106
+                   and getattr(state, 'animation_state', None) in (3, 4))
+    if not climbing and not temple_fall:
         return None
     row = character_row(bounds[1])
     return row, (bounds[0], floor_y(row) + 1, bounds[2] + 1, bounds[3] + 1)
