@@ -267,7 +267,7 @@ class NextDoorEntryTests(unittest.TestCase):
             # The spare time of a few frames.
             scene.next_animation_at = time.perf_counter() + 1
             for _ in range(8):
-                scene.read_ambience_ahead()
+                scene.use_spare_time()
             near = next((terrain.neighbor(room, way) for way in ('left', 'right', 'up', 'down')
                          if terrain.neighbor(room, way) in renderer.ambience_ahead), None)
             if near is None:
@@ -284,25 +284,76 @@ class NextDoorEntryTests(unittest.TestCase):
         scene.load_level(4)
         scene.next_animation_at = time.perf_counter() + 0.01
         with patch.object(scene.level_renderer, 'read_ambience_ahead') as read:
-            scene.read_ambience_ahead()
+            scene.use_spare_time()
         read.assert_not_called()
         scene.next_animation_at = time.perf_counter() + 1
         with patch.object(scene.level_renderer, 'read_ambience_ahead') as read:
-            scene.read_ambience_ahead()
+            scene.use_spare_time()
         read.assert_called_once()
 
-    def test_no_reading_with_the_ambience_off(self):
+    def test_rooms_next_door_are_read_only_with_the_ambience_on(self):
         scene = self.scene
+        scene.load_level(4)
+        scene.next_animation_at = time.perf_counter() + 1
         scene.cave_ambience_enabled = False
-        with patch.object(scene.root, 'after_idle') as idle:
-            scene.schedule_ambience_ahead()
-        idle.assert_not_called()
-        scene.cave_ambience_enabled = True
+        with patch.object(scene.level_renderer, 'read_ambience_ahead') as read, \
+                patch.object(scene, 'ready_next_level') as ready:
+            scene.use_spare_time()
+        read.assert_not_called()
+        ready.assert_called_once()
         with patch.object(scene.root, 'after_idle', return_value='id') as idle:
-            scene.schedule_ambience_ahead()
-            scene.schedule_ambience_ahead()
+            scene.schedule_spare_work()
+            scene.schedule_spare_work()
         idle.assert_called_once()
 
+    def ready_level_three(self):
+        scene = self.scene
+        scene.cave_ambience_enabled = True
+        scene.load_level(2)
+        if scene.opening is not None:
+            scene.opening.active = False
+        self.frame_ms()
+        for _ in range(20):
+            scene.next_animation_at = time.perf_counter() + 1
+            scene.use_spare_time()
+        self.assertTrue(scene.next_level.done)
+        return scene.next_level.renderer
+
+    def test_the_first_cave_level_is_ready_before_the_prince_walks_in(self):
+        from pop2.cavern_ambience import room_air
+        from pop2.level_rendering import LevelRenderer
+
+        scene = self.scene
+        prepared = self.ready_level_three()
+        self.assertIsNotNone(prepared)
+        built = []
+        original = LevelRenderer.built_room
+
+        def build(renderer, key):
+            built.append(key)
+            return original(renderer, key)
+
+        with patch.object(LevelRenderer, 'built_room', build):
+            scene.load_level(3)
+            self.frame_ms()
+            self.frame_ms()
+        self.assertIs(scene.level_renderer, prepared)
+        self.assertIs(prepared.level, scene.game.level)
+        # Nothing drawn again: the start room and the door's first frames were ready.
+        self.assertEqual(built, [])
+        room = scene.room_id
+        air = prepared.ambience_air[room]
+        fresh = room_air(3, room, prepared.rooms[room], scene.level_map, prepared.room_with_gates_up(room))
+        self.assertEqual((air.open, air.covered, air.drips, air.flames),
+                         (fresh.open, fresh.covered, fresh.drips, fresh.flames))
+        for one, other in zip(air.torches, fresh.torches, strict=True):
+            numpy.testing.assert_array_equal(one.light.falloff, other.light.falloff)
+
+    def test_another_level_is_built_as_before(self):
+        scene = self.scene
+        prepared = self.ready_level_three()
+        scene.load_level(5)
+        self.assertIsNot(scene.level_renderer, prepared)
 
 if __name__ == '__main__':
     unittest.main()

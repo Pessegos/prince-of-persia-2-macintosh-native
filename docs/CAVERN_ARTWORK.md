@@ -189,6 +189,18 @@ costs what a frame costs without the ambience. A reading is kept with the drawin
 and the tiles it came from. If the room has changed by the time the Prince comes
 in, for instance because a plate was pressed, it is read again then, as before.
 
+The first walk into the caves (level 2's last screen into level 3) still
+stalled for about a quarter of a second. The new level drew its start room
+three times, once plain and once for each of the first two frames of the
+entrance door, and read it for the ambience. `pop2/level_preparation.py` now
+does that in the spare time of the level before. It loads a rehearsal of the
+next level, sets it up as `bind_level` does, and keeps only the drawings and the
+reading under the exact keys the real level asks for. The renderer is handed
+over when that level is loaded with the same entrance, and anything else is
+built as before. The step into level 3 went from about 220 ms to about 55 ms.
+This works for every level whose next level is drawn from the cave exports,
+with the ambience on or off.
+
 What the user has reviewed and how each part ended up:
 
 - **Drops** hang from the stalactite tips (`stalactite_tips`, read from the

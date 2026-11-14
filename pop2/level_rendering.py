@@ -9,6 +9,10 @@ from pop2.render_opening import (
 )
 
 
+# Environments drawn from the cave exports: caverns, ruins, temple and the tower.
+CAVE_KINDS = (2, 3, 4, 6)
+
+
 def room_kinds(terrain, room_id):
     """The kinds of a room's tiles: all that reading a room for the ambience takes from
     the level map."""
