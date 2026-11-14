@@ -1,4 +1,6 @@
+import functools
 import os
+import random
 import unittest
 from types import SimpleNamespace
 from unittest import mock
@@ -15,6 +17,92 @@ class FakeFont:
 
     def text(self, value, color=(255, 255, 255, 255)):
         return Image.new('RGBA', (max(1, 6 * len(value)), 10), color)
+
+
+def pixel_by_pixel_rock(theme, size, fill):
+    """The rock frame as it was first painted, one pixel at a time: the reference."""
+    width, height = size
+    thickness = menu_theme._ROCK_THICKNESS
+    rng = random.Random(width * 1000 + height)
+    corner = (3, 2, 1)
+    top_out, bottom_out = menu_theme._worn(width, rng, corner), menu_theme._worn(width, rng, corner)
+    left_out, right_out = menu_theme._worn(height, rng, corner), menu_theme._worn(height, rng, corner)
+    top_in, bottom_in = menu_theme._worn(width, rng, ()), menu_theme._worn(width, rng, ())
+    left_in, right_in = menu_theme._worn(height, rng, ()), menu_theme._worn(height, rng, ())
+
+    def solid(x, y):
+        return (0 <= x < width and 0 <= y < height
+                and top_out[x] <= y <= height - 1 - bottom_out[x]
+                and left_out[y] <= x <= width - 1 - right_out[y])
+
+    def hole(x, y):
+        return (0 <= x < width and 0 <= y < height
+                and thickness + top_in[x] <= y <= height - 1 - thickness - bottom_in[x]
+                and thickness + left_in[y] <= x <= width - 1 - thickness - right_in[y])
+
+    @functools.lru_cache(maxsize=None)     # each pixel is asked about by its four neighbours
+    def rock(x, y):
+        return solid(x, y) and not hole(x, y)
+
+    grain_rng = random.Random(0x60C)
+    shades = [menu_theme._rgb(colour) for colour, _count in theme.grain]
+    weights = [count for _colour, count in theme.grain]
+    every_shade = tuple(shades) + tuple(menu_theme._rgb(colour) for colour in theme.shades)
+    period = 240
+    grain = []
+    for _row in range(thickness + 4):
+        row = []
+        while len(row) < period:
+            row += [grain_rng.choices(shades, weights)[0]] * grain_rng.choice(menu_theme._ROCK_RUNS)
+        grain.append(row[:period])
+
+    @functools.lru_cache(maxsize=None)     # few grain colours, four ways of lighting them
+    def nearest(colour, shade):
+        lit = tuple(channel * shade for channel in colour)
+        return min(every_shade, key=lambda s: sum((a - b) ** 2 for a, b in zip(s, lit)))
+
+    picture = Image.new('RGBA', size, (0, 0, 0, 0))
+    opaque_fill = fill + (255,)
+    menu_theme._fill_inside(picture, thickness + 4, opaque_fill)
+    pixels = picture.load()
+    for y in range(height):
+        for x in menu_theme._edge_columns(width, height, y, thickness + 4):
+            if hole(x, y):
+                # The rock stands proud of the panel: a hard shadow below and beside it.
+                pixels[x, y] = (0, 0, 0, 255) if rock(x, y - 1) or rock(x - 1, y) else opaque_fill
+                continue
+            if not solid(x, y):
+                continue
+            vertical, horizontal = min(y, height - 1 - y), min(x, width - 1 - x)
+            depth = min(vertical, horizontal, len(grain) - 1)
+            shade = 1.0
+            if not rock(x - 1, y):
+                shade = 1.15
+            if not rock(x + 1, y):
+                shade = 0.7
+            if not rock(x, y - 1):
+                shade = 1.3
+            if not rock(x, y + 1):
+                shade = 0.6
+            colour = grain[depth][(x if vertical <= horizontal else y) % period]
+            if shade != 1.0:
+                colour = nearest(colour, shade)
+            pixels[x, y] = colour + (255,)
+    return picture
+
+
+class RockFrameTest(unittest.TestCase):
+    def test_rock_frame_is_the_pixel_by_pixel_painting_drawn_faster(self):
+        # The painter was rewritten with arrays (50 ms -> under 30 ms for a wide page);
+        # every pixel must stay as the first painting drew it, small and odd sizes too.
+        fill = menu_theme._rgb(CAVERNS.colour('panel'))
+        sizes = [(660, 372), (470, 376), (700, 350), (30, 30), (26, 40), (40, 26), (12, 12), (27, 27), (300, 27)]
+        rng = random.Random(5)
+        sizes += [(rng.randint(20, 900), rng.randint(20, 500)) for _ in range(6)]
+        for size in sizes:
+            with self.subTest(size=size):
+                self.assertEqual(menu_theme._rock_frame(CAVERNS, size, fill).tobytes(),
+                                 pixel_by_pixel_rock(CAVERNS, size, fill).tobytes())
 
 
 class MenuThemeTest(unittest.TestCase):

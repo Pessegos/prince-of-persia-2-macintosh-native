@@ -11,7 +11,6 @@ the level art but contain none of the game's own pictures, so they need no
 imported resources.
 """
 
-import functools
 import os
 import random
 from dataclasses import dataclass, field
@@ -361,6 +360,7 @@ def _worn(length, rng, corner):
 
 
 def _rock_frame(theme, size, fill):
+    """Speckled stone with a worn edge, as whole arrays (it was painted pixel by pixel: 50 ms)."""
     width, height = size
     thickness = _ROCK_THICKNESS
     rng = random.Random(width * 1000 + height)
@@ -369,21 +369,6 @@ def _rock_frame(theme, size, fill):
     left_out, right_out = _worn(height, rng, corner), _worn(height, rng, corner)
     top_in, bottom_in = _worn(width, rng, ()), _worn(width, rng, ())
     left_in, right_in = _worn(height, rng, ()), _worn(height, rng, ())
-
-    def solid(x, y):
-        return (0 <= x < width and 0 <= y < height
-                and top_out[x] <= y <= height - 1 - bottom_out[x]
-                and left_out[y] <= x <= width - 1 - right_out[y])
-
-    def hole(x, y):
-        return (0 <= x < width and 0 <= y < height
-                and thickness + top_in[x] <= y <= height - 1 - thickness - bottom_in[x]
-                and thickness + left_in[y] <= x <= width - 1 - thickness - right_in[y])
-
-    @functools.lru_cache(maxsize=None)     # each pixel is asked about by its four neighbours
-    def rock(x, y):
-        return solid(x, y) and not hole(x, y)
-
     grain_rng = random.Random(0x60C)
     shades = [_rgb(colour) for colour, _count in theme.grain]
     weights = [count for _colour, count in theme.grain]
@@ -396,39 +381,49 @@ def _rock_frame(theme, size, fill):
             row += [grain_rng.choices(shades, weights)[0]] * grain_rng.choice(_ROCK_RUNS)
         grain.append(row[:period])
 
-    @functools.lru_cache(maxsize=None)     # few grain colours, four ways of lighting them
-    def nearest(colour, shade):
-        lit = tuple(channel * shade for channel in colour)
-        return min(every_shade, key=lambda s: sum((a - b) ** 2 for a, b in zip(s, lit)))
+    y, x = numpy.mgrid[0:height, 0:width]
+    a = numpy.asarray
+    top_out, bottom_out, top_in, bottom_in = (a(v)[x] for v in (top_out, bottom_out, top_in, bottom_in))
+    left_out, right_out, left_in, right_in = (a(v)[y] for v in (left_out, right_out, left_in, right_in))
+    solid = ((top_out <= y) & (y <= height - 1 - bottom_out)
+             & (left_out <= x) & (x <= width - 1 - right_out))
+    hole = ((thickness + top_in <= y) & (y <= height - 1 - thickness - bottom_in)
+            & (thickness + left_in <= x) & (x <= width - 1 - thickness - right_in))
+    rock = numpy.pad(solid & ~hole, 1)      # outside the picture is not rock
 
-    picture = Image.new('RGBA', size, (0, 0, 0, 0))
-    opaque_fill = fill + (255,)
-    _fill_inside(picture, thickness + 4, opaque_fill)
-    pixels = picture.load()
-    for y in range(height):
-        for x in _edge_columns(width, height, y, thickness + 4):
-            if hole(x, y):
-                # The rock stands proud of the panel: a hard shadow below and beside it.
-                pixels[x, y] = (0, 0, 0, 255) if rock(x, y - 1) or rock(x - 1, y) else opaque_fill
-                continue
-            if not solid(x, y):
-                continue
-            vertical, horizontal = min(y, height - 1 - y), min(x, width - 1 - x)
-            depth = min(vertical, horizontal, len(grain) - 1)
-            shade = 1.0
-            if not rock(x - 1, y):
-                shade = 1.15
-            if not rock(x + 1, y):
-                shade = 0.7
-            if not rock(x, y - 1):
-                shade = 1.3
-            if not rock(x, y + 1):
-                shade = 0.6
-            colour = grain[depth][(x if vertical <= horizontal else y) % period]
-            if shade != 1.0:
-                colour = nearest(colour, shade)
-            pixels[x, y] = colour + (255,)
-    return picture
+    def near(dx, dy):
+        return rock[1 + dy:1 + dy + height, 1 + dx:1 + dx + width]
+
+    vertical, horizontal = numpy.minimum(y, height - 1 - y), numpy.minimum(x, width - 1 - x)
+    depth = numpy.minimum(numpy.minimum(vertical, horizontal), len(grain) - 1)
+    along = numpy.where(vertical <= horizontal, x, y) % period
+    palette = sorted(set(colour for row in grain for colour in row))
+    index = {colour: i for i, colour in enumerate(palette)}
+    grain_index = a([[index[colour] for colour in row] for row in grain])[depth, along]
+    # Lighting, as the painter applies it: the last edge that applies wins.
+    factors = (1.0, 1.15, 0.7, 1.3, 0.6)
+    lighting = numpy.zeros((height, width), numpy.intp)
+    for number, (dx, dy) in enumerate(((-1, 0), (1, 0), (0, -1), (0, 1)), 1):
+        lighting[~near(dx, dy)] = number
+    table = numpy.zeros((len(factors), len(palette), 4), numpy.uint8)
+    for f, shade in enumerate(factors):
+        for i, colour in enumerate(palette):
+            if shade == 1.0:
+                result = colour
+            else:
+                lit = tuple(channel * shade for channel in colour)
+                result = min(every_shade, key=lambda s: sum((p - q) ** 2 for p, q in zip(s, lit)))
+            table[f, i] = (*result, 255)
+    pixels = numpy.zeros((height, width, 4), numpy.uint8)
+    body = solid & ~hole
+    pixels[body] = table[lighting, grain_index][body]
+    shadow = hole & (near(0, -1) | near(-1, 0))
+    pixels[hole] = (*fill, 255)
+    pixels[shadow] = (0, 0, 0, 255)
+    margin = thickness + 4
+    if width > 2 * margin and height > 2 * margin:
+        pixels[margin:height - margin, margin:width - margin] = (*fill, 255)
+    return Image.fromarray(pixels, 'RGBA')
 
 
 # --- Shared helpers for the drawn frames.

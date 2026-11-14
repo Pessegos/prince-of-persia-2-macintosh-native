@@ -813,6 +813,10 @@ class WindowControls(InputRouting):
         self.update_cursor_visibility()
         if already_paused and render:
             self.render()
+        if page == 'menu' and render:
+            from pop2.menu_warmup import schedule_menu_warmup
+
+            schedule_menu_warmup(self)   # the pages F1 leads to, while F1 is shown
 
     def toggle_screenshot_menu(self, _event=None):
         if self.game_menu is not None and self.game_menu.page == "confirm":
@@ -826,6 +830,10 @@ class WindowControls(InputRouting):
     def close_game_menu(self, resume=False):
         if self.game_menu is None:
             return
+        if getattr(self, 'menu_warmup_after_id', None) is not None:
+            from pop2.menu_warmup import cancel_menu_warmup
+
+            cancel_menu_warmup(self)
         if getattr(self, 'cutscene_replay', None) is not None:
             self.stop_cutscene_replay(render=False)
         if hasattr(self, 'cancel_cutscene_gallery_tick'):

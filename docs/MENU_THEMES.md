@@ -66,7 +66,8 @@ Frames are drawn by code from a few hard shades taken from the level's
 palette. They contain none of the game's pictures, so they need no imported
 resources and the tests run without assets. The rock frame has no outline and
 no black: its worn edge lets the room show through, and only its shadow on the
-panel is black. A frame is drawn once for each size and kept. The painters
+panel is black. A frame is drawn once for each size and kept; the rock frame is painted
+with whole arrays, pixel for pixel as its first painter drew it. The painters
 visit only the band of pixels near the edge; visiting the whole panel made a
 menu hesitate the first time it opened.
 

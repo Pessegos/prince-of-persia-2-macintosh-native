@@ -26,6 +26,12 @@ The gallery keeps the folder's last listing and the pictures it has read
 (`SHARED_READS`, by path, time and size) for its next opening, so it opens
 with its thumbnails while the folder is read again in the background. A
 moving list is sent to Tk without comparing it with the previous frame.
+While F1 is shown (the game is paused) `pop2/menu_warmup.py` prepares the
+pages it leads to, in steps of a few tens of milliseconds between Tk's
+events: the screenshots folder's listing, newest thumbnails and lava, every
+save read once, the theme's frames for the saves and screenshots pages and
+the Cutscene Viewer's covers. It stops when F1 gives way to another page or
+closes, so the first opening of each page is as quick as the later ones.
 
 Developer Tools prepares its level and playback lists before the animation
 clock starts. Navigation reads scene-program metadata without decoding
