@@ -10,7 +10,7 @@ from unittest.mock import patch
 from PIL import Image, ImageOps
 
 from pop2 import menu_theme
-from pop2.screenshot_gallery import GalleryReads, ScreenshotGallery, open_capture_folder, read_capture, scan_captures
+from pop2.screenshot_gallery import EMBER, ROCK, GalleryReads, ScreenshotGallery, burn, lava_rock, open_capture_folder, read_capture, scan_captures
 from pop2.screenshots import ScreenshotSettings
 
 
@@ -295,7 +295,13 @@ class ScreenshotGalleryTests(unittest.TestCase):
                 self.assertGreater(right - left, 272)                # larger than the classic picture
                 self.assertGreater(bottom - top, 188)
                 self.assertLessEqual(bottom, gallery.LIST[3])
-                self.assertAlmostEqual((right - left - 2) / (bottom - top - 2), 510 / 384, delta=0.01)
+                self.assertAlmostEqual((right - left - 2) / (bottom - top - 2), 510 / 384, delta=0.05)
+                # Twice the columns of thumbnails, and a list as much taller as the page.
+                self.assertEqual(gallery.COLUMNS, 4)
+                self.assertEqual(gallery.LIST[2] - gallery.LIST[0], 4 * 76)
+                self.assertEqual(gallery.row_rect(3)[0], gallery.LIST[0] + 3 * 76)
+                self.assertLess(gallery.LIST[2], left)
+                self.assertEqual(gallery.PANEL[3] - ScreenshotGallery.PANEL[3], gallery.LIST[3] - ScreenshotGallery.LIST[3])
                 # The capture's own pixels, enlarged without smoothing.
                 inner = gallery.pixel_rect((left + 1, top + 1, right - 1, bottom - 1), size)
                 fitted = ImageOps.contain(picture, (inner[2] - inner[0], inner[3] - inner[1]),
@@ -310,8 +316,9 @@ class ScreenshotGalleryTests(unittest.TestCase):
                 self.assertEqual(frame.getpixel(panel[:2]), (133, 133, 133, 255))
                 self.assertGreaterEqual(panel[0], 0)
                 self.assertLess(panel[2], size[0])
-                # The details and the delete button stand beside the picture; the actions at the right edge.
-                self.assertGreater(gallery.DELETE[0], right)
+                # The details and the delete button stay under the picture; the actions at the right edge.
+                self.assertGreaterEqual(gallery.DELETE[1], bottom)
+                self.assertLess(gallery.DELETE[3], gallery.FOOTER[0][1])
                 self.assertEqual(gallery.DELETE[2], gallery.right)
                 self.assertEqual(gallery.FOOTER[2][2], gallery.right)
                 self.assertEqual(gallery.REFRESH[2], gallery.right)
@@ -332,6 +339,40 @@ class ScreenshotGalleryTests(unittest.TestCase):
                 dialog = gallery.pixel_rect((80 + shift, 121, 432 + shift, 270), size)
                 self.assertEqual(confirmed.getpixel(dialog[:2]), (133, 133, 133, 255))
                 self.assertAlmostEqual(dialog[0] + dialog[2], panel[0] + panel[2], delta=2)
+
+    def test_a_dropped_picture_burns_from_its_foot_without_blending(self):
+        sprite = Image.new('RGBA', (60, 45), (0, 0, 255, 255))
+        self.assertIs(burn(sprite, 0, 0, 3)[0], sprite)                  # not alight yet
+        gone = []
+        for step, burnt in enumerate((0.2, 0.5, 0.8, 1)):
+            picture, sparks = burn(sprite, burnt, step, 3)
+            alpha = picture.getchannel('A')
+            self.assertEqual(set(alpha.getdata()) - {0, 255}, set())      # nothing fades: pixels are there or not
+            gone.append(sum(1 for value in alpha.getdata() if not value))
+            self.assertTrue(sparks)
+            if burnt < 1:
+                box = alpha.getbbox()
+                self.assertEqual(box[1], 0)                               # the top is still there
+                edge = {picture.getpixel((x, box[3] - 1))[:3] for x in range(60)
+                        if alpha.getpixel((x, box[3] - 1))}
+                self.assertIn(EMBER[0], edge)                             # the lowest row left is burning
+                if burnt < 0.5:
+                    self.assertEqual(picture.getpixel((30, 0)), (0, 0, 255, 255))   # the rest is still the picture
+        self.assertEqual(gone, sorted(gone))
+        self.assertEqual(gone[-1], 60 * 45)                               # burnt away entirely
+        self.assertEqual(sprite.getpixel((30, 44)), (0, 0, 255, 255))     # the cached picture is untouched
+
+    def test_the_lava_sits_in_a_rim_of_rock(self):
+        pool = Image.new('L', (60, 40))
+        pool.paste(255, (15, 12, 45, 24))
+        rock = lava_rock(pool)
+        self.assertEqual(rock.size, pool.size)
+        box = rock.getbbox()
+        self.assertTrue(box[0] < 15 and box[1] < 12 and box[2] > 45 and box[3] > 26)   # all round, deeper in front
+        self.assertGreater(box[3] - 24, 12 - box[1])
+        colours = {pixel[:3] for pixel in rock.getdata() if pixel[3]}
+        self.assertLessEqual(colours, set(ROCK))                          # a few hard shades, no outline
+        self.assertEqual({pixel[3] for pixel in rock.getdata()}, {0, 255})
 
     def test_fixed_grid_hit_testing_and_navigation_keep_selection_visible(self):
         for i in range(40):
@@ -576,7 +617,7 @@ class ScreenshotGalleryTests(unittest.TestCase):
             self.assertEqual(gallery.draw(source, font, visible=visible).getpixel(pixel), (0, 0, 255, 255))
             self.assertEqual(gallery.draw(source, font, visible=visible).getpixel(pixel), (0, 0, 255, 255))
             gallery.cancel_drag()
-            gallery.burn_seconds = 0.65 * 0.65
+            gallery.burn_seconds = gallery.BURN_SECONDS / 2   # standing in the lava, alight
             gallery.burn_image = gallery.reads.cache[gallery.image_key(gallery.entry, True)].value[0]
             gallery.burn_target = gallery.entry
             self.assertEqual(gallery.draw(source, font, visible=visible).getpixel(pixel), (255, 128, 0, 255))
@@ -613,7 +654,7 @@ class ScreenshotGalleryTests(unittest.TestCase):
             cached = gallery.draw(canvas, font, visible=visible)
             gallery.surface_cache.clear()
             self.assertEqual(cached.tobytes(), gallery.draw(canvas, font, visible=visible).tobytes())
-        gallery.animate(0.66)
+        gallery.animate(gallery.BURN_SECONDS + 0.01)
         self.assertIsNone(gallery.burn_seconds)
         self.assertFalse(gallery.overlay_active)
 

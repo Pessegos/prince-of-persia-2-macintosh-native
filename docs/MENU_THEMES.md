@@ -104,23 +104,33 @@ A picture saved with Shift+F8 "with menus" still shows the classic page.
 
 The screenshots and controls pages follow the same rule
 (`menu_theme.wide_layout`: from about 16:9, 172 units wider, centred beyond
-16:9). On the screenshots page the picture grows to a capture's own shape and
-reaches the foot of the list; the file's name, size and any message stand
-beside it, the lava delete button sits under them at the page's right edge,
-and Refresh, "With menus", Open folder and Capture PNG move to that edge. The
+16:9). The wide screenshots page is the classic one made larger: four columns
+of thumbnails instead of two, a larger picture with the file's name, size and
+the lava delete button under it as before, and a panel 28 units taller.
+Refresh, "With menus", Open folder and Capture PNG move to the right edge. The
 folder and delete dialogs are laid out as on the classic page and centred on
 the wide one (`dialog_shift`). The page's hint, "Take Screenshots with F8",
-keeps to the page's right edge (`draw_screenshot_notice`'s `inset`).
+keeps to the page's right edge and goes under the taller panel
+(`draw_screenshot_notice`'s `inset`).
 
 The controls page is drawn at the game's resolution like the classic one, on
 a picture as many units wide as the window (`WindowControls.wide_controls_frame`),
-and enlarged to fill it. Its pieces stay centred on the wider panel, and the
-keyboard's legend stands beside the keyboard as one column instead of under
-it, the two midway between the tabs and the buttons. The controller and the
-key lists are the classic page moved to the middle; the keyboard and the
-controller are not enlarged. `ControlsPage.lay_out` keeps the rectangles as
-instance attributes over the classic ones on the class; a window made
-narrower goes back to them before the pointer is read.
+and enlarged to fill it. Only its panel is wider: every view is the classic
+page moved to the middle, because the keyboard and the controller cannot be
+enlarged and the legend reads best under the keyboard. `ControlsPage.lay_out`
+keeps the rectangles as instance attributes over the classic ones on the
+class; a window made narrower goes back to them before the pointer is read.
+
+## The lava delete button
+
+The screenshots page deletes a picture dropped on a small pool of the
+caverns' lava. The pool sits in a rim of rock (`lava_rock`: a lit top, a
+darker front face, a dark line where the far rim drops to the lava; the
+level's own stone from `ROCKS`, like the frames; four hard
+shades and a lumpy edge, no outline). A dropped picture falls to the pool, comes to rest with its foot in it and only then
+burns away from the foot up (`burn`, one second in all): a ragged bright edge, an orange row, char
+above, a few sparks. It moves in the game's steps, twelve a second, and
+nothing is blended or faded.
 
 ## The sign on the page
 

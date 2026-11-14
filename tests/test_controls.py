@@ -11,7 +11,7 @@ import numpy as np
 from PIL import Image
 
 from pop2 import controls_art, controls_page, menu_theme
-from pop2.controls_page import (ACTION_COLORS, BRACKET_X, LEGEND, ControlsPage, draw_keycap, keyboard_bounds,
+from pop2.controls_page import (ACTION_COLORS, BRACKET_X, ControlsPage, draw_keycap, keyboard_bounds,
                                 keyboard_keys, led_rect, line_pixels, lock_lights)
 from pop2.game_menu import GameMenu
 from pop2.gamepad import Hysteresis, PadReader, PadState, pad_style
@@ -518,7 +518,7 @@ class ControlsPageTests(unittest.TestCase):
         host.watch_lock_lights()  # the page has closed: the watch ends
         host.root.after.assert_not_called()
 
-    def test_wide_windows_spread_the_page_and_put_the_legend_beside_the_keyboard(self):
+    def test_wide_windows_spread_the_page_and_keep_its_pieces_centred(self):
         self.assertEqual(ControlsPage.wide_layout(1434, 1080), (0, 0.0))   # 4:3 keeps the classic page
         self.assertEqual(ControlsPage.wide_layout(1920, 1200), (0, 0.0))   # 16:10 too
         self.assertEqual(ControlsPage.wide_layout(1920, 1080)[0], 172)
@@ -531,7 +531,8 @@ class ControlsPageTests(unittest.TestCase):
         menu_theme.use(menu_theme.NEUTRAL)
         font = FakeFont()
         pictures = {}
-        for device, view in (('controller', 'overview'), ('keyboard', 'remap'), ('controller', 'remap')):
+        for device, view in (('keyboard', 'overview'), ('controller', 'overview'), ('keyboard', 'remap'),
+                             ('controller', 'remap')):
             page = self.page(pads=(PadState(1, 'Pad', 'xbox'),))
             page.device, page.view = device, view
             pictures[device, view] = page.draw(Image.new('RGBA', (512, 384), 'black'), font)
@@ -545,18 +546,6 @@ class ControlsPageTests(unittest.TestCase):
                 left, top, right, bottom = page.PANEL
                 self.assertEqual(right - left, 470 + 172)
                 self.assertAlmostEqual((left + right) / 2, width / 2, delta=1.5)   # centred on the window
-                # The keyboard and its legend stand side by side, clear of the tabs, buttons and sides.
-                keys = keyboard_bounds(page.KEYBOARD_ORIGIN, page.KEYBOARD_UNIT)
-                self.assertGreaterEqual(keys[0], left + 16)
-                self.assertGreater(keys[1], max(tab[3] for tab in page.TABS) + 8)
-                self.assertLess(keys[3], page.BUTTONS[0][1] - 8)
-                self.assertEqual(page.LEGEND_COLUMNS, 1)
-                self.assertGreaterEqual(page.LEGEND_X[0], keys[2] + 16)
-                self.assertLessEqual(page.LEGEND_X[0] + page.WIDE_LEGEND_WIDTH, right - 16)
-                self.assertLess(page.LEGEND_TOP + len(LEGEND) * 18, page.BUTTONS[0][1] - 8)
-                for index, (label, actions) in enumerate(LEGEND):   # each colour key is drawn there
-                    self.assertEqual(image.getpixel((page.LEGEND_X[0] + 6, page.LEGEND_TOP + index * 18 + 6))[:3],
-                                     ACTION_COLORS[actions[0]][:3], label)
                 # Every control answers where it is drawn.
                 for device in ('keyboard', 'controller'):
                     for view in ('overview', 'remap'):
@@ -565,7 +554,7 @@ class ControlsPageTests(unittest.TestCase):
                             rect = page.control_rect(control)
                             self.assertTrue(left < rect[0] < rect[2] < right)
                             self.assertEqual(page.hit((rect[0] + rect[2]) // 2, (rect[1] + rect[3]) // 2), index)
-                # The other views are the classic page moved to the wide page's middle.
+                # Every view is the classic page moved to the wide page's middle.
                 for (device, view), expected in pictures.items():
                     page = self.page(pads=(PadState(1, 'Pad', 'xbox'),))
                     page.device, page.view = device, view

@@ -269,9 +269,6 @@ class ControlsPage:
     LEGEND_X = (103, 291)
     LEGEND_TOP = 214
     PAD_ORIGIN = (256 - PAD_WIDTH // 2, 86)
-    LEGEND_COLUMNS = 2
-    WIDE_LEGEND_GAP = 24     # between the keyboard and the legend beside it
-    WIDE_LEGEND_WIDTH = 149  # a colour key and its label
 
     @staticmethod
     def wide_layout(width, height):
@@ -282,9 +279,9 @@ class ControlsPage:
         """Place the page's pieces on a picture ``width`` game units wide.
 
         The classic page is 512 units wide. A wide window gets a page as much
-        wider as the other wide menu pages (``menu_theme.wide_layout``): its
-        pieces stay centred on it, and the keyboard's legend stands beside the
-        keyboard as one column instead of under it. A wider window centres
+        wider as the other wide menu pages (``menu_theme.wide_layout``), and
+        the classic page's pieces stay centred on it, arranged as they are:
+        the keyboard and the controller cannot grow. A wider window centres
         that page. The rectangles are instance attributes shadowing the
         classic ones on the class.
         """
@@ -308,24 +305,8 @@ class ControlsPage:
         self.SLOT_X = tuple((a + dx, b + dx) for a, b in cls.SLOT_X)
         self.PAD_ORIGIN = cls.PAD_ORIGIN[0] + dx, cls.PAD_ORIGIN[1]
         self.centre = 256 + dx
-        if not self.spread:
-            self.KEYBOARD_ORIGIN = cls.KEYBOARD_ORIGIN[0] + dx, cls.KEYBOARD_ORIGIN[1]
-            self.LEGEND_X = tuple(x + dx for x in cls.LEGEND_X)
-            self.LEGEND_TOP, self.LEGEND_COLUMNS = cls.LEGEND_TOP, cls.LEGEND_COLUMNS
-            return
-        # The keyboard with its legend beside it, centred on the panel and
-        # midway between the tabs and the buttons.
-        bounds = keyboard_bounds(cls.KEYBOARD_ORIGIN, cls.KEYBOARD_UNIT)
-        keyboard = bounds[2] - bounds[0]
-        inner = self.PANEL[2] - self.PANEL[0] - 32
-        gap = max(4, min(self.WIDE_LEGEND_GAP, inner - keyboard - self.WIDE_LEGEND_WIDTH))
-        start = self.PANEL[0] + 16 + (inner - keyboard - gap - self.WIDE_LEGEND_WIDTH) // 2
-        middle = (max(tab[3] for tab in cls.TABS) + cls.BUTTONS[0][1]) // 2
-        legend = (len(LEGEND) - 1) * 18 + 13
-        self.KEYBOARD_ORIGIN = (start + cls.KEYBOARD_ORIGIN[0] - bounds[0],
-                                middle - (bounds[3] - bounds[1]) // 2 + cls.KEYBOARD_ORIGIN[1] - bounds[1])
-        self.LEGEND_X = start + keyboard + gap,
-        self.LEGEND_TOP, self.LEGEND_COLUMNS = middle - legend // 2, 1
+        self.KEYBOARD_ORIGIN = cls.KEYBOARD_ORIGIN[0] + dx, cls.KEYBOARD_ORIGIN[1]
+        self.LEGEND_X = tuple(x + dx for x in cls.LEGEND_X)
 
     def __init__(self, keyboard, controller, pads=(), controller_enabled=True,
                  controller_available=True, return_to_menu=True):
@@ -636,7 +617,7 @@ class ControlsPage:
         draw_keyboard(image, self.KEYBOARD_ORIGIN, self.KEYBOARD_UNIT, colors, self.locks)
         drawn = {token for token, _label, _rect in keyboard_keys(self.KEYBOARD_ORIGIN, self.KEYBOARD_UNIT)}
         for index, (label, actions) in enumerate(LEGEND):
-            column, row = index % self.LEGEND_COLUMNS, index // self.LEGEND_COLUMNS
+            column, row = index % 2, index // 2
             x, y = self.LEGEND_X[column], self.LEGEND_TOP + row * 18
             color = ACTION_COLORS[actions[0]]
             image.alpha_composite(keycap(13, 12, color), (x, y))
@@ -644,8 +625,7 @@ class ControlsPage:
                       if POSITION_ALIASES.get(token, token) not in drawn]
             missing = not any(self.keyboard.keys(action) for action in actions)
             value = label + (f' ({", ".join(hidden)})' if hidden else '') + (' (none)' if missing else '')
-            text(value, x + 19, y + 2, c(ERROR) if missing else c(WHITE),
-                 max_width=min(150, self.PANEL[2] - 12 - (x + 19)))
+            text(value, x + 19, y + 2, c(ERROR) if missing else c(WHITE), max_width=150)
 
     def callouts(self):
         """(group, side, line row, line points, rows) for each drawn group;

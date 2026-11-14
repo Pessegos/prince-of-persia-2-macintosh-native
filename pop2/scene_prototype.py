@@ -3570,6 +3570,8 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
             viewport = Image.alpha_composite(viewport, plate)
         else:
             y = ROOM_HEIGHT - self.ui_font.height - 6
+            if uniform:   # the wide screenshots page is taller: the hint goes under it
+                y = VIEWPORT_HEIGHT - text.height - 3
         size = max(1, round(text.width * sx)), max(1, round(text.height * sy))
         if text.size != size:
             text = text.resize(size, Image.Resampling.NEAREST)

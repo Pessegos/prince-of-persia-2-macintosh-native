@@ -454,7 +454,7 @@ class GameMenuSceneTests(unittest.TestCase):
                 self.assertFalse(path.exists())
                 self.assertIsNotNone(gallery.burn_seconds)
                 self.assertTrue(gallery.animation_running)
-                for _ in range(45):
+                for _ in range(round(gallery.BURN_SECONDS * 60) + 6):   # past the burn's end
                     gallery.animate(1 / 60)
                     scene.redraw_screenshot_gallery()
                     actual = ImageTk.getimage(scene.image_ref).convert('RGB')

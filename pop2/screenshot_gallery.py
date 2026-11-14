@@ -5,13 +5,15 @@ from datetime import datetime
 from functools import lru_cache
 import math
 import os
+import random
 from pathlib import Path
 from queue import Empty, PriorityQueue, Queue
 from threading import Thread
 import subprocess
 import sys
 
-from PIL import Image, ImageChops, ImageDraw, ImageOps
+import numpy
+from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageOps
 
 from pop2.bitmap_labels import label_text
 from pop2 import menu_theme
@@ -74,8 +76,59 @@ def scan_folders(folder):
                             key=lambda path: path.name.casefold()))
 
 
-@lru_cache(maxsize=1)
-def lava_delete_frames():
+ROCK = ((150, 102, 70), (116, 76, 52), (80, 50, 36), (54, 33, 26))   # lit top, top, front face, crevice
+# The rim takes its stone from the level, like the menus' frames.
+ROCKS = {
+    'neutral': ((158, 158, 158), (120, 120, 120), (84, 84, 84), (56, 56, 56)),
+    'palace': ((247, 227, 176), (206, 190, 167), (174, 149, 148), (135, 110, 119)),
+    'desert': ((254, 222, 165), (216, 171, 113), (168, 121, 74), (110, 74, 46)),
+    'caverns': ROCK,
+    'ruins': ((165, 159, 192), (115, 107, 150), (83, 75, 126), (51, 42, 103)),
+    'temple': ((200, 72, 58), (161, 37, 30), (120, 19, 19), (69, 10, 10)),
+}
+
+
+def lava_rock(liquid, shades=ROCK):
+    """A rim of cavern rock for the lava to sit in, as large as ``liquid`` (the pool's mask).
+
+    A few hard warm shades and a lumpy edge, no outline: the lit top of the
+    rim, its darker front face below, and a dark line where the far rim
+    drops to the lava.
+    """
+    ROCK = shades
+    rng = random.Random(1993)
+    pool = liquid.point(lambda value: 255 if value else 0)
+    top = pool.filter(ImageFilter.MaxFilter(7))
+    # Lumps: small blocks pushed out of the rim, more of them along the front.
+    edge = ImageChops.subtract(top, top.filter(ImageFilter.MinFilter(3)))
+    points = [(x, y) for y in range(edge.height) for x in range(edge.width) if edge.getpixel((x, y))]
+    lumps = ImageDraw.Draw(top)
+    for x, y in rng.sample(points, len(points) // 5):
+        lumps.rectangle((x - rng.randint(0, 2), y - rng.randint(0, 1), x + rng.randint(0, 2), y + 1), fill=255)
+    front = ImageChops.subtract(ImageChops.offset(top, 0, 3), top)       # the face under the rim
+    front = ImageChops.lighter(front, ImageChops.subtract(ImageChops.offset(top, 0, 2), top))
+    wall = ImageChops.subtract(ImageChops.offset(pool, 0, -1), pool)   # the row above the lava's far edge
+    picture = Image.new('RGBA', liquid.size)
+    picture.paste((*ROCK[1], 255), mask=top)
+    lit = ImageChops.subtract(top, ImageChops.offset(top, 0, 1))        # the rim's upper edge catches light
+    picture.paste((*ROCK[0], 255), mask=lit)
+    draw = ImageDraw.Draw(picture)
+    inside = [(x, y) for y in range(top.height) for x in range(top.width)
+              if top.getpixel((x, y)) and not pool.getpixel((x, y))]
+    for x, y in rng.sample(inside, len(inside) // 9):                   # lumps of light and shade on the top
+        shade = ROCK[0] if rng.random() < 0.5 else ROCK[2]
+        draw.rectangle((x, y, x + rng.randint(0, 2), y), fill=(*shade, 255))
+    picture.paste((*ROCK[1], 255), mask=ImageChops.multiply(lit, ImageChops.offset(lit, 3, 0)))
+    picture.paste((*ROCK[0], 255), mask=lit)
+    picture.paste((*ROCK[2], 255), mask=front)
+    low = ImageChops.subtract(front, ImageChops.offset(front, 0, -1))   # the face's foot, darkest
+    picture.paste((*ROCK[3], 255), mask=low)
+    picture.paste((*ROCK[3], 255), mask=ImageChops.multiply(wall, top))
+    return picture
+
+
+@lru_cache(maxsize=8)
+def lava_delete_frames(theme='caverns'):
     from pop2.caverns import cavern_assets, split_lava_bubble
     from pop2.lava import LavaPool
     from pop2.render_opening import decode_shap
@@ -84,17 +137,18 @@ def lava_delete_frames():
     with Image.open(Path(__file__).with_name('screenshot_lava.png')) as image:
         edited = image.convert('RGBA')
     # The edited PNG trims (22, 3) from the native 140 x 33 surface.
-    base = Image.new('RGBA', (140, 60))
+    base = Image.new('RGBA', (140, 68))   # room below the pool for its rock rim
     base.paste(edited, (22, 30))
     liquid = base.getchannel('A')
     pool = LavaPool(program['lava'], enhanced=True)
     pool.initialize(0)
     for _ in range(44):
         pool.advance()
+    rock = lava_rock(liquid, ROCKS.get(theme, ROCK))
     frames, shapes = [], {}
     for _ in range(22):
         pool.advance()
-        frame = base.copy()
+        frame = Image.alpha_composite(rock, base)
         raised = []
         for shape, x, bottom, _mirrored in pool.drawings():
             if shape == 3614:
@@ -118,15 +172,38 @@ def lava_delete_frames():
     return tuple(frame.crop(bounds) for frame in frames)
 
 
-def wrap(value, width, measure):
-    """Break ``value`` at spaces into lines no wider than ``width``; a long word keeps its own line."""
-    lines = []
-    for word in value.split():
-        if lines and measure(f'{lines[-1]} {word}') <= width:
-            lines[-1] = f'{lines[-1]} {word}'
-        else:
-            lines.append(word)
-    return lines
+EMBER = ((255, 222, 96), (238, 124, 32), (64, 34, 24))   # the burning edge, the glow above it, char
+
+
+def burn(sprite, burnt, step, block):
+    """``sprite`` with the lowest ``burnt`` part of it burnt away, and the sparks above it.
+
+    The burning edge is ragged, in blocks of ``block`` pixels: a bright row,
+    an orange row, then charred picture. Nothing is blended. The sparks are
+    (x, y, colour) in the sprite's own pixels and change with each ``step``.
+    """
+    if burnt <= 0:
+        return sprite, ()
+    pixels = numpy.array(sprite)
+    height, width = pixels.shape[:2]
+    ragged = random.Random(31)
+    notch = numpy.repeat([ragged.randint(0, 3) for _ in range(width // block + 1)], block)[:width]
+    drift = random.Random(step)
+    notch = notch + numpy.repeat([drift.randint(0, 1) for _ in range(width // block + 1)], block)[:width]
+    edge = numpy.round((height + 4 * block) * (1 - burnt) / block).astype(int) * block - notch * block
+    rows = numpy.arange(height)[:, None]
+    char = max(block, height // 4)
+    pixels[..., :3][(rows >= edge - 2 * block - char) & (rows < edge - 2 * block)] //= 3
+    charred = (rows >= edge - 2 * block - char // 2) & (rows < edge - 2 * block)
+    pixels[..., :3][charred] = EMBER[2]
+    pixels[..., :3][(rows >= edge - 2 * block) & (rows < edge - block)] = EMBER[1]
+    pixels[..., :3][(rows >= edge - block) & (rows < edge)] = EMBER[0]
+    pixels[..., 3][rows >= numpy.broadcast_to(edge, (height, width))] = 0
+    top = int(max(0, edge.min()))
+    sparks = tuple((drift.randrange(max(1, width // block)) * block,
+                    top - drift.randint(3, 9) * block, EMBER[drift.randint(0, 1)])
+                   for _ in range(4 if burnt < 1 else 2))
+    return Image.fromarray(pixels), sparks
 
 
 def open_capture_folder(folder):
@@ -219,6 +296,9 @@ class ScreenshotGallery:
     REFRESH = (386, 24, 474, 44)
     COLUMNS = 2
     ROW_HEIGHT = 64
+    BURN_SECONDS = 1.0   # a dropped picture's fall into the lava and its burning
+    WIDE_COLUMNS = 4   # thumbnails across on the wide page
+    WIDE_DROP = 28     # how much taller the wide page is
 
     @staticmethod
     def wide_layout(width, height, basis=510):
@@ -228,26 +308,28 @@ class ScreenshotGallery:
     def lay_out(self, spread=0, shift=0.0):
         """Place the page's pieces for a page ``spread`` units wider than the classic one.
 
-        The wide page gives the picture more room, with its name and details
-        beside it, and moves the right-hand controls to its right edge. The
+        The wide page is the classic one made larger: four columns of
+        thumbnails instead of two, a larger picture with its name, details
+        and the delete button under it as before, and a panel ``WIDE_DROP``
+        units taller. The right-hand controls move to its right edge and the
         dialogs stay centred on it. A wider window centres the page ``shift``
         units in.
         """
         self.spread, self.shift = spread, shift
         cls, right = type(self), 474 + spread
+        drop = cls.WIDE_DROP if spread else 0
         self.right = right
-        self.PANEL = cls.PANEL[:2] + (cls.PANEL[2] + spread, cls.PANEL[3])
-        if spread:
-            # The picture keeps a capture's own shape and reaches the list's foot.
-            width = 281 - max(0, menu_theme.WIDE_SPREAD - spread)
-            self.PREVIEW = (202, 84, 202 + width, 84 + round((width - 2) * 384 / 510) + 2)
-            self.DELETE = (right - 42, self.PREVIEW[3] - 24, right, self.PREVIEW[3])
-        else:
-            self.PREVIEW, self.DELETE = cls.PREVIEW, cls.DELETE
+        self.COLUMNS = cls.WIDE_COLUMNS if spread else cls.COLUMNS
+        grown = (self.COLUMNS - cls.COLUMNS) * 76
+        self.PANEL = cls.PANEL[:2] + (cls.PANEL[2] + spread, cls.PANEL[3] + drop)
+        self.LIST = cls.LIST[:2] + (cls.LIST[2] + grown, cls.LIST[3] + drop)
+        self.PREVIEW = (cls.PREVIEW[0] + grown, cls.PREVIEW[1], right, cls.PREVIEW[3] + drop)
+        self.DELETE = (right - 42, cls.DELETE[1] + drop, right, cls.DELETE[3] + drop)
         self.INCLUDE_UI = (right - 116, 48, right, 70)
         self.REFRESH = (right - 88, 24, right, 44)
-        self.FOOTER = (*cls.FOOTER[:2], (362 + spread, 300, right, 322))
-        self.OPEN_FOLDER = (242 + spread, 300, 354 + spread, 322)
+        top, bottom = cls.FOOTER[0][1] + drop, cls.FOOTER[0][3] + drop
+        self.FOOTER = ((36, top, 106, bottom), (114, top, 234, bottom), (362 + spread, top, right, bottom))
+        self.OPEN_FOLDER = (242 + spread, top, 354 + spread, bottom)
         self.dialog_shift = spread // 2
 
     def pixel_rect(self, rect, size):
@@ -289,6 +371,10 @@ class ScreenshotGallery:
         self.committed_folder = None
         self.refresh()
 
+    @property
+    def lava_key(self):
+        return 'icon', 'lava', menu_theme.current().name
+
     @staticmethod
     def contains(rect, x, y):
         return rect[0] <= x < rect[2] and rect[1] <= y < rect[3]
@@ -323,7 +409,7 @@ class ScreenshotGallery:
                 self.error, self.status, -1 if self.choosing or self.deleting else min(self.focus, 100),
                 id(main_image), self.applied_scan == self.scan_key, self.choosing, self.deleting,
                 self.hovered == 13, self.focus == 13 and self.keyboard_navigation,
-                id(self.reads.cache.get(('icon', 'lava'))))
+                id(self.reads.cache.get(self.lava_key)))
 
     def refresh(self, selected_path=None):
         self.cancel_drag()
@@ -491,7 +577,7 @@ class ScreenshotGallery:
 
     @property
     def animation_running(self):
-        icon = self.reads.cache.get(('icon', 'lava'))
+        icon = self.reads.cache.get(self.lava_key)
         return bool(not (self.choosing or self.deleting)
                     and icon is not None and not icon.error and len(icon.value) > 1)
 
@@ -515,12 +601,12 @@ class ScreenshotGallery:
         icon_changed = self.burn_seconds is not None
         if self.burn_seconds is not None:
             self.burn_seconds += max(0, seconds)
-            if self.burn_seconds >= 0.65:
+            if self.burn_seconds >= self.BURN_SECONDS:
                 self.burn_seconds, self.burn_image = None, None
                 self.burn_target = None
         if self.animation_running:
             self.icon_seconds += max(0, seconds)
-            frame = math.floor(self.icon_seconds * 12 + 1e-9) % len(self.reads.cache['icon', 'lava'].value)
+            frame = math.floor(self.icon_seconds * 12 + 1e-9) % len(self.reads.cache[self.lava_key].value)
             icon_changed = icon_changed or frame != self.icon_frame
             self.icon_frame = frame
         distance = self.scroll_target - self.scroll
@@ -566,7 +652,7 @@ class ScreenshotGallery:
                         **dict(enumerate(self.FOOTER, 10)), 13: self.DELETE, 15: self.REFRESH,
                         18: self.OPEN_FOLDER}
             if self.contains(self.LIST, x, y):
-                if x >= 185 and self.max_scroll:
+                if x >= self.LIST[2] - 3 and self.max_scroll:
                     return 14
                 row = int((y - self.LIST[1] + self.scroll) // self.row_height)
                 column = int((x - self.LIST[0]) // 76)
@@ -878,19 +964,21 @@ class ScreenshotGallery:
                 height = self.LIST[3] - self.LIST[1]
                 thumb = max(16, height * height / (math.ceil(len(self.entries) / self.COLUMNS) * self.row_height))
                 top = self.LIST[1] + (height - thumb) * self.scroll / self.max_scroll
-                box((185, self.LIST[1], 187, self.LIST[3]), c('#303030'), None)
-                box((185, top, 187, top + thumb), c('#858585'), None)
+                bar = self.LIST[2] - 3
+                box((bar, self.LIST[1], bar + 2, self.LIST[3]), c('#303030'), None)
+                box((bar, top, bar + 2, top + thumb), c('#858585'), None)
 
         def draw_delete(clear=True):
             highlighted = self.hovered == 13 or self.focus == 13 and self.keyboard_navigation
             if clear:
                 box(self.DELETE, c('#422622') if self.deleting or self.dragging and self.hovered == 13 else
                     c('#2b1d1b') if highlighted else c('#181818'), None)
-            icon = self.reads.request(('icon', 'lava'), lava_delete_frames, -5)
+            theme = menu_theme.current().name
+            icon = self.reads.request(self.lava_key, lambda: lava_delete_frames(theme), -5)
             if icon is not None and not icon.error:
-                icon_key = sx, sy
+                icon_key = sx, sy, theme
                 if icon_key not in self.icon_cache:
-                    size = max(1, round(36 * sx)), max(1, round(16 * sy))
+                    size = max(1, round(40 * sx)), max(1, round(20 * sy))
                     remember(self.icon_cache, icon_key, tuple(ImageOps.contain(frame, size,
                         Image.Resampling.NEAREST) for frame in icon.value), 3)
                 frames = self.icon_cache[icon_key]
@@ -913,13 +1001,15 @@ class ScreenshotGallery:
                 progress = 0
             else:
                 raw = self.burn_image
-                progress = min(1, self.burn_seconds / 0.65)
-                fall = min(1, progress / 0.65)
-                dissolve = max(0, (progress - 0.65) / 0.35)
-                scale = (1 - 0.45 * fall) * (1 - dissolve)
+                # The picture falls to the lava and burns away from its foot, in the game's steps.
+                step = math.floor(self.burn_seconds * 12 + 1e-9)
+                progress = min(1, step / 12 / self.BURN_SECONDS)
+                fall = min(1, progress / 0.4)
+                scale = 1 - 0.45 * fall
                 width, height = max(1, round(56 * scale)), max(1, round(42 * scale))
-                x = self.DELETE[0] + 21 + math.sin(progress * math.pi * 2) * 2
-                y = self.DELETE[1] - 24 + 36 * fall * fall + 3 * dissolve
+                x = self.DELETE[0] + 21
+                # It comes to rest with its foot in the middle of the pool.
+                y = self.DELETE[1] - 24 + (37 - height / 2) * fall * fall
             size = max(1, round(width * sx)), max(1, round(height * sy))
             fit_key = 'held', self.drag_target if self.dragging else self.burn_target, size
             if fit_key not in self.image_cache:
@@ -929,12 +1019,17 @@ class ScreenshotGallery:
             sprite = self.image_cache[fit_key]
             left, top = point(x, y)
             left, top = left - sprite.width // 2, top - sprite.height // 2
-            if progress > 0.65:
-                sprite = sprite.copy()
-                sprite.putalpha(round(255 * (1 - progress) / 0.35))
             if not self.dragging:
-                surface = point(0, self.DELETE[1] + 13)[1]   # the lava's surface
-                sprite = sprite.crop((0, 0, sprite.width, max(0, min(sprite.height, surface - top))))
+                block = max(1, round(min(sx, sy)))
+                # Alight only once it stands in the lava; the pool hides the first of it.
+                burnt = 0 if progress < 0.4 else min(1, 0.3 + 0.7 * (progress - 0.4) / 0.5)
+                sprite, sparks = burn(sprite, burnt, step, block)
+                lava = point(0, self.DELETE[1] + 13)[1]   # the lava's surface
+                sprite = sprite.crop((0, 0, sprite.width, max(0, min(sprite.height, lava - top))))
+                for spark_x, spark_y, colour in sparks:
+                    if top + spark_y < lava:
+                        draw.rectangle((left + spark_x, top + spark_y,
+                                        left + spark_x + block - 1, top + spark_y + block - 1), fill=colour)
             if sprite.height:
                 image.paste(sprite, (left, top), sprite)
                 if self.dragging:
@@ -976,18 +1071,11 @@ class ScreenshotGallery:
                 dimensions = picture(self.entry, self.PREVIEW)
                 name = self.entry.path.name.replace('_', ' ')
                 kilobytes = f'{self.entry.size / 1024:.0f} KB'
-                if self.spread:
-                    # Beside the picture: one detail on each line, then any message.
-                    column = self.PREVIEW[2] + 10
-                    text(name, column, 87, right - column, gold, 0.55)
-                    if dimensions:
-                        text(f'{dimensions[0]} x {dimensions[1]}', column, 102, right - column, muted, 0.55)
-                    text(kilobytes, column, 115, right - column, muted, 0.55)
-                else:
-                    text(name, 202, 277, 222, gold, 0.55)
-                    if dimensions:
-                        text(f'{dimensions[0]} x {dimensions[1]}', 202, 290, 145, muted, 0.55)
-                    text(kilobytes, 424, 290, 70, muted, 0.55, right=True)
+                under = self.PREVIEW[0], self.PREVIEW[3]
+                text(name, under[0], under[1] + 5, self.DELETE[0] - 8 - under[0], gold, 0.55)
+                if dimensions:
+                    text(f'{dimensions[0]} x {dimensions[1]}', under[0], under[1] + 18, 145, muted, 0.55)
+                text(kilobytes, self.DELETE[0] - 8, under[1] + 18, 70, muted, 0.55, right=True)
             else:
                 box(self.PREVIEW, c('#0c0c0c'))
                 text('Reading folder...' if self.applied_scan != self.scan_key else 'No screenshots yet',
@@ -997,13 +1085,10 @@ class ScreenshotGallery:
             for i, (rect, label) in enumerate(zip(self.FOOTER, ('Close', 'Change folder', 'Capture PNG'))):
                 button(rect, label, 10 + i, active=i == 2, scale=0.6)
             button(self.OPEN_FOLDER, 'Open folder', 18, scale=0.6)
-            if message and self.spread:
-                column = self.PREVIEW[2] + 10
-                for row, value in enumerate(wrap(message, right - column, lambda value: glyph(value).width * 0.5)):
-                    text(value, column, 134 + row * 10, right - column, message_color, 0.5)
-            elif message:
-                box((202, 286, 426, 298), c('#181818'), None)
-                text(message, 202, 289, 222, message_color, 0.5)
+            if message:
+                under = self.PREVIEW[0], self.PREVIEW[3]
+                box((under[0], under[1] + 14, self.DELETE[0] - 6, under[1] + 26), c('#181818'), None)
+                text(message, under[0], under[1] + 17, self.DELETE[0] - 8 - under[0], message_color, 0.5)
             if not modal and self.hovered == 13:
                 edge = self.DELETE[2]
                 box((edge - 124, self.DELETE[1] - 18, edge, self.DELETE[1] - 3), c('#303030'), c('#858585'))
