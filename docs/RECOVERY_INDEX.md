@@ -514,8 +514,11 @@ CODE 9:0760 calls NIS 5 in native room 2, followed by the room-4 reset in
 `TransFuncJaffarMagic` 15:09fa; 766 operations are now recovered for import.
 CODE 9:0760's room/bound/animation gate agreed with 27 original-code probes,
 with the saved-character copy and NIS/reset supplied. The port now plays the
-spell from room 2 and enters room 4 at native X 484 with SEQS 55; its
-pre-control sprite edge is an inferred stand-in for GetCharEdges 4:5cbc.
+spell from room 2 and enters room 4 at native X 484 with SEQS 55. The gate
+compares GetCharEdges' working-X exclusive right edge (4:5d5a-5d6a, drawing
+X + 207 + 1), so the outer-sill landing waits for the step into the window;
+the reset sets a5-0x503c = 1 and AddSound(14) (9:05ec-05f6), leaving the
+Prince armed in room 4.
 GenCtrl 6:079c calls 9:0062 to place the
 character in room 11 under a separate state gate. Full redraw sequencing,
 the death variant and Jaffar encounter conditions remain to be recovered. See

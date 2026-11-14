@@ -3,10 +3,10 @@
 Status: 2026-11-11. The level-13 completion path through NIS 3, all 11 static rooms, entry
 placement and saving are integrated. The final battle and ending are not.
 
-Latest playtest blockers: NIS 5 fires on the room-2 outside landing before
-window entry, and gameplay freezes after the room-4 sword draw. These new
-reports remain open despite the earlier audio-manifest repair. Prioritize
-[the Claude handoff](final-level-claude-handoff.md), which also records the
+The two playtest blockers of 2026-11-11 (NIS 5 on the room-2 outside
+landing, and the freeze after the room-4 sword draw) are fixed; see
+[the 2026-11-14 section](#room-2-window-gate-and-armed-reset-2026-11-14).
+[The Claude handoff](final-level-claude-handoff.md) also records the
 manual's shadow/fireball rules and the optional room-3 potion recovery route.
 
 The player's complete Macintosh run is now indexed in
@@ -430,3 +430,38 @@ Focused shared-desktop checks: 185 tests passed across temple arrival,
 developer map/menu, level ending, music transition and installation. Dependency,
 Ruff, recovery catalogue and diff checks passed. Full discovery was not repeated
 because the prior shared-desktop run grew to about 15 GB without finishing.
+
+## Room-2 window gate and armed reset (2026-11-14)
+
+Both reported blockers reproduced with real keys from the native entry in a
+hidden scene: step to the roof edge, turn, climb down and drop.
+
+- **Early spell.** `GetCharEdges` 4:5cbc stores a5-0x3566 at 4:5d5a-5d6a
+  as left + width, where left already includes `X + 0xcf`: the edge is in
+  working X (drawing X + 207) and exclusive. `Final.frame_start` passed the
+  port's inclusive drawing column instead, so 486 admitted every room-2
+  position. The landing on the outer sill now gives native edge 534 and
+  plays no scene; the first step left reaches 481 and plays NIS 5 on the
+  next frame, with the Prince hidden in the window as in the video at
+  00:44-00:44.5. The edge comes from the existing collision bounds, which
+  add 4:5e6e's sword extension.
+- **Freeze in room 4.** After NIS 5 the reset 9:05d2 selects SEQS 55
+  (9:05e2), sets a5-0x503c = 1 (sword drawn, 9:05ec) and calls
+  `AddSound(14)` (9:05f6). The port selected SEQS 55 without the sword flag.
+  SEQS 55 ends in the en-garde hold (pose 171), which only the armed
+  controls leave, so no key did anything. `finish_spell` now sets the flag
+  and queues sound 14. Advance, sheathe and run respond afterwards.
+
+Also read but not changed: 9:05d6 sets the Kid draw mode a5-0x5020 to 16;
+9:064a clears the Up-held catch flag a5-0x3480; 9:0758 writes -1 to
+a5-0x5000. The port already draws the Prince with CTBL 25006 in level 14,
+which matches the red Prince of the video after the spell.
+
+`tests.test_final_spell_flow` now plays that real-key route with an
+`AudioEngine` over mocked playback. It checks the landing and the window
+step, the NIS 5 audio, room 4, and then advance, sheathe and run. Two direct
+regressions cover the native edge and the armed reset. The previous code
+fails all three (three failures, no errors). A separate run with SDL's dummy
+audio device and the real mixer completed the same route with no Tk
+callback exception. The route keys are supplied; they are not the video's
+recorded input.
