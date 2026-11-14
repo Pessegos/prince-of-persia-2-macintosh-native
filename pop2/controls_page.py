@@ -260,14 +260,16 @@ class ControlsPage:
     PANEL = centered_panel(470, 350)
     TABS = ((150, 34, 252, 56), (260, 34, 362, 56))
     BUTTONS = ((100, 318, 250, 344), (262, 318, 412, 344))
-    TOGGLE = (196, 286, 316, 304)
+    # Its label is centred under the status line; the check box stands to the left of it.
+    TOGGLE = (169, 286, 325, 304)
     ROW_TOP = 52
     ROW_HEIGHT = 22
     SLOT_X = ((232, 344), (352, 464))
-    KEYBOARD_ORIGIN = (54, 79)
+    KEYBOARD_ORIGIN = (54, 83)   # the free height is shared: tabs, keyboard, legend, buttons
     KEYBOARD_UNIT = 18
     LEGEND_X = (103, 291)
-    LEGEND_TOP = 214
+    LEGEND_TOP = 220
+    LEGEND_ROW = 22
     PAD_ORIGIN = (256 - PAD_WIDTH // 2, 86)
 
     def __init__(self, keyboard, controller, pads=(), controller_enabled=True,
@@ -557,7 +559,7 @@ class ControlsPage:
                 if self.controller_enabled:
                     draw.line(((left + 8, top + 9), (left + 10, top + 12), (left + 14, top + 6)),
                               fill=c(GOLD), width=2)
-                text('Use controller', left + 24, top + 5)
+                text('Use controller', (left + right) // 2 + 9, top + 5, align='center')
                 button(self.BUTTONS[0], 'Change buttons...', focused == 'change')
             button(self.BUTTONS[1], 'Back' if self.return_to_menu else 'Close', focused == 'back')
         else:
@@ -578,7 +580,7 @@ class ControlsPage:
         drawn = {token for token, _label, _rect in keyboard_keys(self.KEYBOARD_ORIGIN, self.KEYBOARD_UNIT)}
         for index, (label, actions) in enumerate(LEGEND):
             column, row = index % 2, index // 2
-            x, y = self.LEGEND_X[column], self.LEGEND_TOP + row * 18
+            x, y = self.LEGEND_X[column], self.LEGEND_TOP + row * self.LEGEND_ROW
             color = ACTION_COLORS[actions[0]]
             image.alpha_composite(keycap(13, 12, color), (x, y))
             hidden = [key_name(token) for action in actions for token in self.keyboard.keys(action)
