@@ -270,7 +270,7 @@ class ControlsPage:
     LEGEND_X = (103, 291)
     LEGEND_TOP = 220
     LEGEND_ROW = 22
-    PAD_ORIGIN = (256 - PAD_WIDTH // 2, 86)
+    PAD_ORIGIN = (256 - PAD_WIDTH // 2, 89)
 
     def __init__(self, keyboard, controller, pads=(), controller_enabled=True,
                  controller_available=True, return_to_menu=True):
