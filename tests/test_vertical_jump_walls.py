@@ -72,8 +72,13 @@ class OpposedBarrierTests(unittest.TestCase):
                                       level_kind=2, target_x=x, current_x=x, facing=facing)
                 self.assertEqual(terrain.wall_correction(0, x, x, expanded, old, facing,
                                                         physical_row=0, state=state), x)
-                # The ordinary overlap-recovery safeguard is unchanged.
+                # Temple running uses that same native mask transition:
+                # a gate closing behind the arm is not a new front contact.
                 state.sequence_id = 1
+                self.assertEqual(terrain.wall_correction(0, x, x, expanded, old, facing,
+                                                        physical_row=0, state=state), x)
+                # Retain the separate ruins overlap-recovery safeguard.
+                struct.pack_into('>H', level, 0x2186, 4)
                 self.assertNotEqual(terrain.wall_correction(0, x, x, expanded, old, facing,
                                                            physical_row=0, state=state), x)
 
