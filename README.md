@@ -28,6 +28,7 @@ I'm trying to stay as close to the original as possible, while still making some
   - [Lava Overhaul](#lava-overhaul)
   - [Cave Ambience](#cave-ambience)
   - [Cavern Artwork](#cavern-artwork)
+  - [Ledge Animations](#ledge-animations)
   - [Stone Gates](#stone-gates)
   - [Gate Sounds](#gate-sounds)
 - [Other Quality of Life Improvements](#other-quality-of-life-improvements)
@@ -208,6 +209,18 @@ Here are a few examples:
 <h3 align="center">
   <a href="docs/CAVERN_ARTWORK_COMPARISONS.md">View artwork comparisons →</a>
 </h3>
+
+<br/>
+
+## Ledge Animations
+
+In the Macintosh version, parts of the Prince's body can show through the stone while climbing up or lowering himself from a ledge. I adjusted the masking for both animations so the ledge covers his body properly, while his hands stay on top and his feet remain visible below it.
+
+<br/>
+
+<img src="docs/github readme/ledge-masking-before-after.gif" alt="Before and after comparison of the Prince descending and climbing a ledge, with improved masking around the stone">
+
+*Slowed down for comparison.*
 
 <br/>
 
