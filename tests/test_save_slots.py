@@ -466,7 +466,7 @@ class SaveBrowserTests(unittest.TestCase):
         preview_left = round((browser.PREVIEW[0] + shift) * sy)
         tip_bottom = (y + 30 + 11 + 17) * sy
         # The details stand in the column's lower corner, level with the preview's foot.
-        below = browser.PREVIEW[3] - 39
+        below = browser.PREVIEW[3] - 37
         self.assertGreaterEqual(below, y + 11 + browser.DETAIL_GAP)
         self.assertLess(tip_bottom, below * sy)
         overlapping = [rect for rect in drawn if rect[0] > preview_left
@@ -548,10 +548,10 @@ class SaveBrowserTests(unittest.TestCase):
         self.assertEqual(layout(1920, 1200), (0, 0.0))               # 16:10 is not wide enough
         self.assertEqual(layout(1024, 768, 512), (0, 0.0))
         spread, shift = layout(1920, 1080)
-        self.assertEqual(spread, 172)
-        self.assertLess(shift, 1)
+        self.assertEqual(spread, 172 + 2 * SaveBrowser.WIDE_PAD)    # a little further out than the other wide pages
+        self.assertAlmostEqual(shift, 1 / 3 - SaveBrowser.WIDE_PAD)
         spread, shift = layout(2560, 1080)                           # the panel stops growing and is centred
-        self.assertEqual(spread, SaveBrowser.WIDE_LIMIT)
+        self.assertEqual(spread, SaveBrowser.WIDE_LIMIT + 2 * SaveBrowser.WIDE_PAD)
         self.assertAlmostEqual(2 * shift + 510 + spread, 2560 * 384 / 1080)
 
         classic = SaveBrowser(self.slots)
@@ -559,6 +559,9 @@ class SaveBrowserTests(unittest.TestCase):
                          ((28, 16, 484, 368), (40, 99, 228, 321), (238, 99, 472, 267), (238, 270, 472, 296)))
         self.assertEqual(classic.FOOTER, ((40, 328, 108, 356), (116, 328, 196, 356),
                                           (204, 328, 324, 356), (332, 328, 472, 356)))
+        # Load game used to stretch from 204 to the edge; it now stands alone at the right, as on the wide page.
+        self.assertEqual(classic.footer_rects[2], (332, 328, 472, 356))
+        self.assertEqual(classic.hit(250, 340), None)
         self.assertEqual((classic.NAME_FIELD, classic.CONFIRM),
                          ((100, 166, 412, 199), ((100, 222, 246, 252), (258, 222, 412, 252))))
 
@@ -574,6 +577,7 @@ class SaveBrowserTests(unittest.TestCase):
                 left, top, right, bottom = browser.PREVIEW
                 self.assertGreater(right - left, 270)                # larger than the classic 234
                 self.assertLessEqual(bottom, browser.LIST[3])
+                self.assertEqual(bottom, browser.row_rect(4)[3])     # level with the fifth row's foot
                 self.assertAlmostEqual((right - left - 2) / (bottom - top - 2), 510 / 365, delta=0.01)
                 self.assertGreater(browser.DETAILS[0], right)        # the details stand beside it
                 self.assertEqual(browser.right - browser.DETAILS[0], 120)
@@ -592,7 +596,7 @@ class SaveBrowserTests(unittest.TestCase):
                 self.assertEqual(footer[-1][2] - footer[-1][0], 140)   # not stretched across the page
                 # 21:9 only adds a little room for long names in the list, then centres the page.
                 growth = 50 if size[0] == 2560 else 0
-                self.assertEqual(browser.PANEL[2] - browser.PANEL[0], 456 + 172 + growth)
+                self.assertEqual(browser.PANEL[2] - browser.PANEL[0], 456 + 184 + growth)
                 self.assertEqual(browser.LIST[2] - browser.LIST[0], 188 + growth)
                 self.assertEqual(browser.PREVIEW[0], browser.LIST[2] + 10)
                 self.assertEqual(browser.hit(footer[-1][2] - 2, 340), 27)

@@ -110,9 +110,12 @@ class SaveBrowser:
     TABS = ((40, 53, 144, 79), (150, 53, 254, 79))
     ROW_HEIGHT = 42
     WIDE_FROM = menu_theme.WIDE_FROM       # narrower windows keep the classic page, centred
-    WIDE_PREVIEW = menu_theme.WIDE_SPREAD  # a 16:9 window: up to here the extra width enlarges the preview
+    # A wide page reaches WIDE_PAD units further out on each side than the other
+    # wide pages, so that the preview can be as tall as the list's first five rows.
+    WIDE_PAD = 6
+    WIDE_PREVIEW = menu_theme.WIDE_SPREAD + 2 * WIDE_PAD   # a 16:9 window: up to here the extra width enlarges the preview
     DETAIL_GAP = 53      # wide page: the details never climb above name (26) + Rename tip (4 + 17) + 6
-    WIDE_LIMIT = 222     # wider windows give the list a little more room for long names, then stop
+    WIDE_LIMIT = 222     # wider windows give the list a little more room for long names, then stop (before the pad)
 
     def __post_init__(self):
         if self.mode == 'save' and not self.slots and self.focus == 100:
@@ -125,9 +128,13 @@ class SaveBrowser:
         The page is 384 units tall. A window wide enough gets a wider panel:
         a larger preview with the save's details beside it. Wider than 16:9,
         the list grows a little so that long names fit; beyond that the panel
-        is centred instead of being stretched.
+        is centred instead of being stretched. The saves page then reaches
+        WIDE_PAD units further out on each side.
         """
-        return menu_theme.wide_layout(width, height, basis, cls.WIDE_LIMIT)
+        spread, shift = menu_theme.wide_layout(width, height, basis, cls.WIDE_LIMIT)
+        if not spread:
+            return 0, 0.0
+        return spread + 2 * cls.WIDE_PAD, shift - cls.WIDE_PAD
 
     def pixel_rect(self, rect, size):
         """A rectangle of the page in the pixels of a visible picture of this size, as draw places it."""
@@ -157,7 +164,8 @@ class SaveBrowser:
         if not self.spread:
             return 238, 99, 472, 267
         left = 238 + self.list_growth
-        width = 276 - max(0, self.WIDE_PREVIEW - self.spread)
+        # In 16:9 and wider its foot is level with the fifth row's (306).
+        width = 288 - max(0, self.WIDE_PREVIEW - self.spread)
         return left, 99, left + width, 99 + round((width - 2) * 365 / 510) + 2   # a save picture's own shape
 
     @property
@@ -198,8 +206,8 @@ class SaveBrowser:
 
     @property
     def footer_rects(self):
-        return self.FOOTER if self.mode == 'save' else (
-            *self.FOOTER[:2], ((332 if self.spread else 204) + self.spread, 328, self.right, 356))
+        # Loading has one action: it stands alone at the page's right edge, as wide as New save.
+        return self.FOOTER if self.mode == 'save' else (*self.FOOTER[:2], self.FOOTER[3])
 
     @property
     def entry(self):
@@ -634,9 +642,9 @@ class SaveBrowser:
             message_color = c('#ff9b9b') if self.error else muted
             if self.spread:
                 # Beside the preview: one detail on each line; messages go under the preview.
-                # The details sit in the column's lower corner, level with the preview's foot,
+                # The details sit in the column's lower corner, the last line's foot level with the preview's,
                 # clear of the name and of the Rename tip under it, so hovering moves nothing.
-                below = max(top + extra + self.DETAIL_GAP, self.PREVIEW[3] - 39)
+                below = max(top + extra + self.DETAIL_GAP, self.PREVIEW[3] - 37)
                 text(slot.resume, column, below, muted, right - column, True)
                 text(slot.date, column, below + 14, muted, right - column, True)
                 if slot.capacity is not None:
