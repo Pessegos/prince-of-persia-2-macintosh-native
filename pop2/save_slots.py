@@ -132,9 +132,10 @@ class SaveBrowser:
     TABS = ((40, 53, 144, 79), (150, 53, 254, 79))
     ROW_HEIGHT = 42
     WIDE_FROM = menu_theme.WIDE_FROM       # narrower windows keep the classic page, centred
-    # A wide page reaches WIDE_PAD units further out on each side than the other
-    # wide pages, so that the preview can be as tall as the list's first five rows.
-    WIDE_PAD = 6
+    # The wide page reaches WIDE_PAD units further out on each side than the
+    # shared wide layout: in 16:9 its panel is then exactly as wide as the
+    # screenshots page's, and the preview can be as tall as the list's first five rows.
+    WIDE_PAD = 8
     WIDE_PREVIEW = menu_theme.WIDE_SPREAD + 2 * WIDE_PAD   # a 16:9 window: up to here the extra width enlarges the preview
     DETAIL_GAP = 49      # wide page: the details never climb above name (22) + Rename tip (4 + 17) + 6
     WIDE_LIMIT = 222     # wider windows give the list a little more room for long names, then stop (before the pad)

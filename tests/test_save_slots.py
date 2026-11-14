@@ -569,7 +569,14 @@ class SaveBrowserTests(unittest.TestCase):
         self.assertEqual(layout(1920, 1200), (0, 0.0))               # 16:10 is not wide enough
         self.assertEqual(layout(1024, 768, 512), (0, 0.0))
         spread, shift = layout(1920, 1080)
-        self.assertEqual(spread, 172 + 2 * SaveBrowser.WIDE_PAD)    # a little further out than the other wide pages
+        self.assertEqual(spread, 172 + 2 * SaveBrowser.WIDE_PAD)    # as wide as the screenshots page
+        from pop2.screenshot_gallery import ScreenshotGallery
+        shots = ScreenshotGallery.__new__(ScreenshotGallery)
+        shots.lay_out(*ScreenshotGallery.wide_layout(1920, 1080))
+        saves = SaveBrowser(())
+        saves.spread, saves.shift = spread, shift
+        page = saves.pixel_rect(saves.PANEL, (1920, 1080))
+        self.assertEqual(page[0::2], shots.pixel_rect(shots.PANEL, (1920, 1080))[0::2])   # the same sides
         self.assertAlmostEqual(shift, 1 / 3 - SaveBrowser.WIDE_PAD)
         spread, shift = layout(2560, 1080)                           # the panel stops growing and is centred
         self.assertEqual(spread, SaveBrowser.WIDE_LIMIT + 2 * SaveBrowser.WIDE_PAD)
@@ -601,7 +608,7 @@ class SaveBrowserTests(unittest.TestCase):
                 self.assertEqual(bottom, browser.row_rect(4)[3])     # level with the fifth row's foot
                 self.assertAlmostEqual((right - left - 2) / (bottom - top - 2), 510 / 365, delta=0.01)
                 self.assertGreater(browser.DETAILS[0], right)        # the details stand beside it
-                self.assertEqual(browser.right - browser.DETAILS[0], 120)
+                self.assertEqual(browser.right - browser.DETAILS[0], 124)
                 rect = browser.pixel_rect((left + 1, top + 1, right - 1, bottom - 1), size)
                 expected = preview.resize((rect[2] - rect[0], rect[3] - rect[1]), Image.Resampling.NEAREST)
                 self.assertEqual(frame.crop(rect).convert('RGB').tobytes(), expected.tobytes())
@@ -617,7 +624,7 @@ class SaveBrowserTests(unittest.TestCase):
                 self.assertEqual(footer[-1][2] - footer[-1][0], 140)   # not stretched across the page
                 # 21:9 only adds a little room for long names in the list, then centres the page.
                 growth = 50 if size[0] == 2560 else 0
-                self.assertEqual(browser.PANEL[2] - browser.PANEL[0], 456 + 184 + growth)
+                self.assertEqual(browser.PANEL[2] - browser.PANEL[0], 456 + 188 + growth)
                 self.assertEqual(browser.LIST[2] - browser.LIST[0], 188 + growth)
                 self.assertEqual(browser.PREVIEW[0], browser.LIST[2] + 10)
                 self.assertEqual(browser.hit(footer[-1][2] - 2, 340), 27)
