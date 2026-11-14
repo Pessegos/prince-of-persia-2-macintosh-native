@@ -124,7 +124,7 @@ caverns' lava. The pool sits in a rim of rock made from the page's own
 background lit by the lava (`rim_shades`): the rim's top takes some of the
 lava's orange and its front face falls away a little darker than the page;
 four hard shades and a lumpy edge, no outline. A dropped picture falls until
-its foot meets the pool, then sinks into it while it burns from the foot up
+its foot meets the middle of the pool, then sinks into it, in front of the far\nhalf of the lava and under the near half, while it burns from the foot up
 (`burn`, one second in all): a ragged bright edge just above the lava, an
 orange row, char above, a few sparks. It moves in the game's steps, twelve a
 second, and nothing is blended or faded.

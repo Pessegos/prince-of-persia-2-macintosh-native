@@ -598,7 +598,7 @@ class ScreenshotGalleryTests(unittest.TestCase):
         self.assertFalse(gallery.deleting)
         self.assertFalse(gallery.begin_drag(250, 150))
 
-    def test_held_thumbnail_is_in_front_of_lava_but_confirmed_sinking_is_behind_it(self):
+    def test_held_and_sinking_pictures_are_in_front_of_the_far_lava_and_go_under_its_near_half(self):
         self.png(color='blue')
         gallery = self.gallery()
         font = self.font()
@@ -621,10 +621,18 @@ class ScreenshotGalleryTests(unittest.TestCase):
             self.assertEqual(gallery.draw(source, font, visible=visible).getpixel(pixel), (0, 0, 255, 255))
             self.assertEqual(gallery.draw(source, font, visible=visible).getpixel(pixel), (0, 0, 255, 255))
             gallery.cancel_drag()
-            gallery.burn_seconds = gallery.BURN_SECONDS / 2   # standing in the lava, alight
+            gallery.burn_seconds = gallery.BURN_SECONDS / 2   # sinking into the lava, alight
             gallery.burn_image = gallery.reads.cache[gallery.image_key(gallery.entry, True)].value[0]
             gallery.burn_target = gallery.entry
-            self.assertEqual(gallery.draw(source, font, visible=visible).getpixel(pixel), (255, 128, 0, 255))
+
+            def at(unit_y):
+                return gallery.pixel_rect((x, unit_y, x, unit_y), size)[:2] if visible else (x, unit_y)
+            frame = gallery.draw(source, font, visible=visible)
+            entry = gallery.DELETE[1] + gallery.BURN_ENTRY
+            self.assertEqual(frame.getpixel(at(entry + 2)), (255, 128, 0, 255))   # the near lava, in front
+            far = frame.getpixel(at(entry - 6))                                  # the far lava, behind it
+            self.assertNotEqual(far, (255, 128, 0, 255))
+            self.assertIn(far[:3], {(0, 0, 255), (0, 0, 85), *EMBER})              # the picture, charred or alight
 
     def test_dropping_confirms_original_capture_and_burns_only_after_success(self):
         original = self.png('original.png')

@@ -306,6 +306,7 @@ class ScreenshotGallery:
     BURN_SECONDS = 1.0   # a dropped picture's fall into the lava and its burning
     BURN_LANDING = 0.35  # the share of it spent falling to the lava
     BURN_SINK = 0.6      # how much of its height sinks under the lava while it burns
+    BURN_ENTRY = 15      # the line, from the lava button's top, where the picture enters the lava
     WIDE_COLUMNS = 4   # thumbnails across on the wide page
     WIDE_DROP = 28     # how much taller the wide page is
 
@@ -1018,8 +1019,9 @@ class ScreenshotGallery:
                 scale = 1 - 0.45 * fall
                 width, height = max(1, round(56 * scale)), max(1, round(42 * scale))
                 x = self.DELETE[0] + 21
-                # It falls until its foot meets the pool, then sinks into it as it burns.
-                y = self.DELETE[1] - 24 + (37 - height / 2) * fall * fall + self.BURN_SINK * height * sinking
+                # It falls until its foot meets the pool's middle, then sinks into it as it burns.
+                y = (self.DELETE[1] - 24 + (24 + self.BURN_ENTRY - height / 2) * fall * fall
+                     + self.BURN_SINK * height * sinking)
             size = max(1, round(width * sx)), max(1, round(height * sy))
             fit_key = 'held', self.drag_target if self.dragging else self.burn_target, size
             if fit_key not in self.image_cache:
@@ -1035,7 +1037,9 @@ class ScreenshotGallery:
                 # line as it sinks, and the last of it burns as it goes under.
                 burnt = 0 if progress < self.BURN_LANDING else min(1, 0.12 + 0.88 * sinking)
                 sprite, sparks = burn(sprite, burnt, step, block)
-                lava = point(0, self.DELETE[1] + 13)[1]   # the lava's surface
+                # Where it enters the lava: in front of the pool's far half, the near half
+                # stays in front of it.
+                lava = point(0, self.DELETE[1] + self.BURN_ENTRY)[1]
                 sprite = sprite.crop((0, 0, sprite.width, max(0, min(sprite.height, lava - top))))
                 for spark_x, spark_y, colour in sparks:
                     if top + spark_y < lava:
@@ -1046,9 +1050,6 @@ class ScreenshotGallery:
                 if self.dragging:
                     draw.rectangle((left - 1, top - 1, left + sprite.width, top + sprite.height), outline=gold,
                                    width=max(1, round(sx)))
-            if not self.dragging:
-                # Only confirmed sinking goes behind the liquid; held thumbnails stay in front.
-                draw_delete(clear=False)
 
         if surface is not None:
             draw_list()
