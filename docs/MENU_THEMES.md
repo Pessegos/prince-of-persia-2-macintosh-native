@@ -102,7 +102,7 @@ rectangles (`PANEL`, `LIST`, `PREVIEW`, ...) are properties that follow the
 layout of the last picture drawn, and the pointer is mapped to the same units.
 A picture saved with Shift+F8 "with menus" still shows the classic page.
 
-The screenshots and controls pages follow the same rule
+The screenshots page follows the same rule
 (`menu_theme.wide_layout`: from about 16:9, 172 units wider, centred beyond
 16:9). The wide screenshots page is the classic one made larger: four columns
 of thumbnails instead of two, a larger picture with the file's name, size and
@@ -113,22 +113,18 @@ the wide one (`dialog_shift`). The page's hint, "Take Screenshots with F8",
 keeps to the page's right edge and goes under the taller panel
 (`draw_screenshot_notice`'s `inset`).
 
-The controls page is drawn at the game's resolution like the classic one, on
-a picture as many units wide as the window (`WindowControls.wide_controls_frame`),
-and enlarged to fill it. Only its panel is wider: every view is the classic
-page moved to the middle, because the keyboard and the controller cannot be
-enlarged and the legend reads best under the keyboard. `ControlsPage.lay_out`
-keeps the rectangles as instance attributes over the classic ones on the
-class; a window made narrower goes back to them before the pointer is read.
+The controls page keeps the classic page in every window, fitted like the
+game's picture: its keyboard and controller cannot be enlarged, and a wider
+panel around the same pieces gained nothing.
 
 ## The lava delete button
 
 The screenshots page deletes a picture dropped on a small pool of the
-caverns' lava. The pool sits in a rim of rock (`lava_rock`: a lit top, a
-darker front face, a dark line where the far rim drops to the lava; the
-level's own stone from `ROCKS`, like the frames; four hard
-shades and a lumpy edge, no outline). A dropped picture falls to the pool, comes to rest with its foot in it and only then
-burns away from the foot up (`burn`, one second in all): a ragged bright edge, an orange row, char
+caverns' lava. The pool sits in a rim of rock in the page's own background,
+a little darker (`rim_shades`), so it sits in the page rather than on it: a
+lit top, a darker front face, a dark line where the far rim drops to the
+lava; four hard shades and a lumpy edge, no outline. A dropped picture falls
+to the pool, comes to rest with its foot in it and only then burns away from the foot up (`burn`, one second in all): a ragged bright edge, an orange row, char
 above, a few sparks. It moves in the game's steps, twelve a second, and
 nothing is blended or faded.
 

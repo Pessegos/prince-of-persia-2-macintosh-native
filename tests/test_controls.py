@@ -10,7 +10,7 @@ from unittest.mock import Mock, patch
 import numpy as np
 from PIL import Image
 
-from pop2 import controls_art, controls_page, menu_theme
+from pop2 import controls_art, controls_page
 from pop2.controls_page import (ACTION_COLORS, BRACKET_X, ControlsPage, draw_keycap, keyboard_bounds,
                                 keyboard_keys, led_rect, line_pixels, lock_lights)
 from pop2.game_menu import GameMenu
@@ -517,54 +517,6 @@ class ControlsPageTests(unittest.TestCase):
         host.root.after.reset_mock()
         host.watch_lock_lights()  # the page has closed: the watch ends
         host.root.after.assert_not_called()
-
-    def test_wide_windows_spread_the_page_and_keep_its_pieces_centred(self):
-        self.assertEqual(ControlsPage.wide_layout(1434, 1080), (0, 0.0))   # 4:3 keeps the classic page
-        self.assertEqual(ControlsPage.wide_layout(1920, 1200), (0, 0.0))   # 16:10 too
-        self.assertEqual(ControlsPage.wide_layout(1920, 1080)[0], 172)
-        classic = self.page()
-        self.assertEqual((classic.PANEL, classic.TABS, classic.BUTTONS, classic.KEYBOARD_ORIGIN, classic.LEGEND_X,
-                          classic.LEGEND_TOP, classic.PAD_ORIGIN, classic.SLOT_X),
-                         (ControlsPage.PANEL, ControlsPage.TABS, ControlsPage.BUTTONS, ControlsPage.KEYBOARD_ORIGIN,
-                          ControlsPage.LEGEND_X, ControlsPage.LEGEND_TOP, ControlsPage.PAD_ORIGIN, ControlsPage.SLOT_X))
-        self.addCleanup(menu_theme.use, menu_theme.current())
-        menu_theme.use(menu_theme.NEUTRAL)
-        font = FakeFont()
-        pictures = {}
-        for device, view in (('keyboard', 'overview'), ('controller', 'overview'), ('keyboard', 'remap'),
-                             ('controller', 'remap')):
-            page = self.page(pads=(PadState(1, 'Pad', 'xbox'),))
-            page.device, page.view = device, view
-            pictures[device, view] = page.draw(Image.new('RGBA', (512, 384), 'black'), font)
-        # A 16:9 window is 683 units across and a 21:9 one 910, plus the page's hidden edge columns.
-        for width in (685, 912):
-            with self.subTest(width=width):
-                page = self.page()
-                image = page.draw(Image.new('RGBA', (width, 384), 'black'), font)
-                self.assertEqual(image.size, (width, 384))
-                self.assertEqual(page.spread, 172)
-                left, top, right, bottom = page.PANEL
-                self.assertEqual(right - left, 470 + 172)
-                self.assertAlmostEqual((left + right) / 2, width / 2, delta=1.5)   # centred on the window
-                # Every control answers where it is drawn.
-                for device in ('keyboard', 'controller'):
-                    for view in ('overview', 'remap'):
-                        page.device, page.view = device, view
-                        for index, control in enumerate(page.controls()):
-                            rect = page.control_rect(control)
-                            self.assertTrue(left < rect[0] < rect[2] < right)
-                            self.assertEqual(page.hit((rect[0] + rect[2]) // 2, (rect[1] + rect[3]) // 2), index)
-                # Every view is the classic page moved to the wide page's middle.
-                for (device, view), expected in pictures.items():
-                    page = self.page(pads=(PadState(1, 'Pad', 'xbox'),))
-                    page.device, page.view = device, view
-                    image = page.draw(Image.new('RGBA', (width, 384), 'black'), font)
-                    inside = (ControlsPage.PANEL[0] + 1, ControlsPage.PANEL[1] + 1,
-                              ControlsPage.PANEL[2], ControlsPage.PANEL[3])
-                    moved = (inside[0] + page.dx, inside[1], inside[2] + page.dx, inside[3])
-                    self.assertEqual(image.crop(moved).tobytes(), expected.crop(inside).tobytes(), (device, view))
-                page.lay_out()   # back to the classic page
-                self.assertEqual((page.PANEL, page.TABS, page.dx), (ControlsPage.PANEL, ControlsPage.TABS, 0))
 
     def test_every_view_and_style_draws(self):
         font = FakeFont()

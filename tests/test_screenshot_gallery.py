@@ -10,7 +10,7 @@ from unittest.mock import patch
 from PIL import Image, ImageOps
 
 from pop2 import menu_theme
-from pop2.screenshot_gallery import EMBER, ROCK, GalleryReads, ScreenshotGallery, burn, lava_rock, open_capture_folder, read_capture, scan_captures
+from pop2.screenshot_gallery import EMBER, GalleryReads, ScreenshotGallery, burn, lava_rock, rim_shades, open_capture_folder, read_capture, scan_captures
 from pop2.screenshots import ScreenshotSettings
 
 
@@ -365,13 +365,16 @@ class ScreenshotGalleryTests(unittest.TestCase):
     def test_the_lava_sits_in_a_rim_of_rock(self):
         pool = Image.new('L', (60, 40))
         pool.paste(255, (15, 12, 45, 24))
-        rock = lava_rock(pool)
+        shades = rim_shades('#001831')                                    # the palace page's background
+        self.assertTrue(all(a <= b for shade in shades for a, b in zip(shade, (0, 24, 49))))   # all darker
+        self.assertEqual(shades[0], (0, 19, 39))
+        rock = lava_rock(pool, shades)
         self.assertEqual(rock.size, pool.size)
         box = rock.getbbox()
         self.assertTrue(box[0] < 15 and box[1] < 12 and box[2] > 45 and box[3] > 26)   # all round, deeper in front
         self.assertGreater(box[3] - 24, 12 - box[1])
         colours = {pixel[:3] for pixel in rock.getdata() if pixel[3]}
-        self.assertLessEqual(colours, set(ROCK))                          # a few hard shades, no outline
+        self.assertLessEqual(colours, set(shades))                        # a few hard shades, no outline
         self.assertEqual({pixel[3] for pixel in rock.getdata()}, {0, 255})
 
     def test_fixed_grid_hit_testing_and_navigation_keep_selection_visible(self):

@@ -1453,13 +1453,6 @@ class WindowControls(InputRouting):
             if spread:   # the wide page uses the whole window; its panel starts `shift` units in
                 point = menu_viewport_point(event.x, event.y, width, height)
                 return None if point is None else (point[0] - shift, point[1])
-        controls = getattr(menu, 'controls_page', None) if page == 'controls' else None
-        if controls is not None and controls.wide_layout(width, height)[0]:
-            # Drawn on a picture as many units wide as the window (wide_controls_frame).
-            if not (0 <= event.x < width and 0 <= event.y < height):
-                return None
-            return (1 + event.x * self.wide_columns(width, height) / width,
-                    event.y * VISIBLE_SIZE[1] / height)
         return viewport_point(
             event.x, event.y, self.canvas.winfo_width(), self.canvas.winfo_height()
         )
@@ -1901,11 +1894,7 @@ class WindowControls(InputRouting):
         else:
             self.save_menu_frame = None
             self.save_menu_source = None
-            frame = self.wide_controls_frame(width, height)
-            if frame is not None:
-                size, position = frame.size, (0, 0)
-            else:
-                frame = self.native_viewport.crop(VISIBLE_VIEWPORT).resize(size, Image.Resampling.NEAREST)
+            frame = self.native_viewport.crop(VISIBLE_VIEWPORT).resize(size, Image.Resampling.NEAREST)
         menu = getattr(self, 'dev_menu', None)
         if menu is not None and menu.preview_enabled:
             frame = menu.present_map(frame, self.ui_font).convert('RGB')
@@ -1945,36 +1934,6 @@ class WindowControls(InputRouting):
             picture, source = source, Image.new('RGBA', size, '#080808')
             source.paste(picture, (origin[0] - position[0], origin[1] - position[1]))
         return source
-
-    @staticmethod
-    def wide_columns(width, height):
-        """How many game units wide a window is, for the wide controls page."""
-        return round(width * VISIBLE_SIZE[1] / max(1, height))
-
-    def wide_controls_frame(self, width, height):
-        """The controls page laid out across a wide window, or None for the classic page.
-
-        The page is drawn at the game's resolution like the classic one, on a
-        picture as many units wide as the window, then enlarged to fill it.
-        The classic page stays in ``native_viewport`` for captures with menus.
-        """
-        from pop2.controls_page import ControlsPage
-
-        menu = getattr(self, 'game_menu', None)
-        page = getattr(menu, 'controls_page', None) if getattr(menu, 'page', None) == 'controls' else None
-        if page is None:
-            return None
-        if not ControlsPage.wide_layout(width, height)[0]:
-            # A window made narrower shows the classic page already drawn;
-            # the pointer must find its pieces there again.
-            page.lay_out()
-            return None
-        columns = self.wide_columns(width, height)
-        canvas = Image.new('RGBA', (columns + 2, VISIBLE_SIZE[1]), '#080808')
-        canvas.paste(self.screenshot_viewport, ((columns + 2 - self.screenshot_viewport.width) // 2, 0))
-        picture = self.draw_screenshot_notice(page.draw(canvas, self.ui_font), uniform=True)
-        return picture.crop((1, 0, columns + 1, VISIBLE_SIZE[1])).convert('RGB').resize(
-            (width, height), Image.Resampling.NEAREST)
 
     def expose_viewport(self, _event=None):
         if self.bitmap_presenter is not None:

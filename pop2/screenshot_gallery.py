@@ -76,24 +76,26 @@ def scan_folders(folder):
                             key=lambda path: path.name.casefold()))
 
 
-ROCK = ((150, 102, 70), (116, 76, 52), (80, 50, 36), (54, 33, 26))   # lit top, top, front face, crevice
-# The rim takes its stone from the level, like the menus' frames.
-ROCKS = {
-    'neutral': ((158, 158, 158), (120, 120, 120), (84, 84, 84), (56, 56, 56)),
-    'palace': ((247, 227, 176), (206, 190, 167), (174, 149, 148), (135, 110, 119)),
-    'desert': ((254, 222, 165), (216, 171, 113), (168, 121, 74), (110, 74, 46)),
-    'caverns': ROCK,
-    'ruins': ((165, 159, 192), (115, 107, 150), (83, 75, 126), (51, 42, 103)),
-    'temple': ((200, 72, 58), (161, 37, 30), (120, 19, 19), (69, 10, 10)),
-}
+# The rim's shades as parts of the page's own background: all a little darker than it.
+RIM_SHADES = (0.8, 0.64, 0.48, 0.32)   # lit top, top, front face, crevice
+
+
+def rim_shades(background):
+    """The rim's four shades for a page whose panel is ``background`` ('#rrggbb')."""
+    rgb = tuple(int(background[i:i + 2], 16) for i in (1, 3, 5))
+    return tuple(tuple(round(value * share) for value in rgb) for share in RIM_SHADES)
+
+
+ROCK = rim_shades('#181818')   # the neutral page's
 
 
 def lava_rock(liquid, shades=ROCK):
-    """A rim of cavern rock for the lava to sit in, as large as ``liquid`` (the pool's mask).
+    """A rim of rock for the lava to sit in, as large as ``liquid`` (the pool's mask).
 
-    A few hard warm shades and a lumpy edge, no outline: the lit top of the
-    rim, its darker front face below, and a dark line where the far rim
-    drops to the lava.
+    The rock is the page's background a little darker (``rim_shades``), so the
+    pool sits in the page rather than on it: a few hard shades and a lumpy
+    edge, no outline, the lit top of the rim, its darker front face below, and
+    a dark line where the far rim drops to the lava.
     """
     ROCK = shades
     rng = random.Random(1993)
@@ -144,7 +146,7 @@ def lava_delete_frames(theme='caverns'):
     pool.initialize(0)
     for _ in range(44):
         pool.advance()
-    rock = lava_rock(liquid, ROCKS.get(theme, ROCK))
+    rock = lava_rock(liquid, rim_shades(menu_theme.THEMES.get(theme, menu_theme.NEUTRAL).colour('panel')))
     frames, shapes = [], {}
     for _ in range(22):
         pool.advance()

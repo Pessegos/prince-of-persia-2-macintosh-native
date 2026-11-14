@@ -270,47 +270,8 @@ class ControlsPage:
     LEGEND_TOP = 214
     PAD_ORIGIN = (256 - PAD_WIDTH // 2, 86)
 
-    @staticmethod
-    def wide_layout(width, height):
-        """(spread, shift) for a window of this size; (0, 0) keeps the classic page."""
-        return menu_theme.wide_layout(width, height)
-
-    def lay_out(self, width=512):
-        """Place the page's pieces on a picture ``width`` game units wide.
-
-        The classic page is 512 units wide. A wide window gets a page as much
-        wider as the other wide menu pages (``menu_theme.wide_layout``), and
-        the classic page's pieces stay centred on it, arranged as they are:
-        the keyboard and the controller cannot grow. A wider window centres
-        that page. The rectangles are instance attributes shadowing the
-        classic ones on the class.
-        """
-        if width == getattr(self, 'width', None):
-            return
-        cls = type(self)
-        self.width = width
-        self.spread, _shift = menu_theme.wide_layout(width - 2, 384)
-        inset = (width - 512 - self.spread) // 2   # where the page starts on a wider picture
-        dx = self.dx = inset + self.spread // 2      # the classic pieces, centred on the page
-        self.limit = (1, 0, width - 2, 364)
-
-        def moved(rect):
-            return rect[0] + dx, rect[1], rect[2] + dx, rect[3]
-
-        left, top, right, bottom = cls.PANEL
-        self.PANEL = left + inset, top, right + inset + self.spread, bottom
-        self.TABS = tuple(map(moved, cls.TABS))
-        self.BUTTONS = tuple(map(moved, cls.BUTTONS))
-        self.TOGGLE = moved(cls.TOGGLE)
-        self.SLOT_X = tuple((a + dx, b + dx) for a, b in cls.SLOT_X)
-        self.PAD_ORIGIN = cls.PAD_ORIGIN[0] + dx, cls.PAD_ORIGIN[1]
-        self.centre = 256 + dx
-        self.KEYBOARD_ORIGIN = cls.KEYBOARD_ORIGIN[0] + dx, cls.KEYBOARD_ORIGIN[1]
-        self.LEGEND_X = tuple(x + dx for x in cls.LEGEND_X)
-
     def __init__(self, keyboard, controller, pads=(), controller_enabled=True,
                  controller_available=True, return_to_menu=True):
-        self.lay_out()
         self.keyboard = keyboard
         self.controller = controller
         self.pads = tuple(pads)
@@ -550,7 +511,6 @@ class ControlsPage:
 
     # -- drawing --------------------------------------------------------
     def draw(self, viewport, font):
-        self.lay_out(viewport.width)
         image = Image.alpha_composite(viewport, Image.new('RGBA', viewport.size, (0, 0, 0, menu_theme.current().dim)))
         draw = ImageDraw.Draw(image)
 
@@ -571,11 +531,11 @@ class ControlsPage:
             text(label, (rect[0] + rect[2]) // 2, rect[1] + (rect[3] - rect[1]) // 2 - 4,
                  color, 'center', rect[2] - rect[0] - 12)
 
-        menu_theme.panel(image, self.PANEL, clear_sides=True, limit=self.limit)  # labels reach the panel's sides
+        menu_theme.panel(image, self.PANEL, clear_sides=True)  # labels reach the panel's sides
         draw = ImageDraw.Draw(image)
         focused = self.focused
         if self.view == 'overview':
-            text('Controls', self.centre, self.PANEL[1] + 12, c(GOLD), 'center')
+            text('Controls', 256, self.PANEL[1] + 12, c(GOLD), 'center')
             for rect, device, label in zip(self.TABS, ('keyboard', 'controller'),
                                            ('Keyboard', 'Controller')):
                 chosen = device == self.device
@@ -672,14 +632,14 @@ class ControlsPage:
                     text(label, left + 20, y - 5, c(WHITE), 'left', LABEL_WIDTH)
         status_y = y0 + PAD_HEIGHT + 6
         if not self.controller_available:
-            text('Controller support is unavailable here', self.centre, status_y, c(MUTED), 'center', 420)
+            text('Controller support is unavailable here', 256, status_y, c(MUTED), 'center', 420)
         elif not self.controller_enabled:
-            text('Controller input is switched off', self.centre, status_y, c(MUTED), 'center', 420)
+            text('Controller input is switched off', 256, status_y, c(MUTED), 'center', 420)
         elif self.pads:
             names = ', '.join(pad.name for pad in self.pads)
-            text(names, self.centre, status_y, c(GOLD), 'center', 420)
+            text(names, 256, status_y, c(GOLD), 'center', 420)
         else:
-            text('No controller connected', self.centre, status_y, c(MUTED), 'center', 420)
+            text('No controller connected', 256, status_y, c(MUTED), 'center', 420)
 
     def hints(self):
         if self.input_device == 'pad':
@@ -690,10 +650,10 @@ class ControlsPage:
 
     def draw_remap(self, image, draw, text, button, measure):
         keyboard = self.device == 'keyboard'
-        text('Keyboard keys' if keyboard else 'Controller buttons', self.centre, self.PANEL[1] + 12, c(GOLD), 'center')
+        text('Keyboard keys' if keyboard else 'Controller buttons', 256, self.PANEL[1] + 12, c(GOLD), 'center')
         heading = 'Key' if keyboard else 'Button'
         row_top = self.row_top()
-        text('Action', 50 + self.dx, row_top - 15, c(MUTED))
+        text('Action', 50, row_top - 15, c(MUTED))
         for index, (left, right) in enumerate(self.SLOT_X):
             text(f'{heading} {index + 1}', (left + right) // 2, row_top - 15, c(MUTED), 'center')
         bindings = self.bindings
@@ -702,8 +662,8 @@ class ControlsPage:
             top = row_top + row * self.ROW_HEIGHT
             unbound = not bindings.keys(action) and action not in ('time',)
             color = ACTION_COLORS[action]
-            draw.rectangle((38 + self.dx, top + 7, 43 + self.dx, top + 12), fill=color)
-            text(ACTION_BY_NAME[action].label, 50 + self.dx, top + 5, c(ERROR) if unbound else c(WHITE), max_width=176)
+            draw.rectangle((38, top + 7, 43, top + 12), fill=color)
+            text(ACTION_BY_NAME[action].label, 50, top + 5, c(ERROR) if unbound else c(WHITE), max_width=176)
             for slot in range(2):
                 rect = self.control_rect(('slot', action, slot))
                 selected = focused == ('slot', action, slot)
@@ -735,5 +695,5 @@ class ControlsPage:
         button(self.BUTTONS[1], 'Back', focused == 'back')
         bottom = row_top + len(bindings.actions) * self.ROW_HEIGHT
         if self.message:
-            text(self.message, self.centre, bottom + 8, c(ERROR) if self.message_error else c(GOLD), 'center', 420)
-        text(self.hints(), self.centre, self.BUTTONS[0][1] - 18, c(MUTED), 'center', 420)
+            text(self.message, 256, bottom + 8, c(ERROR) if self.message_error else c(GOLD), 'center', 420)
+        text(self.hints(), 256, self.BUTTONS[0][1] - 18, c(MUTED), 'center', 420)

@@ -628,46 +628,30 @@ class GameMenuSceneTests(unittest.TestCase):
                     self.assertGreater(ink[2] - ink[0], hint.width * sy * 0.8)
                     self.assertGreater(ink[1], gallery.pixel_rect(gallery.PANEL, frame.size)[3])
 
-    def test_wide_controls_page_fills_the_window_and_answers_the_pointer(self):
+    def test_controls_page_stays_the_classic_page_in_wide_windows(self):
+        # Its keyboard and controller cannot grow, so a wide window gains it nothing
+        # (docs/MENU_THEMES.md, "Wide windows"): it is fitted like the game's picture.
         scene = self.scene
         scene.open_controls_page()
         page = scene.game_menu.controls_page
-        for width, height in ((1920, 1080), (2560, 1080), (1434, 1080), (1920, 1200), (1920, 1080)):
+        for width, height in ((1920, 1080), (2560, 1080), (1434, 1080)):
             with self.subTest(window=(width, height)), \
                     patch.object(scene.canvas, 'winfo_width', return_value=width), \
                     patch.object(scene.canvas, 'winfo_height', return_value=height):
                 scene.present_viewport()
-                frame = ImageTk.getimage(scene.image_ref)
-                wide = width * 384 / height - 510 >= 136
-                self.assertEqual(bool(page.spread), wide)
-                size, origin = ((width, height), (0, 0)) if wide else fit_viewport(width, height)
-                self.assertEqual(frame.size, size)
-                self.assertEqual(tuple(scene.canvas.coords(scene.canvas.find_all()[0])), tuple(map(float, origin)))
-                units = scene.wide_columns(width, height) if wide else 510
+                frame = ImageTk.getimage(scene.image_ref).convert('RGB')
+                size, origin = fit_viewport(width, height)
+                expected = scene.native_viewport.crop((1, 0, 511, 384)).resize(size, Image.Resampling.NEAREST)
+                self.assertEqual(frame.tobytes(), expected.convert('RGB').tobytes())
                 for device in ('keyboard', 'controller'):
                     page.device = device
                     for index, control in enumerate(page.controls()):
                         left, top, right, bottom = page.control_rect(control)
-                        for x, y in ((left + 2, top + 2), (right - 2, bottom - 2)):
-                            pixel = origin[0] + (x - 1) * size[0] / units, origin[1] + y * size[1] / 384
-                            point = scene.dev_pointer(SimpleNamespace(x=pixel[0], y=pixel[1]))
-                            self.assertEqual(page.hit(*point), index, (device, control))
+                        x, y = (left + right) / 2, (top + bottom) / 2
+                        pixel = origin[0] + (x - 1) * size[0] / 510, origin[1] + y * size[1] / 384
+                        point = scene.dev_pointer(SimpleNamespace(x=pixel[0], y=pixel[1]))
+                        self.assertEqual(page.hit(*point), index, (device, control))
                 page.device = 'keyboard'
-                scene.present_viewport()
-                frame = ImageTk.getimage(scene.image_ref).convert('RGB')
-                if wide:
-                    # The page is drawn at the game's resolution on a picture as wide as the
-                    # window, the game's picture centred behind it, and enlarged without smoothing.
-                    self.assertEqual(page.PANEL[2] - page.PANEL[0], 470 + page.spread)
-                    canvas = Image.new('RGBA', (units + 2, 384), '#080808')
-                    canvas.paste(scene.screenshot_viewport, ((units + 2 - 512) // 2, 0))
-                    expected = page.draw(canvas, scene.ui_font).crop((1, 0, units + 1, 384)).convert('RGB')
-                    self.assertEqual(frame.tobytes(), expected.resize(size, Image.Resampling.NEAREST).tobytes())
-                else:
-                    expected = scene.native_viewport.crop((1, 0, 511, 384)).resize(size, Image.Resampling.NEAREST)
-                    self.assertEqual(frame.tobytes(), expected.convert('RGB').tobytes())
-                # The classic page stays the capture "with menus".
-                self.assertEqual(scene.native_viewport.size, (512, 384))
 
     def test_save_dialog_and_scroll_update_pixels_without_redrawing_gameplay(self):
         scene = self.scene
