@@ -228,6 +228,7 @@ def open_capture_folder(folder):
 # path, time and size, so a changed file is read afresh. Quotas per kind.
 SHARED_QUOTAS = {'thumb': 32, 'image': 2, 'icon': 8}
 SHARED_READS = {}
+THUMB_WORKERS = 3
 # The last listing of each folder: the page opens with it while the folder is read again.
 LAST_SCANS = {}
 
@@ -239,6 +240,9 @@ class GalleryReads:
         self.shared = shared   # a dict kept between pages (SHARED_READS), or None
         self.closed, self.serial, self.thread = False, 0, None
         self.wanted = None
+        # The page's thumbnails are read by a few workers of their own: PNG
+        # decoding leaves Python's lock, so the page fills a few times sooner.
+        self.thumbs, self.thumb_threads = PriorityQueue(), []
 
     def request(self, key, function, priority=0):
         if key in self.cache:
@@ -252,15 +256,23 @@ class GalleryReads:
                 key[0] not in ('image', 'thumb') or priority < 0 or len(self.pending) < 12):
             self.pending.add(key)
             self.serial += 1
+            if key[0] == 'thumb' and self.shared is not None:
+                self.thumbs.put((priority, self.serial, key, function))
+                if len(self.thumb_threads) < THUMB_WORKERS:
+                    thread = Thread(target=self.work, args=(self.thumbs,), daemon=True, name='PNG thumbnail reads')
+                    self.thumb_threads.append(thread)
+                    thread.start()
+                return None
             self.jobs.put((priority, self.serial, key, function))
             if self.thread is None:
                 self.thread = Thread(target=self.work, daemon=True, name='PNG gallery reads')
                 self.thread.start()
         return None
 
-    def work(self):
+    def work(self, jobs=None):
+        jobs = self.jobs if jobs is None else jobs
         while not self.closed:
-            _priority, _serial, key, function = self.jobs.get()
+            _priority, _serial, key, function = jobs.get()
             if self.closed or function is None:
                 return
             if key[0] in ('image', 'thumb') and self.wanted is not None and key not in self.wanted:
@@ -304,6 +316,8 @@ class GalleryReads:
     def close(self):
         self.closed = True
         self.jobs.put((-100, 0, None, None))
+        for _thread in self.thumb_threads:
+            self.thumbs.put((-100, 0, None, None))
         self.pending.clear()
         self.cache.clear()
 
