@@ -268,7 +268,7 @@ class SaveBrowserTests(unittest.TestCase):
     def test_entire_name_strip_renames_in_both_modes_without_loading_or_saving(self):
         slot = SaveSlot(self.folder / 'journey.pop2save', 'My journey', True)
         for mode in ('save', 'load'):
-            for point in ((238, 273), (258, 280), (470, 292)):
+            for point in ((238, 273), (258, 280), (470, 291)):
                 with self.subTest(mode=mode, point=point):
                     menu = SaveBrowser((slot,), mode)
                     self.assertEqual(menu.hit(*point), 25)
