@@ -156,7 +156,11 @@ class Final(Environment):
         # FinlWatchOpps reads the saved Prince record (a5-0x50d2), which
         # trails the current actor through the native frame. Keep that
         # pre-control snapshot when a room crossing happens in this tick.
-        scene.final_saved_prince = (scene.room_id, scene.player_bounds()[2],
+        # a5-0x3566 is GetCharEdges' right edge (4:5d5a-5d6a): working X
+        # (drawing X + 207) and exclusive, where the port's last sprite
+        # column is inclusive drawing X.
+        right = scene.player_collision_bounds()[2] + 1
+        scene.final_saved_prince = (scene.room_id, native_x(right),
                                     scene.sequence_state.animation_state)
 
     def frame_hook(self):
@@ -178,6 +182,12 @@ class Final(Environment):
         scene.combat.player.life, scene.combat.player.max_life = life, capacity
         scene.sequence_state.sequence_mode = mode
         scene.start_sequence(55)
+        # 9:05ec-05f6: a5-0x503c = 1 (sword drawn) and AddSound(14). SEQS 55
+        # ends in the en-garde hold, which only the armed controls leave.
+        scene.sword_drawn = scene.combat.player.sword_drawn = True
+        scene.sword_sheathing = False
+        scene.armed_input = None
+        scene.sequence_state.sound_events.append(14)
         frame = scene.sequence_runtime.next_frame()
         scene.action, scene.player_x = frame.action, frame.target_x
 
