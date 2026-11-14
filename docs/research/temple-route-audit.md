@@ -102,6 +102,15 @@ Every search reported zero exceptions from the game.
 
 ## Level 12
 
+**Video follow-up, 2026-11-14:** the player supplied a successful Macintosh
+run. Read [the timestamped route](level12-video-route.md) before continuing
+this search. It escapes upwards from room 8 through loose 1:26, drops the
+room-9 guard beside plate 9:24, opens the exit from **14:8**, and returns
+west via **16 -> 6 -> 17 -> 10 -> 9 -> 8 -> 19 -> 7**. It does not visit the
+genie. This corrects the obligatory-start-detour claim below and supports
+the guard/corpse hypothesis; a full port replay remains unverified. The
+following sections preserve the earlier partial search results.
+
 Not finished, and not proven impossible. The east side is now played from a fresh
 load, and the search still ran without opponents. What is left is the way to the
 door.
@@ -110,8 +119,11 @@ Exit door 7:23 opens from plate 14:8 or plate 24:23.
 
 ### The trap at the start
 
-The start rooms (19, 7 and room 8's lower floor) have one way out: hole 8:21.
-It lands on plate 16:1, which shuts gates 8:24, 8:29, 6:29 and 16:28, three of
+The earlier search used hole 8:21 to leave the start rooms (19, 7 and
+room 8's lower floor). The native video now shows another route: climb room
+8, dislodge loose 1:26 from below and climb through the ceiling. The claim
+that 8:21 was the only way out was incorrect.
+Hole 8:21 lands on plate 16:1, which shuts gates 8:24, 8:29, 6:29 and 16:28, three of
 which start open. Plate 16:2 reopens 6:29, the road north. Plate 16:7 reopens
 16:28, the road east.
 
@@ -159,8 +171,10 @@ measured climb of 31 frames. These figures are an estimate, not a proof.
 
 ### A hypothesis for gate 5:2
 
-Not tested. A guard stands at 9:1 on the floor that ends at the hole over plate
-9:24, and gates 3:2, 5:0 and 2:9 are all held by something falling on a plate.
+Not tested by that port audit. The later native video shows this guard
+falling beside the lower plate and the subsequent northern-gate traversal;
+see the follow-up above. A guard stands at 9:1 on the floor that ends at the
+hole over plate 9:24, and gates 3:2, 5:0 and 2:9 are all held by something falling on a plate.
 CheckPress treats a dead actor as a press for good (5:252e; `permanent=not alive`
 in `PressurePlates.press`), so his body on 9:24 would hold the gate.
 
@@ -169,7 +183,8 @@ gave nothing usable: the guard stood at X 115 and later 136 and did not cross
 the hole, and when the Prince dropped behind him through 5:21 he already showed as
 dead, with the Prince 64 pixels away. The cause was not found, so those trials
 prove nothing either way. A fair test needs a route with opponents on from the
-start, which means winning the fight in room 6.
+start. The video reaches room 9 before the room-6 fight by using the upward
+escape from room 8; winning room 6 first is not a prerequisite for that route.
 
 Rooms with generator records: 6 (cell 24), 7 (cell 6), 9 (cell 1), 20 (cell 14).
 Checkpoints: 11:10 and 2:9, both on the northern route.
