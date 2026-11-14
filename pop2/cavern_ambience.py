@@ -32,7 +32,7 @@ import math
 import random
 
 import numpy
-from PIL import Image, ImageFilter
+from PIL import Image
 
 from pop2.firelight import DIRECTIONS, Firelight, gaussian, trace_firelight, trace_lavalight
 from pop2.opponent_generation import EMPTY_TILES, WALL_TILES
@@ -49,6 +49,9 @@ FLOOR_STRIP = 14
 
 # Scenery darker than this is open air against the cave's back wall.
 AIR_LUMINANCE = 60
+# Pixels across the square over which the dark is smoothed, so that specks of
+# paint do not count.
+AIR_SMOOTHING = 5
 TIP_LUMINANCE = 72
 TIP_CLEARANCE = 12
 TIP_LENGTH = 8
@@ -364,19 +367,20 @@ class Colours:
         self.lavalight = self.light_table(POOL_GLOW_GAIN, POOL_GLOW_ADD)
 
     def closest(self, values, among=None):
-        among = self.rgb if among is None else among
-        distance = (((values[:, None, :] - among[None, :, :]) * (2, 3, 2)) ** 2).sum(axis=2)
+        """Index in among of the nearest colour to each of values, by weighted distance.
+        The distance is sum(w²(v - a)²); its w²v² part is the same for every a, so
+        only w²a² - 2w²v·a is compared, in whole numbers, which keeps every tie."""
+        among = (self.rgb if among is None else among).astype(numpy.int64)
+        weights = numpy.array((2, 3, 2), dtype=numpy.int64) ** 2
+        distance = (among ** 2 * weights).sum(axis=1) - 2 * (values.astype(numpy.int64) @ (among * weights).T)
         return distance.argmin(axis=1)
 
     def nearest_cube(self):
         """Nearest palette colour for every 5-bit red, green and blue."""
         levels = numpy.arange(32, dtype=numpy.int32) * 8 + 4
-        green, blue = numpy.meshgrid(levels, levels, indexing='ij')
-        planes = []
-        for red in levels:
-            values = numpy.stack((numpy.full(green.size, red), green.ravel(), blue.ravel()), axis=1)
-            planes.append(self.rgb[self.closest(values)])
-        return numpy.concatenate(planes).astype(numpy.uint8)
+        red, green, blue = numpy.meshgrid(levels, levels, levels, indexing='ij')
+        values = numpy.stack((red.ravel(), green.ravel(), blue.ravel()), axis=1)
+        return self.rgb[self.closest(values)].astype(numpy.uint8)
 
     def light_table(self, gain, add):
         """[level, colour] -> what that palette colour becomes at that light."""
@@ -528,14 +532,17 @@ def steady_wall(frames, flame, unlit):
     frame, there is only the unlit recess to go by."""
     wall = numpy.array(frames[0])
     codes = frames[..., 0].astype(numpy.int64) << 16 | frames[..., 1].astype(numpy.int64) << 8 | frames[..., 2]
-    for row, column in numpy.argwhere((codes != codes[0]).any(axis=0) | flame.any(axis=0)):
-        shows = codes[:, row, column][~flame[:, row, column]]
-        if len(shows):
-            colours, counts = numpy.unique(shows, return_counts=True)
-            kept = int(colours[counts.argmax()])
-            wall[row, column, :3] = kept >> 16, (kept >> 8) & 255, kept & 255
-        else:
-            wall[row, column] = unlit[row, column]
+    changing = (codes != codes[0]).any(axis=0) | flame.any(axis=0)
+    clear = ~flame
+    # [frame, y, x]: how many clear frames show the colour this frame shows there.
+    counts = ((codes[:, None] == codes[None, :]) & clear[None, :]).sum(axis=1)
+    counts = numpy.where(clear, counts, -1)
+    # The colour shown most often; of two as often, the lower code.
+    kept = numpy.where(counts == counts.max(axis=0), codes, numpy.iinfo(numpy.int64).max).min(axis=0)
+    seen = changing & clear.any(axis=0)
+    wall[seen, 0], wall[seen, 1], wall[seen, 2] = kept[seen] >> 16, (kept[seen] >> 8) & 255, kept[seen] & 255
+    hidden = changing & ~clear.any(axis=0)
+    wall[hidden] = unlit[hidden]
     return wall
 
 
@@ -635,10 +642,24 @@ class Air:
         return bool(self.covered[y * WIDTH + x])
 
 
+def majority(picked, size):
+    """[y, x] of where most of the size-by-size square around a pixel is picked, the
+    edge pixels standing in for what is past the edge: a median filter of a
+    two-colour picture, counted instead of sorted."""
+    reach = size // 2
+    padded = numpy.pad(picked, reach, mode='edge').astype(numpy.int32)
+    summed = numpy.zeros((padded.shape[0] + 1, padded.shape[1] + 1), dtype=numpy.int32)
+    summed[1:, 1:] = padded.cumsum(axis=0).cumsum(axis=1)
+    height, width = picked.shape
+    count = (summed[size:size + height, size:size + width] - summed[:height, size:size + width]
+             - summed[size:size + height, :width] + summed[:height, :width])
+    return count > size * size // 2
+
+
 def open_air(luminance, terrain, room):
     """Pixels of the dark back wall that are open space in the level map."""
-    air = bytearray(luminance.point(lambda value: 255 if value < AIR_LUMINANCE else 0)
-                    .filter(ImageFilter.MedianFilter(5)).tobytes())
+    air = bytearray((majority(numpy.asarray(luminance) < AIR_LUMINANCE, AIR_SMOOTHING).astype(numpy.uint8)
+                     * 255).tobytes())
     blank = bytes(TILE_WIDTH)
     for row in range(3):
         top = row * TILE_HEIGHT + 5
@@ -659,22 +680,38 @@ def open_air(luminance, terrain, room):
 def stalactite_tips(shades):
     """Ends of thin bright runs of rock, hanging over the dark back wall.
 
-    Read from the raw art: the last pixels of a tip are one pixel wide."""
-    def dark(x, y):
-        return shades[y * WIDTH + x] < AIR_LUMINANCE
+    Read from the raw art: the last pixels of a tip are one pixel wide.
+    shades: the room's brightness, a byte a pixel, row by row. The neighbours are
+    read by their place in that run of bytes, so a taper that reaches past the
+    edge of a row reads the end of the row beside it."""
+    flat = numpy.frombuffer(bytes(shades), dtype=numpy.uint8)
+    dark = flat < AIR_LUMINANCE
+    # Before the first pixel comes the last, as a negative index reads it.
+    back = TIP_LENGTH * WIDTH + TIP_TAPER
+    wrapped = numpy.concatenate((dark[-back:], dark))
+    start, end = TIP_LENGTH * WIDTH, (HEIGHT - TIP_CLEARANCE) * WIDTH
 
+    def dark_at(offset):
+        return wrapped[back + start + offset:back + end + offset]
+
+    tip = flat[start:end] >= TIP_LUMINANCE
+    for beside in (-WIDTH - TIP_WIDTH, -WIDTH + TIP_WIDTH,
+                   -TIP_LENGTH * WIDTH - TIP_TAPER, -TIP_LENGTH * WIDTH + TIP_TAPER):
+        tip &= dark_at(beside)
+    # Clear below, all the way down to TIP_CLEARANCE.
+    for below in range(1, TIP_CLEARANCE):
+        tip &= dark_at(below * WIDTH)
+    tip = tip.reshape(-1, WIDTH)
+    tip[:, :TIP_WIDTH] = tip[:, WIDTH - TIP_WIDTH:] = False
     found = []
-    for x in range(TIP_WIDTH, WIDTH - TIP_WIDTH):
-        for y in range(TIP_LENGTH, HEIGHT - TIP_CLEARANCE):
-            if (shades[y * WIDTH + x] >= TIP_LUMINANCE and dark(x, y + 1)
-                    and dark(x - TIP_WIDTH, y - 1) and dark(x + TIP_WIDTH, y - 1)
-                    and dark(x - TIP_TAPER, y - TIP_LENGTH) and dark(x + TIP_TAPER, y - TIP_LENGTH)
-                    and all(dark(x, below) for below in range(y + 1, y + TIP_CLEARANCE))):
-                length = 0
-                while length < y and not dark(x, y - length):
-                    length += 1
-                if length >= TIP_LENGTH:
-                    found.append((x, y, length))
+    # Column by column, top to bottom.
+    columns, rows = numpy.nonzero(tip.T)
+    for x, y in zip(columns.tolist(), (rows + TIP_LENGTH).tolist()):
+        length = 0
+        while length < y and not dark[(y - length) * WIDTH + x]:
+            length += 1
+        if length >= TIP_LENGTH:
+            found.append((x, y, length))
     # Neighbouring columns of one stalactite end at different heights: its
     # tip is the lowest of them.
     return [tip for tip in found if not any(
@@ -781,7 +818,7 @@ def shows(torch, in_front):
 
 
 def analyze_room(program, room, art, terrain, palette, resources=None, shapes=None, raised=None):
-    """raised: the room with its gates up. Torches are traced on that whatever the gates
+    """raised: the room with its gates up, or what builds it when it is wanted. Torches are traced on that whatever the gates
     are doing when the Prince comes in, and a gate that is down is left out as it is drawn:
     traced on a shut gate, the light stopped at its front, went on over the rest of it and
     left a hole where it had been once it rose."""
@@ -803,8 +840,9 @@ def analyze_room(program, room, art, terrain, palette, resources=None, shapes=No
                   for columns in liquid)
     torches = ()
     before_torches = in_front
-    if resources is not None:
-        raised = art if raised is None else raised
+    if resources is not None and records:
+        # Building the room with its gates up costs as much as the rest: only for torches.
+        raised = art if raised is None else raised() if callable(raised) else raised
         before_torches = numpy.array(raised.foreground.getchannel('A')) > 0
         pixels = numpy.array(Image.alpha_composite(raised.background, raised.foreground).convert('RGB'))
         arts = ((record, torch_art(record, resources, palette, shapes, colours.firelight, pixels, before_torches))

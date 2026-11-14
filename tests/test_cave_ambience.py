@@ -2842,8 +2842,13 @@ class RealSceneTests(unittest.TestCase):
         self.addCleanup(setattr, scene.root, 'after', pending)
         # The harness replaces this on the instance.
         type(scene).schedule_next_animation(scene)
-        scene.root.after.assert_called_once()
-        self.assertEqual(scene.root.after.call_args.args[1], scene.advance_animation)
+        # The spare time reads the rooms next door (after_idle is after('idle', ...)):
+        # that is not a frame.
+        timers = [call.args for call in scene.root.after.call_args_list if call.args[0] != 'idle']
+        idle = [call.args[1] for call in scene.root.after.call_args_list if call.args[0] == 'idle']
+        self.assertEqual(len(timers), 1)
+        self.assertEqual(timers[0][1], scene.advance_animation)
+        self.assertEqual(idle, [scene.read_ambience_ahead])
 
 
 class SourceTests(unittest.TestCase):

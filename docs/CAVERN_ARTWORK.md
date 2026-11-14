@@ -158,8 +158,8 @@ to level8 room5. The comparison is kept locally at
 
 An optional port effect, not a recovered behavior: the original has no dust,
 ash, water drops or cast light, and its torch does not behave like this.
-`pop2/cavern_ambience.py` draws them while the F1 item Cave ambience (Alt+A) is
-on, and `pop2/firelight.py` works out the light. It is off by default, and the
+`pop2/cavern_ambience.py` draws them while Cave ambience (Options page, under
+Display; Alt+A) is on, and `pop2/firelight.py` works out the light. It is off by default, and the
 choice is kept between sessions in `preferences.json` (`pop2/preferences.py`).
 
 The user approved how it looks on 2026-11-07, after eleven passes, in level 4 room
@@ -172,6 +172,22 @@ the frame is a colour of the room's own palette, and everything moves once per
 game tick. The second rule was learned the hard way: a pass at 36 Hz made the
 drops and the dust glide, and they stood out against a game running at 12. If
 the whole game ever runs faster, the ambience can follow it.
+
+Each room is read once, the first time it is shown: the open air, the
+stalactite tips, the pools and the light of every torch. That reading used to
+cost 60 to 115 ms and stalled the frame on which the Prince walked into a new
+room. On 2026-11-14 it was made about twice as fast without changing a single
+result. The stalactites and the smoothing of the dark are now counted with
+whole-array operations, and the palette search compares whole numbers by matrix
+product. The cells of a flame are lit together, and a room without torches is no
+longer drawn a second time with its gates up. All 84 rooms read exactly as
+before, and `tests/test_ambience_speed.py` checks each part against its old form.
+
+The rooms next door are also read ahead in the time the game waits for its next
+frame (`LevelRenderer.read_ambience_ahead`), one step per wait. Walking in then
+costs what a frame costs without the ambience. A reading is kept with the drawing
+and the tiles it came from. If the room has changed by the time the Prince comes
+in, for instance because a plate was pressed, it is read again then, as before.
 
 What the user has reviewed and how each part ended up:
 

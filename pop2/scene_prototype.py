@@ -102,6 +102,9 @@ ANIMATION_FPS = 12
 ANIMATION_INTERVAL_MS = 1000 / ANIMATION_FPS
 COMBAT_ANIMATION_FPS = 10
 COMBAT_ANIMATION_INTERVAL_MS = 1000 / COMBAT_ANIMATION_FPS
+# Seconds that must be left before the next frame to read a cave room ahead for
+# the ambience. A reading takes 20 to 50 ms; a frame interval is about 83.
+AMBIENCE_AHEAD_SPARE_S = 0.05
 RUN_CYCLE_SEQUENCES = {1, 200, 201, 202}
 REST_SEQUENCES = {IDLE_SEQUENCE}
 CROUCH_SEQUENCES = {
@@ -3348,6 +3351,24 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
                 interval_ms=self.current_animation_interval_ms(),
             )
         self.animation_after_id = self.root.after(delay_ms, self.advance_animation)
+        self.schedule_ambience_ahead()
+
+    def schedule_ambience_ahead(self):
+        """With the cave ambience on, the time left before the next frame reads a room
+        next door, so that walking into it does not stall that frame."""
+        if (not getattr(self, 'cave_ambience_enabled', False)
+                or getattr(self, 'ambience_ahead_after_id', None) is not None):
+            return
+        self.ambience_ahead_after_id = self.root.after_idle(self.read_ambience_ahead)
+
+    def read_ambience_ahead(self):
+        self.ambience_ahead_after_id = None
+        caverns = getattr(getattr(self, 'game', None), 'caverns', None)
+        terrain = getattr(self, 'level_map', None)
+        if (caverns is None or terrain is None or getattr(self, 'intro', None) is not None
+                or self.next_animation_at - time.perf_counter() < AMBIENCE_AHEAD_SPARE_S):
+            return
+        self.level_renderer.read_ambience_ahead(self.room_id, caverns, terrain)
 
     def cancel_gate_presentation(self):
         pending = getattr(self, 'gate_presentation_after_id', None)
