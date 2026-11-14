@@ -142,6 +142,42 @@ class TempleExitSceneTests(unittest.TestCase):
         self.assertEqual({pose for _site, pose in observed}, set(range(217, 227)))
         self.assertEqual(exposed, set(DOORS))
 
+    def test_entry_occlusion_keeps_the_floor_corner_and_other_uncovered_scenery_stable(self):
+        scene = self.scene
+        scene.audio = None
+        room_rect = (ROOM_ORIGIN_X, 0, ROOM_ORIGIN_X + ROOM_WIDTH, ROOM_HEIGHT)
+        checked = set()
+        for site in DOORS:
+            with self.subTest(site=site):
+                self.open_exit(*site)
+                row, column = divmod(site[2], 10)
+                corners = [(column * 51 + dx, row * 120 + dy)
+                           for dx, dy in ((88, 96), (89, 96), (87, 97))]
+                for _ in range(36):
+                    state = scene.sequence_state
+                    if 217 <= state.action <= 226:
+                        scene.render()
+                        fixed = scene.native_viewport.crop(room_rect).convert('RGB')
+                        with patch.object(CavernRoom, 'draw_actor_foreground',
+                                          CavernRoom.draw_actor_floor_foreground):
+                            scene.render()
+                            ordinary = scene.native_viewport.crop(room_rect).convert('RGB')
+                        for point in corners:
+                            self.assertEqual(fixed.getpixel(point), ordinary.getpixel(point),
+                                             f'Door entry changes the floor corner at {point}')
+                        difference = ImageChops.difference(fixed, ordinary)
+                        left, top, right, bottom = scene.player_bounds()
+                        difference.paste((0, 0, 0), (max(0, left), max(0, top),
+                                                    min(ROOM_WIDTH, right + 1),
+                                                    min(ROOM_HEIGHT, bottom + 1)))
+                        self.assertIsNone(difference.getbbox(),
+                                          f'Door entry repaints scenery outside the Prince at pose {state.action}')
+                        checked.add(site)
+                    if scene.level_complete:
+                        break
+                    self.harness.tick()
+        self.assertEqual(checked, set(DOORS))
+
     def test_all_six_temple_exit_doors_clip_real_late_stair_pixels(self):
         scene = self.scene
         scene.audio = None

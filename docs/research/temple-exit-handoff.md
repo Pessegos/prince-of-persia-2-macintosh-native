@@ -130,6 +130,8 @@ and full FrameAdv remain excluded.
 
 The port retains the clipped original SHAP and position alongside the room
 commands, and redraws it after the entering Prince's ordinary floor repaint.
+The later corner repair below retains composed scenery colours under that
+original SHAP alpha rather than repainting the raw SHAP colours.
 This uses the sprite's own transparency, retaining the actual arch and jamb
 contour, and leaves ordinary poses, NPCs and other environments alone. The
 existing rectangular clip and all three level transitions remain unchanged.
@@ -163,3 +165,33 @@ New comparison-output SHA-256:
 `8a6d82ccbb34d70a85599652fc06c7185820eefb2e1b29d5a446cd9df7d552ad`.
 Full native draw/audio/frame equivalence remains the next bounded research
 boundary, not a prerequisite for this reproduced foreground repair.
+
+## Follow-up: stable lower-right floor corner
+
+The next user crop exposed a scenery change introduced by the whole-piece
+repaint in `743ea0d`. In the level-10 exit, three pixels at room coordinates
+(343,216), (344,216), (342,217) changed from the neighbouring floor's dark
+colours to the jamb's brown colours as soon as pose 217 began. The source
+commands place SHAP3579 before the next column's SHAP3528; the latter covers
+these corner pixels in the composed room. Redrawing raw SHAP3579 after the
+actor incorrectly replaced them. This is independent of the Prince's pixels.
+The equivalent three-point corner occurs at all six tested exit doors.
+
+The retained actor-occluding piece now takes its colours from the finished
+background/foreground composition, while keeping the original door's alpha
+and position. Only small cropped pieces are stored. This preserves the
+visible floor and other already composed scenery while hiding the entering
+Prince. Native pose admission and geometry remain as previously recovered;
+the colour-preserving host composition is a renderer correction, not a new
+claim about the complete Macintosh dirty-cell/raster pipeline.
+
+The additional regression checks all three corner pixels and requires that
+entry occlusion change no scenery outside the player's drawn bounds, in
+every entry frame at all six doors. The previous renderer fails seven
+cases/subcases without errors. The existing full-contour occlusion and
+transition tests remain intact. The focused renderer/exit/arrival/ending
+group now passes 162 tests, without skips, in 59.753 seconds. No new full
+discovery or native probe run is claimed for this colour-only correction.
+The normal/previous-entry/fixed-entry corner comparison was inspected:
+fixed and normal have no differing pixels in that crop. Local evidence is
+ignored under `rendered/temple-door-corner`.

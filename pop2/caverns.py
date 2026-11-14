@@ -1566,5 +1566,14 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
     retained = ImageChops.invert(ImageChops.lighter(
         background.getchannel('A'), foreground.getchannel('A')))
     background = Image.alpha_composite(Image.new('RGBA', background.size, 'black'), background)
+    visible_exits = []
+    for sprite, (x, y) in exit_foreground:
+        # The promotion supplies an actor occluder, not a scenery change.
+        # Later cells already cover the jamb's bottom corner with floor.
+        # Retain those composed colours under the original doorway alpha.
+        rect = (x, y, x + sprite.width, y + sprite.height)
+        cover = Image.alpha_composite(background.crop(rect), foreground.crop(rect))
+        cover.putalpha(sprite.getchannel('A'))
+        visible_exits.append((cover, (x, y)))
     return CavernRoom(background, foreground, masks, (), (), room_id, 3, cell_masks,
-                      redraw, floors, retained, gate_masks, custom_mask, torch_occlusion, tuple(exit_foreground))
+                      redraw, floors, retained, gate_masks, custom_mask, torch_occlusion, tuple(visible_exits))
