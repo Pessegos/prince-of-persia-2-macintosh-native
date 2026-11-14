@@ -173,7 +173,7 @@ In the Macintosh version, parts of the Prince's body can show through the stone 
 
 <br/>
 
-<img src="docs/github readme/ledge-left-fall-before-after.gif" alt="Before and after comparison of the Prince falling off a ledge to the left, with the rear leg masked by the diagonal floor edge">
+<img src="docs/github readme/ledge-left-fall-ruins-before-after.gif" alt="Before and after comparison of the Prince falling off a ledge to the left, with the rear leg masked by the diagonal floor edge">
 
 *Slowed down for comparison.*
 

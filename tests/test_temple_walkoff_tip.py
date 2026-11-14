@@ -17,7 +17,7 @@ def first_fall():
 
 
 class WalkoffTipTests(unittest.TestCase):
-    def test_only_first_leftward_temple_frame_uses_the_bounded_contour(self):
+    def test_only_first_leftward_temple_or_ruins_frame_uses_the_bounded_contour(self):
         size = (510, 365)
         floor = Image.new('RGBA', (51, 30))
         ImageDraw.Draw(floor).polygon(((0, 29), (30, 0), (50, 0), (50, 29)), fill='gray')
@@ -27,14 +27,17 @@ class WalkoffTipTests(unittest.TestCase):
         room = CavernRoom(Image.new('RGBA', size), front, {}, (), (), 0, 3,
                           platform_contours={(1, 0): [(floor, (51, 95))]})
         bounds = (55, 90, 95, 145)
-        frame = Image.new('RGBA', size, 'red')
-        room.draw_walkoff_tip(frame, first_fall(), bounds)
-        self.assertEqual(frame.getpixel((80, 101)), (128, 128, 128, 255))
-        self.assertEqual(frame.getpixel((80, 115)), (0, 255, 0, 255))
-        for point in ((55, 110), (75, 115), (80, 130), (96, 115), (80, 89)):
-            self.assertEqual(frame.getpixel(point), (255, 0, 0, 255), point)
+        for kind in (2, 4):
+            state = first_fall()
+            state.level_kind = kind
+            frame = Image.new('RGBA', size, 'red')
+            room.draw_walkoff_tip(frame, state, bounds)
+            self.assertEqual(frame.getpixel((80, 101)), (128, 128, 128, 255))
+            self.assertEqual(frame.getpixel((80, 115)), (0, 255, 0, 255))
+            for point in ((55, 110), (75, 115), (80, 130), (96, 115), (80, 89)):
+                self.assertEqual(frame.getpixel(point), (255, 0, 0, 255), point)
         for field, values in (('actor_type', (2, 4, 7, 8, 11)),
-                              ('level_kind', (1, 3, 4, 5, 6)),
+                              ('level_kind', (1, 3, 5, 6)),
                               ('source_sequence_id', (0, 9, 10, 20, 43, 68)),
                               ('action', (101, 103, 104, 105, 106, 135, 140)),
                               ('animation_state', (0, 1, 2, 4, 5, 6, 9)),
@@ -88,6 +91,49 @@ class WalkoffTipSceneTests(unittest.TestCase):
                     changed.append(state.action)
                 else:
                     self.assertIsNone(difference.getbbox(), f'Unrelated frame {state.action} changed')
+                checked.add(state.action)
+            self.assertEqual(changed, [102])
+            self.assertTrue({2, 3, 4, 5, 6, 7, 102, 103, 104, 105, 106} <= checked)
+        finally:
+            harness.close()
+
+
+@unittest.skipUnless((ASSET_DIR / 'ruins_level6.json').is_file(), 'Imported ruins artwork required')
+class RuinsWalkoffTipSceneTests(unittest.TestCase):
+    def test_same_ruins_ledge_hides_only_the_first_frame_tip(self):
+        from tools.audit_temple_routes import Harness, press
+
+        harness = Harness(6, draw=True)
+        scene = harness.scene
+        scene.audio = None
+        changed, checked = [], set()
+        try:
+            scene.jump_to_room(7, 1, 275, 0)
+            press(harness, 'L', True)
+            for _ in range(13):
+                harness.tick()
+                state = scene.sequence_state
+                saved = replace(state)
+                scene.render()
+                fixed = scene.native_viewport.crop((1, 0, 511, 365)).convert('RGB')
+                with patch.object(CavernRoom, 'draw_walkoff_tip', lambda art, frame, *_args: frame):
+                    scene.render()
+                    ordinary = scene.native_viewport.crop((1, 0, 511, 365)).convert('RGB')
+                self.assertEqual(state, saved)
+                difference = ImageChops.difference(fixed, ordinary)
+                if state.source_sequence_id == 7 and state.action == 102:
+                    self.assertEqual((state.target_x, state.current_y, scene.terrain_motion.row), (202, -115, 2))
+                    self.assertEqual(difference.getbbox(), (238, 218, 246, 220))
+                    self.assertEqual(sum(count for count, colour in difference.getcolors(510 * 365)
+                                         if any(colour)), 13)
+                    scenery = scene.room_cache[7].flattened().convert('RGB')
+                    for y in range(218, 220):
+                        for x in range(238, 246):
+                            if difference.getpixel((x, y)) != (0, 0, 0):
+                                self.assertEqual(fixed.getpixel((x, y)), scenery.getpixel((x, y)))
+                    changed.append(state.action)
+                else:
+                    self.assertIsNone(difference.getbbox(), f'Unrelated ruins frame {state.action} changed')
                 checked.add(state.action)
             self.assertEqual(changed, [102])
             self.assertTrue({2, 3, 4, 5, 6, 7, 102, 103, 104, 105, 106} <= checked)
