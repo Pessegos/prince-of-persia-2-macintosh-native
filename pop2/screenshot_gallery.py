@@ -490,7 +490,7 @@ class ScreenshotGallery:
             self.delete_key, self.deleting = None, False
             self.delete_target = None
             self.error = 'Could not delete this PNG. It may have changed.' if result.error else ''
-            self.status = '' if result.error else 'PNG deleted'
+            self.status = ''   # the picture leaves the list (and burns, when dropped): no message needed
             if not result.error and self.delete_from_drop:
                 self.burn_seconds, self.burn_image = 0.0, self.delete_art
                 self.burn_target = target
@@ -1164,9 +1164,10 @@ class ScreenshotGallery:
                 button(rect, label, 10 + i, active=i == 2, scale=0.6)
             button(self.OPEN_FOLDER, 'Open folder', 18, scale=0.6)
             if message:
-                under = self.PREVIEW[0], self.PREVIEW[3]
+                # In the place of the details line, starting where the picture's name does.
+                under = (self.PREVIEW[0] if framed_left[0] is None else framed_left[0]), self.PREVIEW[3]
                 box((under[0], under[1] + 14, self.DELETE[0] - 6, under[1] + 26), c('#181818'), None)
-                text(message, under[0], under[1] + 17, self.DELETE[0] - 8 - under[0], message_color, 0.5)
+                text(message, under[0], under[1] + 18, self.DELETE[0] - 8 - under[0], message_color, 0.55, flush=True)
             if not modal and self.hovered == 13:
                 edge = self.DELETE[2]
                 box((edge - 124, self.DELETE[1] - 18, edge, self.DELETE[1] - 3), c('#303030'), c('#858585'))

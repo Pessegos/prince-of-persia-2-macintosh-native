@@ -3620,8 +3620,8 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         else:
             # Under the page's frame, a little nearer the health strip than the frame.
             y = ROOM_HEIGHT - self.ui_font.height - 3
-            if uniform:   # the wide screenshots page is taller: the hint goes under it
-                y = VIEWPORT_HEIGHT - text.height - 3
+            if uniform:   # the wide screenshots page is taller: the hint goes under it, near the window's foot
+                y = VIEWPORT_HEIGHT - text.height - 1
         size = max(1, round(text.width * sx)), max(1, round(text.height * sy))
         if text.size != size:
             text = text.resize(size, Image.Resampling.NEAREST)

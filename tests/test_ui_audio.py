@@ -51,7 +51,7 @@ class MenuPcmTests(unittest.TestCase):
         import numpy as np
 
         for rate in (16000, 44100, 48000):
-            for kind in KINDS:
+            for kind in ('hover', 'click', 'reveal'):   # the strings; the burn is a fizz on purpose
                 with self.subTest(rate=rate, kind=kind):
                     samples = np.frombuffer(menu_pcm(kind, rate, 1), dtype='<i2').astype(float)
                     energy = abs(np.fft.rfft(samples)) ** 2
@@ -66,6 +66,25 @@ class MenuPcmTests(unittest.TestCase):
                     # Soft, not bright or hissy: the note itself carries the sound.
                     centroid = (energy * frequencies).sum() / energy.sum()
                     self.assertLess(centroid, 1400)
+
+    def test_burn_is_a_short_fizz_that_dies_away_without_rumble_or_harshness(self):
+        import numpy as np
+
+        for rate in (16000, 44100, 48000):
+            with self.subTest(rate=rate):
+                samples = np.frombuffer(menu_pcm('burn', rate, 1), dtype='<i2').astype(float)
+                energy = abs(np.fft.rfft(samples)) ** 2
+                frequencies = np.fft.rfftfreq(len(samples), 1 / rate)
+                centroid = (energy * frequencies).sum() / energy.sum()
+                self.assertGreater(centroid, 2000)                       # a hiss, not a note
+                self.assertLess(centroid, 4500)                          # duller than white noise
+                self.assertLess(energy[frequencies >= 7000].sum() / energy.sum(), 0.15)
+                self.assertLess(energy[frequencies < 200].sum() / energy.sum(), 0.01)
+                tenth = len(samples) // 10
+                self.assertLess(np.sqrt((samples[-tenth:] ** 2).mean()),
+                                np.sqrt((samples[:3 * tenth] ** 2).mean()) / 20)
+                # In at once: loudest within its first tenth of a second.
+                self.assertLess(np.argmax(abs(samples)), rate * 0.1)
 
     def test_hover_note_is_in_tune_at_every_rate(self):
         import numpy as np
