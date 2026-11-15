@@ -7,7 +7,6 @@ from unittest.mock import patch
 from PIL import Image
 
 from pop2.game_ui import PLAYFIELD_VIEWPORT, DevelopmentMenu, fit_viewport, viewport_point
-from pop2.playback_navigation import PlaybackGroup
 from pop2.screenshots import ScreenshotSettings
 
 
@@ -20,18 +19,16 @@ class MenuModelTests(unittest.TestCase):
 
     def test_pages_are_centered_with_matching_control_hits(self):
         for levels in ((), ((1, "Level 1", SCREENS),)):
-            menu = DevelopmentMenu(SCREENS, 0, False, sections=("First",), level_options=levels)
-            for page in ('tools', 'playback'):
-                menu.show_page(page)
-                with self.subTest(levels=bool(levels), page=page):
-                    left, top, right, bottom = menu.panel_rect
-                    self.assertEqual(left + right, 512)
-                    self.assertLessEqual(abs(top - (PLAYFIELD_VIEWPORT[3] - bottom)), 1)
-                    for index in menu.controls:
-                        x1, y1, x2, y2 = menu.control_rect(index)
-                        self.assertTrue(left < x1 < x2 < right)
-                        self.assertTrue(top < y1 < y2 < bottom)
-                        self.assertEqual(menu.hit((x1 + x2) // 2, (y1 + y2) // 2), index)
+            menu = DevelopmentMenu(SCREENS, 0, False, level_options=levels)
+            with self.subTest(levels=bool(levels)):
+                left, top, right, bottom = menu.panel_rect
+                self.assertEqual(left + right, 512)
+                self.assertLessEqual(abs(top - (PLAYFIELD_VIEWPORT[3] - bottom)), 1)
+                for index in menu.controls:
+                    x1, y1, x2, y2 = menu.control_rect(index)
+                    self.assertTrue(left < x1 < x2 < right)
+                    self.assertTrue(top < y1 < y2 < bottom)
+                    self.assertEqual(menu.hit((x1 + x2) // 2, (y1 + y2) // 2), index)
 
     def test_screen_keys_wrap_and_popup_commits_only_on_selection(self):
         menu = self.menu
@@ -112,37 +109,6 @@ class MenuModelTests(unittest.TestCase):
         self.assertEqual(menu.option_index, 0)
         self.assertEqual(menu.screen, "Room 5")
 
-    def test_playback_back_and_debug_checkbox_are_keyboard_accessible(self):
-        menu = self.menu
-        menu.show_page('playback')
-        menu.focus = 8
-        self.assertEqual(menu.key("space"), "debug_status")
-        self.assertTrue(menu.debug_status)
-        menu.key('Tab')
-        self.assertEqual(menu.focus, 7)
-        self.assertEqual(menu.key('Return'), 'changed')
-        self.assertEqual(menu.page, 'tools')
-        menu.show_page('playback')
-        self.assertEqual(menu.key('Escape'), 'changed')
-        self.assertEqual(menu.page, 'tools')
-        self.assertEqual(menu.key('Escape'), 'resume')
-
-    def test_playback_dropdown_scrolls_to_all_parts_without_covering_the_viewport(self):
-        menu = self.menu
-        menu.sections = tuple(f"Story {i}" for i in range(30))
-        menu.show_page('playback')
-        menu.focus = 4
-        menu.open_dropdown()
-        for _ in range(25):
-            menu.key("Down")
-        self.assertEqual(menu.option_index, 25)
-        self.assertEqual(menu.popup_start, 20)
-        self.assertEqual(menu.popup_count, 10)
-        menu.click(220, menu.control_rect(4)[3] + (25 - menu.popup_start) * 19 + 8)
-        self.assertEqual(menu.section_index, 25)
-        menu.focus = 2
-        self.assertEqual(menu.key("Return"), "seek")
-
     def test_disabled_level_controls_cannot_activate_or_receive_button_focus(self):
         menu = self.menu
         menu.level_available = False
@@ -170,18 +136,15 @@ class MenuModelTests(unittest.TestCase):
         self.assertEqual(menu.screen, "Room 2")
 
     def test_popup_hover_keeps_rows_stable_and_wheel_reaches_both_ends(self):
-        menu = self.menu
-        menu.sections = tuple(f"Story {i}" for i in range(30))
-        menu.section_index = 15
-        menu.show_page('playback')
-        menu.focus = 4
+        menu = DevelopmentMenu(tuple(f"Room {i}" for i in range(30)), 15, False)
+        menu.focus = 0
         menu.open_dropdown()
         start = menu.popup_start
-        popup_y = menu.control_rect(4)[3] + 6
+        popup_y = menu.control_rect(0)[3] + 6
         menu.hover(220, popup_y)
         self.assertEqual(menu.popup_start, start)
         menu.click(220, popup_y)
-        self.assertEqual(menu.section_index, start)
+        self.assertEqual(menu.screen_index, start)
         menu.open_dropdown()
         # The wheel moves the rows; the highlight is the row under the pointer.
         highlighted = menu.option_index
@@ -192,77 +155,20 @@ class MenuModelTests(unittest.TestCase):
         self.assertEqual((menu.option_index, menu.popup_start), (20, 20))
         menu.scroll(-100, (220, popup_y))
         self.assertEqual((menu.option_index, menu.popup_start), (0, 0))
-        self.assertEqual(menu.section_index, start)
-
-    def test_playback_sequences_filter_parts_and_preserve_absolute_selection(self):
-        menu = self.menu
-        menu.sections = ("Story 1", "Story 2", "Clouds", "Screen 1", "Screen 2")
-        menu.section_groups = (PlaybackGroup("Prologue", (0, 1)),
-                               PlaybackGroup("Titles", (2,)),
-                               PlaybackGroup("Level 1 demo", (3, 4)))
-        menu.section_index = 4
-        menu.show_page('playback')
-        self.assertEqual(menu.group_index, 2)
-        self.assertEqual(menu.options, ("Prologue", "Titles", "Level 1 demo"))
-        self.assertEqual(menu.field_options(4), ("Screen 1", "Screen 2"))
-        self.assertEqual(menu.field_selected_index(4), 1)
-        menu.key("Left")
-        self.assertEqual(menu.section_index, 2)
-        self.assertEqual(menu.field_options(4), ("Clouds",))
-        menu.key("Left")
-        menu.key("Down")
-        self.assertEqual(menu.focus, 4)
-        menu.key("Right")
-        self.assertEqual(menu.section_index, 1)
-        self.assertEqual(menu.next_section_index, 2)
-        menu.key("Down")
-        self.assertEqual(menu.key("Return"), "next_part")
-
-    def test_sequence_popup_cancel_does_not_change_current_part(self):
-        menu = self.menu
-        menu.sections = ("First", "Second")
-        menu.section_groups = (PlaybackGroup("Intro", (0,)), PlaybackGroup("Demo", (1,)))
-        menu.show_page('playback')
-        menu.key("Return")
-        menu.key("Down")
-        self.assertEqual(menu.section_index, 0)
-        menu.key("Escape")
-        self.assertEqual(menu.group_index, 0)
-        menu.click(220, menu.control_rect(0)[1] + 8)
-        menu.click(220, menu.control_rect(0)[3] + 19 + 8)
-        self.assertEqual(menu.section_index, 1)
-
-    def test_playback_buttons_keep_horizontal_navigation_and_click_actions(self):
-        menu = self.menu
-        menu.sections = ("First", "Second")
-        menu.show_page('playback')
-        menu.click(220, menu.control_rect(4)[1] + 8)
-        self.assertEqual(menu.dropdown_control, 4)
-        menu.click(220, menu.control_rect(4)[3] + 19 + 8)
-        self.assertEqual(menu.section_index, 1)
-        menu.focus = 2
-        menu.key("Right")
-        self.assertEqual(menu.focus, 3)
-        menu.key("Left")
-        self.assertEqual(menu.focus, 2)
-        self.assertEqual(menu.click(150, menu.control_rect(2)[1] + 8), "seek")
-        self.assertEqual(menu.click(290, menu.control_rect(3)[1] + 8), "resume")
-        self.assertEqual(menu.click(220, menu.control_rect(1)[1] + 8), "next_part")
+        self.assertEqual(menu.screen_index, start)
 
     def test_native_pointer_coordinates_survive_resize_and_letterboxing(self):
         for dimensions in ((512, 384), (800, 900), (1920, 1080), (2560, 1440)):
             with self.subTest(dimensions=dimensions):
                 size, origin = fit_viewport(*dimensions)
-                for page in ('tools', 'playback'):
-                    self.menu.show_page(page)
-                    for index in self.menu.controls:
-                        left, top, right, bottom = self.menu.control_rect(index)
-                        x, y = (left + right) / 2, (top + bottom) / 2
-                        mapped = viewport_point(origin[0] + (x - 1) * size[0] / 510,
-                                                origin[1] + y * size[1] / 384, *dimensions)
-                        self.assertAlmostEqual(mapped[0], x)
-                        self.assertAlmostEqual(mapped[1], y)
-                        self.assertEqual(self.menu.hit(*mapped), index)
+                for index in self.menu.controls:
+                    left, top, right, bottom = self.menu.control_rect(index)
+                    x, y = (left + right) / 2, (top + bottom) / 2
+                    mapped = viewport_point(origin[0] + (x - 1) * size[0] / 510,
+                                            origin[1] + y * size[1] / 384, *dimensions)
+                    self.assertAlmostEqual(mapped[0], x)
+                    self.assertAlmostEqual(mapped[1], y)
+                    self.assertEqual(self.menu.hit(*mapped), index)
                 self.assertIsNone(viewport_point(origin[0] - 1, origin[1], *dimensions))
                 self.assertIsNone(viewport_point(origin[0] + size[0], origin[1], *dimensions))
 
@@ -373,19 +279,16 @@ class MenuSceneTests(unittest.TestCase):
         scene = self.scene
         self.assertFalse(scene.debug_status)
         self.assertEqual(scene.status_label.winfo_manager(), "")
-        scene.open_dev_mode()
-        scene.dev_menu.show_page('playback')
-        scene.dev_menu.focus = 8
-        scene.apply_dev_action(scene.dev_menu.activate())
-        self.assertTrue(scene.debug_status)
+        scene.debug_status = True
+        scene.update_status_visibility()
         self.assertEqual(scene.status_label.winfo_manager(), "pack")
         with patch.object(scene.root, "attributes"), patch.object(scene.root, "state"):
             scene.toggle_fullscreen()
             self.assertEqual(scene.status_label.winfo_manager(), "")
             scene.toggle_fullscreen()
             self.assertEqual(scene.status_label.winfo_manager(), "pack")
-        scene.apply_dev_action(scene.dev_menu.activate())
-        self.assertFalse(scene.debug_status)
+        scene.debug_status = False
+        scene.update_status_visibility()
         self.assertEqual(scene.status_label.winfo_manager(), "")
 
     def test_mouse_wheel_scrolls_only_the_open_dev_dropdown(self):
@@ -393,9 +296,7 @@ class MenuSceneTests(unittest.TestCase):
         event = SimpleNamespace(delta=-120)
         self.assertIsNone(scene.dev_scroll(event))
         scene.open_dev_mode()
-        scene.dev_menu.sections = tuple(f"Story {i}" for i in range(30))
-        scene.dev_menu.section_groups = tuple(PlaybackGroup(f'Story {i}', (i,)) for i in range(30))
-        scene.dev_menu.show_page('playback')
+        scene.dev_menu = DevelopmentMenu(tuple(f"Room {i}" for i in range(30)), 0, False)
         scene.dev_menu.focus = 0
         scene.dev_menu.open_dropdown()
         menu = scene.dev_menu
@@ -406,7 +307,7 @@ class MenuSceneTests(unittest.TestCase):
         # The rows stop at the end of the list; the highlight follows the pointer.
         self.assertEqual(menu.popup_start, 30 - menu.popup_count)
         self.assertEqual(menu.option_index, menu.popup_start + row)
-        self.assertEqual(menu.section_index, 0)
+        self.assertEqual(menu.screen_index, 0)
 
     def test_simulation_and_game_inputs_stay_frozen_and_pause_state_is_restored(self):
         scene = self.scene
@@ -524,20 +425,6 @@ class MenuSceneTests(unittest.TestCase):
         self.assertEqual(result.getpixel((200, menu.control_rect(0)[3] + 8 * 19)), (244, 216, 115, 255))
         self.assertIn("DevelopmentInput", scene.root.bindtags())
         self.assertIn("DevelopmentInput", scene.canvas.bindtags())
-
-    def test_playback_part_popup_fits_below_the_second_selector(self):
-        scene = self.scene
-        menu = DevelopmentMenu(SCREENS, 0, False, sections=tuple(f"Story {i}" for i in range(30)))
-        menu.show_page('playback')
-        menu.focus = 4
-        menu.open_dropdown()
-        viewport = Image.new("RGBA", (512, 384), (80, 80, 80, 255))
-        result = menu.draw(viewport, scene.ui_font)
-        bottom = menu.control_rect(4)[3] + menu.popup_count * menu.OPTION_HEIGHT
-        self.assertEqual(bottom, 370)
-        left = menu.control_rect(4)[0]
-        self.assertEqual(result.getpixel((left, bottom)), (244, 216, 115, 255))
-        self.assertEqual(result.getpixel((left, bottom + 1)), result.getpixel((30, 20)))
 
     def test_text_keys_resume_pause_without_gameplay_or_repeat_until_release(self):
         scene = self.scene
@@ -760,7 +647,7 @@ class BaselineTests(unittest.TestCase):
 
     def test_labels_side_by_side_share_a_baseline_and_sit_in_the_middle(self):
         menu = DevelopmentMenu(SCREENS, 0, False, level_options=((4, 'Level 4', SCREENS),),
-                               map_provider=lambda _level: None, cutscene_viewer=True)
+                               map_provider=lambda _level: None)
         placed = self.capitals(menu)
         self.assertEqual(placed['Peaceful'], placed['God mode'])
         for control, label in ((4, 'Open map'), (8, 'Cutscene Viewer'), (1, 'Peaceful'), (11, 'God mode'),

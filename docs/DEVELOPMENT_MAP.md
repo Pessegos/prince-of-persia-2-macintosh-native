@@ -1,10 +1,10 @@
 # F3 Level Map
 
-F3 opens a compact, tabless Developer Tools panel with Open map, Playback,
+F3 opens a compact, tabless Developer Tools panel with Open map, Cutscene Viewer,
 side-by-side Peaceful and God mode checkboxes, and Resume. No level selectors or room dropdowns occupy this
-entry panel. Open map enters a separate full-viewport workspace. Playback
-opens a [visual scene gallery](PLAYBACK_GALLERY.md), with a back arrow and the
-optional debug status bar. During attract playback only Playback and Resume are offered.
+entry panel. Open map enters a separate full-viewport workspace. Cutscene Viewer
+opens the chapter viewer in its Dev Tools mode, where every chapter is unlocked.
+During attract playback only Cutscene Viewer and Resume are offered.
 These are host development tools, not recovered Macintosh features.
 
 ## Playtest Cheats

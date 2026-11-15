@@ -352,30 +352,18 @@ class WindowControls(InputRouting):
             self.dispose_cutscene_strip()
         self.dispose_screenshot_gallery()
         self.game_menu = None
-        from pop2.playback_navigation import playback_groups
-
         self.ui_hover_target = None
-        parts = self.development_parts()
-        if not hasattr(self, 'development_gallery_pages'):
-            self.development_gallery_pages = {}
         if (self.level_navigation_available() and self.combat is not None
                 and not self.combat.player.alive):
             self.remember_development_room()
         self.dev_menu = DevelopmentMenu(
             screens, screen_index, self.peaceful,
-            sections=tuple(part.label for part in parts), section_groups=playback_groups(parts),
-            section_index=self.current_playback_part(), debug_status=self.debug_status,
             level_available=self.level_navigation_available(),
             level_options=level_options, level_index=level_index if level_options else 0,
             map_provider=self.development_map if level_options else None,
             return_screens=dict(getattr(self, 'development_return_screens', {})),
-            playback_provider=self.development_playback_preview if parts else None,
-            gallery_pages=self.development_gallery_pages,
-            current_section=(self.current_playback_part() if self.attract_stage is not None
-                             or self.game.level.number in (2, 10) else None),
             current_level=self.game.level.number, current_screen=self.screen_label(self.room_id),
             god_mode=getattr(self, 'god_mode', False),
-            cutscene_viewer=True,
         )
         if self.dev_menu.map_available:
             self.dev_menu.focus = 4
@@ -427,19 +415,6 @@ class WindowControls(InputRouting):
             self.set_peaceful(self.dev_menu.peaceful)
         elif action == 'god_mode' and self.level_navigation_available():
             self.set_god_mode(self.dev_menu.god_mode)
-        elif action in ("seek", "next_part"):
-            parts = self.development_parts()
-            if not parts:
-                return
-            index = (self.dev_menu.next_section_index if action == "next_part"
-                     else self.dev_menu.section_index)
-            self.seek_playback_part(parts[index])
-            self.dev_was_paused = False
-            self.close_dev_mode()
-        elif action == "debug_status":
-            self.debug_status = self.dev_menu.debug_status
-            self.update_status_visibility()
-            self.render()
         else:
             self.update_cursor_visibility()
             if self.dev_menu.map_enabled and getattr(self, 'screenshot_viewport', None) is not None:
@@ -1272,17 +1247,14 @@ class WindowControls(InputRouting):
             return None
         if isinstance(menu, DevelopmentMenu) and index not in menu.controls:
             return None
-        if isinstance(menu, DevelopmentMenu) and menu.preview_enabled and index == 4:
-            if menu.map_enabled:
-                room = menu.screen if point is None else menu.map_hit(*point)
-                return (*context, 'room', menu.level_number, room) if room is not None else None
-            part = menu.section_index if point is None else menu.gallery_hit(*point)
-            return (*context, 'part', part) if part is not None else None
+        if isinstance(menu, DevelopmentMenu) and menu.map_enabled and index == 4:
+            room = menu.screen if point is None else menu.map_hit(*point)
+            return (*context, 'room', menu.level_number, room) if room is not None else None
         return (*context, 'control', index)
 
     def menu_key_action(self, menu, event):
         fields = ('page', 'focus', 'dropdown', 'option_index', 'level_index', 'screen_index',
-                  'section_index', 'gallery_page', 'screenshot_scale')
+                  'screenshot_scale')
         def state():
             browser = getattr(menu, 'save_browser', None)
             viewer = getattr(menu, 'cutscene_viewer', None) if menu.page == 'cutscenes' else None
@@ -1768,8 +1740,8 @@ class WindowControls(InputRouting):
                 if self.canvas.cget('cursor') != cursor:
                     self.canvas.configure(cursor=cursor)
             if menu is self.dev_menu:
-                hovered = menu.hovered_screen if menu.map_enabled else menu.hovered_part
-                cursor = 'hand2' if menu.preview_enabled and hovered is not None and not menu.dropdown else ''
+                hovered = menu.hovered_screen if menu.map_enabled else None
+                cursor = 'hand2' if hovered is not None and not menu.dropdown else ''
                 if self.canvas.cget('cursor') != cursor:
                     self.canvas.configure(cursor=cursor)
             elif menu.page == 'saves':
@@ -1847,15 +1819,6 @@ class WindowControls(InputRouting):
             return 'break'
         if self.dev_menu is None:
             return None
-        if self.dev_menu.gallery_enabled and not self.dev_menu.dropdown:
-            point = self.dev_pointer(event)
-            if (point is not None and self.dev_menu.hit(*point) == 4
-                    and self.dev_menu.gallery_count > 1):
-                delta = getattr(event, 'delta', 0)
-                self.dev_menu.turn_gallery_page(-1 if delta > 0 or getattr(event, 'num', None) == 4 else 1)
-                self.play_menu_sound('click')
-                self.redraw_dev_menu()
-            return 'break'
         if not self.dev_menu.dropdown:
             return None
         point = self.dev_pointer(event)

@@ -186,8 +186,7 @@ class DevelopmentMapModelTests(unittest.TestCase):
         menu.key('Tab', backwards=True)
         self.assertEqual(menu.focus, 3)
         menu.focus = 8
-        menu.activate()
-        self.assertEqual(menu.page, 'playback')
+        self.assertEqual(menu.activate(), 'cutscenes')
 
     def test_spatial_keys_and_enter_select_without_numeric_room_order(self):
         menu = self.menu()
@@ -239,7 +238,7 @@ class DevelopmentMapModelTests(unittest.TestCase):
         menu.select(1)
         self.assertEqual((menu.level_number, menu.screen), (4, 'Other'))
         self.assertIsNone(menu.hovered_screen)
-        menu.show_page('playback')
+        menu.show_page('tools')
         self.assertFalse(menu.map_enabled)
 
     def test_destination_highlight_requires_keyboard_navigation_and_resets_on_level_change(self):
@@ -590,7 +589,7 @@ class ImportedDevelopmentMapTests(unittest.TestCase):
         s.open_dev_mode()
         menu = s.dev_menu
         before, game, combat = capture_snapshot(s.game), s.game, s.combat
-        selected = menu.screen, menu.section_index
+        selected = menu.screen
         menu.focus = 8
         s.apply_dev_action(menu.activate())
         self.assertIsNone(s.dev_menu)
@@ -609,7 +608,7 @@ class ImportedDevelopmentMapTests(unittest.TestCase):
             self.assertNotIn(removed, labels)
         s.apply_game_action(s.game_menu.key('Escape'))
         self.assertEqual(s.game_menu.page, 'menu')
-        self.assertEqual((menu.screen, menu.section_index), selected)
+        self.assertEqual(menu.screen, selected)
         self.assertTrue(s.paused)
         self.assertIs(s.game, game)
         self.assertIs(s.combat, combat)
@@ -669,7 +668,7 @@ class ImportedDevelopmentMapTests(unittest.TestCase):
             menu.draw(Image.new('RGBA', (512, 384)), font)
         labels = [call.args[0] for call in text.call_args_list]
         self.assertIn('Open map', labels)
-        self.assertIn('Playback', labels)
+        self.assertIn('Cutscene Viewer', labels)
         self.assertNotIn('Game', labels)
         self.assertNotIn('Display', labels)
         self.assertNotIn('Level', labels)
@@ -681,7 +680,7 @@ class ImportedDevelopmentMapTests(unittest.TestCase):
         labels = [call.args[0] for call in text.call_args_list]
         self.assertEqual(labels.count('Level 3'), 1)
         self.assertNotIn('Developer Tools', labels)
-        self.assertNotIn('Playback', labels)
+        self.assertNotIn('Cutscene Viewer', labels)
         self.assertNotIn('Level', labels)
 
     def test_toolbar_tooltip_survives_display_resolution_map_layer(self):

@@ -36,11 +36,9 @@ class CheatMenuTests(unittest.TestCase):
         self.assertFalse(menu.god_mode)
         self.assertTrue(menu.peaceful)
 
-    def test_god_control_is_not_exposed_in_map_or_playback(self):
+    def test_god_control_is_not_exposed_in_map(self):
         menu = self.menu()
         menu.open_map()
-        self.assertNotIn(11, menu.controls)
-        menu.show_page('playback')
         self.assertNotIn(11, menu.controls)
 
     def test_god_control_is_not_available_in_attract_tools(self):

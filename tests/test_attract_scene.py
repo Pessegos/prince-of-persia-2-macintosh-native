@@ -109,7 +109,6 @@ class AttractSceneTests(unittest.TestCase):
     def test_first_f3_uses_prepared_navigation_without_loading_scene_artwork(self):
         scene = self.scene
         self.assertTrue(scene.development_level_options)
-        self.assertTrue(scene.development_playback_parts)
         self.assertIsNone(scene.ending_assets)
         with (patch('pop2.intro.IntroAssets', side_effect=AssertionError('Menu loaded artwork')),
               patch('pop2.intro.read_program', side_effect=AssertionError('Menu read scene data')),
@@ -124,7 +123,7 @@ class AttractSceneTests(unittest.TestCase):
 
     def test_cold_playback_navigation_reads_programs_without_decoding_images(self):
         scene = self.scene
-        original = scene.development_playback_parts
+        original = scene.development_parts()
         scene.development_playback_parts = None
         scene.intro_assets = scene.ending_assets = scene.attract_data = None
         with (patch('pop2.intro.IntroAssets', side_effect=AssertionError('Navigation loaded artwork')),
@@ -222,50 +221,6 @@ class AttractSceneTests(unittest.TestCase):
         self.assertEqual(scene.combat.player.life, 3)
         self.assertIsNone(scene.intro)
         self.assertIsNone(scene.demo)
-
-    def test_next_part_starts_playback_and_consumes_activation_key(self):
-        scene = self.scene
-        scene.set_paused(True)
-        scene.open_dev_mode()
-        scene.dev_menu.show_page('playback')
-        part = scene.development_parts()[scene.dev_menu.section_index + 1]
-        scene.dev_menu.focus = 1
-        self.key("Return")
-        self.assertIsNone(scene.dev_menu)
-        self.assertFalse(scene.paused)
-        self.assertEqual(scene.development_parts()[scene.current_playback_part()], part)
-        self.assertEqual(self.key("Return"), "break")
-        self.assertFalse(scene.paused)
-
-    def test_group_selection_seeks_only_after_activation_and_next_keeps_playback_order(self):
-        scene = self.scene
-        parts = scene.development_parts()
-        scene.open_dev_mode()
-        groups = scene.dev_menu.groups
-        scene.close_dev_mode()
-        self.assertEqual([group.label for group in groups],
-                         ['Opening', 'After Level 1', 'After Level 3', 'After Level 9'])
-        for group_index, group in enumerate(groups):
-            with self.subTest(sequence=group.label):
-                scene.open_dev_mode()
-                scene.dev_menu.show_page('playback')
-                scene.dev_menu.focus = 0
-                before = scene.intro, scene.demo
-                scene.dev_menu.select(group_index)
-                self.assertEqual((scene.intro, scene.demo), before)
-                self.assertEqual(scene.dev_menu.section_index, group.part_indices[0])
-                scene.dev_menu.section_index = group.part_indices[-1]
-                target_index = (group.part_indices[-1] + 1) % len(parts)
-                scene.apply_dev_action("next_part")
-                self.assertIsNone(scene.dev_menu)
-                self.assertEqual(parts[scene.current_playback_part()], parts[target_index])
-                scene.open_dev_mode()
-                scene.dev_menu.show_page('playback')
-                target_group = next(i for i, item in enumerate(groups) if target_index in item.part_indices)
-                self.assertEqual(scene.dev_menu.group_index, target_group)
-                self.assertEqual(scene.dev_menu.field_options(4),
-                                 tuple(parts[index].label for index in groups[target_group].part_indices))
-                scene.close_dev_mode()
 
     def test_seeking_does_not_briefly_play_the_destination_stages_initial_cues(self):
         from pop2.audio import AudioEngine, scene_sound_key

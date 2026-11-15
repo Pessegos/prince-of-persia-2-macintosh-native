@@ -339,7 +339,6 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
 
         # Prepare menu metadata before the animation clock starts, not on F3.
         self.development_levels()
-        self.development_parts()
         self.create_window("Prince of Persia 2 Macintosh Native (WIP)" if with_guard
                            else "Prince of Persia 2 Macintosh Native - Animation Preview (WIP)",
                            scale=SCALE)
@@ -3269,14 +3268,6 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         if not hasattr(self, 'development_preview_fingerprint'):
             self.development_preview_fingerprint = preview_fingerprint()
         return self.development_preview_fingerprint
-
-    def development_playback_preview(self, indices):
-        from pop2.playback_preview import PlaybackPreviews
-
-        if not hasattr(self, 'development_playback_previews'):
-            self.development_playback_previews = PlaybackPreviews(
-                self.resources, self.development_parts(), self.attract_data, self.preview_fingerprint())
-        return self.development_playback_previews.group(indices)
 
     def screen_label(self, room):
         return next((label for label, target in self.dev_screens().items() if target == room),

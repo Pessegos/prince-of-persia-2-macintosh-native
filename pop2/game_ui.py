@@ -3,7 +3,6 @@ from dataclasses import dataclass, field
 
 from PIL import Image, ImageDraw, ImageEnhance
 
-from pop2.playback_navigation import PlaybackGroup
 from pop2 import menu_theme
 from pop2.menu_theme import c
 
@@ -66,11 +65,7 @@ class DevelopmentMenu:
     popup_start: int = 0
     error: str = ""
     page: str = 'tools'
-    sections: tuple = ()
-    section_index: int = 0
-    debug_status: bool = False
     level_available: bool = True
-    section_groups: tuple = ()
     dropdown_control: int = 0
     level_options: tuple = ()
     level_index: int = 0
@@ -79,16 +74,10 @@ class DevelopmentMenu:
     map_open: bool = False
     hovered_control: int | None = None
     return_screens: dict = field(default_factory=dict)
-    playback_provider: object = None
-    gallery_page: int = 0
-    hovered_part: int | None = None
-    gallery_pages: dict = field(default_factory=dict, repr=False)
-    current_section: int | None = None
     current_level: int | None = None
     current_screen: str | None = None
     preview_keyboard_selection: bool = False
     god_mode: bool = False
-    cutscene_viewer: bool = False
     # Finished map pictures by size: the native menu and the HD view each keep one.
     map_layers: dict = field(default_factory=dict, repr=False, compare=False)
     # The plain map on the theme's ground by size, before any marker or highlight.
@@ -102,12 +91,6 @@ class DevelopmentMenu:
     # Control templates use this reference panel; each page is positioned as a unit.
     PANEL = (100, 70, 412, 350)
     OPTION_HEIGHT = 19
-    PLAYBACK_CONTROLS = {
-        0: (212, 138, 392, 166), 4: (212, 180, 392, 208),
-        1: (120, 220, 392, 248),
-        2: (120, 269, 252, 301), 3: (264, 269, 392, 301),
-        7: (120, 80, 146, 106), 8: (120, 316, 392, 342),
-    }
     MAP_CONTROLS = {
         7: (12, 14, 38, 40), 5: (130, 14, 156, 40),
         0: (164, 14, 348, 40), 6: (356, 14, 382, 40),
@@ -117,9 +100,6 @@ class DevelopmentMenu:
     GAME_CONTROLS = {4: (120, 128, 392, 164), 8: (120, 172, 392, 208),
                      1: (120, 216, 252, 246), 11: (264, 216, 392, 246),
                      3: (120, 270, 392, 300)}
-    GALLERY_CONTROLS = {**MAP_CONTROLS, 9: (420, 14, 446, 40), 10: (460, 14, 486, 40),
-                        8: (14, 348, 40, 372), 1: (52, 348, 202, 372),
-                        2: (214, 348, 350, 372), 3: (362, 348, 498, 372)}
 
     def __post_init__(self):
         if self.focus not in self.controls:
@@ -134,49 +114,8 @@ class DevelopmentMenu:
         return self.map_available and self.map_open
 
     @property
-    def gallery_enabled(self):
-        return self.page == 'playback' and bool(self.sections) and self.playback_provider is not None
-
-    @property
     def preview_enabled(self):
-        return self.map_enabled or self.gallery_enabled
-
-    @property
-    def gallery_count(self):
-        return (len(self.part_indices) + 5) // 6
-
-    @property
-    def gallery_preview(self):
-        from pop2.playback_preview import gallery_preview
-
-        key = tuple(self.part_indices[self.gallery_page * 6:(self.gallery_page + 1) * 6])
-        if key not in self.gallery_pages:
-            frames = self.playback_provider(key)
-            if len(self.gallery_pages) >= 4:
-                del self.gallery_pages[next(iter(self.gallery_pages))]
-            self.gallery_pages[key] = gallery_preview(frames, key)
-        preview = self.gallery_pages.pop(key)
-        self.gallery_pages[key] = preview
-        return preview
-
-    def gallery_hit(self, x, y):
-        from pop2.playback_preview import gallery_caption_rect
-
-        left, top, right, bottom = self.control_rect(4)
-        scale, (ox, oy) = self.gallery_preview.transform((right - left, bottom - top))
-        px, py = (x - left - ox) / scale, (y - top - oy) / scale
-        label = self.gallery_preview.hit(px, py)
-        if label is None:
-            label = next((label for label, rect in self.gallery_preview.rooms.items()
-                          if self.contains(gallery_caption_rect(rect, len(self.gallery_preview.rooms) == 1),
-                                           px, py)), None)
-        return int(label) if label is not None else None
-
-    def turn_gallery_page(self, delta):
-        self.gallery_page = (self.gallery_page + delta) % self.gallery_count
-        self.section_index = self.part_indices[self.gallery_page * 6]
-        self.hovered_part = None
-        self.preview_keyboard_selection = False
+        return self.map_enabled
 
     @property
     def map_preview(self):
@@ -215,32 +154,11 @@ class DevelopmentMenu:
         self.select((self.level_index + delta) % len(self.level_options))
         self.focus = focus
 
-    @property
-    def groups(self):
-        return self.section_groups or ((PlaybackGroup("Playback", tuple(range(len(self.sections)))),)
-                                       if self.sections else ())
-
-    @property
-    def group_index(self):
-        return next((i for i, group in enumerate(self.groups)
-                     if self.section_index in group.part_indices), 0)
-
-    @property
-    def part_indices(self):
-        return self.groups[self.group_index].part_indices if self.groups else ()
-
-    @property
-    def next_section_index(self):
-        return (self.section_index + 1) % len(self.sections)
-
     def field_options(self, control):
         if self.page == 'tools' and self.level_options:
             return (tuple(option[1] for option in self.level_options) if control == 0
                     else self.screen_options)
-        if self.page != 'playback':
-            return self.screens
-        return (tuple(group.label for group in self.groups) if control == 0 else
-                tuple(self.sections[i] for i in self.part_indices))
+        return self.screens
 
     @property
     def screen_options(self):
@@ -253,9 +171,7 @@ class DevelopmentMenu:
     def field_selected_index(self, control):
         if self.page == 'tools' and self.level_options:
             return self.level_index if control == 0 else self.screen_index
-        if self.page != 'playback':
-            return self.screen_index
-        return self.group_index if control == 0 else self.part_indices.index(self.section_index)
+        return self.screen_index
 
     @property
     def options(self):
@@ -266,8 +182,6 @@ class DevelopmentMenu:
         return self.field_selected_index(self.dropdown_control if self.dropdown else self.focus)
 
     def control_rect(self, index):
-        if self.gallery_enabled:
-            return self.GALLERY_CONTROLS[index]
         if self.map_enabled:
             return self.MAP_CONTROLS[index]
         if self.page == 'tools' and (self.map_available or not self.level_available):
@@ -275,7 +189,7 @@ class DevelopmentMenu:
         if self.page == 'tools' and self.level_options:
             rect = self.LEVEL_CONTROLS[index]
         else:
-            rect = self.PLAYBACK_CONTROLS[index] if self.page == 'playback' else self.CONTROLS[index]
+            rect = self.CONTROLS[index]
         return self.position_rect(rect)
 
     @property
@@ -301,9 +215,6 @@ class DevelopmentMenu:
 
     @property
     def controls(self):
-        if self.gallery_enabled:
-            return tuple(control for control in (7, 5, 0, 6, 9, 10, 4, 8, 1, 2, 3)
-                         if control not in (9, 10) or self.gallery_count > 1)
         if self.map_enabled:
             return tuple(control for control in (7, 5, 0, 6, 4, 1, 2, 3)
                          if (control not in (5, 6) or len(self.level_options) > 1)
@@ -312,8 +223,6 @@ class DevelopmentMenu:
             return (4, 8, 1, 11, 3)
         if self.page == 'tools' and not self.level_available:
             return (8, 3)
-        if self.page == 'playback':
-            return (7, 0, 4, 1, 2, 3, 8) if self.sections else (7, 3, 8)
         if self.page == 'tools' and self.level_options:
             return (0, 4, 1, 2, 3)
         return (0, 1, 2, 3)
@@ -328,11 +237,8 @@ class DevelopmentMenu:
         self.dropdown = False
         self.hovered_screen = None
         self.hovered_control = None
-        self.hovered_part = None
         self.preview_keyboard_selection = False
-        self.gallery_page = self.part_indices.index(self.section_index) // 6 if self.gallery_enabled else 0
-        self.focus = (4 if self.gallery_enabled else
-                      0 if page == 'playback' and self.sections else self.controls[0])
+        self.focus = self.controls[0]
         self.error = ""
 
     @property
@@ -340,10 +246,9 @@ class DevelopmentMenu:
         return self.screen_options[self.screen_index]
 
     def open_dropdown(self):
-        if (self.map_available or self.gallery_enabled) and self.focus == 4:
+        if self.map_available and self.focus == 4:
             return
         self.hovered_screen = None
-        self.hovered_part = None
         self.dropdown_control = self.focus
         self.dropdown = True
         self.option_index = self.selected_index
@@ -378,13 +283,7 @@ class DevelopmentMenu:
 
     def select(self, index):
         self.preview_keyboard_selection = False
-        if self.page == 'playback':
-            control = self.dropdown_control if self.dropdown else self.focus
-            self.section_index = (self.groups[index].part_indices[0] if control == 0
-                                  else self.part_indices[index])
-            self.gallery_page = self.part_indices.index(self.section_index) // 6
-            self.hovered_part = None
-        elif (self.page == 'tools' and self.level_options
+        if (self.page == 'tools' and self.level_options
               and (self.dropdown_control if self.dropdown else self.focus) == 0):
             self.level_index = index
             self.screens = self.screen_options
@@ -404,11 +303,6 @@ class DevelopmentMenu:
             if self.map_enabled:
                 self.close_map()
                 return "changed"
-            if self.page == 'playback':
-                self.show_page('tools')
-                if 8 in self.controls:
-                    self.focus = 8
-                return 'changed'
             return "resume"
         if key == "Tab":
             self.dropdown = False
@@ -421,14 +315,6 @@ class DevelopmentMenu:
                 self.center_popup()
             elif key in ("Return", "KP_Enter", "space"):
                 self.select(self.option_index)
-        elif self.gallery_enabled and self.focus == 4 and key in ('Up', 'Down', 'Left', 'Right'):
-            delta = {'Left': -1, 'Right': 1, 'Up': -3, 'Down': 3}[key]
-            index = max(0, min(len(self.part_indices) - 1,
-                              self.part_indices.index(self.section_index) + delta))
-            self.section_index = self.part_indices[index]
-            self.gallery_page = index // 6
-            self.hovered_part = None
-            self.preview_keyboard_selection = True
         elif self.map_enabled and self.focus == 4 and key in ("Up", "Down", "Left", "Right"):
             label = self.map_preview.move(self.screen, key.lower())
             self.screen_index = self.screen_options.index(label)
@@ -457,29 +343,8 @@ class DevelopmentMenu:
         if self.focus == 11 and self.map_available and not self.map_enabled:
             self.god_mode = not self.god_mode
             return 'god_mode'
-        if self.gallery_enabled and self.focus == 4:
-            return 'seek'
-        if self.gallery_enabled and self.focus in (5, 6):
-            focus = self.focus
-            self.focus = 0
-            self.select((self.group_index + (-1 if focus == 5 else 1)) % len(self.groups))
-            self.focus = focus
-            return 'changed'
-        if self.gallery_enabled and self.focus in (9, 10):
-            self.turn_gallery_page(-1 if self.focus == 9 else 1)
-            return 'changed'
         if self.focus == 8:
-            if self.page == 'tools' and self.cutscene_viewer:
-                return 'cutscenes'
-            if self.page == 'playback':
-                self.debug_status = not self.debug_status
-                return 'debug_status'
-            self.show_page('playback')
-            return 'changed'
-        if self.page == 'playback' and self.focus == 7:
-            self.show_page('tools')
-            self.focus = 8 if 8 in self.controls else self.controls[0]
-            return 'changed'
+            return 'cutscenes'
         if self.map_available and not self.map_enabled and self.focus == 4:
             self.open_map()
             return 'changed'
@@ -496,12 +361,10 @@ class DevelopmentMenu:
         if self.focus in (0, 4):
             self.open_dropdown()
         elif self.focus == 1:
-            if self.page == 'playback':
-                return "next_part"
             self.peaceful = not self.peaceful
             return "peaceful"
         else:
-            return ("seek" if self.page == 'playback' else "go") if self.focus == 2 else "resume"
+            return "go" if self.focus == 2 else "resume"
         return "changed"
 
     @staticmethod
@@ -520,14 +383,6 @@ class DevelopmentMenu:
 
     def hover(self, x, y):
         index = self.hit(x, y)
-        if self.gallery_enabled and not self.dropdown:
-            before = self.focus, self.hovered_part, self.hovered_control, self.preview_keyboard_selection
-            self.preview_keyboard_selection = False
-            self.hovered_part = self.gallery_hit(x, y) if index == 4 else None
-            self.hovered_control = index if index in (5, 6, 7, 8, 9, 10) else None
-            if index is not None:
-                self.focus = index
-            return before != (self.focus, self.hovered_part, self.hovered_control, self.preview_keyboard_selection)
         if self.map_enabled and not self.dropdown:
             before = self.focus, self.hovered_screen, self.hovered_control, self.preview_keyboard_selection
             self.preview_keyboard_selection = False
@@ -545,13 +400,6 @@ class DevelopmentMenu:
 
     def click(self, x, y):
         index = self.hit(x, y)
-        if self.gallery_enabled and not self.dropdown and index == 4:
-            part = self.gallery_hit(x, y)
-            if part is not None:
-                self.section_index = part
-                self.focus = 4
-                return 'seek'
-            return 'changed'
         if self.map_enabled and not self.dropdown and index == 4:
             label = self.map_hit(x, y)
             if label is not None:
@@ -587,69 +435,37 @@ class DevelopmentMenu:
                 glyphs = glyphs.resize((max_width, glyphs.height), Image.Resampling.NEAREST)
             image.paste(glyphs, (int(x - glyphs.width // 2) if centered else x, y - capitals), glyphs)
 
-        if self.gallery_enabled:
-            self.draw_gallery(image, draw, font, text)
-            self.draw_popup(draw, text)
-            return image
         if self.map_enabled:
             self.draw_map(image, draw, font, text)
             self.draw_popup(draw, text)
             return image
         menu_theme.panel(image, self.panel_rect)
         draw = ImageDraw.Draw(image)
-        text('Playback' if self.page == 'playback' else 'Developer Tools',
-             264 if self.page == 'playback' else 256, 87 + offset, gold, centered=True)
+        text('Developer Tools', 256, 87 + offset, gold, centered=True)
         if self.page == 'tools' and (self.map_available or not self.level_available):
             self.draw_game_tools(draw, text)
             menu_theme.watermark(image, self.panel_rect)
             return image
-        available = self.page != 'playback' or bool(self.sections)
-        if self.page == 'tools':
-            text("Level" if self.level_options else "Screen", 120, 147 + offset)
-            if self.level_options:
-                text("Screen", 120, 188 + offset)
-        elif available:
-            text("Sequence", 120, 147 + offset)
-            text("Part", 120, 189 + offset)
+        text("Level" if self.level_options else "Screen", 120, 147 + offset)
+        if self.level_options:
+            text("Screen", 120, 188 + offset)
         for i in self.controls:
             rect = self.control_rect(i)
             draw.rectangle(rect, fill=c("#303030") if i == self.focus else c("#222222"),
                            outline=gold if i == self.focus else c("#626262"))
-        if self.page == 'playback':
-            left, top, right, bottom = self.control_rect(7)
-            cx, cy = (left + right) // 2, (top + bottom) // 2
-            draw.line(((cx + 7, cy), (cx - 6, cy), (cx, cy - 6)), fill=white, width=2)
-            draw.line(((cx - 6, cy), (cx, cy + 6)), fill=white, width=2)
-            top = self.control_rect(8)[1]
-            draw.rectangle((130, top + 7, 141, top + 18), fill=c('#121212'), outline=muted)
-            if self.debug_status:
-                draw.line(((132, top + 12), (135, top + 15), (139, top + 9)), fill=gold, width=2)
-            text('Debug status bar', 151, top + 8, muted, max_width=231)
-        if available:
-            selectors = ((0, 4) if self.page == 'playback' or self.level_options
-                         else (0,))
-            for control in selectors:
-                left, top, right, _bottom = self.control_rect(control)
-                text(self.field_options(control)[self.field_selected_index(control)],
-                     left + 10, top + 9, max_width=right - left - 34)
-                draw.polygon(((right - 15, top + 12), (right - 7, top + 12),
-                              (right - 11, top + 16)), fill=white)
-            text("Go to part" if self.page == 'playback' else "Go to screen", 186,
-                 self.control_rect(2)[1] + 11,
-                 centered=True, max_width=118)
-        if available and self.page == 'tools':
-            checkbox_y = self.control_rect(1)[1] + (8 if self.level_options else 9)
-            draw.rectangle((130, checkbox_y, 141, checkbox_y + 11), fill=c("#121212"), outline=muted)
-            if self.peaceful:
-                draw.line(((132, checkbox_y + 5), (135, checkbox_y + 8),
-                           (139, checkbox_y + 2)), fill=gold, width=2)
-            text("Peaceful (no guards)",
-                 151, checkbox_y + 1, max_width=231)
-        elif available:
-            text("Next part", 256, 231 + offset, centered=True)
-        else:
-            text("No playback data",
-                 256, 191 + offset, muted, centered=True, max_width=272)
+        for control in ((0, 4) if self.level_options else (0,)):
+            left, top, right, _bottom = self.control_rect(control)
+            text(self.field_options(control)[self.field_selected_index(control)],
+                 left + 10, top + 9, max_width=right - left - 34)
+            draw.polygon(((right - 15, top + 12), (right - 7, top + 12),
+                          (right - 11, top + 16)), fill=white)
+        text("Go to screen", 186, self.control_rect(2)[1] + 11, centered=True, max_width=118)
+        checkbox_y = self.control_rect(1)[1] + (8 if self.level_options else 9)
+        draw.rectangle((130, checkbox_y, 141, checkbox_y + 11), fill=c("#121212"), outline=muted)
+        if self.peaceful:
+            draw.line(((132, checkbox_y + 5), (135, checkbox_y + 8),
+                       (139, checkbox_y + 2)), fill=gold, width=2)
+        text("Peaceful (no guards)", 151, checkbox_y + 1, max_width=231)
         text("Resume", 328, self.control_rect(3)[1] + 11, centered=True)
         if self.error:
             words, line, lines = self.error.split(), "", []
@@ -676,7 +492,7 @@ class DevelopmentMenu:
             draw.rectangle(self.control_rect(control),
                            fill=c('#303030') if self.focus == control else c('#222222'),
                            outline=gold if self.focus == control else c('#626262'))
-        for control, label in ((4, 'Open map'), (8, 'Cutscene Viewer' if self.cutscene_viewer else 'Playback')):
+        for control, label in ((4, 'Open map'), (8, 'Cutscene Viewer')):
             if control not in self.controls:
                 continue
             left, top, right, bottom = self.control_rect(control)
@@ -744,10 +560,7 @@ class DevelopmentMenu:
             text(label, rect[0] + 6, rect[1] + 4, gold)
 
     def map_tooltip(self, font):
-        labels = ({5: 'Previous sequence', 6: 'Next sequence', 7: 'Developer Tools',
-                   8: 'Debug status bar', 9: 'Previous page', 10: 'Next page'}
-                  if self.gallery_enabled else
-                  {5: 'Previous level', 6: 'Next level', 7: 'Developer Tools'})
+        labels = {5: 'Previous level', 6: 'Next level', 7: 'Developer Tools'}
         if self.dropdown or self.hovered_control not in labels:
             return None
         label = labels[self.hovered_control]
@@ -756,87 +569,6 @@ class DevelopmentMenu:
         x1 = min(x1, 500 - width)
         y1 = y2 + 3 if y2 < 300 else self.control_rect(self.hovered_control)[1] - 22
         return label, (x1, y1, x1 + width, y1 + 18)
-
-    def draw_gallery(self, image, draw, font, text):
-        gold, white = c('#f4d873'), c('#eeeeee')
-        draw.rectangle((1, 0, 510, 383), fill=c('#101010'))
-        draw.line((12, 47, 500, 47), fill=c('#383838'))
-        draw.line((12, 340, 500, 340), fill=c('#383838'))
-        for control in self.controls:
-            if control == 4:
-                continue
-            rect = self.control_rect(control)
-            draw.rectangle(rect, fill=c('#303030') if self.focus == control else c('#222222'),
-                           outline=gold if self.focus == control else c('#626262'))
-        left, top, right, _bottom = self.control_rect(0)
-        text(self.groups[self.group_index].label, 250, top + 8,
-             centered=True, max_width=right - left - 34)
-        if self.gallery_count > 1:
-            text(f'{self.gallery_page + 1}/{self.gallery_count}', 401, top + 8,
-                 c('#b9b9b9'), centered=True, max_width=30)
-        draw.polygon(((right - 15, top + 10), (right - 7, top + 10),
-                      (right - 11, top + 14)), fill=white)
-        left, top, _right, _bottom = self.control_rect(4)
-        image.paste(self.gallery_layer(font), (left, top))
-        for control in (7, 5, 6, 9, 10):
-            if control not in self.controls:
-                continue
-            x1, y1, x2, y2 = self.control_rect(control)
-            cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
-            if control == 7:
-                draw.line(((cx + 7, cy), (cx - 6, cy)), fill=white, width=2)
-                draw.line(((cx, cy - 6), (cx - 6, cy), (cx, cy + 6)), fill=white, width=2)
-            else:
-                direction = 1 if control in (6, 10) else -1
-                draw.line(((cx - direction * 3, cy - 5), (cx + direction * 3, cy),
-                           (cx - direction * 3, cy + 5)), fill=white, width=2)
-                if control in (9, 10):
-                    draw.line((cx + direction * 7, cy - 5, cx + direction * 7, cy + 5),
-                              fill=white, width=2)
-        left, top, _right, _bottom = self.control_rect(8)
-        draw.rectangle((left + 7, top + 6, left + 18, top + 17), fill=c('#121212'), outline=c('#b9b9b9'))
-        if self.debug_status:
-            draw.line(((left + 9, top + 11), (left + 12, top + 14), (left + 16, top + 8)),
-                      fill=gold, width=2)
-        text('Next part', 127, 355, centered=True, max_width=138)
-        text('Play', 282, 355, centered=True, max_width=124)
-        text('Resume', 430, 355, centered=True, max_width=124)
-        tooltip = self.map_tooltip(font)
-        if tooltip is not None:
-            label, rect = tooltip
-            draw.rectangle(rect, fill=c('#181818'), outline=gold)
-            text(label, rect[0] + 6, rect[1] + 4, gold)
-
-    def gallery_layer(self, font, size=None):
-        from pop2.playback_preview import gallery_caption, gallery_caption_rect
-
-        preview = self.gallery_preview
-        left, top, right, bottom = self.control_rect(4)
-        size = size or (right - left, bottom - top)
-        image = preview.detail(size).convert('RGBA')
-        draw = ImageDraw.Draw(image)
-        scale, (ox, oy) = preview.transform(size)
-        for label, (x1, y1, x2, y2) in preview.rooms.items():
-            index = int(label)
-            rect = (round(x1 * scale + ox), round(y1 * scale + oy),
-                    round(x2 * scale + ox), round(y2 * scale + oy))
-            hovered = index == self.hovered_part
-            selected = (index == self.section_index and self.focus == 4
-                        and self.preview_keyboard_selection)
-            current = index == self.current_section
-            color = ('#f4d873' if hovered else c('#63c8e5') if current else
-                     c('#eeeeee') if selected else c('#b9b9b9'))
-            if hovered:
-                image.paste(ImageEnhance.Brightness(image.crop(rect)).enhance(1.2), rect[:2])
-            if hovered or current or selected:
-                draw.rectangle((rect[0], rect[1], rect[2] - 1, rect[3] - 1), outline=color,
-                               width=max(1, round(2 * scale)))
-            cx1, cy1, cx2, cy2 = gallery_caption_rect((x1, y1, x2, y2), len(preview.rooms) == 1)
-            caption_size = (max(1, round((cx2 - cx1) * scale)),
-                            max(1, round((cy2 - cy1) * scale)))
-            caption = gallery_caption(font, self.sections[index], caption_size, color, scale=0.75 * scale)
-            image.paste(caption, (round(cx1 * scale + ox), round(cy1 * scale + oy)), caption)
-        return image
 
     def map_layer(self, font, size=None):
         preview = self.map_preview
@@ -1014,8 +746,7 @@ class DevelopmentMenu:
             overlay_rect = projected((x1, y1, x2 + 1, y2 + 1))
             overlay = frame.crop(overlay_rect)
         left, top, right, bottom = projected(self.control_rect(4))
-        layer = self.gallery_layer if self.gallery_enabled else self.map_layer
-        frame.paste(layer(font, (right - left, bottom - top)), (left, top))
+        frame.paste(self.map_layer(font, (right - left, bottom - top)), (left, top))
         if overlay is not None:
             frame.paste(overlay, overlay_rect[:2])
         return frame

@@ -321,7 +321,7 @@ class GameMenuSceneTests(unittest.TestCase):
         scene = self.scene
         with TemporaryDirectory() as directory:
             scene.screenshot_settings = ScreenshotSettings(Path(directory), 1)
-            for overlay in ('pause', 'menu', 'saves', 'screenshots', 'tools', 'playback', 'intro'):
+            for overlay in ('pause', 'menu', 'saves', 'screenshots', 'tools', 'intro'):
                 with self.subTest(overlay=overlay):
                     if scene.game_menu is not None:
                         scene.close_game_menu(resume=True)
@@ -336,9 +336,8 @@ class GameMenuSceneTests(unittest.TestCase):
                             scene.apply_game_action('save')
                         else:
                             scene.open_game_menu(overlay)
-                    elif overlay in ('tools', 'playback'):
+                    elif overlay == 'tools':
                         scene.open_dev_mode()
-                        scene.dev_menu.show_page(overlay)
                     else:
                         scene.start_intro()
                         scene.set_paused(True)
@@ -1204,10 +1203,8 @@ class GameMenuSceneTests(unittest.TestCase):
             ("screenshots", GameMenu.SCREENSHOT_PANEL),
             ("confirm", GameMenu.DIALOG), ("about", GameMenu.ABOUT_DIALOG))]
         for levels in ((), ((1, "Level 1", ("1", "2")),)):
-            for page in ('tools', 'playback'):
-                menu = DevelopmentMenu(("1", "2"), 0, False, page=page,
-                                       sections=("First", "Second"), level_options=levels)
-                menus.append((menu, menu.panel_rect))
+            menu = DevelopmentMenu(("1", "2"), 0, False, level_options=levels)
+            menus.append((menu, menu.panel_rect))
         for menu, (left, top, right, bottom) in menus:
             with self.subTest(menu=type(menu).__name__, panel=(left, top, right, bottom)):
                 image = menu.draw(viewport, self.scene.ui_font)

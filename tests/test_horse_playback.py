@@ -64,8 +64,6 @@ class HorsePlaybackTests(unittest.TestCase):
         self.assertEqual(parts[scene.current_playback_part()].index, 10)
         self.assertIsNone(scene.intro)
         scene.audio.reset.assert_called_once_with(keep_music=True)
-        scene.open_dev_mode()
-        self.assertEqual(scene.dev_menu.current_section, scene.current_playback_part())
 
     def test_seeking_away_discards_the_unfinished_horse_callback(self):
         scene = self.scene
@@ -77,18 +75,3 @@ class HorsePlaybackTests(unittest.TestCase):
         self.assertIsNone(scene.next_level_after_tree)
         self.assertIsNone(scene.intro)
         self.assertEqual((scene.game.level.number, scene.room_id), (10, 21))
-
-    def test_developer_play_button_starts_the_horse_scene_unpaused(self):
-        scene = self.scene
-        parts = scene.development_parts()
-        index = next(i for i, p in enumerate(parts) if p.stage == 'temple')
-        scene.open_dev_mode()
-        menu = scene.dev_menu
-        menu.section_index = index
-        menu.show_page('playback')
-        self.assertIn('After Level 9', [group.label for group in menu.groups])
-        menu.focus = 2
-        scene.apply_dev_action(menu.activate())
-        self.assertIsNone(scene.dev_menu)
-        self.assertFalse(scene.paused)
-        self.assertEqual(scene.intro.program_kind, 'temple')

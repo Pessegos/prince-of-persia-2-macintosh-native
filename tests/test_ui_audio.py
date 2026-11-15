@@ -229,27 +229,6 @@ class MenuInputAudioTests(unittest.TestCase):
         self.assertEqual(host.audio.play_ui.call_args_list[-2:], [call('hover'), call('click')])
         host.apply_dev_action.assert_called_with('go')
 
-    def test_gallery_image_and_caption_share_a_target_and_gaps_are_silent(self):
-        from tests.test_playback_preview import GalleryModelTests, part_point
-        from pop2.playback_preview import gallery_caption_rect
-
-        host = self.host
-        host.game_menu = None
-        host.dev_menu, _provider = GalleryModelTests().menu()
-        menu = host.dev_menu
-        menu.activate()
-        self.hover(part_point(menu, 0))
-        rect = gallery_caption_rect(menu.gallery_preview.rooms['0'])
-        left, top, _right, _bottom = menu.control_rect(4)
-        self.hover((left + (rect[0] + rect[2]) / 2, top + (rect[1] + rect[3]) / 2))
-        self.hover((172, 60))
-        self.assertEqual(host.audio.play_ui.call_args_list, [call('hover')])
-        self.hover(part_point(menu, 1))
-        host.dev_click(SimpleNamespace(num=1))
-        self.assertEqual(host.audio.play_ui.call_args_list[-2:], [call('hover'), call('click')])
-        host.apply_dev_action.assert_called_with('seek')
-
-
 class MenuSdlTests(unittest.TestCase):
     def test_ui_finishes_while_game_audio_is_paused_without_interrupting_it(self):
         with TemporaryDirectory() as directory, patch.dict(os.environ, {'SDL_AUDIODRIVER': 'dummy'}):
