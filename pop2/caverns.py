@@ -119,6 +119,23 @@ class CavernRoom(OpeningRoom):
                 mask.paste(ImageChops.lighter(mask.crop(rect), cover), (x, y))
         return mask
 
+    def contact_floor_mask(self, mask, cell):
+        # The one-frame leg reveal must also reach the earlier actor-alpha
+        # mask: a neighbouring stone base can overlap the struck slab.
+        # Remove only the slab's real silhouette, retaining the statue above.
+        positioned = None
+        # QuickFloor's half repaint stops at the tile boundary; the visible
+        # slab contour extends into the next cell, where the toe was cut.
+        for sprite, position in (self.platform_contours or {}).get(cell, ()):
+            positioned = merge_positioned_mask(positioned, sprite.getchannel('A'), position)
+        if positioned is None:
+            return mask
+        cover, (x, y) = positioned
+        rect = (x, y, x + cover.width, y + cover.height)
+        result = mask.copy()
+        result.paste(ImageChops.subtract(mask.crop(rect), cover), (x, y))
+        return result
+
     def draw_actor_foreground(self, frame, state, bounds, floor_exclusion=None):
         frame = self.draw_actor_floor_foreground(frame, state, bounds, floor_exclusion)
         frame = self.draw_walkoff_tip(frame, state, bounds)

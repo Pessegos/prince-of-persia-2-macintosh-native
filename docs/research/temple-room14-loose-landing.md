@@ -217,3 +217,44 @@ the neighbouring-floor control, all five room14 tests pass in3.681s.
 Dependency, Ruff F/E9, recovery-catalogue and whitespace checks pass. The
 before/fixed contact and both adjacent frames were visually inspected.
 No full discovery or native probe rerun is claimed for this visual exception.
+
+## Residual: toe cut by the neighbouring stone base (2026-11-15)
+
+The user's zoom after e24c078 exposed a gap in that implementation and its
+X145 test. Deferring QuickFloor reveals the leg at X145, but starts X150 and
+X155 put the toe into the statue plinth's independent actor-alpha mask. The
+floor-only reference render retained that same mask, so it could not certify
+that every boot pixel was visible. The preceding no-foreground-change claim
+was specific to X145; it did not cover this residual.
+
+The same first-contact admission now also removes the contacted slab's full
+visible contour from the actor mask, before the actor layer is composited.
+Existing `platform_contours` provide its actual alpha, including the portion
+extending into the next cell: this temple slab is90 pixels wide, whereas its
+QuickFloor repaint is clipped to51 pixels. Using only that half repaint as
+the mask boundary would still leave the toe cut. No new rectangular mask or
+resource/artwork change is introduced. The statue above that contour remains
+in front; the lower leg and toe can cover the overlapping base in this one
+approved frame. The following detached frame retains normal plinth occlusion.
+
+Two additional real-key23-frame replays at starts X150 and X155 compare with
+e24c078's mask order. Only tick16 changes, restoring respectively4 and37 actor
+pixels. An independent control disables all actor masks and checks the whole
+lower leg/boot against that original sprite image; the upper statue/body
+continues to differ from the unmasked control exactly as before. Restoring
+the previous mask produces two failing subcases without errors, each at the
+leg/boot artwork comparison. A synthetic contour test checks holes, bounds,
+unchanged source artwork and unchanged input mask. Earlier X145, neighbour
+floor, detached-slab/plinth and guard progression tests are retained.
+
+These are supplied reproduction starts/keys, not recovered video inputs or a
+claim of complete native raster equivalence. This remains the user's visual
+port exception; actor/controller/physics and the following frame are unchanged.
+Ignored same-state enlarged before/fixed crops are under
+`rendered/first-loose-contact-leg/residual-before-fixed.png`.
+
+Validation:283 focused renderer/loose/ledge/temple-arrival/final-route tests
+pass without skips in108.527s. The final seven room14 tests pass in8.045s,
+including both actual toe-overlap starts. Dependencies, Ruff F/E9,
+recovery-catalogue and whitespace checks pass. No new full discovery or
+native CPU probe run is claimed for this renderer-only follow-up.

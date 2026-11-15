@@ -12,6 +12,22 @@ from pop2.caverns import CavernRoom, loose_contact_floor_cell
 
 
 class LooseContactRevealTests(unittest.TestCase):
+    def test_contact_mask_uses_whole_slab_alpha_and_preserves_upper_stone_holes_and_cache(self):
+        size = (20, 20)
+        contour = Image.new('RGBA', (8, 5), 'gray')
+        contour.putpixel((3, 2), (0, 0, 0, 0))
+        room = CavernRoom(Image.new('RGBA', size), Image.new('RGBA', size), {}, (), (), 0, 2,
+                          platform_contours={(0, 0): [(contour, (8, 10))]})
+        original = Image.new('L', size, 255)
+        source_bytes = contour.tobytes()
+        mask = room.contact_floor_mask(original, (0, 0))
+        self.assertEqual(mask.getpixel((10, 12)), 0)
+        for point in ((11, 12), (10, 9), (17, 12), (10, 15)):
+            self.assertEqual(mask.getpixel(point), 255, point)
+        self.assertEqual(original.tobytes(), Image.new('L', size, 255).tobytes())
+        self.assertEqual(contour.tobytes(), source_bytes)
+        self.assertIs(room.contact_floor_mask(original, (1, 0)), original)
+
     def test_deferring_one_floor_keeps_the_neighbouring_floor_repaint(self):
         size = (510, 365)
         red = Image.new('RGBA', (20, 20), 'red')
@@ -65,6 +81,58 @@ class LooseContactRevealTests(unittest.TestCase):
 
 @unittest.skipUnless((ASSET_DIR / 'temple_level10.json').is_file(), 'Imported temple resources required')
 class Room14SlabTests(unittest.TestCase):
+    def test_first_contact_keeps_the_whole_boot_in_front_of_the_neighbouring_stone_base(self):
+        from tools.audit_temple_routes import Harness, press
+
+        for start_x in (150, 155):
+            with self.subTest(start_x=start_x):
+                harness = Harness(10, draw=True, peaceful=False)
+                scene = harness.scene
+                scene.audio = None
+                changed = []
+                try:
+                    scene.jump_to_room(13, 1, start_x, 1)
+                    press(harness, 'up', True)
+                    press(harness, 'R', True)
+                    for tick in range(23):
+                        harness.tick()
+                        if tick == 2:
+                            press(harness, 'up', False)
+                        if tick == 9:
+                            press(harness, 'R', False)
+                        scene.render()
+                        fixed = scene.native_viewport.crop((1, 0, 511, 365)).convert('RGB')
+                        # e24c078 deferred only QuickFloor; the earlier alpha
+                        # mask still removed the toe at these actual positions.
+                        with patch.object(CavernRoom, 'contact_floor_mask',
+                                          lambda art, mask, cell: mask):
+                            scene.render()
+                            previous = scene.native_viewport.crop((1, 0, 511, 365)).convert('RGB')
+                        delta = ImageChops.difference(fixed, previous)
+                        if tick != 16:
+                            self.assertIsNone(delta.getbbox(), f'Frame {tick} changed')
+                            continue
+                        bounds = scene.player_bounds()
+                        foot = (bounds[0], bounds[3] - 24, bounds[2] + 1, bounds[3] + 1)
+                        # Independently remove ALL actor masks to obtain the
+                        # original complete leg/boot artwork, not another
+                        # floor-only control that retains the same toe cut.
+                        with patch.object(CavernRoom, 'actor_mask',
+                                          return_value=Image.new('L', (510, 365))):
+                            scene.render()
+                            raw = scene.native_viewport.crop((1, 0, 511, 365)).convert('RGB')
+                        self.assertIsNone(ImageChops.difference(fixed.crop(foot), raw.crop(foot)).getbbox(),
+                                          'Lower leg/boot still cut by the neighbouring plinth')
+                        self.assertIsNotNone(delta.getbbox())
+                        # Upper statue/body masking stays exactly as before.
+                        self.assertIsNone(delta.crop((0, 0, 510, foot[1])).getbbox())
+                        self.assertIsNotNone(ImageChops.difference(fixed, raw).crop(
+                            (0, 0, 510, foot[1])).getbbox())
+                        changed.append(tick)
+                    self.assertEqual(changed, [16])
+                finally:
+                    harness.close()
+
     def test_first_contact_reveals_boot_and_leg_but_neighbouring_frames_keep_native_mask(self):
         from tools.audit_temple_routes import Harness, press
 

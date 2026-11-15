@@ -3573,8 +3573,16 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         # An upper roof's foreground must not erase a lower-row fall.
         rooms = getattr(self, "room_cache", {})
         room = rooms.get(getattr(self, "room_id", None))
+        floor_exclusion = None
+        if room is not None and state is not None and bounds is not None:
+            caverns = getattr(getattr(self, 'game', None), 'caverns', None)
+            floor_exclusion = loose_contact_floor_cell(
+                getattr(self, 'level_map', None), getattr(caverns, 'loose', None),
+                self.room_id, row, state, record)
         mask = (room.actor_mask(row, bottom, state, bounds, record)
                 if room is not None and row is not None else self.foreground.getchannel("A"))
+        if floor_exclusion is not None:
+            mask = room.contact_floor_mask(mask, floor_exclusion)
         layer.putalpha(ImageChops.multiply(layer.getchannel("A"), ImageChops.invert(mask)))
         level = getattr(getattr(self, 'game', None), 'level', None)
         level_kind = getattr(state, 'level_kind', getattr(level, 'kind', None))
@@ -3598,10 +3606,6 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
             layer.paste((0, 0, 0, 0), (0, 243, layer.width, layer.height))
         frame = Image.alpha_composite(frame, layer)
         if level_kind in (2, 3, 4, 6) and room is not None and state is not None and bounds is not None:
-            caverns = getattr(getattr(self, 'game', None), 'caverns', None)
-            floor_exclusion = loose_contact_floor_cell(
-                getattr(self, 'level_map', None), getattr(caverns, 'loose', None),
-                self.room_id, row, state, record)
             # Only the struck floor's repaint is deferred. The statue mask
             # above and the following frame's detached slab retain their order.
             frame = room.draw_actor_foreground(frame, state, bounds, floor_exclusion)
