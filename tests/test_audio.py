@@ -677,7 +677,7 @@ class PolyphonicCueTests(unittest.TestCase):
         playback = MixerPlayback(self.directory.name, cues)
         burn = playback.ui_sounds['burn']
         self.assertNotEqual(burn.get_raw(), self.playback.ui_sounds['burn'].get_raw())
-        self.assertAlmostEqual(burn.get_volume(), 1.0, places=2)
+        self.assertAlmostEqual(burn.get_volume(), 0.8, places=2)
         playback.play_ui('burn')
         self.assertIs(playback.ui_channels['click'].get_sound(), burn)
         # A file that cannot be read leaves the lava sound.

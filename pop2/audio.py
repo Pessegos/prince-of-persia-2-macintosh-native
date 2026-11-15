@@ -41,7 +41,7 @@ BURN_VOLUME = 0.4   # cue 69 peaks at 23% of full scale: 9%, as the reveal
 # is not one of the game's resources and is not in the repository; its level
 # as recorded is about as loud as the lava sound above.
 BURN_FILE = "menu-burn.wav"
-BURN_FILE_VOLUME = 1.0
+BURN_FILE_VOLUME = 0.8   # a little quieter than recorded, as the user asked
 # The file is used as the user prepared it (1 s, already faded out).
 # Cue 69 opens with a bright pulsing rattle (to 0.165 s, a quiet gap), like
 # bones; only the lava's bubbling after it is kept, faded in over 5 ms. It is
