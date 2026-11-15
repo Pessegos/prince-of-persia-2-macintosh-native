@@ -92,6 +92,15 @@ class RoomThreeCopyTests(unittest.TestCase):
         # The flask stays where the copy fell.
         self.assertEqual(scene.level_map.tile(2, column, 1).kind, 10)
 
+    def test_room_three_counts_its_spider_and_flasks_as_animated_objects(self):
+        # a5-0x43e6: room 3's kind-40 spider is one trob, each flask
+        # another, so a fourth flask is refused (9:011e) after three drops.
+        potions = self.scene.game.caverns.potions
+        self.assertEqual(self.combat._final_room_objects(2), 1)
+        for cell in (13, 15, 17):
+            potions.tiles[2, cell] = 10, 0x4020
+        self.assertEqual(self.combat._final_room_objects(2), 4)
+
     def test_the_life_enhancement_left_by_a_copy_can_be_drunk(self):
         copy, = self.combat.guards
         scene = self.scene

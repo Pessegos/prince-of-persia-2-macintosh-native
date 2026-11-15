@@ -888,9 +888,13 @@ Evidence:
   (maximum life 4 -> 5).
 
 Exclusions:
-- a5-0x43e6 counts all animated objects of the room on screen. The port
-  counts room 3's flasks, which TriggerFlask adds one each; other
-  animated objects in that room, if any, are not counted.
+- a5-0x43e6 is the trob count of the room on screen (capacity 20,
+  5:20bc). KeepTime 2:4fd0 adds one per flask, per cell of kinds
+  28/29/31/40/43 and, in native rooms 6-8, per crystal/gargoyle cell
+  (foreground 0x1000). Room 3's spider is kind 40, so with it three flasks
+  already refuse a fourth. The port counts these cells in the Prince's
+  room; the neighbouring rooms' edge cells that KeepTime also scans are
+  left out (room 3 has none of those kinds).
 - A copy that dies outside native room 3 keeps the ordinary body (6:07b8
   requires room 3); the port does not let copies follow the Prince out of
   room 3 (it has no exit they can walk through: CutChar refuses the right

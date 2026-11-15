@@ -245,6 +245,8 @@ class CombatEvent:
 PALACE_ROOMS = (6, 7)
 # Native room 3: the Jaffar copies' room (FinlWatchOpps 9:0874).
 FINAL_COPY_ROOM = 2
+# KeepTime 2:4fd0: tile kinds that add an animated object (trob).
+TROB_KINDS = (FLASK_TILE, 28, 29, 31, 40, 43)
 
 
 class _FinalKid:
@@ -1762,13 +1764,21 @@ class CombatEncounter:
         return True
 
     def _final_room_objects(self, room):
-        """a5-0x43e6, the animated objects of the room on screen. In room 3
-        these are its flasks (TriggerFlask 5:1ce8 adds one each)."""
+        """a5-0x43e6, the animated objects (trobs) of the room on screen.
+        KeepTime 2:4fd0 adds one for each flask (TriggerFlask 5:1ce8), each
+        cell of kinds 28/29/31/40/43 (5:20a0) and, in native rooms 6-8,
+        each crystal or gargoyle cell (foreground 0x1000, 9:2068/233a);
+        room 3's spider is kind 40. Neighbour edge cells are left out."""
         terrain = getattr(self, 'terrain', None)
-        if terrain is None or room != self.player.room:
+        if terrain is None:
             return 0
-        return sum(1 for cell in range(30)
-                   if terrain.tile(room, cell % 10, cell // 10).kind == FLASK_TILE)
+        room = self.player.room
+        count = 0
+        for cell in range(30):
+            tile = terrain.tile(room, cell % 10, cell // 10)
+            if tile.kind in TROB_KINDS or (room in (5, 6, 7) and tile.foreground & 0x1000):
+                count += 1
+        return count
 
     def advance_guard(self):
         terrain = getattr(self, "terrain", None)
