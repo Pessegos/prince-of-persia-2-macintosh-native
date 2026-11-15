@@ -60,7 +60,7 @@ from pop2.game_session import GameResources, GameSession
 from pop2.level_rendering import LevelRenderer
 from pop2.environments import environment_for
 from pop2.carpet import carpet_room
-from pop2.caverns import cavern_clip_top, cavern_exit_clip
+from pop2.caverns import cavern_clip_top, cavern_exit_clip, loose_contact_floor_cell
 from pop2.render_opening import (
     OPENING_FLOOR_Y,
     ROOF_GLASS_OFFSETS,
@@ -3598,7 +3598,13 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
             layer.paste((0, 0, 0, 0), (0, 243, layer.width, layer.height))
         frame = Image.alpha_composite(frame, layer)
         if level_kind in (2, 3, 4, 6) and room is not None and state is not None and bounds is not None:
-            frame = room.draw_actor_foreground(frame, state, bounds)
+            caverns = getattr(getattr(self, 'game', None), 'caverns', None)
+            floor_exclusion = loose_contact_floor_cell(
+                getattr(self, 'level_map', None), getattr(caverns, 'loose', None),
+                self.room_id, row, state, record)
+            # Only the struck floor's repaint is deferred. The statue mask
+            # above and the following frame's detached slab retain their order.
+            frame = room.draw_actor_foreground(frame, state, bounds, floor_exclusion)
             if (state.actor_type in (0, 2, 4) and record is not None
                     and actor_draw_order(state, record, bounds, row)[0] == 0):
                 # IndexCell1 maps offscreen actors to bucket30, drawn before

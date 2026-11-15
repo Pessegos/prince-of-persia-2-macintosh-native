@@ -169,3 +169,51 @@ Validation for this origin correction:246 focused tests pass without skips
 in90.983s (room14/slab/cavern/opening/loose/ledge/actor/temple/gate/bridge).
 Dependency, Ruff F/E9, recovery-catalogue and whitespace checks pass. No new
 full-discovery run is claimed for this drawing-only coordinate change.
+
+## Deliberate port improvement: first-contact leg reveal (2026-11-15)
+
+After accepting the native match, the user requested a visual exception for
+the supplied short-jump impact frame: show the Prince's whole lower leg and
+boot in front of the loose tile, then resume its existing masking on the
+following frame. This is an approved port improvement, not recovered native
+behaviour; the original can show the same cut.
+
+The room14 real-key reproduction at start X145 selects SEQS18, pose106,
+mode4. At tick16 the actor has relative Y6 in row2 and the struck type11
+floor is still attached at collapse phase11. QuickFloor's complete floor
+repaint cuts across the trousers and boot. The compositor now omits only
+that supporting cell's floor repaint in this state, verified through the
+supporting-foot coordinate and its active forced-collapse controller.
+The exception applies to this temple short-jump contact, independently of
+room number. Other environments, actors, sequences and contact heights keep
+their previous drawing. Warning shakes and ordinary floors are excluded.
+
+Stationary statue/plinth masking still happens before the actor is painted;
+neighbouring floors still repaint. Tick17's MOB3 at Y365 retains the accepted
+inclusive raster origin, foreground protection and trouser masking. No actor,
+motion, tile controller, slab or guard timing is changed, and no persistent
+state or input is introduced.
+
+The regression compares all23 frames of the supplied-input reproduction
+against the previous painter at the same game state: only tick16 changes.
+Its entire image equals the render without floor repaint in that frame,
+showing the actual actor artwork; no changed pixel touches stationary
+foreground. The test also checks actor/motion/loose-controller state remains
+unchanged by drawing. A separate two-floor control verifies that deferring
+one cell leaves its neighbour in front. Existing detached-frame/plinth and
+guard-contact regressions remain in force. Disabling the exception makes
+the new real-route test fail once, without errors. Start and key timing are
+supplied test inputs, not a recovery of the video's original keypresses.
+
+The legacy temple-arrival slab fixture also now supplies a transparent
+stationary-foreground image and expects the already recovered inclusive
+bottom. That fixes its stale fixture/expectation after the earlier painter
+changes; it does not change production behaviour or weaken the shape check.
+No original resources or imported artwork are modified.
+
+Validation:252 focused renderer/route tests pass without skips in98.233s;
+62 temple-arrival/final-level tests pass without skips in24.810s. After adding
+the neighbouring-floor control, all five room14 tests pass in3.681s.
+Dependency, Ruff F/E9, recovery-catalogue and whitespace checks pass. The
+before/fixed contact and both adjacent frames were visually inspected.
+No full discovery or native probe rerun is claimed for this visual exception.

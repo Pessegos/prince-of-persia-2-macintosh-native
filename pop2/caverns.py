@@ -43,6 +43,22 @@ def floor_redraw_cells(state, bounds):
                  for column in range(first, last + 1))
 
 
+def loose_contact_floor_cell(terrain, loose, room, row, state, record):
+    """User-approved leg reveal at the temple short-jump's first slab impact."""
+    if (terrain is None or loose is None or record is None or row not in range(3)
+            or state.level_kind != 2 or state.actor_type != 0
+            or state.source_sequence_id != 18 or state.action != 106
+            or state.animation_state != 4 or state.current_y != 6):
+        return None
+    column = character_column(floor_contact_x(state.target_x, state.facing, record))
+    tile = terrain.tile(room, column, row)
+    key = room, row * 10 + column
+    if (tile.room == room and tile.kind == 11 and tile.foreground & 0x4f == 11
+            and loose.active.get(key, 0) > 1):
+        return column, row
+    return None
+
+
 def falling_floor_redraw_cells(x, y, height=43):
     # Cave loose MOB: 5:3128-32e0 marks the next column at the bottom
     # and, if different, at the top of its 43-unit bounding rectangle.
@@ -103,8 +119,8 @@ class CavernRoom(OpeningRoom):
                 mask.paste(ImageChops.lighter(mask.crop(rect), cover), (x, y))
         return mask
 
-    def draw_actor_foreground(self, frame, state, bounds):
-        frame = self.draw_actor_floor_foreground(frame, state, bounds)
+    def draw_actor_foreground(self, frame, state, bounds, floor_exclusion=None):
+        frame = self.draw_actor_floor_foreground(frame, state, bounds, floor_exclusion)
         frame = self.draw_walkoff_tip(frame, state, bounds)
         if (self.exit_foreground and state.actor_type == 0
                 and 217 <= state.action <= 226
@@ -128,7 +144,7 @@ class CavernRoom(OpeningRoom):
         return self.draw_floor_records(frame, records,
             (max(0, bounds[0]), max(0, bounds[1]), min(510, bounds[2] + 1), min(365, bounds[3] + 1)))
 
-    def draw_actor_floor_foreground(self, frame, state, bounds):
+    def draw_actor_floor_foreground(self, frame, state, bounds, floor_exclusion=None):
         surface = ledge_surface_clip(state, bounds)
         if surface is not None and self.floor_redraw is not None:
             # Intentional improvement over ComputeHalfRect: the support line
@@ -151,6 +167,7 @@ class CavernRoom(OpeningRoom):
             records = self.climb_redraw.get((state.action, column, row), ())
         elif self.floor_redraw:
             records = [record for cell in floor_redraw_cells(state, bounds)
+                       if cell != floor_exclusion
                        for record in self.floor_redraw.get(cell, ())]
             clip = (max(0, bounds[0] + int(bool(state.facing))), max(0, bounds[1]),
                     min(510, bounds[2] + 1), min(365, bounds[3] + 1))
