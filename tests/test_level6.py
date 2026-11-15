@@ -39,7 +39,10 @@ class LevelSixSceneryTests(unittest.TestCase):
                 # Next frame: the floor is now a moving slab, while the
                 # Prince's legs extend beyond the viewport. It still covers
                 # his white trousers instead of being painted behind them.
-                self.assertEqual(scene.native_viewport.getpixel((277, 351)), (157, 114, 98, 255))
+                # The slab's MOB bottom is inclusive (AddImgObj3:0302-030c,
+                # 430eb87), so its texture sits a pixel lower than the
+                # static-command origin this check first used.
+                self.assertEqual(scene.native_viewport.getpixel((277, 352)), (157, 114, 98, 255))
                 seen.add('moving_slab')
             if tick == 16:
                 scene.set_key_state('down', False)
