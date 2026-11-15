@@ -2,9 +2,10 @@
   <img src="docs/github readme/pop2-mac-banner.png"
        alt="Prince of Persia 2 Macintosh"
        width="1200">
+  </p>
 <br/>
 <br/>
-</p>
+
 
 I'm working on a native Windows reimplementation of the Macintosh version of *Prince of Persia 2: The Shadow & the Flame*. It uses the original game's graphics, animations, levels and sounds.
 
@@ -28,7 +29,7 @@ I'm trying to stay as close to the original as possible, while still making some
   - [Ledge Masking](#ledge-masking)
   - [Lava Overhaul](#lava-overhaul)
   - [Cave Ambience](#cave-ambience)
-  - [Cavern Artwork](#cavern-artwork)
+  - [Game Artwork](#game-artwork)
   - [Stone Gates](#stone-gates)
   - [Gate Sounds](#gate-sounds)
 - [Other Quality of Life Improvements](#other-quality-of-life-improvements)
@@ -168,11 +169,11 @@ Different sound effects can now play at the same time. <br/> In this example, th
 In the Macintosh version, parts of the Prince's body can show through the stone while climbing up or lowering himself from a ledge. I improved the masking in both animations to make the movement around the ledge look more natural.
 
 <br/>
-
+<p align="center">
 <img src="docs/github readme/ledge-masking-before-after.gif" alt="Before and after comparison of the Prince descending and climbing a ledge, with improved masking around the stone">
 
 <img src="docs/github readme/ledge-left-fall-ruins-before-after.gif" alt="Before and after comparison of the Prince falling off a ledge to the left, with the rear leg masked by the diagonal floor edge">
-
+</p>
 *Slowed down for comparison.*
 
 <br/>
@@ -187,8 +188,9 @@ So I decided to take it a step further and give the lava a proper overhaul, with
 
 The animation also required some careful masking to prevent overlapping, and I fixed a brief pause in the original animation loop.
 
-<br/>
+<p align="center">
 <img src="docs/github readme/lava-macintosh-reconstructed-dos-port.gif" alt="Comparison of the original Macintosh lava, reconstructed Macintosh lava, DOS lava and overhauled lava" width="800">
+</p>
 
 <br/>
 
@@ -210,7 +212,20 @@ The effects are off by default, but can be enabled through the F1 menu or with A
 
 <br/>
 
-## Cavern Artwork
+## Game Artwork
+
+### Desert Artwork
+
+In the original Macintosh version, the Room 2 artwork in Level 2 sits 20 pixels lower than Room 1, so the horizon, water and hills don't line up. This looks especially odd in the Game Map, and would also cause problems if I ever wanted to experiment with wider aspect ratios.
+
+So I moved the artwork up and retouched the sand, rocks, water and sky gradient to make the two screens connect naturally.</br>The trees had to be cut down a bit for the greater good.
+
+<p align="center">
+  <img src="docs/github readme/desert-artwork/desert-artwork.gif" alt="Macintosh and Port comparisons of Room 1 and 2 from Level 2" height="772">
+</p>
+<br/>
+
+### Cavern Artwork
 
 Cavern artwork has been touched up across levels 3-5 to soften harsh column shadows and blend abrupt joins between walls and floors. This also includes the floor edges around column bases and dart traps, and the rectangular outlines around cavern doorways.
 
@@ -231,8 +246,9 @@ Here are a few examples:
 The stone gate closing animation in the Macintosh version looks pretty rough, especially when crushing the Prince. The DOS version handles this much better, with a nice bouncing effect when the gate slams shut, so I recreated its closing animation frame by frame for the port and adjusted the timing of the original slam sound to match.
 
 <br/>
+<p align="center">
 <img src="docs/github readme/stone-gate-macintosh-dos-port.gif" alt="Stone gate closing animation comparison between Macintosh, DOS and the port" >
-
+</p>
 <br/>
 
 ## Gate Sounds
