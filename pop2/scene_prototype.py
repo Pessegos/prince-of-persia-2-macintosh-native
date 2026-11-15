@@ -3302,6 +3302,12 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
             preferred = {(3, 20): 2, (5, 2): 0}.get((self.game.level.number, room))
             row, column = room_entry(self.level_map, room, preferred_row=preferred)
             return self.jump_to_room(room, row=row, x=column * TILE_WIDTH + 30, facing=0)
+        elif (self.game.level.number == 6 and room == 2 and self.game.caverns is not None
+              and self.game.caverns.entry_room == room and self.game.caverns.entry_frames):
+            # Level six's room 3 is entered through its door from the cliff:
+            # step out of it as that exit does, the door closing behind.
+            environment_for(self).leave_cliff(warp=True)
+            row = None
         elif self.game.level.kind in (2, 4):
             from pop2.development_entry import room_entry
 
@@ -3325,7 +3331,8 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
             # Use the same supported entry-cell inset as the secret-room warp.
             # A near-boundary spawn changes the phase of subsequent run stops.
             row, x = rows[0], 9 * TILE_WIDTH + 30
-        self.jump_to_room(room, row=row, x=x, facing=0)
+        if row is not None:
+            self.jump_to_room(room, row=row, x=x, facing=0)
         # A dev warp simulates progress along the route, including the last
         # LEVL checkpoint it would pass. Normal play still uses the cell gate.
         route = list(screens.values())[:list(screens).index(label) + 1]

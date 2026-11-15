@@ -110,6 +110,22 @@ class LevelSixSceneryTests(unittest.TestCase):
         self.assertEqual(caverns.entry_frame, len(caverns.entry_frames) - 1)
         self.assertEqual(caverns.advance(), ())
 
+    def test_teleport_to_room_three_steps_out_as_its_door_slams(self):
+        # Previously the warp stood the Prince beside an already-shut door.
+        scene = self.scene
+        caverns = scene.game.caverns
+        self.tick(4)
+        scene.jump_to_screen('Room 3')
+        self.assertEqual((scene.room_id, scene.terrain_motion.row), (2, 2))
+        self.assertEqual(scene.sequence_state.source_sequence_id, 5)
+        self.assertEqual(caverns.entry_frame, 0)
+        for _ in range(60):
+            self.tick()
+            if caverns.entry_frame == len(caverns.entry_frames) - 1:
+                break
+        self.assertEqual(caverns.entry_frame, len(caverns.entry_frames) - 1)
+        self.assertEqual(scene.room_id, 2)
+
     def test_crouching_at_a_crevice_uncovers_its_whole_run(self):
         from pop2.caverns import cavern_scene_signature
 

@@ -1736,7 +1736,10 @@ class Ruins(Caverns):
             return True
         return False
 
-    def leave_cliff(self):
+    def leave_cliff(self, warp=False):
+        # A development warp to room 3 replays the same arrival, so its door
+        # still slams behind the Prince, but as a fresh entry: guards,
+        # checkpoint, keys and music start over like any other warp.
         scene = self.scene
         # CutChar 6:4d7c-4d92 -> S07_373E: leaving level six's cliff (native
         # room 27) to the left, the Prince steps out of native room 3's door
@@ -1747,9 +1750,11 @@ class Ruins(Caverns):
         held = (list(scene.held_directions), scene.up_held, scene.down_held,
                 scene.shift_held, scene.ctrl_held)
         # This is a continuous room cut, so retain the cliff's music cursor.
-        scene.jump_to_room(2, 2, 4 * TILE_WIDTH + 22, 1, reset_guards=False,
-                          preserve_checkpoint=True, redraw=False, keep_music=True)
+        scene.jump_to_room(2, 2, 4 * TILE_WIDTH + 22, 1, reset_guards=warp,
+                          preserve_checkpoint=not warp, redraw=False, keep_music=not warp)
         scene.start_sequence(5)
+        if warp:
+            held = ([], False, False, False, False)
         # The keys stay held through the cut. 7:379a-379e then calls
         # ClearControls and zeroes the modifier: a key still held is a fresh
         # request, so a held Left turns into a run at SEQS 5's pose 48.
