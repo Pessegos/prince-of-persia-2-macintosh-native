@@ -1170,6 +1170,11 @@ class RooftopPhysics:
         # RoofMakeWaterTestRect handles the offscreen death separately.
         if direction == "right" and motion.room == 14 and state.level_kind == 5:
             return False
+        # CutChar 6:4c50-4c6c: in the final tower (environment 6) native
+        # room 3 refuses its right exit, so the Prince never reaches room 9
+        # and bumps against its wall column from room 3's view.
+        if direction == "right" and motion.room == 2 and state.level_kind == 6:
+            return False
         room = self.map.neighbor(motion.room, direction)
         if room is None:
             return False

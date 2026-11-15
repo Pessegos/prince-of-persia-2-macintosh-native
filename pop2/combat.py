@@ -229,10 +229,14 @@ class CombatEvent:
     sound: int | None = None
 
 
-# Native rooms 7 and 8. Out of the Prince's view the final Jaffar makes no
-# AutoCtrl decision (the video's Prince crosses room 7's upper floor
-# unharmed), but a move begun in view, such as a running jump over the
-# border, still finishes instead of freezing in the air (a port choice).
+# Native rooms 7 and 8. The final Jaffar acts only while he is in the
+# Prince's active opponent list: in the Prince's room (or a visible side
+# slot). Running out of it, CutOpponent 6:424c -> UpdateOppInfo 6:30b0
+# moves his record to the other room's bank and drops him from the list,
+# so he waits there, mid-move, until the Prince comes (the video's Prince
+# crosses room 7's upper floor unharmed while he stands in room 8). The
+# port lets a burning Jaffar (SEQS 230) finish there, so that a fire that
+# crossed the border still ends the game.
 PALACE_ROOMS = (6, 7)
 
 
@@ -371,6 +375,12 @@ def strike_range(attacker, defender):
         # 6:5c58: the flaming sword's own reach.
         return STRIKE_RANGE
     opposed = attacker.state.facing != defender.state.facing
+    if attacker.state.actor_type == 6 or (attacker.state.actor_type in (0, 1)
+                                          and defender.state.actor_type == 6):
+        # 6:5bd2-5c06 and 6:5cd4-5cec: Jaffar's false Princes (type 6) are
+        # struck, and strike, at close range: 16..79, or 16..86 when the
+        # Prince faces a copy.
+        return 16, (86 if opposed and attacker.state.actor_type != 6 else 79)
     if attacker.state.actor_type in (0, 1):
         low, high = 61, 99
         # 0x5c18 tests engagement, unlike the NPC branch's sword-flag test.
@@ -1815,6 +1825,9 @@ class CombatEncounter:
             figure.final_info = PathInfo()
         old_x = state.target_x
         in_view = figure.room == self.player.room or figure.bank_room == self.player.room
+        if not in_view and state.selected_sequence_id != 230:
+            # Out of the active list: his record keeps the move he was in.
+            return
         if in_view and frames is not None and getattr(self, 'terrain', None) is not None:
             view = self.final_prince_view()
             player = self.player
@@ -1886,6 +1899,10 @@ class CombatEncounter:
                 figure.room = motion.room = neighbor
                 state.target_x += delta
                 state.current_x = state.target_x
+                # CutOpponent 6:42fc-430a: the cut record leaves the active
+                # opponent list (it is no longer the Prince's bank).
+                if neighbor != self.player.room:
+                    figure.bank_room = None
                 if self.guard is figure:
                     self.guard = None
                 break

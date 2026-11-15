@@ -102,10 +102,14 @@ def distance(jaffar, prince):
 
 
 def prince_in_range(jaffar, prince, frames):
-    """9:0ba6: may the spell reach the Prince?"""
+    """9:0ba6: may the spell reach the Prince?
+
+    The pose tests at 9:0bee-0c2c read -0x504c, the Char record's pose:
+    Jaffar's own. He must stand in a FRAM 0x40 pose (or 191-205) and not
+    crouch (109); the Prince's own pose does not matter here."""
     if (prince.life <= 0 or prince.room not in (LEFT_ROOM, RIGHT_ROOM)
             or prince.selected == DISSOLVE_PRINCE_SEQUENCE or jaffar.row != prince.row
-            or not prince_exposed(prince.pose, frames) or prince.pose == CROUCH_POSE):
+            or not prince_exposed(jaffar.pose, frames) or jaffar.pose == CROUCH_POSE):
         return False
     column = global_column(jaffar)
     if jaffar.row == 0:

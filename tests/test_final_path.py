@@ -8,7 +8,9 @@ from pop2.final_path import (
     prince_in_range, prince_near)
 from pop2.paths import ASSET_DIR
 
-EXPOSED = [SimpleNamespace(aux=0x40)] * 120 + [SimpleNamespace(aux=0)] * 300
+# Poses 120-159 lack FRAM flag 0x40 here; the spell poses (272-282) have it.
+EXPOSED = ([SimpleNamespace(aux=0x40)] * 120 + [SimpleNamespace(aux=0)] * 40
+           + [SimpleNamespace(aux=0x40)] * 260)
 
 
 class Kid:
@@ -53,10 +55,15 @@ class DecisionTests(unittest.TestCase):
     def test_the_spell_strikes_at_pose_282_only_in_range(self):
         calls, events, _info = run(jaffar(pose=282, selected=SPELL_SEQUENCE), prince())
         self.assertEqual((calls, events), ([('select', KILL_SEQUENCE)], [('kill',)]))
-        # A crouching Prince (pose 109) is not in range (9:0c28).
+        # 9:0bee-0c2c test Jaffar's own pose (-0x504c), not the Prince's:
+        # crouching does not save the Prince, a crouching Jaffar is out of
+        # range, and so is one in a pose without FRAM flag 0x40.
         _calls, events, _info = run(jaffar(pose=282, selected=SPELL_SEQUENCE),
                                     prince(pose=109))
-        self.assertEqual(events, [])
+        self.assertEqual(events, [('kill',)])
+        self.assertFalse(prince_in_range(jaffar(pose=109), prince(), EXPOSED))
+        self.assertFalse(prince_in_range(jaffar(pose=150), prince(), EXPOSED))
+        self.assertTrue(prince_in_range(jaffar(), prince(pose=150), EXPOSED))
         _calls, events, _info = run(jaffar(pose=281, selected=SPELL_SEQUENCE), prince())
         self.assertEqual(events, [('sound', 289)])
 
@@ -138,11 +145,24 @@ class PalaceSceneTests(unittest.TestCase):
 
     def test_a_prince_below_sees_him_run_to_the_left_view_and_climb_down(self):
         self.scene.jump_to_room(7, row=2, x=100, facing=1, reset_guards=False, redraw=False)
+        for _ in range(60):
+            self.harness.tick()
+            if self.jaffar.room == 6:
+                break
+        self.assertEqual((self.jaffar.room, self.jaffar.row), (6, 0))
+        # CutOpponent 6:42fc: once cut into room 7 he leaves the Prince's
+        # active list, and his record waits there in the move he was in.
+        state = self.jaffar.state
+        held = (state.target_x, state.action, state.selected_sequence_id)
+        self.ticks(40)
+        self.assertEqual((state.target_x, state.action, state.selected_sequence_id), held)
+        # Following him there, the Prince sees him finish the route and
+        # climb down toward position 2.
+        self.scene.jump_to_room(6, row=2, x=100, facing=1, reset_guards=False, redraw=False)
         rows = set()
         for _ in range(130):
             self.harness.tick()
             rows.add((self.jaffar.room, self.jaffar.row))
-        self.assertIn((6, 0), rows)
         self.assertIn((6, 1), rows)
         self.assertEqual((self.jaffar.final_info.prev, self.jaffar.final_info.pos), (3, 2))
 
