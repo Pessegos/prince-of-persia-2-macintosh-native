@@ -22,7 +22,14 @@ class FinalSpellRecoveryTests(unittest.TestCase):
         operations = recover_final_spell(*(
             (FORKS / name).read_bytes() for name in (
                 'Prince of Persia 2.bin', 'NIS.rsrc.bin', 'Happy.rsrc.bin')))
-        self.assertEqual(len(operations), 766)
+        self.assertEqual(len(operations), 767)
+        # 15:0ae4-0b0c starts 30500 once 10055 has ended; the earlier
+        # extraction restarted 10055 instead.
+        self.assertFalse(any(item['op'] == 'ensure_sound' for item in operations))
+        self.assertEqual({tuple(item['args']) for item in operations if item['op'] == 'sound_after'},
+                         {(10055, 1, 30500, 1)})
+        # Room 4's enter hook (9:1afe) waits on it.
+        self.assertEqual(operations[-1], {'op': 'wait_sound', 'args': [30500, 1], 'pc': 0x1afe, 'code': 9})
         self.assertFalse(any(item['op'] == 'animation' for item in operations))
         self.assertIn({'op': 'fade', 'args': [1031001, True, 262145], 'pc': 0x0a5c},
                       operations)
@@ -38,6 +45,7 @@ class FinalSpellRecoveryTests(unittest.TestCase):
             audio = {scene_sound_key(item['args'][0], item['args'][1]):
                      {'duration': 0.01, 'markers': {}}
                      for item in operations if item['op'] == 'sound'}
+            audio[scene_sound_key(30500, 1)] = {'duration': 0.01, 'markers': {}}
             (destination / 'final_spell.json').write_text(json.dumps({
                 'schema': 1, 'kind': 'final_spell',
                 'resource_files': {'Happy.rsrc': 1000000},
@@ -52,6 +60,30 @@ class FinalSpellRecoveryTests(unittest.TestCase):
             player.advance(30)
             self.assertTrue(player.done)
             self.assertIsNotNone(player.frame().getbbox())
+
+
+class SoundAfterTests(unittest.TestCase):
+    def test_the_follow_sound_starts_once_when_the_watched_one_ends(self):
+        from unittest.mock import Mock
+
+        audio = {scene_sound_key(10055, 1): {'duration': 1.0, 'markers': {}},
+                 scene_sound_key(30500, 1): {'duration': 3.0, 'markers': {}}}
+        step = {'op': 'sound_after', 'args': [10055, 1, 30500, 1]}
+        operations = [{'op': 'sound', 'args': [10055, 1]}]
+        operations += [dict(step), {'op': 'wait', 'args': [6]}] * 40
+        operations.append({'op': 'wait_sound', 'args': [30500, 1]})
+        assets = Mock(program={'operations': operations, 'audio': audio}, shapes={}, palettes={})
+        player = IntroPlayer.__new__(IntroPlayer)
+        started = []
+        IntroPlayer.__init__(player, assets)
+        player.sound = lambda resource, kind, original=player.sound: (
+            started.append((round(player.time, 1), resource)), original(resource, kind))
+        player.advance(10)
+        self.assertEqual([resource for _, resource in started], [30500])
+        self.assertGreaterEqual(started[0][0], 1.0)
+        # The last wait holds until 30500 ends.
+        self.assertTrue(player.done)
+        self.assertAlmostEqual(player.time, started[0][0] + 3.0, delta=0.2)
 
 
 if __name__ == '__main__':

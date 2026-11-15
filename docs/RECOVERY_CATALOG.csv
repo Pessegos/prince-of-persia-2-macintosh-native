@@ -589,7 +589,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 15,NISs,Transition,0x07c8,prologue,indexed-only,,No semantic review recorded in this prototype catalog,0,5
 15,NISs,TransPrincessRoom,0x0880,prologue,partial,tools/extract_intro.py;tests/test_final_spell.py;tests/test_final_spell_flow.py,"NIS 5 room-2 spell coordinator: Happy resource and 766 expanded operations with supplied CODE16 drawing/sound and Resource Manager endpoints; hidden port transition tested, native pixel/audio parity excluded",0,17
 15,NISs,TransFuncSetCTABframe1,0x09c0,jump_table,partial,tools/extract_intro.py,"Frame-1 brightness (0x51, 100) of the victory bedroom",0,1
-15,NISs,TransFuncJaffarMagic,0x09fa,jump_table,partial,tools/extract_intro.py;tests/test_final_spell.py,79-frame NIS 5 animation callback recovered with supplied animation/resource/sound endpoints; isolated fade pointer restored from coordinator CTBL; live trigger and native frame capture excluded,0,7
+15,NISs,TransFuncJaffarMagic,0x09fa,jump_table,partial,tools/extract_intro.py;tests/test_final_spell.py,79-frame NIS 5 animation callback recovered with supplied animation/resource/sound endpoints; 30500 starts once 10055 ends (0ae4-0b0c); isolated fade pointer restored from coordinator CTBL; live trigger and native frame capture excluded,0,7
 15,NISs,ClearNIS,0x0b32,prologue,indexed-only,,No semantic review recorded in this prototype catalog,49,3
 15,NISs,AddShpNIS,0x0b86,prologue,indexed-only,,No semantic review recorded in this prototype catalog,0,3
 15,NISs,DissolveNIS,0x0bce,prologue,indexed-only,,No semantic review recorded in this prototype catalog,20,1

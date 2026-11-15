@@ -412,6 +412,14 @@ def recover_scenes(program, nis, entries=(0x45c2, 0x4ee8), arguments=(), a5_word
                 elif target == 0x1242:
                     # RestoreRectKeep 17:544a.
                     emit("restore_rect", saved[l()])
+                elif target == 0xff2 and address - base == 0x0aec:
+                    # TransFuncJaffarMagic 15:0ae4-0b0c: when SoundIdOn is
+                    # false and a5-0x245a is clear, StartSndId(30500, 1)
+                    # and set the flag. The probe reports it playing.
+                    if word(base + 0x0b00) != 0x3f3c or word(base + 0x0afc) != 0x7001:
+                        raise ValueError("Unsupported spell sound order")
+                    emit("sound_after", w(), w(2), word(base + 0x0b02), 1)
+                    result = 1
                 elif target == 0xff2:
                     # SoundIdOn 16:25b0: the scene restarts the sound when it
                     # has ended; it is reported as playing here.
@@ -540,8 +548,10 @@ def extract_scene_audio(image, operations, directory, progress=lambda _text: Non
     manifest_path = directory / "audio/manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="ascii"))
     audio = {}
-    for resource_id, kind in sorted({tuple(item["args"]) for item in operations
-                                     if item["op"] == "sound" and not item.get("song")}):
+    sounds = {tuple(item["args"]) for item in operations
+              if item["op"] == "sound" and not item.get("song")}
+    sounds |= {tuple(item["args"][2:]) for item in operations if item["op"] == "sound_after"}
+    for resource_id, kind in sorted(sounds):
         progress(f"Preparing intro audio {resource_id}...")
         key = scene_sound_key(resource_id, kind) if banked else str(resource_id)
         stem = key if banked else f"intro-{resource_id}"
@@ -948,7 +958,12 @@ def recover_final_spell(program, nis, happy):
                 item['args'][0] = palette
         if items:
             callbacks[frame] = items
-    return expand_animations(operations, resources, {'jaffar_magic': callbacks})
+    operations = expand_animations(operations, resources, {'jaffar_magic': callbacks})
+    # The scene returns to native room 4, whose CUST enter hook (CODE
+    # 9:1ab4-1b06) erases the screen and waits on sound 30500, started near
+    # the scene's end (15:0afc-0b08): the black screen stays until it ends.
+    operations.append({'op': 'wait_sound', 'args': [30500, 1], 'pc': 0x1afe, 'code': 9})
+    return operations
 
 
 def extract_final_spell(image, program, nis, happy, directory, progress=lambda _text: None):

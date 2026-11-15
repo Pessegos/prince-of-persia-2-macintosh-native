@@ -1036,5 +1036,24 @@ that swaps rooms 7 and 8 is rejected) and, in hidden level-14 scenes,
 each room's requests, the Escher flag, no new theme while a song plays
 and nothing with the music off. No native CPU probe and no capture.
 
-Exclusions: the room-4 wait on sound 30500; whether other rooms (such as
-native room 10) use the 9:1d84 hook, which would also add Crystal there.
+Exclusions: whether other rooms (such as native room 10) use the 9:1d84
+hook, which would also add Crystal there. ChessRm starts after the room-4
+wait below, about two seconds later than the Macintosh, whose hook adds it
+before waiting.
+
+### The spell's last sound and room 4's wait (2026-11-15)
+
+From frame 51 `TransFuncJaffarMagic` checks sound 10055 (SoundIdOn
+16:25b0): once it has ended and a5-0x245a is clear (cleared at 15:0918),
+it starts 30500 with StartSndId 16:2396 and sets the flag (15:0ae4-0b0c).
+The extractor reported SoundIdOn as playing and emitted the throne scene's
+"restart when ended" operation, so the port replayed 10055 and never played
+30500. The scene now has a `sound_after` operation. Room 4's enter hook
+(9:1ab4-1b06) sets the room palettes, adds ChessRm, erases the screen and
+calls WaitSndId(30500, 1) 16:270e; the scene's black last frame is held by
+a closing `wait_sound` (30500, 1) tagged `code: 9`. In the scene's own
+timeline 30500 starts at 8.6 s and ends at 11.5 s, after the scene's 9.5 s.
+
+Evidence: static reading; `tests.test_final_spell` rejects the old
+operation and checks the follow sound plays once and holds the end. A
+re-import writes the corrected scene and its 30500 entry.

@@ -28,6 +28,8 @@ OPERATIONS = {
     # The vision at the throne (NIS 6).
     "rgb": 4, "set_palette": 2, "remap": 2, "combine": 0, "fade_out_all": 1,
     "save_rect": 2, "restore_rect": 1, "ensure_sound": 2, "dissolve_area": 1, "text_panel": 1,
+    # Jaffar's spell (NIS 5): one sound once another has ended.
+    "sound_after": 4,
     "fade_in_all": 1,
     "blit": 2,
     # NISTemple's last shot: DrawRoomFromNIS 2:03d4(level, room).
@@ -396,6 +398,7 @@ class IntroPlayer:
         self.done = False
         self.wait_until = 0.0
         self.timers, self.playing = {}, {}
+        self.sound_after_done = False
         self.carried_music = {}
         if music is not None:
             cue, played, metadata = music
@@ -662,6 +665,12 @@ class IntroPlayer:
         elif op == "ensure_sound":
             if self.sound_end(args[1], args[0]) <= self.time + 1e-9:
                 self.sound(*args)
+        elif op == "sound_after":
+            # TransFuncJaffarMagic 15:0ae4-0b0c: once the watched sound has
+            # ended, the next one starts, only once a scene (a5-0x245a).
+            if not self.sound_after_done and self.sound_end(args[1], args[0]) <= self.time + 1e-9:
+                self.sound_after_done = True
+                self.sound(args[2], args[3])
         elif op == "blit":
             # CopyBits 17:5048 within the offscreen picture.
             source, target = self.box(args[0]), self.box(args[1])
