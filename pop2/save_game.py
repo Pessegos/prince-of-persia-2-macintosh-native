@@ -188,7 +188,7 @@ def _unpack(value, resources, lava_tables, depth=0):
     if cls.__name__ == 'Fighter':
         optional.update(('bank_room', 'bank_slot', 'guard_record', 'native_alive', 'sword_lost',
                          'ruins', 'flame_sword', 'death_song_frames', 'death_song_pending',
-                         'final_jaffar', 'final_clone'))
+                         'final_jaffar', 'final_clone', 'final_alive'))
     if cls is RebirthSnapshot:
         optional.add('ruins_rooms')
     if cls is Skeleton:

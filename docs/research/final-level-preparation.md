@@ -109,25 +109,24 @@ at a5-0x51e0 and a5-0x51fa are the **first active opponent's** selected
 sequence and row (+0x28 and +0x0e from a5-0x5208); a5-0x50c4 is the
 Prince's row. They must not be read as Prince sequence/facing.
 
-- At count 0, column 1 is chosen if the Prince is on row 2; otherwise column
-  2. At count 1, selected `SEQS 238` blocks another birth. Otherwise column
-  2 is chosen when the first opponent is on row 1, column 1 otherwise. A
-  match between that column and the Prince's row blocks birth. Next,
-  `Rnd(20) == 0` admits it: `Rnd` is inclusive, so this is **1/21**.
-  Count 2 stops further births.
-- The constructor 9:03c8 increments the room-3 count and calls
-  `GetOppInfoIdx(3, old_count)` 6:3642. `FirstInRow` 4:322a plus the selected
-  column writes cell 21/22, 41/42, 61/62 or 81/82; `Rnd(1)` independently
-  adds 4 to the base row (2 for column 2, 4 for column 1). Those larger
-  values are positions for Jaffar's later vertical path, not regular cells
-  to clamp to 0..29. The original X table at a5-0x4b88 gives native X 258
-  or 309; the constructor faces left, sets skill 5 and life 3 or 4 from a
-  second independent `Rnd(1)`, then starts `SEQS 238`. When the first
-  palette-bank slot is empty, 9:042a-043e and 6:40f6 assign variant 3;
-  Guard.rsrc CTBL 752 gives Jaffar's red and white outfit. Its frame 233
-  resolves to SHAP 782. The port stores these as marked
-  type-2 room-3 opponents, keeps their path cell in the room record, starts
-  that sequence and persists them through room visits and saves.
+- At count 0, row 1 is chosen if the Prince is on row 2; otherwise row 2.
+  At count 1, selected `SEQS 238` blocks another birth. Otherwise row 2 is
+  chosen when the first opponent is on row 1, row 1 otherwise. A match
+  between that row and the Prince's row blocks birth. Next, `Rnd(20) == 0`
+  admits it: `Rnd` is inclusive, so this is **1/21**. Count 2 stops
+  further births.
+- The column is 4 on row 1 and 2 on row 2, plus 4 when `Rnd(1)` is
+  nonzero. The constructor 9:03c8 increments the room-3 count, calls
+  `GetOppInfoIdx(3, old_count)` 6:3642 and writes cell `FirstInRow(row) +
+  column` (14/18 or 22/26), native X a5-0x4b88[column] (411/615 or
+  309/513), facing right below column 5, skill 5 and life `Rnd(2) + 3`
+  (3-5), then starts `SEQS 238`. (This bullet was corrected on
+  2026-11-15; an earlier reading swapped row and column and described
+  cells 21-82 as path rows.) When the first palette-bank slot is empty,
+  9:042a-043e and 6:40f6 assign variant 3; Guard.rsrc CTBL 752 gives
+  Jaffar's red and white outfit. Its frame 233 resolves to SHAP 782. The
+  port stores these as marked type-2 room-3 opponents and persists them
+  through room visits and saves.
 - Despite its preserved name, `FinlGenerateOpp` 9:02a6 is called from
   `DrawBFItem` 3:2cc8-2d16. It scans 38-byte background/foreground item
   records and chooses which entries to draw (including `0x1025..0x1028`,
@@ -144,12 +143,9 @@ checked separately by `tests.test_final_jaffars`. Port tests also reject an
 immediate second birth during `SEQS 238`, a third birth, loss on room exit
 and loss on save. They do not establish full frame cadence or pixel parity.
 
-The path controller beginning at 9:09ca, later copy movement between rooms,
-combat, finishing logic, moving scenery and ending remain open. The next
-bounded task is to recover Jaffar's position transitions and the mapping of
-these extended record cells to visible tower rooms. Until then, copies can
-appear in room 3's visible row 2; path rows 4/6/8 are retained but are not
-drawn or run through ordinary guard AI.
+**Superseded (2026-11-15):** the "column" and "row" in this block are
+swapped. See "The room-3 copies and their flasks" below: the copies stand on
+rows 1/2 of room 3 and are ordinary guards; there are no path rows 4-8.
 
 ## Level-14 handoff and developer warp follow-up (2026-11-10)
 
@@ -819,17 +815,86 @@ in the dead pose, the laughing figure and one sound 261, a death without a
 checkpoint staying in place, and the retry at the checkpoint. Without the
 change three of the four fail.
 
-### Next: the room-3 drops (findings, not yet ported)
+### The room-3 copies and their flasks (ported 2026-11-15)
 
-- **Room-3 drops (FinlCheckDeadOpp 9:00e2).** These replace the ordinary
-  death counter for room-3 type-2 opponents.
-  - At ALIVE 6, Rnd(2) gives 0/1/2 (none, healing, life enhancement).
-  - A drop needs:
-    - the opponent's cell to be floor (kind 1);
-    - fewer than 4 animated objects (a5-0x43e6);
-    - the cell to be outside 22-24.
-  - It writes tile 10 with foreground (kind << 5) | 0x4000 into native
-    room 3, then calls TriggerFlask 5:1ce8.
-  - At ALIVE 96 the body takes SEQS 239 with sound 243.
-  - The port's room-3 copies are still parked on path rows 4/8 and never
-    become visible fighters, so this drop needs that copy movement first.
+**Correction.** The generation block above read 9:0202's two pushed
+values the wrong way round. 9:0202 pushes d6 and then d3, so the
+constructor's first argument `$8(a6)` is d3 and its second `$a(a6)` is d6.
+9:03c8 uses the first as the **column** (X from a5-0x4b88, the facing,
+-0x504a) and the second as the **row** (FirstInRow, -0x5048 and +0x20).
+So d6, the value compared with the Prince's row, is the copy's row (1 or
+2), and d3 (2 or 4, plus 4 from `Rnd(1)`) is its column. There are no path
+rows 4-8: a copy stands on room 3's row 1 at column 4 or 8 (cells 14/18,
+native X 411/615) or row 2 at column 2 or 6 (cells 22/26, X 309/513). It
+is born on the row the Prince is not on. Columns below 5 face right
+(9:040c-0420). Life is `Rnd(2) + 3`, so 3, 4 or 5 (the old port drew
+only 3 or 4). The constructor also arms the cue word (-0x503e = 1), sets
+ALIVE -1 and calls AddSound(0xf3), sound 243, as SEQS 238 starts.
+
+**Control.** The copies are ordinary type-2 guards: AutoCtrl 6:4e90's
+table sends type 2 to 6:4f04 -> 6:4f60, the ordinary guard controller,
+with skill 5. The port no longer parks them in their sequence: they
+alert, draw and fight like the other guards.
+
+**Death (FinlCheckDeadOpp 9:00e2).** GenCtrl 6:0762 sends a dead type-2
+actor in native room 3 of environment 6 to 9:00e2 (6:07b8-07d6). PlayerCtrl
+4:3d24 still counts ALIVE 0..6 while the cue word is set and then plays the
+opponent's death song as usual (4:3d32).
+
+- At ALIVE 6: ReadCell(room, column, row) 4:27ee, then `Rnd(2)` is always
+  drawn. With a nonzero draw, a floor cell (kind 1), fewer than four
+  animated objects (a5-0x43e6) and a cell (`row * 10 + column`) outside
+  22-24, room 3's tile becomes 10 and its foreground `(draw << 5) |
+  0x4000`: 1 a healing flask, 2 a life enhancement. TriggerFlask 5:1ce8
+  starts the bubbling at `Rnd(26) + 1` and 5:18f0 redraws the cell. ALIVE
+  becomes 7.
+- 9:01d4-01e2: once the cue word is clear and ALIVE > 6, ALIVE goes up by
+  one per call.
+- At ALIVE 96, unless +0x28 is already 239: SEQS 239 (poses 242-254), sound
+  243, the target (a5-0x5098) reset when it was this copy. The sequence's
+  -17 is RemoveChar 4:48f8, which takes the record out of the room-3 bank,
+  so FinlCheckGenOpp can bring another copy: the respawning opponents the
+  strategy guide describes.
+
+Port: `final_jaffars.dead_copy_step` is the routine; combat runs it from
+the dead-guard path with `death_song_frames` as ALIVE up to 6 and
+`final_alive` after it, queues the flask in `final_drops`, and removes the
+copy on SEQS 239's -17. `Final.place_drops` writes it into the flasks'
+state (tile and phase), and `cavern_flask_instances` gives such a flask the
+same front command as the imported ones (shape 3001, X `column * 51 + 29`,
+bottom `row * 120 + 110`), so it is drawn, bubbles and can be drunk.
+
+Evidence:
+- `python -m tools.probe_final_jaffar_record`: 144 original cases run
+  9:0202 and 9:03c8 with FirstInRow 4:322a and GetOppInfoIdx 6:3642
+  native; Rnd, the palette-bank helpers 6:40f6/41dc, 4:31fa, 4:34e2,
+  SetSeq, 4:2c0c, AddSound and 4:4a46 are supplied and only record their
+  arguments. The room-3 count, the record's cell, X, facing, skill,
+  palette slot, index, life words and row, the character words and the
+  target agree. A model that always faces left is rejected.
+- `python -m tools.probe_final_dead_copy`: 1684 original cases of 9:00e2
+  with ReadCell, FirstInRow and the room loader 5:0004 native and Rnd,
+  TriggerFlask, the redraw, SetSeq and AddSound supplied. ALIVE, the
+  level's tile and foreground bytes, the supplied calls and the target
+  agree. Dropping the 22-24 exclusion, allowing four objects or moving
+  the shimmer to 97 is each rejected.
+- `python -m tools.probe_final_jaffar_generation` (216 cases) now
+  compares the constructor's arguments as (column, row).
+- `tests.test_final_jaffars` and `tests.test_final_copies` (hidden level-14
+  scenes): the copy on row 1 at cell 14, a copy that draws and wounds a
+  Prince on its row, the life-enhancement flask on its cell at ALIVE 6,
+  drawn in the front layer, SEQS 239 on the 97th frame after the death,
+  removal 13 frames later and a new copy, and drinking the flask
+  (maximum life 4 -> 5).
+
+Exclusions:
+- a5-0x43e6 counts all animated objects of the room on screen. The port
+  counts room 3's flasks, which TriggerFlask adds one each; other
+  animated objects in that room, if any, are not counted.
+- A copy that dies outside native room 3 keeps the ordinary body (6:07b8
+  requires room 3); the port does not let copies follow the Prince out of
+  room 3 (it has no exit they can walk through: CutChar refuses the right
+  edge and the other links are vertical).
+- No Macintosh capture of this room is available (the user's winning
+  video skips it), so the fight's timing and the pixels of SEQS 238/239
+  are unchecked against the original.

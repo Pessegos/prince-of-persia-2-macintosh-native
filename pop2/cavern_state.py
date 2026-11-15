@@ -114,7 +114,10 @@ class CavernState:
 
     def foreground(self, room, cell, value):
         if (room, cell) in self.potions.tiles:
-            value = self.potions.tiles[room, cell][1]
+            kind, value = self.potions.tiles[room, cell]
+            if kind == 10:
+                # A flask written during play (9:00e2) bubbles like the rest.
+                value = self.potions.phases.get((room, cell), value)
             changed = self.loose.tiles.get((room, cell))
             if changed is None or changed[0] in (10, 22):
                 return value

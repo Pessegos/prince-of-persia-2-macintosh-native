@@ -67,7 +67,8 @@ def run_probe(recovery):
         machine.call(9, 0x0202, (count,))
         expected_rng = Draws((gate, boost, 0) if count else (boost, 0))
         expected = next_jaffar_spawn(count, sequence, first_row, player_row, expected_rng)
-        position = None if expected is None else (expected.row, expected.column)
+        # 9:03c8 reads its first argument as the column, its second as the row.
+        position = None if expected is None else (expected.column, expected.row)
         native_stops = [stop - 1 for stop in expected_rng.stops[:len(machine.stops)]]
         if machine.spawn != position or machine.stops != native_stops:
             raise AssertionError((count, sequence, first_row, player_row, gate, boost,

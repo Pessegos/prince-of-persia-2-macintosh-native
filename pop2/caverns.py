@@ -586,12 +586,33 @@ def flask_assets():
 
 
 def cavern_flask_instances(program, room_id, terrain):
+    placed = set()
     for command in program['rooms'][str(room_id)]:
         if len(command) < 10 or command[7] != 1 or command[1] not in (3001, 3002):
             continue
+        placed.add((command[8], command[9]))
         tile = terrain.tile(room_id, command[8], command[9])
         if tile.room is not None and tile.kind == 10:
             yield command, tile
+    # Flasks written during play (the final tower's room-3 drops, 9:00e2)
+    # have no static command: place them like the imported ones.
+    state = getattr(terrain, 'caverns', None)
+    if state is None:
+        return
+    for (room, cell), (kind, _value) in sorted(state.potions.tiles.items()):
+        column, row = cell % 10, cell // 10
+        if room != room_id or kind != 10 or (column, row) in placed:
+            continue
+        tile = terrain.tile(room_id, column, row)
+        if tile.room is not None and tile.kind == 10:
+            yield flask_command(column, row), tile
+
+
+def flask_command(column, row):
+    """A library-1 flask's front command: shape 3001 with its bottom at the
+    floor line (row * 120 + 110), 29 pixels into the cell."""
+    x, y = column * 51 + 29, row * 120 + 110
+    return ['front', 3001, x, y, 16, row, [y - 16, x, y, x + 12], 1, column, row]
 
 
 FLAME_LEVEL, FLAME_ROOM, FLAME_CUSTOM = 13, 3, 4075

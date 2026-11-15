@@ -579,6 +579,7 @@ class Final(Environment):
         if combat is None or scene.level_complete:
             return False
         if getattr(scene.game, 'caverns', None) is not None:
+            self.place_drops()
             # The flasks of rooms 7, 8 and 10 (and room 3's drops) heal.
             advance_potions(scene)
         # 16fe runs for him in either palace room; the port's controller
@@ -596,6 +597,20 @@ class Final(Environment):
         scene.clear_keys(None)
         scene.status.set("Jaffar is defeated")
         return True
+
+    def place_drops(self):
+        """9:0142-0194: a dead room-3 copy's flask becomes tile 10 with its
+        kind in the foreground; TriggerFlask 5:1ce8 starts its bubbling at
+        phase Rnd(26) + 1."""
+        combat = self.scene.combat
+        drops = getattr(combat, 'final_drops', None)
+        if not drops:
+            return
+        potions = self.scene.game.caverns.potions
+        for room, cell, foreground in drops:
+            potions.tiles[room, cell] = 10, foreground
+            potions.phases[room, cell] = (foreground & 0xffe0) | (combat.rng.randrange(27) + 1)
+        drops.clear()
 
     def finish_exit(self):
         """CODE 2:4596-45c2: with minutes left, level 15 plays NIS 11
