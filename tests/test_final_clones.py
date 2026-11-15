@@ -1,9 +1,19 @@
 """Macintosh room-6 copies use Prince-shaped artwork in the final tower."""
 
+import random
 import unittest
 import struct
 
 from pop2.paths import ASSET_DIR
+
+
+class FixedDraws:
+    def __init__(self, *values):
+        self.values, self.stops = list(values), []
+
+    def randrange(self, stop):
+        self.stops.append(stop)
+        return self.values.pop(0)
 
 
 @unittest.skipUnless(all((ASSET_DIR / name).is_file()
@@ -38,6 +48,22 @@ class FinalCloneTests(unittest.TestCase):
         self.assertTrue(all(not actor.final_clone and actor.state.actor_type == 2
                             for actor in game.combat.guards))
 
+    def test_each_entry_into_room_six_draws_every_figure_s_facing(self):
+        from pop2.game_session import GameSession
+
+        game = GameSession.load(self.resources, 14)
+        game.place(4, 2, 250, 0)
+        game.combat.rng = FixedDraws(1, 0, 0, 1, 0, 1, 1, 0)
+        game.combat.enter_room(5, 2)
+        # 6:39a2-39c8: Rnd(1) - 1 per figure in bank order, native 0 right.
+        self.assertEqual([actor.state.facing for actor in game.combat.guards], [1, 0, 0, 1])
+        game.combat.enter_room(5, 2)
+        self.assertEqual(game.combat.rng.stops, [2] * 4)
+        game.combat.enter_room(4, 2)
+        game.combat.enter_room(5, 2)
+        self.assertEqual([actor.state.facing for actor in game.combat.guards], [0, 1, 1, 0])
+        self.assertEqual(game.combat.rng.stops, [2] * 8)
+
     def test_clone_body_uses_kid_frame_and_final_palette(self):
         from dataclasses import replace
         from pop2.development_map import map_enemies
@@ -60,7 +86,11 @@ class FinalCloneTests(unittest.TestCase):
             if scene.animation_after_id is not None:
                 scene.root.after_cancel(scene.animation_after_id)
                 scene.animation_after_id = None
+            # 6:39a2 draws each figure's facing on entry; these draws keep
+            # the records' own facings (right, right, left, left).
+            scene.combat.rng = FixedDraws(1, 1, 0, 0)
             scene.jump_to_room(5, row=1, x=120, redraw=False)
+            scene.combat.rng = random.Random(1)
             scene.render()
             self.assertEqual(scene.native_viewport.getpixel((196, 50)),
                              (41, 8, 24, 255))

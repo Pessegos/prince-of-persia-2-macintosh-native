@@ -498,7 +498,12 @@ type 6 in environment 6 instead of the generic scripted advance.
   `final_path` for the path controller.
 
 The path controller that then drives this figure is described in the next
-section. The room-6 random facing draw 6:39a2 is still not ported.
+section. The room-6 random facing draw 6:39a2 is ported (2026-11-15): every
+entry into native room 6 runs CheckSideRoomsForVisibleOpps 6:2b7e (PrepCut
+2:5394, after KeepTime), whose 6:3972 call draws `Rnd(1) - 1` for each
+actor-6 record in bank order; `Combat.enter_room` does this after the
+records are restored. The port draws them before the crystals' triggers of
+the same entry (the original draws them after); both use the game's Rnd.
 
 `tests.test_final_tower` covers the decision windows without the scene,
 then in a hidden level-14 scene: three hits dissolve three figures and the

@@ -245,6 +245,8 @@ class CombatEvent:
 PALACE_ROOMS = (6, 7)
 # Native room 3: the Jaffar copies' room (FinlWatchOpps 9:0874).
 FINAL_COPY_ROOM = 2
+# Native room 6, the false Princes' room.
+FALSE_PRINCE_ROOM = 5
 # KeepTime 2:4fd0: tile kinds that add an animated object (trob).
 TROB_KINDS = (FLASK_TILE, 28, 29, 31, 40, 43)
 
@@ -609,6 +611,13 @@ class CombatEncounter:
             # InitOpps -> CheckLoadedOppSet 3:5278 loads the room's set.
             art.select_room(self.guards)
         self._restore_opponent_records()
+        if self.level_kind == 6 and room == FALSE_PRINCE_ROOM and previous_room != room:
+            # CheckSideRoomsForVisibleOpps 6:2b7e -> 6:3972, actor 6 in
+            # native room 6 (6:39a2-39c8): each figure faces Rnd(1) - 1 on
+            # entry, native -1 (left, port 0) or 0 (right, port 1).
+            for actor in self.guards:
+                if actor.state.actor_type == 6:
+                    actor.state.facing = self.rng.randrange(2)
         self.guard = self._nearest_guard() or next(iter(self.active_guards()), None)
 
     def _restore_opponent_records(self):
