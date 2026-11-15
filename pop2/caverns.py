@@ -44,10 +44,10 @@ def floor_redraw_cells(state, bounds):
 
 
 def loose_contact_floor_cell(terrain, loose, room, row, state, record):
-    """User-approved leg reveal at the temple short-jump's first slab impact."""
+    """User-approved leg reveal at the temple running-jump's first slab impact."""
     if (terrain is None or loose is None or record is None or row not in range(3)
             or state.level_kind != 2 or state.actor_type != 0
-            or state.source_sequence_id != 18 or state.action != 106
+            or state.source_sequence_id != 21 or state.action != 106
             or state.animation_state != 4 or state.current_y != 6):
         return None
     column = character_column(floor_contact_x(state.target_x, state.facing, record))

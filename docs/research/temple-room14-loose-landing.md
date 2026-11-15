@@ -172,6 +172,10 @@ full-discovery run is claimed for this drawing-only coordinate change.
 
 ## Deliberate port improvement: first-contact leg reveal (2026-11-15)
 
+**Superseded admission:** the source18 standing-jump exception in this and
+the next section was based on the wrong reproduction. It is withdrawn;
+the confirmed video-frame correction below applies only to running source21.
+
 After accepting the native match, the user requested a visual exception for
 the supplied short-jump impact frame: show the Prince's whole lower leg and
 boot in front of the loose tile, then resume its existing masking on the
@@ -258,3 +262,53 @@ pass without skips in108.527s. The final seven room14 tests pass in8.045s,
 including both actual toe-overlap starts. Dependencies, Ruff F/E9,
 recovery-catalogue and whitespace checks pass. No new full discovery or
 native CPU probe run is claimed for this renderer-only follow-up.
+
+## Correction: confirmed video A is a running jump (2026-11-15)
+
+The user still saw no change after both patches, then confirmed the target
+using actual video images: A is source frame76 (about1.267s), with straight
+trousers/boot in front of the stone; B is the next pose, source frame80
+(about1.333s), which must retain its occlusion. The user also confirmed
+launching the primary worktree's `run_game.py`, rather than a packaged build.
+
+The failure was the reproduction and its admission guard. The video's
+earlier frames show a running leap. A real-key running reproduction, start
+X2 in room13/row1, Right held, Up pressed before tick4 and released before
+tick5, reaches source21/pose106/mode4/Y6 at tick22, targetX322 and actor
+bounds(291,282,324,352). The video's white-trouser silhouette fits pose106
+at that same drawn X/Y. Previous supplied standing inputs selected source18,
+so the strict source18 guard did nothing to the user's running case. The
+passing tests and previous completion reports did not establish a fix for A.
+Video keypresses are not recovered; these are supplied inputs matching the
+confirmed impact placement, not full pixel/timing equivalence with the clip.
+
+The production correction now changes the guard to source21 **only**, and
+withdraws the unrequested source18 change. It reuses the already checked
+floor-repaint deferral/full-contour actor mask at the same forced phase11
+and Y6, with no further changes to the painter, assets, actor state, motion,
+MOB origin, guard timing, gates or AI. A23-frame standing-jump regression
+now requires every frame to match the original mask path, including contact.
+
+Three29-frame running-input replays at starts X2/7/12 compare against the
+previously published running path: only tick22 changes. For exact A and
+nearby X7, the whole lower-leg/boot region matches independent drawing with
+all actor masks and floor repaint disabled. At X12, upper trousers genuinely
+intersect the statue's foot above the slab contour, so that stone remains
+in front; the boot below the real contour must still match its complete
+artwork. This is an explicit upper-statue preservation control. At exact A's
+tick23, B remains byte-identical to the old path, source21/pose106/Y-92,row3,
+and the MOB still starts at Y365/type3. The farther-right route can instead
+land on the statue's floor; its following render must likewise stay unchanged.
+
+Restoring e56ada4's actual admission function fails all three running
+subcases at the independent artwork check and fails the standing-jump
+preservation test: four failures, no errors. Enlarged source-video/before/
+corrected A and B were inspected together in
+`rendered/first-loose-contact-leg/confirmed-running-comparison.png`.
+
+Validation:283 focused renderer/loose/ledge/temple-arrival/final-route tests
+pass without skips in109.699s. Final seven room14 tests pass in7.113s after
+adding explicit state/motion/loose-controller immutability checks at the
+running contact. Dependencies, Ruff F/E9, recovery-catalogue and whitespace
+checks pass. No full discovery/native CPU probe run is claimed for this
+source-admission correction; no new painter geometry was added.

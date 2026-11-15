@@ -41,8 +41,8 @@ class LooseContactRevealTests(unittest.TestCase):
         self.assertEqual(frame.getpixel((15, 225)), (255, 255, 255, 255))
         self.assertEqual(frame.getpixel((65, 225)), (0, 0, 255, 255))
 
-    def test_only_forced_first_short_jump_contact_defers_its_supporting_floor(self):
-        state = SimpleNamespace(level_kind=2, actor_type=0, source_sequence_id=18,
+    def test_only_forced_first_running_jump_contact_defers_its_supporting_floor(self):
+        state = SimpleNamespace(level_kind=2, actor_type=0, source_sequence_id=21,
                                 action=106, animation_state=4, current_y=6,
                                 target_x=318, facing=1)
         tile = SimpleNamespace(room=13, kind=11, foreground=11)
@@ -56,7 +56,7 @@ class LooseContactRevealTests(unittest.TestCase):
         self.assertEqual(cell(), (5, 2))
         for field, values in (('level_kind', (1, 3, 4, 5, 6)),
                               ('actor_type', (2, 4, 6, 11)),
-                              ('source_sequence_id', (7, 9, 20, 21)),
+                              ('source_sequence_id', (7, 9, 18, 20)),
                               ('action', (102, 105, 107)),
                               ('animation_state', (0, 3, 5)),
                               ('current_y', (0, 5, 7, -89))):
@@ -84,7 +84,7 @@ class Room14SlabTests(unittest.TestCase):
     def test_first_contact_keeps_the_whole_boot_in_front_of_the_neighbouring_stone_base(self):
         from tools.audit_temple_routes import Harness, press
 
-        for start_x in (150, 155):
+        for start_x in (2, 7, 12):
             with self.subTest(start_x=start_x):
                 harness = Harness(10, draw=True, peaceful=False)
                 scene = harness.scene
@@ -92,33 +92,58 @@ class Room14SlabTests(unittest.TestCase):
                 changed = []
                 try:
                     scene.jump_to_room(13, 1, start_x, 1)
-                    press(harness, 'up', True)
                     press(harness, 'R', True)
-                    for tick in range(23):
-                        harness.tick()
-                        if tick == 2:
+                    for tick in range(29):
+                        if tick == 4:
+                            press(harness, 'up', True)
+                        if tick == 5:
                             press(harness, 'up', False)
-                        if tick == 9:
-                            press(harness, 'R', False)
+                        harness.tick()
+                        if tick == 22:
+                            state = replace(scene.sequence_state)
+                            motion = deepcopy(scene.terrain_motion)
+                            loose = deepcopy(scene.game.caverns.loose)
                         scene.render()
                         fixed = scene.native_viewport.crop((1, 0, 511, 365)).convert('RGB')
-                        # e24c078 deferred only QuickFloor; the earlier alpha
-                        # mask still removed the toe at these actual positions.
-                        with patch.object(CavernRoom, 'contact_floor_mask',
-                                          lambda art, mask, cell: mask):
+                        # The video is a running jump: source21, not the
+                        # supplied standing-jump18 used by the earlier tests.
+                        # e56ada4's source18 guard did nothing to this route.
+                        with patch('pop2.scene_prototype.loose_contact_floor_cell', return_value=None):
                             scene.render()
                             previous = scene.native_viewport.crop((1, 0, 511, 365)).convert('RGB')
                         delta = ImageChops.difference(fixed, previous)
-                        if tick != 16:
+                        if tick != 22:
                             self.assertIsNone(delta.getbbox(), f'Frame {tick} changed')
+                            if tick == 23 and start_x == 2:
+                                block, = scene.game.caverns.loose.falling
+                                self.assertEqual((block.y, block.mob_type), (365, 3))
+                                self.assertEqual((scene.sequence_state.action,
+                                                  scene.sequence_state.current_y,
+                                                  scene.terrain_motion.row), (106, -92, 3))
                             continue
                         bounds = scene.player_bounds()
-                        foot = (bounds[0], bounds[3] - 24, bounds[2] + 1, bounds[3] + 1)
+                        self.assertEqual((scene.sequence_state.source_sequence_id,
+                                          scene.sequence_state.action, scene.sequence_state.current_y),
+                                         (21, 106, 6))
+                        if start_x == 2:
+                            # Matches the confirmed video A's actor placement.
+                            self.assertEqual(bounds, (291, 282, 324, 352))
+                        foot_top = bounds[3] - 24
+                        if start_x == 12:
+                            # Farther right the upper trousers genuinely
+                            # intersect the statue's foot ABOVE the slab.
+                            # Keep that occlusion; only the boot below the
+                            # real floor contour is part of this exception.
+                            foot_top = min(position[1] for _sprite, position in
+                                           scene.room_cache[13].platform_contours[(5, 2)])
+                        foot = (bounds[0], foot_top, bounds[2] + 1, bounds[3] + 1)
                         # Independently remove ALL actor masks to obtain the
                         # original complete leg/boot artwork, not another
                         # floor-only control that retains the same toe cut.
                         with patch.object(CavernRoom, 'actor_mask',
-                                          return_value=Image.new('L', (510, 365))):
+                                          return_value=Image.new('L', (510, 365))), \
+                             patch.object(CavernRoom, 'draw_actor_floor_foreground',
+                                          lambda art, frame, *_args: frame):
                             scene.render()
                             raw = scene.native_viewport.crop((1, 0, 511, 365)).convert('RGB')
                         self.assertIsNone(ImageChops.difference(fixed.crop(foot), raw.crop(foot)).getbbox(),
@@ -128,18 +153,21 @@ class Room14SlabTests(unittest.TestCase):
                         self.assertIsNone(delta.crop((0, 0, 510, foot[1])).getbbox())
                         self.assertIsNotNone(ImageChops.difference(fixed, raw).crop(
                             (0, 0, 510, foot[1])).getbbox())
+                        self.assertEqual(scene.sequence_state, state)
+                        self.assertEqual(scene.terrain_motion, motion)
+                        self.assertEqual(scene.game.caverns.loose, loose)
                         changed.append(tick)
-                    self.assertEqual(changed, [16])
+                    self.assertEqual(changed, [22])
                 finally:
                     harness.close()
 
-    def test_first_contact_reveals_boot_and_leg_but_neighbouring_frames_keep_native_mask(self):
+    def test_standing_jump_keeps_native_mask_through_contact_and_following_frames(self):
         from tools.audit_temple_routes import Harness, press
 
         harness = Harness(10, draw=True, peaceful=False)
         scene = harness.scene
         scene.audio = None
-        changed = []
+        contacts = []
         try:
             scene.jump_to_room(13, 1, 145, 1)
             press(harness, 'up', True)
@@ -162,24 +190,12 @@ class Room14SlabTests(unittest.TestCase):
                 self.assertEqual(scene.terrain_motion, motion)
                 self.assertEqual(scene.game.caverns.loose, loose)
                 delta = ImageChops.difference(fixed, native)
-                if tick != 16:
-                    self.assertIsNone(delta.getbbox(), f'Unrelated frame {tick} changed')
-                    continue
-                self.assertEqual((state.action, state.current_y, motion.row), (106, 6, 2))
-                self.assertIsNotNone(delta.getbbox(), 'First-contact leg is still hidden')
-                # All revealed pixels must come from the actual actor, and
-                # the entire leg/boot must match drawing without floor paint.
-                with patch.object(CavernRoom, 'draw_actor_floor_foreground',
-                                  lambda art, frame, *_args: frame):
-                    scene.render()
-                    actor = scene.native_viewport.crop((1, 0, 511, 365)).convert('RGB')
-                self.assertIsNone(ImageChops.difference(fixed, actor).getbbox())
-                mask = scene.room_cache[13].foreground.getchannel('A')
-                for channel in delta.split():
-                    self.assertIsNone(ImageChops.multiply(channel, mask).getbbox(),
-                                      'Statue/plinth foreground changed')
-                changed.append(tick)
-            self.assertEqual(changed, [16])
+                self.assertIsNone(delta.getbbox(), f'Standing-jump frame {tick} changed')
+                if tick == 16:
+                    self.assertEqual((state.source_sequence_id, state.action, state.current_y, motion.row),
+                                     (18, 106, 6, 2))
+                    contacts.append(tick)
+            self.assertEqual(contacts, [16])
         finally:
             harness.close()
 
