@@ -32,8 +32,8 @@ class GameMenuModelTests(unittest.TestCase):
         self.assertNotIn("F3", shortcuts)
         self.assertNotIn("development", {item.action for item in items})
         self.assertNotIn("screenshots", {item.action for item in items})
-        self.assertEqual({item.action for item in items if not item.enabled},
-                         {"hall"})
+        # The Hall of Fame (ShowHallOfFame 2:28c2) is the last entry to be enabled.
+        self.assertEqual({item.action for item in items if not item.enabled}, set())
 
     def test_navigation_wraps_and_activation_is_explicit(self):
         menu = GameMenu()
@@ -952,8 +952,8 @@ class GameMenuSceneTests(unittest.TestCase):
         self.assertEqual(scene.game_menu.page, "options")
         self.assertFalse(scene.game_menu.return_to_menu)
         self.press("h", 0x20000)
-        self.assertEqual(scene.game_menu.page, "menu")
-        self.assertEqual(scene.game_menu.items[scene.game_menu.focus].action, "hall")
+        self.assertEqual(scene.game_menu.page, "hall")
+        self.assertFalse(scene.game_menu.return_to_menu)
 
     def test_cave_ambience_starts_off_and_its_shortcut_works_when_paused(self):
         self.keep_preferences_here()
@@ -1010,18 +1010,15 @@ class GameMenuSceneTests(unittest.TestCase):
         self.assertFalse(scene.sound_enabled)
         self.assertTrue(scene.peaceful)
 
-    def test_disabled_shortcuts_show_the_unavailable_entry_without_mutating_progress(self):
+    def test_hall_of_fame_shortcut_shows_the_table_without_mutating_progress(self):
         scene = self.scene
         scene.jump_to_screen("Room 9")
         before = (scene.room_id, scene.player_x, scene.checkpoint)
-        for key, action in (("h", "hall"),):
-            self.press(key, 0x20000)
-            item = scene.game_menu.items[scene.game_menu.focus]
-            self.assertEqual(item.action, action)
-            self.assertFalse(item.enabled)
-            self.press("Return")
-            self.assertEqual(before, (scene.room_id, scene.player_x, scene.checkpoint))
-            self.press("Escape")
+        self.press("h", 0x20000)
+        self.assertEqual(scene.game_menu.page, "hall")
+        self.press("Return")
+        self.assertIsNone(scene.game_menu)
+        self.assertEqual(before, (scene.room_id, scene.player_x, scene.checkpoint))
 
     def test_removed_end_game_shortcut_does_not_reset_or_open_a_menu(self):
         scene = self.scene

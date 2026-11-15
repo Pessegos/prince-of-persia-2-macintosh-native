@@ -779,7 +779,7 @@ class WindowControls(InputRouting):
         if self.game_menu is not None:
             if self.game_menu.page != "confirm":
                 if page == "menu":
-                    if self.game_menu.page in ("screenshots", "saves", 'cutscenes', 'controls', 'options'):
+                    if self.game_menu.page in ("screenshots", "saves", 'cutscenes', 'controls', 'options', 'hall'):
                         self.dispose_screenshot_gallery()
                         self.game_menu.show_page("menu")
                         self.pause_resume_keys.update(self.window_keys_down)
@@ -931,19 +931,70 @@ class WindowControls(InputRouting):
         elif action in ('slot_save', 'slot_load', 'slot_delete', 'slot_create', 'slot_rename'):
             self.apply_save_action(action)
         elif action == "hall":
-            if self.game_menu is None:
-                self.open_game_menu(render=False)
-            elif self.game_menu.page == 'options':
-                self.open_game_menu()
-            self.game_menu.focus = next(i for i, item in enumerate(self.game_menu.items)
-                                        if item.action == action)
-            self.render()
+            self.open_hall_of_fame()
+        elif action == 'hall_saved':
+            self.save_hall_of_fame()
+        elif action == 'hall_close':
+            self.close_hall_of_fame()
         else:
             self.schedule_save_scroll()
             if self.game_menu is not None and self.game_menu.page == 'saves':
                 self.redraw_save_menu()
             else:
                 self.render()
+
+    def open_hall_of_fame(self, minutes=None):
+        """The menu's Hall of Fame (ShowHallOfFame 2:28c2), or, with the
+        minutes left when Jaffar fell, the row to name (HallOfFameDialog)."""
+        from pop2.hall_of_fame import HallOfFamePage, load_hall
+
+        if self.game_menu is None:
+            self.open_game_menu('hall', render=False)
+        elif self.game_menu.page != 'hall':
+            self.open_game_menu('hall')
+        menu = self.game_menu
+        if menu.page != 'hall':
+            return
+        if minutes is not None:
+            menu.return_to_menu = False
+        menu.hall_page = HallOfFamePage.after_victory(minutes) if minutes is not None else HallOfFamePage(load_hall())
+        self.hall_after_id = None
+        self.render()
+
+    def save_hall_of_fame(self):
+        from pop2.hall_of_fame import save_hall
+
+        menu = self.game_menu
+        page = getattr(menu, 'hall_page', None)
+        if page is None:
+            return
+        try:
+            save_hall(page.table())
+        except OSError:
+            self.status.set('Could not save the Hall of Fame')
+        self.render()
+        # 2:1fa4-1fd8: the named table stays up for 900 ticks or a click.
+        def close():
+            self.hall_after_id = None
+            if self.game_menu is menu and menu.hall_page is page:
+                self.close_hall_of_fame()
+        self.hall_after_id = self.root.after(15000, close)
+
+    def close_hall_of_fame(self):
+        menu = self.game_menu
+        pending = getattr(self, 'hall_after_id', None)
+        if pending is not None:
+            self.root.after_cancel(pending)
+            self.hall_after_id = None
+        if menu is None:
+            return
+        victory = getattr(menu.hall_page, 'position', None) is not None
+        menu.hall_page = None
+        if victory or menu.back() == 'close':
+            # After a victory the presentation, already waiting, starts now.
+            self.close_game_menu(resume=victory)
+        else:
+            self.render()
 
     def gamepads_available(self):
         gamepads = getattr(self, 'gamepads', None)
@@ -1247,6 +1298,19 @@ class WindowControls(InputRouting):
                 action = self.game_menu.key(event.keysym, bool(event.state & 1),
                                             getattr(event, 'char', ''), control)
             self.apply_game_action(action)
+            if event.keysym == 'Escape':
+                self.pause_resume_keys.add('Escape')
+            return 'break'
+        hall = getattr(self.game_menu, 'hall_page', None) if self.game_menu is not None else None
+        if hall is not None and self.game_menu.page == 'hall' and (hall.editing or hall.confirming):
+            # Typing the name: letters are text, not commands (GetHallOfFameName 2:2220).
+            if alt or repeated and event.keysym in ('Return', 'KP_Enter', 'space'):
+                return 'break'
+            control = bool(event.state & 4)
+            if event.keysym in ('Return', 'KP_Enter', 'space', 'Escape'):
+                self.play_menu_sound('click')
+            self.apply_game_action(self.game_menu.key(
+                event.keysym, bool(event.state & 1), getattr(event, 'char', ''), control))
             if event.keysym == 'Escape':
                 self.pause_resume_keys.add('Escape')
             return 'break'

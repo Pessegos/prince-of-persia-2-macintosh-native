@@ -105,9 +105,11 @@ loads level 2. It must not be wired to level-14 victory.
 
 The native generic NIS dispatcher maps NIS 11 at 15:00fa to 15:3c76. That
 coordinator opens the Happy resource record at a5-0x26b0 (15:3c80-3c88).
-The Happy callback/dialog routines at 15:411a and 15:44b0 are further
-recovery targets. Happy.rsrc also supplies the initial NIS 5 spell, so the
-resource filename alone does not identify either scene.
+The Happy callback/dialog routines at 15:411a and 15:44b0 are now
+recovered (see the NIS 11 section of
+[the preparation notes](final-level-preparation.md)). Happy.rsrc also
+supplies the initial NIS 5 spell, so the resource filename alone does not
+identify either scene.
 
 CODE 2:4596-45de supplies a separate final completion boundary. With nonzero
 remaining minutes and a next-level value greater than 14, it writes the
@@ -116,8 +118,8 @@ word at a5-0x4fce. If the dialog preserves the sentinel, it clears the next
 level to zero; a supplied replacement next level is retained. It then resets
 the tree stage at a5-0x27d2 to -1. KeepTime 2:520e-5220 decrements the same
 minutes word, so the observed score of 20 is remaining minutes, not elapsed
-completion time. Ranking, ties and validation of names still need their own
-recovery.
+completion time. Ranking, ties and name validation are recovered from
+HOFAddPlayer 2:260c and GetHallOfFameName 2:2220 in `pop2/hall_of_fame.py`.
 
 `python -m tools.probe_final_completion` executed 12 original CPU cases:
 next levels 15/16, remaining minutes 0/20/60, and a supplied Hall-of-Fame

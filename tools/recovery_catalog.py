@@ -13,6 +13,16 @@ CATALOG = PROJECT_DIR / "docs" / "RECOVERY_CATALOG.csv"
 
 # These reviews cover specific ordinary branches, never an entire routine.
 REVIEWS = {
+    (2, 'HallOfFameDialog'): ("partial", 'pop2/hall_of_fame.py;pop2/window_controls.py;tests/test_happy_ending.py', 'Victory naming flow: new row from remaining minutes, empty name not written, 900-tick hold after save; native window, file and menu handling replaced by the port page'),
+    (2, 'DrawHallOfFameDialog'): ("partial", 'pop2/game_menu.py', 'Title, headings, names and minutes per row; port menu-style drawing, native layout not reproduced'),
+    (2, 'GetHallOfFameName'): ("partial", 'pop2/hall_of_fame.py;tests/test_happy_ending.py', "Refused '<' '>' NUL, length below 24, Return confirmation alert; pixel-width limit not ported"),
+    (2, 'HOFAddPlayer'): ("partial", 'pop2/hall_of_fame.py;tests/test_happy_ending.py', 'Five-entry table, insertion before the first equal or lower score, full table keeps the new score in fifth place'),
+    (2, 'InitHallOfFame'): ("partial", 'pop2/hall_of_fame.py', 'Bad entry count discards the table; port JSON file instead of the Macintosh file'),
+    (2, 'ShowHallOfFame'): ("partial", 'pop2/window_controls.py;tests/test_happy_ending.py', 'Alt+H shows the table; song cue 180 and the empty-table skip not ported'),
+    (15, 'HappyEnding'): ("partial", 'tools/extract_intro.py;tests/test_happy_ending.py', 'NIS 11 coordinator with Happy.rsrc and inline bedroom 15:44e2, supplied CODE16 drawing/sound and Resource Manager endpoints; native pixel/audio parity excluded'),
+    (15, 'HappyFunc'): ("partial", 'tools/extract_intro.py;pop2/intro.py;tests/test_happy_ending.py', 'Per-frame steps by emulation with persistent state; time-dependent offset at cue 102, voiced dialog lines and -1 end applied by the player'),
+    (15, 'HappyDialog'): ("partial", 'pop2/intro.py;tests/test_happy_ending.py', 'Voice 30004+line and text 30000 entry line+4 drawn under the panel copy'),
+    (15, 'TransFuncSetCTABframe1'): ("partial", 'tools/extract_intro.py', 'Frame-1 brightness (0x51, 100) of the victory bedroom'),
     (15, "TransPrincessRoom"): ("partial", "tools/extract_intro.py;tests/test_final_spell.py;tests/test_final_spell_flow.py", "NIS 5 room-2 spell coordinator: Happy resource and 766 expanded operations with supplied CODE16 drawing/sound and Resource Manager endpoints; hidden port transition tested, native pixel/audio parity excluded"),
     (15, "TransFuncJaffarMagic"): ("partial", "tools/extract_intro.py;tests/test_final_spell.py", "79-frame NIS 5 animation callback recovered with supplied animation/resource/sound endpoints; isolated fade pointer restored from coordinator CTBL; live trigger and native frame capture excluded"),
     (9, "FinlCheckGenOpp"): ("partial", "pop2/final_jaffars.py;tools/probe_final_jaffar_generation.py", "room-3 two-copy admission and position: 216 original CODE9 cases with Rnd and record constructor supplied; full constructor/path/combat excluded"),

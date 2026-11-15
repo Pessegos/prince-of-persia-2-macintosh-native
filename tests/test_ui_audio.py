@@ -121,12 +121,23 @@ class MenuAudioEngineTests(unittest.TestCase):
         engine.playback.play_ui.assert_called_once_with('click')
 
 
+class DisabledRowMenu(GameMenu):
+    """The menu with one disabled row. Every command row is enabled now that
+    the Hall of Fame exists, so the tests disable it themselves."""
+    @property
+    def menu_items(self):
+        from dataclasses import replace
+
+        return tuple(replace(item, enabled=False) if item.action == 'hall' else item
+                     for item in super().menu_items)
+
+
 class MenuInputAudioTests(unittest.TestCase):
     def setUp(self):
         self.host = WindowControls.__new__(WindowControls)
         self.host.audio = Mock()
         self.host.sound_enabled = True
-        self.host.game_menu = GameMenu()
+        self.host.game_menu = DisabledRowMenu()
         self.host.dev_menu = self.host.copy_challenge = None
         self.host.dev_pointer = Mock()
         self.host.canvas = Mock()

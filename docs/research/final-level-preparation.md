@@ -15,7 +15,9 @@ sequence, separate blue form/body, projectile victory, bedroom aftermath,
 final epilogue and Hall of Fame. The final epilogue is NIS 11 (15:3c76);
 the existing `ending.json` is the level-1 voyage and must not be reused for it.
 The bounded final completion caller now has 12 original CPU checks with
-PlayNIS and HallOfFameDialog supplied; the UI/epilogue/restart loop remain open.
+PlayNIS and HallOfFameDialog supplied. The port now plays NIS 11 from the
+original coordinator, then the Hall of Fame takes the remaining minutes and
+the introduction restarts (see "NIS 11 and the Hall of Fame" below).
 Names in the inventory below come from preserved symbols.
 
 ## The level
@@ -687,8 +689,8 @@ runs them in the scene. Native facing word 0 is the port's facing 1.
 Port choices:
 - The port's controller runs only in view, so the burnt Jaffar is also
   read directly by `Final.level_events`.
-- The victory goes back to the introduction. NIS 11 (15:3c76,
-  Happy.rsrc) and the Hall of Fame are not yet presented.
+- The victory plays NIS 11 and the Hall of Fame, then the introduction
+  (see the next section).
 - The lie-down's native Y - 1 is left out to keep the Kid on his floor.
 - The shadow's fall off the bottom of the screen (4:3780) is not
   separately ported.
@@ -708,26 +710,75 @@ Port choices:
 
 No native CPU probe is claimed.
 
-### Next: NIS 11 and the defeat variant (findings, not yet ported)
+### NIS 11 and the Hall of Fame (ported 2026-11-15)
 
-- **NIS 11 (15:3c76).** It opens Happy.rsrc (a5-0x26b0) and first runs
-  15:44e2, the victory bedroom. That scene uses palette 0x7919 and SHAP
-  0x7a47, then plays ANI 0x7918 with flags 0x0e and callback 15:09c0. At
-  frame 1 the callback sets the brightness (0x51, 100).
-- **Running NIS 11 in `tools.extract_intro.recover_scenes`.** Three
-  additions are needed:
-  - 15:44e2 run inline;
-  - animation flags 0x0e allowed;
-  - SetForeColor 17:0eae, with the QuickDraw PaintRect trap that follows
-    it, as a fill.
-- **The epilogue animation (callback 15:411a).** It is driven by state
-  that persists across frames:
-  - a5-0x2340, a frame offset;
-  - a5-0x2342 and a5-0x2344, the HappyDialog text index and its delay;
-  - a5-0x1f7c and a5-0x1f6e, sound and playback status.
-  The per-frame isolated probe used for NIS 5 cannot capture that state.
-  One emulation that persists across frames, with modelled sound status,
-  is the next bounded task.
+**NIS 11 (HappyEnding 15:3c76).** `tools.extract_intro.recover_happy` runs
+the coordinator with Happy.rsrc open (a5-0x26b0, resource offset 1000000):
+
+- 15:44e2, the victory bedroom, runs inline. It uses palette 0x7919 and
+  SHAP 0x7a47, then ANI 0x7918 with flags 0x0e and callback
+  TransFuncSetCTABframe1 15:09c0, which sets brightness (0x51, 100) at
+  frame 1.
+- SetForeColor 17:0eae and the PaintRect trap after it become a `fill`.
+- The epilogue ANI 30004 (286 frames, callback HappyFunc 15:411a) is
+  recovered one frame at a time into a table (`happy_frames` in
+  `happy.json`). Each frame's callback runs with persistent state
+  a5-0x2340/-0x2342/-0x2344 and sound status a5-0x1f7c/-0x1f6e; the
+  sound-ensure call at 15:448c is left out. The player then applies the
+  rules of HappyFunc that depend on time:
+  - frames 131..141 with song cue 102 or later (a5-0x1f6e, set by
+    PoPAudioCallBack 16:2054) move the remaining frames on to 142, once;
+  - from frame 3, whenever no digitized sound plays (a5-0x1f7c), one
+    frame passes and HappyDialog 15:44b0 starts the next line: voice
+    30004 + line and text 30000 entry line + 4, for five lines, then the
+    panel is cleared;
+  - past frame 182, once song 30020 has ended, the callback returns -1 and
+    the animation ends.
+- HappyDialog draws its panel through NISTextDraw (a5-0x27de) on the
+  picture under it, in colours (8, 255), (6, 253), (5, 254).
+- SetNISCTAB flags 0x2000/0x4000 blend the current or target table with the
+  third table (palette flag 0x1000) as (a * p + b * (100 - p)) / 100.
+
+Timeline in the port: bedroom 0-6 s, song 30010 from 8.35 s, the three
+narrative panels, the epilogue from 32.1 s, voices and dialog 32.7-46.1 s,
+fade 46.6 s, the observer from 50.6 s, done at 64.7 s once song 30020 ends.
+This matches the user's Macintosh capture (circle on black about 50 s,
+observer dimmed about 62 s, scene about 64.7 s). In that timeline the 286
+frames run out before song 30020 ends, so the -1 path is checked only with
+a shortened song in the test.
+
+**Hall of Fame (CODE 2).** `pop2/hall_of_fame.py` and the `hall` menu page:
+
+- HOFAddPlayer 2:260c: at most five 30-byte entries (Pascal name, word
+  minutes); a new score goes before the first entry it equals or beats; a
+  full table drops its last entry and a lower score still takes fifth
+  place.
+- GetHallOfFameName 2:2220: '<', '>' and NUL are refused and names stay
+  below 24 characters; Return asks whether this is the name to insert
+  (2:235e-237e); an empty name is not written (2:254c-2560, 2:1f88).
+- After the name is saved the table stays up for 900 ticks or a click
+  (2:1fa4-1fd8). ShowHallOfFame 2:28c2 (Alt+H) shows the table.
+- CODE 2:4596-45c2: only with minutes left does the victory play NIS 11 and
+  the Hall of Fame; the next level becomes 0 and the presentation restarts.
+
+Port choices:
+- The table is JSON beside the saves (`hall_of_fame.json`), not the
+  Macintosh Hall of Fame file (2:29de, creator 'PRNc').
+- The page uses the port's menu style; its look awaits the user's review.
+  Escape leaves the victory row unnamed, as an empty name does. An empty
+  table shows "No names yet" (ShowHallOfFame shows nothing then).
+- ShowHallOfFame's song cue 180 and the native pixel-width limit on the
+  name are not ported.
+- The introduction is started under the Hall page and runs once it closes.
+- `happy.json` is optional at launch; without it the victory goes straight
+  to the Hall of Fame. A reimport writes it.
+
+`tests.test_happy_ending` checks the recovered program, the dialog order and
+the -1 end, the table rules, the page and the victory flow through real key
+events. No native CPU probe of HappyFunc's timing rules is claimed.
+
+### Next: the defeat variant and the room-3 drops (findings, not yet ported)
+
 - **Defeat variant (9:0062).** GenCtrl 6:0780-07a0 calls it for a dead
   type-0 Kid (ALIVE > 6) in environment 6. When a5-0x5018 (the saved-game
   structure) is present and he is not already in native room 11, it moves

@@ -125,6 +125,7 @@ class InputRouting:
             page_name = getattr(menu, 'page', None)
             gallery = getattr(menu, 'screenshot_gallery', None)
             if ((page_name == 'saves' and getattr(getattr(menu, 'save_browser', None), 'editing', False))
+                    or (page_name == 'hall' and getattr(getattr(menu, 'hall_page', None), 'editing', False))
                     or (page_name == 'screenshots' and getattr(gallery, 'choosing', False))):
                 return 'text'
             return 'menu'

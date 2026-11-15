@@ -32,6 +32,8 @@ OPERATIONS = {
     "blit": 2,
     # NISTemple's last shot: DrawRoomFromNIS 2:03d4(level, room).
     "game_room": 2,
+    # NIS 11: HappyFunc 15:411a's frames and the end of its animation.
+    "happy_frame": 1, "happy_end": 0,
 }
 
 
@@ -48,6 +50,12 @@ def read_program(path):
                     or not isinstance(item.get("args"), list)
                     or len(item["args"]) != OPERATIONS[item["op"]]):
                 raise ValueError("Invalid intro scene instruction")
+    for items in (data.get("happy_frames") or {}).values():
+        if not isinstance(items, list) or any(
+                not isinstance(item, dict) or item.get("op") not in OPERATIONS
+                or item["op"] in ("happy_frame", "happy_end")
+                or len(item.get("args", ())) != OPERATIONS[item["op"]] for item in items):
+            raise ValueError("Invalid intro scene instruction")
     operations = data['operations']
     if (any(item.get('pc') == 0x0758 and item['op'] == 'palette'
             and item['args'] == [26028, 114, 0x40001] for item in operations)
@@ -214,8 +222,9 @@ class IntroAssets:
         # The throne scene also draws a few of the game's own shapes: only the
         # drawn ones are decoded.
         drawn = None
-        if self.program.get("kind") in ("throne", "temple", "tower", "final_spell"):
-            programs = [*self.program.get("variants", {}).values(), self.program["operations"]]
+        if self.program.get("kind") in ("throne", "temple", "tower", "final_spell", "happy"):
+            programs = [*self.program.get("variants", {}).values(), self.program["operations"],
+                        *self.program.get("happy_frames", {}).values()]
             drawn = {item["args"][0] for operations in programs
                      for item in operations if item["op"] == "shape"}
         for name, offset in self.program.get("resource_files", {}).items():
@@ -409,6 +418,12 @@ class IntroPlayer:
         self.dissolve_words = dissolve_words(assets.program.get("dissolve"))
         self.saved_rects = {}
         self.text_panel = None
+        # NIS 11: steps of a HappyFunc frame run before the next program
+        # step; HappyFunc's own state, and the third table (a5-0x244c)
+        # that GetSetFadeCTAB 15:28a2 loads for BlendCtabs 15:33f4.
+        self.inserted = []
+        self.happy = {"offset": 0, "line": 0, "delay": 0, "ending": False}
+        self.blend_palette = None
         # QoL (the carpet scene): the Mac fades block, freezing the clouds; here
         # fade-ins and fade-outs overlap the drawing steps, as in the DOS port.
         self.animated_fades = self.program_kind == "carpet"
@@ -454,10 +469,17 @@ class IntroPlayer:
         mask = crop.point([0] + [255] * 255) if flags & 16 else None
         self.target.paste(crop, region[:2], mask)
 
-    def text(self, resource_id, index, initial, dx, dy):
+    def text(self, resource_id, index, initial, dx, dy, dialog=False):
         colors = ((8, 255), (6, 3), (5, 14))
         panel = (0, 297, 512, 384)
-        if self.text_panel is not None:
+        canvas = self.target
+        if dialog:
+            # HappyDialog 15:44b0 sets a5-0x27de: NISTextDraw 15:0214-026c
+            # copies the picture under the panel and writes in entries
+            # 253/254 there, then only to the screen (15:03ee-0400).
+            canvas = self.target.copy()
+            colors = ((8, 255), (6, 253), (5, 254))
+        elif self.text_panel is not None:
             # 15:026e-028c (NIS 6): the saved rectangle is the panel and the
             # text uses entries 1 and 2.
             panel, image = self.saved_rects[self.text_panel]
@@ -477,13 +499,13 @@ class IntroPlayer:
                 mask = font.text(line).getchannel("A")
                 left = panel[0] + 1 + max(0, (panel[2] - panel[0] - 4 - mask.width) // 2)
                 for offset, color in colors:
-                    self.target.paste(color, (left + offset, top + n * font.height), mask)
+                    canvas.paste(color, (left + offset, top + n * font.height), mask)
             if initial:
                 clip, self.clip = self.clip, (0, 0, *SIZE)
                 self.draw_shape(initial, panel[0] + 8 + dx, panel[1] + 30 + dy, 16)
                 self.clip = clip
         rect = panel
-        self.display.paste(self.target.crop(rect), rect)
+        self.display.paste(canvas.crop(rect), rect)
         self.changed()
 
     def fade(self, colors, into, flags, start=None, blocking=True):
@@ -740,6 +762,10 @@ class IntroPlayer:
         elif op == "palette":
             resource_id, flags, fade_flags = args
             colors = self.assets.palettes[resource_id]
+            if not flags & 3 and flags & 0x1000:
+                # GetSetFadeCTAB 15:28a2: the table BlendCtabs mixes in.
+                self.blend_palette = colors
+                return
             if flags & 32:
                 old = self.loaded.get(2, {})
                 self.fade(old, False, fade_flags)
@@ -765,6 +791,23 @@ class IntroPlayer:
             self.fade(colors, op == "fade_in_both", args[0])
         elif op == "brightness":
             flags, percent = args
+            if not flags & 3 and flags & 0x6000:
+                # SetNISCTAB 15:2640-26c8: BlendCtabs 15:33f4 mixes the
+                # current (0x2000) or target (0x4000) table with the third,
+                # percent of the first, and shows it at full brightness.
+                source = None
+                if flags & 0x2000:
+                    source = self.loaded.get(1)
+                if flags & 0x4000 and self.loaded.get(2):
+                    source = self.loaded[2]
+                third = self.blend_palette
+                if source and third and len(source) == len(third) and flags & 0x10:
+                    for (index, color), other in zip(source.items(), third.values()):
+                        if 0 <= index < 256:
+                            self.palette[index] = tuple((a * percent + b * (100 - percent)) // 100
+                                                        for a, b in zip(color, other))
+                    self.changed()
+                return
             for flag, colors in self.loaded.items():
                 if flags & flag:
                     for index, color in colors.items():
@@ -779,6 +822,59 @@ class IntroPlayer:
             self.wait_until = self.time + duration
         elif op == "title":
             self.start_title()
+        elif op == "happy_frame":
+            self.happy_frame(args[0])
+        elif op == "happy_after":
+            self.happy_after(args[0])
+
+    # HappyFunc 15:411a, called by PlayTheAnimation with each frame number.
+    HAPPY_VOICE, HAPPY_TEXT, HAPPY_LINES = 30004, 30000, 5
+    HAPPY_SONG = 30020
+
+    def music_cue(self):
+        """a5-0x1f6e: the last cue marker the playing song has passed
+        (PoPAudioCallBack 16:2054-208a)."""
+        playing = self.playing.get(0)
+        if playing is None or self.time >= playing[1] + playing[2]:
+            return 0
+        markers = self.sound_metadata(playing[0], 0)["markers"]
+        passed = [ord(name) for name, at in markers.items()
+                  if len(name) == 1 and playing[1] + at <= self.time + 1e-9]
+        return max(passed, default=0)
+
+    def happy_frame(self, frame):
+        state = self.happy
+        if state["ending"]:
+            # The callback's -1 left PlayTheAnimation after that frame.
+            self.position = next(index for index in range(self.position, len(self.operations))
+                                 if self.operations[index]["op"] == "happy_end")
+            return
+        # 15:4128-4148: between frames 131 and 141, music cue 102 moves
+        # the remaining frames on to 142 (once).
+        if 0x82 < frame < 0x8e and self.music_cue() >= 0x66 and not state["offset"]:
+            state["offset"] = 0x8e - frame
+        frame += state["offset"]
+        steps = self.assets.program.get("happy_frames", {}).get(str(frame), [])
+        self.inserted[:0] = [*steps, {"op": "happy_after", "args": [frame]}]
+
+    def happy_after(self, frame):
+        state = self.happy
+        # 15:4416-447c: once no voice plays (a5-0x1f7c), the next line of
+        # HappyDialog 15:44b0 starts with its voice; a frame passes first.
+        if frame > 2 and self.sound_end(1) <= self.time + 1e-9:
+            if state["delay"]:
+                state["delay"] -= 1
+            elif state["line"] < self.HAPPY_LINES:
+                self.sound(self.HAPPY_VOICE + state["line"], 1)
+                self.text(self.HAPPY_TEXT, state["line"] + 4, 0, 0, 0, dialog=True)
+                state["line"] += 1
+                state["delay"] = 1
+            elif state["line"] < 100:
+                self.text(0, 0, 0, 0, 0, dialog=True)
+                state["line"] = 100
+        # 15:447e-4496: past frame 182 the scene ends with its song.
+        if frame > 0xb6 and self.sound_end(0, self.HAPPY_SONG) <= self.time + 1e-9:
+            state["ending"] = True
 
     def seek_operation(self, index):
         if not 0 <= index < len(self.operations):
@@ -811,6 +907,10 @@ class IntroPlayer:
                 args = self.deferred_palette
                 self.deferred_palette = None
                 self.execute("palette", args)
+            if self.inserted:
+                item = self.inserted.pop(0)
+                self.execute(item["op"], item["args"])
+                continue
             if self.position >= len(self.operations):
                 self.done = True
                 return

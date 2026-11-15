@@ -42,7 +42,7 @@ or a level jump actually needs it. Menu presentation remains synchronous.
 | Sound | Alt+T | Master audio toggle |
 | Ambient Music | Alt+M | Ambient tracks only |
 | End Game | Not bound | New Game already returns to the introduction |
-| Hall of Fame | Alt+H | Disabled until scoring/frontend exists |
+| Hall of Fame | Alt+H | The five best times left when Jaffar falls; a victory adds a named row |
 | Version | Alt+V | Port information, not the original game's version |
 | Full Screen | Alt+Enter | Aspect-preserving nearest-neighbor scaling |
 

@@ -31,13 +31,13 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 2,Main,DrawSymbolBox,0x1db6,decoded,indexed-only,,No semantic review recorded in this prototype catalog,3,5
 2,Main,GetCopyProtectionSymbol,0x1e10,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,7
 2,Main,PtInSymbolRect,0x1ed6,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,1
-2,Main,HallOfFameDialog,0x1f2c,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,18
+2,Main,HallOfFameDialog,0x1f2c,decoded,partial,pop2/hall_of_fame.py;pop2/window_controls.py;tests/test_happy_ending.py,"Victory naming flow: new row from remaining minutes, empty name not written, 900-tick hold after save; native window, file and menu handling replaced by the port page",1,18
 2,Main,ComputeHallPlayerRect,0x20a6,decoded,indexed-only,,No semantic review recorded in this prototype catalog,3,0
-2,Main,DrawHallOfFameDialog,0x20f4,decoded,indexed-only,,No semantic review recorded in this prototype catalog,2,10
-2,Main,GetHallOfFameName,0x2220,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,18
-2,Main,HOFAddPlayer,0x260c,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,3
-2,Main,InitHallOfFame,0x275c,decoded,indexed-only,,No semantic review recorded in this prototype catalog,2,13
-2,Main,ShowHallOfFame,0x28c2,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,14
+2,Main,DrawHallOfFameDialog,0x20f4,decoded,partial,pop2/game_menu.py,"Title, headings, names and minutes per row; port menu-style drawing, native layout not reproduced",2,10
+2,Main,GetHallOfFameName,0x2220,decoded,partial,pop2/hall_of_fame.py;tests/test_happy_ending.py,"Refused '<' '>' NUL, length below 24, Return confirmation alert; pixel-width limit not ported",1,18
+2,Main,HOFAddPlayer,0x260c,decoded,partial,pop2/hall_of_fame.py;tests/test_happy_ending.py,"Five-entry table, insertion before the first equal or lower score, full table keeps the new score in fifth place",1,3
+2,Main,InitHallOfFame,0x275c,decoded,partial,pop2/hall_of_fame.py,Bad entry count discards the table; port JSON file instead of the Macintosh file,2,13
+2,Main,ShowHallOfFame,0x28c2,decoded,partial,pop2/window_controls.py;tests/test_happy_ending.py,Alt+H shows the table; song cue 180 and the empty-table skip not ported,1,14
 2,Main,WriteHallOfFameFile,0x29de,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,8
 2,Main,DoCreditsDialog,0x2b70,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,29
 2,Main,DrawCreditsPage,0x2d20,decoded,indexed-only,,No semantic review recorded in this prototype catalog,1,1
@@ -588,7 +588,7 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 15,NISs,TreeCheck,0x0568,prologue,indexed-only,,No semantic review recorded in this prototype catalog,0,32
 15,NISs,Transition,0x07c8,prologue,indexed-only,,No semantic review recorded in this prototype catalog,0,5
 15,NISs,TransPrincessRoom,0x0880,prologue,partial,tools/extract_intro.py;tests/test_final_spell.py;tests/test_final_spell_flow.py,"NIS 5 room-2 spell coordinator: Happy resource and 766 expanded operations with supplied CODE16 drawing/sound and Resource Manager endpoints; hidden port transition tested, native pixel/audio parity excluded",0,17
-15,NISs,TransFuncSetCTABframe1,0x09c0,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,1
+15,NISs,TransFuncSetCTABframe1,0x09c0,jump_table,partial,tools/extract_intro.py,"Frame-1 brightness (0x51, 100) of the victory bedroom",0,1
 15,NISs,TransFuncJaffarMagic,0x09fa,jump_table,partial,tools/extract_intro.py;tests/test_final_spell.py,79-frame NIS 5 animation callback recovered with supplied animation/resource/sound endpoints; isolated fade pointer restored from coordinator CTBL; live trigger and native frame capture excluded,0,7
 15,NISs,ClearNIS,0x0b32,prologue,indexed-only,,No semantic review recorded in this prototype catalog,49,3
 15,NISs,AddShpNIS,0x0b86,prologue,indexed-only,,No semantic review recorded in this prototype catalog,0,3
@@ -621,9 +621,9 @@ segment,segment_name,name,body_offset,body_method,review_status,prototype_owner,
 15,NISs,DissolveTime,0x396c,decoded,indexed-only,,No semantic review recorded in this prototype catalog,3,5
 15,NISs,DisolveDelay,0x3b9a,prologue,indexed-only,,No semantic review recorded in this prototype catalog,0,1
 15,NISs,SetDisolveDelays,0x3bfa,decoded,indexed-only,,No semantic review recorded in this prototype catalog,3,3
-15,NISs,HappyEnding,0x3c76,prologue,indexed-only,,No semantic review recorded in this prototype catalog,0,60
-15,NISs,HappyFunc,0x411a,jump_table,indexed-only,,No semantic review recorded in this prototype catalog,0,25
-15,NISs,HappyDialog,0x44b0,decoded,indexed-only,,No semantic review recorded in this prototype catalog,2,1
+15,NISs,HappyEnding,0x3c76,prologue,partial,tools/extract_intro.py;tests/test_happy_ending.py,"NIS 11 coordinator with Happy.rsrc and inline bedroom 15:44e2, supplied CODE16 drawing/sound and Resource Manager endpoints; native pixel/audio parity excluded",0,60
+15,NISs,HappyFunc,0x411a,jump_table,partial,tools/extract_intro.py;pop2/intro.py;tests/test_happy_ending.py,"Per-frame steps by emulation with persistent state; time-dependent offset at cue 102, voiced dialog lines and -1 end applied by the player",0,25
+15,NISs,HappyDialog,0x44b0,decoded,partial,pop2/intro.py;tests/test_happy_ending.py,Voice 30004+line and text 30000 entry line+4 drawn under the panel copy,2,1
 15,NISs,JaffarBurnBabyBurn,0x44e2,prologue,indexed-only,,No semantic review recorded in this prototype catalog,1,9
 15,NISs,Opening1,0x45c2,prologue,indexed-only,,No semantic review recorded in this prototype catalog,0,132
 15,NISs,Opening2,0x4ee8,prologue,indexed-only,,No semantic review recorded in this prototype catalog,0,232

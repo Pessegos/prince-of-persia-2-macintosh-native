@@ -562,13 +562,23 @@ class Final(Environment):
         return True
 
     def finish_exit(self):
-        """CODE 2:4596: level 15 plays NIS 11 and the Hall of Fame, then the
-        presentation restarts. NIS 11 is not yet presented; the port goes
-        back to the introduction."""
+        """CODE 2:4596-45c2: with minutes left, level 15 plays NIS 11
+        (HappyEnding 15:3c76) and then the Hall of Fame takes those minutes
+        (HallOfFameDialog 2:1f2c); the next level becomes 0 and the
+        presentation restarts."""
         scene = self.scene
         scene.game.exit = None
         scene.level_complete = False
+        minutes = scene.game.story.minutes
+        if minutes <= 0 or not scene.start_story_scene(
+                'happy.json', lambda: self.finish_happy_ending(minutes), 'The happy ending'):
+            self.finish_happy_ending(minutes)
+
+    def finish_happy_ending(self, minutes):
+        scene = self.scene
         scene.start_intro()
+        if minutes > 0 and hasattr(scene, 'open_hall_of_fame'):
+            scene.open_hall_of_fame(minutes)
 
     def player_palette(self):
         """Draw mode 0x30: the shadow, or a turn's flash, in CTBL 2000/2001."""

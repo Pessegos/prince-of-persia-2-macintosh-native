@@ -12,7 +12,7 @@ from tools.extract_enemy_profiles import extract_bytes
 from tools.extract_audio import extract_audio
 from tools.extract_intro import (
     TREE_VARIANTS, extract_carpet, extract_intro, extract_ending, extract_discovery, extract_temple,
-    extract_throne, extract_tower, extract_final_spell, extract_trees,
+    extract_throne, extract_tower, extract_final_spell, extract_happy, extract_trees,
 )
 from tools.extract_attract import extract_attract, extract_credits_music
 from tools.extract_caverns import extract_cavern_levels, scenery_name
@@ -127,6 +127,9 @@ def extract_assets(image_path, output_dir=ASSET_DIR, progress=lambda _text: None
         extract_final_spell(image, program, resources["NIS.rsrc"], resources["Happy.rsrc"],
                             staging, progress)
         resources["final_spell.json"] = (staging / "final_spell.json").read_bytes()
+        progress("Recovering the happy ending...")
+        extract_happy(image, program, resources["NIS.rsrc"], resources["Happy.rsrc"], staging, progress)
+        resources["happy.json"] = (staging / "happy.json").read_bytes()
         for variant in TREE_VARIANTS:
             resources[f"tree-{variant}.json"] = (staging / f"tree-{variant}.json").read_bytes()
         caverns.result()
