@@ -44,6 +44,40 @@ def guard_frame_index(action):
     return index(action)
 
 
+def advance_potions(scene):
+    """The drunk flask's effect (DoPickupEffect 4:45dc), the slow fall and
+    the flipped world, then the visible flasks' bubbling (5:13ec). Every
+    environment with flasks runs this: the caverns, ruins, temple and the
+    final tower."""
+    from pop2.caverns import cavern_flask_instances
+
+    potions = scene.game.caverns.potions
+    potions.consume_events(scene.sequence_state, scene.combat.player)
+    potions.advance_float()
+    potions.advance_flip(scene.combat.player.alive)
+    scene.sync_flipped_controls()
+    scene.sequence_state.floating = potions.floating
+    if potions.fatal:
+        potions.fatal = False
+        motion = scene.terrain_motion
+        scene.clear_keys(None)
+        scene.native_ledge = scene.ledge_hanging = scene.ledge_climbing = False
+        if motion is not None:
+            motion.dead, motion.falling = True, False
+        scene.sequence_state.horizontal_velocity = scene.sequence_state.vertical_velocity = 0
+        scene.physics.select(scene.sequence_runtime, 71)
+        scene.death.begin(3)
+    if potions.jinnee_prompt:
+        from pop2.jinnee import PRINCE_SEQUENCE
+
+        potions.jinnee_prompt = False
+        scene.physics.select(scene.sequence_runtime, PRINCE_SEQUENCE)
+        scene.status.set("Defeated")
+    potions.advance((tile.room, tile.row * 10 + tile.column)
+        for _command, tile in cavern_flask_instances(
+            scene.level_renderer.cavern_program, scene.room_id, scene.level_map))
+
+
 class Environment:
     """No environment-specific work."""
 
@@ -508,6 +542,9 @@ class Final(Environment):
         combat = getattr(scene, 'combat', None)
         if combat is None or scene.level_complete:
             return False
+        if getattr(scene.game, 'caverns', None) is not None:
+            # The flasks of rooms 7, 8 and 10 (and room 3's drops) heal.
+            advance_potions(scene)
         # 16fe runs for him in either palace room; the port's controller
         # runs only in view, so the burnt Jaffar is also read directly.
         burnt = any(figure.final_path and figure.state.selected_sequence_id == BURN_SEQUENCE
@@ -847,33 +884,7 @@ class Caverns(Environment):
         scene = self.scene
         if scene.game.caverns is None:
             return
-        from pop2.caverns import cavern_flask_instances
-
-        potions = scene.game.caverns.potions
-        potions.consume_events(scene.sequence_state, scene.combat.player)
-        potions.advance_float()
-        potions.advance_flip(scene.combat.player.alive)
-        scene.sync_flipped_controls()
-        scene.sequence_state.floating = potions.floating
-        if potions.fatal:
-            potions.fatal = False
-            motion = scene.terrain_motion
-            scene.clear_keys(None)
-            scene.native_ledge = scene.ledge_hanging = scene.ledge_climbing = False
-            if motion is not None:
-                motion.dead, motion.falling = True, False
-            scene.sequence_state.horizontal_velocity = scene.sequence_state.vertical_velocity = 0
-            scene.physics.select(scene.sequence_runtime, 71)
-            scene.death.begin(3)
-        if potions.jinnee_prompt:
-            from pop2.jinnee import PRINCE_SEQUENCE
-
-            potions.jinnee_prompt = False
-            scene.physics.select(scene.sequence_runtime, PRINCE_SEQUENCE)
-            scene.status.set("Defeated")
-        potions.advance((tile.room, tile.row * 10 + tile.column)
-            for _command, tile in cavern_flask_instances(
-                scene.level_renderer.cavern_program, scene.room_id, scene.level_map))
+        advance_potions(scene)
         lava = scene.game.caverns.lava
         lava.enter_room(scene.room_id, scene.level_renderer.cavern_program.get(
             'lava', {}).get('rooms', {}).get(str(scene.room_id), ()))

@@ -536,8 +536,10 @@ and run-jumps like the Prince.
 - **Spell.** Pose 281 of SEQS 242 plays sound 289. At pose 282, with the
   Prince still in range, 9:14c8 selects SEQS 244 for the figure. The
   Prince gets SEQS 71, sound 12, 100 points of damage and death method 17.
-  In range means the same row, an exposed pose that is not the crouch
-  (109), and his life above zero. On the upper floor the figure must be at
+  In range (9:0ba6) means the same row and the Prince's life above zero.
+  The pose tests at 9:0bee-0c2c read -0x504c, the Char record: the
+  figure's own pose must be exposed (FRAM 0x40, or 191-205) and must not
+  be the crouch (109). A crouching Prince is still struck. On the upper floor the figure must be at
   global column <= 6 or >= 13. On the middle floor both must be on the same
   side of column 13.
 - **Routes (9:0d28).** 0ed2/107c/11fe/136e choose the Kid routine from the
@@ -556,11 +558,13 @@ figure's footsteps (`-15 1`) are played like the Kid's.
 
 Port choices, not recovered behaviour: the Kid routines reuse the Prince's
 terrain helpers (ledge, step, run-jump and release tests) with the figure's
-foot column. Out of the Prince's view the figure makes no AutoCtrl
-decision. A move already begun still finishes in the other palace room,
-so the figure does not freeze in the air. The video supports the view
-rule: the Prince crosses room 7's upper floor unharmed while the figure
-stands in room 8. The relocation's call site is assumed, not traced.
+foot column. CutOpponent 6:424c -> UpdateOppInfo 6:30b0 moves a record
+that leaves the Prince's room to the other room's bank and drops it from
+the active list, so out of view the figure keeps the move it was in and
+resumes when the Prince comes (6:42fc-430a). The port lets only a burning
+figure (SEQS 230) finish out of view, so the victory still arrives. The
+video supports the view rule: the Prince crosses room 7's upper floor
+unharmed while the figure stands in room 8. The relocation's call site is assumed, not traced.
 The turn count (a5-0x5004) and the shadow are now ported (next section),
 so the figure flees from a strong shadow.
 
@@ -570,6 +574,44 @@ scene it checks four cases: standing on the figure's floor is fatal
 Prince below sends it through room 7's upper floor and down its ledge
 toward position 2; and relocation away from the palace. No native CPU
 probe of 9:16fe is claimed yet.
+
+## Route playthrough fixes (2026-11-15)
+
+Playing native room 1 to Jaffar in a hidden scene found six faults. Each
+has a regression in `tests.test_final_route` or `tests.test_final_path`
+that fails on the earlier port.
+
+- **Room 3 right exit (CutChar 6:4c50-4c6c).** In environment 6 native
+  room 3 refuses its right exit, so the Prince bumps against the wall
+  column and never reaches room 9. The port had let him walk into room 9.
+- **False Princes' strike range (6:5b38).** For a type-6 defender the
+  Kid's window is (16, 86) facing each other and (16, 79) facing the same
+  way (6:5bd2-5c06); a type-6 attacker gets (16, 79) (6:5cd4-5cec). The
+  ordinary (61, 99) left all four room-6 figures out of reach. Not ported:
+  with sword type -0x500a == 2 (levels 7-8) the Kid's high bound is 10
+  lower.
+- **Flasks.** The palace flasks are library-1 front commands left out of
+  the static room. `animated_layer` now draws them on the front pass in
+  environment 6, and `Final.level_events` consumes potion events, so
+  drinking heals (`advance_potions`, shared with the caverns).
+- **Jaffar's in-range pose** reads his own record, as above.
+- **Jaffar out of view** freezes in his move, as above, instead of running
+  on through room 7.
+- **Casting at rest.** After the eight turns the waiting controls own the
+  Ctrl bank, and their Ctrl branch drew the sword. It now calls the same
+  DoKidEngarde 6:1f4c-1f72 cast as the standing gate.
+
+Played in the hidden scene: room 6 (climb, kill the left figure from 76 px,
+run-jump, kill the right one, descend, kill the bottom one, the last
+shimmers away), the climb through rooms 7/8, the eight turns (12 -> 4 life
+with the body's fall), the chase across both views, and a cast on
+Jaffar's row that burns him (SEQS 230 to pose 185) and returns to the
+introduction.
+
+Open: standing in range on Jaffar's floor kills before four turns are
+possible (SEQS 242 reaches pose 282 in 11 frames; four standing turns take
+about 15). The video's player survived it; only a native trace can say
+which gate the port misses.
 
 ## Shadow form and magic fire (2026-11-14)
 

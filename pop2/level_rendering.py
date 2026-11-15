@@ -244,6 +244,19 @@ class LevelRenderer:
         return frame
 
     def animated_layer(self, frame, room_id, harbor, front=False, frame_number=0, desert=None, caverns=None):
+        if self.level.kind == 6 and caverns is not None:
+            # The final tower's flasks (native rooms 7, 8 and 10, and room
+            # 3's drops) are front commands like the caverns' own; the static
+            # room leaves their library-1 commands out.
+            if not front:
+                return frame
+            from pop2.terrain import LevelMap
+            from pop2.caverns import draw_cavern_flasks
+
+            if self.cavern_map is None:
+                self.cavern_map = LevelMap(self.level.data)
+            return draw_cavern_flasks(frame, room_id, caverns, self.cavern_map,
+                                      level_number=self.level.number)
         if self.level.kind in (2, 3, 4) and caverns is not None:
             from pop2.terrain import LevelMap
             from pop2.caverns import (
