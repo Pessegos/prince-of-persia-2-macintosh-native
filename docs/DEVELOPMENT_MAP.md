@@ -92,7 +92,7 @@ the native exit handler. Level 1 ends at the ship (Room 10). Level 2 shows
 no Start or End markers: its three open-shore rooms read as one picture
 (user decision, 2026-11-15); it still ends through the stone chamber's door.
 Levels 1 and 2 label their rooms Room 1, Room 2, ... in route order (level 1's
-hidden room is Secret), like the later levels' Room labels; their numbers are
+hidden room is Room 11), like the later levels' Room labels; their numbers are
 not native room IDs.
 Keyboard destination selection is white only after arrow-key navigation; opening
 the map, changing levels or moving the mouse clears that pending marker. It does

@@ -3278,12 +3278,12 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
             if not self.game.level.window_escape:
                 return self.load_level(self.game.level.number)
             return self.jump_to_room(room, row=1, x=411, facing=1)
-        secret = label == "Secret"
+        secret = label == "Room 11" and self.game.level.number == 1
         if secret:
             row, column = next((row, column) for row in range(3) for column in range(10)
                                if self.level_map.tile(room, column, row).kind == 1)
             return self.jump_to_room(room, row=row, x=column * TILE_WIDTH + 30, facing=1)
-        if label == "Room 8":
+        if label == "Room 8" and self.game.level.number == 1:
             # Entry from screen 7 is the upper roof, not the quay below.
             row, x = 0, 5 * TILE_WIDTH + 14
         elif self.game.level.kind == 1 and label == "Room 2":

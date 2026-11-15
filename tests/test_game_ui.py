@@ -1048,7 +1048,7 @@ class GameWindowTests(unittest.TestCase):
         with patch("pop2.level_rendering.build_opening_room") as build:
             self.assertEqual(scene.screen_label(2), "Room 3")
             self.assertEqual(tuple(scene.dev_screens()),
-                             ("Room 1", "Room 2", "Room 3", "Room 4", "Room 5", "Room 6", "Room 7", "Room 8", "Room 9", "Room 10", "Secret"))
+                             ("Room 1", "Room 2", "Room 3", "Room 4", "Room 5", "Room 6", "Room 7", "Room 8", "Room 9", "Room 10", "Room 11"))
             build.assert_not_called()
         self.assertEqual(set(scene.room_cache), cached_rooms)
 
@@ -1466,7 +1466,7 @@ class GameWindowTests(unittest.TestCase):
             scene.open_dev_mode()
             self.assertTrue(scene.paused)
             self.assertEqual(scene.dev_menu.screens,
-                             ("Room 1", "Room 2", "Room 3", "Room 4", "Room 5", "Room 6", "Room 7", "Room 8", "Room 9", "Room 10", "Secret"))
+                             ("Room 1", "Room 2", "Room 3", "Room 4", "Room 5", "Room 6", "Room 7", "Room 8", "Room 9", "Room 10", "Room 11"))
             scene.dev_menu.focus = 4
             scene.dev_menu.select(4)
             scene.apply_dev_action("go")
@@ -1479,7 +1479,7 @@ class GameWindowTests(unittest.TestCase):
         for label, room, row, x, facing in (("Room 1", 3, 1, 411, 1), ("Room 2", 1, 1, 489, 0),
                                            ("Room 3", 2, 1, 489, 0), ("Room 4", 0, 1, 489, 0),
                                            ("Room 5", 9, 1, 489, 0), ("Room 6", 10, 0, 489, 0),
-                                           ("Room 7", 11, 1, 489, 0), ("Secret", 4, 0, 285, 1)):
+                                           ("Room 7", 11, 1, 489, 0), ("Room 11", 4, 0, 285, 1)):
             with self.subTest(screen=label):
                 scene.jump_to_screen(label)
                 self.clear_guards()

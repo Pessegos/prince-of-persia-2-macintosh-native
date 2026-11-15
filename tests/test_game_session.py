@@ -327,7 +327,7 @@ class OriginalLevelSessionTests(unittest.TestCase):
         before = set(renderer.rooms)
         with patch("pop2.level_rendering.build_opening_room") as build:
             self.assertEqual(tuple(renderer.screen_entries()),
-                             ("Room 1", "Room 2", "Room 3", "Room 4", "Room 5", "Room 6", "Room 7", "Room 8", "Room 9", "Room 10", "Secret"))
+                             ("Room 1", "Room 2", "Room 3", "Room 4", "Room 5", "Room 6", "Room 7", "Room 8", "Room 9", "Room 10", "Room 11"))
             build.assert_not_called()
         self.assertEqual(set(renderer.rooms), before)
         for room in (3, 0, 14, 15, 18):

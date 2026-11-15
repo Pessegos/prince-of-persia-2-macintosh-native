@@ -11,7 +11,7 @@ from pop2.playback_navigation import PlaybackGroup
 from pop2.screenshots import ScreenshotSettings
 
 
-SCREENS = ("Room 1", "Room 2", "Room 3", "Room 4", "Room 5", "Room 6", "Room 7", "Secret")
+SCREENS = ("Room 1", "Room 2", "Room 3", "Room 4", "Room 5", "Room 6", "Room 7", "Room 11")
 
 
 class MenuModelTests(unittest.TestCase):
@@ -47,7 +47,7 @@ class MenuModelTests(unittest.TestCase):
         menu.key("Right")
         self.assertEqual(menu.screen, "Room 1")
         menu.key("Left")
-        self.assertEqual(menu.screen, "Secret")
+        self.assertEqual(menu.screen, "Room 11")
 
     def test_escape_cancels_popup_before_closing_menu(self):
         menu = self.menu

@@ -727,7 +727,7 @@ class RebirthSceneTests(unittest.TestCase):
         self.assertEqual(scene.checkpoint.checkpoint, Checkpoint(2, 1, 18))
         scene.jump_to_screen("Room 1")
         self.assertIsNone(scene.checkpoint)
-        scene.jump_to_screen("Secret")
+        scene.jump_to_screen("Room 11")
         self.assertIsNone(scene.checkpoint)
 
     def test_going_back_before_checkpoint_or_restarting_clears_dev_checkpoint(self):

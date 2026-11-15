@@ -333,5 +333,5 @@ class LevelRenderer:
         entries = {f"Room {index + 1}": room for index, room in enumerate(route)}
         secret = terrain.neighbor(self.level.start_room, "right")
         if secret in available and secret not in route:
-            entries["Secret"] = secret
+            entries[f"Room {len(entries) + 1}"] = secret
         return entries
