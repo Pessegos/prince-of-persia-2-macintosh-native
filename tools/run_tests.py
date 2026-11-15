@@ -12,6 +12,8 @@ with its own temporary POP2_USER_DATA, so saves and preferences never collide.
 Workers always run with POP2_SHARED_DESKTOP=1: the tests that need the physical
 desktop are skipped there and, with --desktop, run afterwards on their own,
 one process, without that switch. A skip is reported as a skip, not a pass.
+Timing-sensitive modules (the frame-cost guard) run alone once the pool has
+finished: sharing the CPU with the other workers inflates their frame times.
 """
 
 import argparse
@@ -26,6 +28,8 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 TIMINGS = ROOT / 'rendered' / 'test-timings.json'
+# Measured wall time per frame: these must not share the CPU with the pool.
+TIMING_MODULES = frozenset({'tests.test_frame_cost'})
 
 
 def discover_modules():
@@ -82,11 +86,11 @@ def run_parallel(modules, jobs, slow):
         weights = json.loads(TIMINGS.read_text(encoding='utf-8'))
     except (OSError, ValueError):
         pass
-    groups = share_out(modules, weights, jobs)
+    timed = [name for name in modules if name in TIMING_MODULES]
+    groups = share_out([name for name in modules if name not in TIMING_MODULES], weights, jobs)
     started = time.perf_counter()
     with tempfile.TemporaryDirectory(prefix='pop2-run-tests-') as scratch:
-        processes = []
-        for index, group in enumerate(groups):
+        def launch(index, group):
             env = os.environ.copy()
             env.pop('POP2_USER_DATA', None)      # each worker makes its own (tests/__init__.py)
             env['POP2_SHARED_DESKTOP'] = '1'
@@ -96,7 +100,14 @@ def run_parallel(modules, jobs, slow):
             process = subprocess.Popen(
                 [sys.executable, '-m', 'tools.run_tests', '--worker', str(report), *group],
                 cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT)
-            processes.append((process, report, log, group))
+            return process, report, log, group
+
+        processes = [launch(index, group) for index, group in enumerate(groups)]
+        for process, *_rest in processes:
+            process.wait()
+        if timed:
+            # Alone, after the pool: other workers would slow its frames.
+            processes.append(launch(len(groups), timed))
         reports = []
         for process, report, log, group in processes:
             process.wait()
@@ -110,7 +121,7 @@ def run_parallel(modules, jobs, slow):
                                 'expected_failures': 0, 'modules': {},
                                 'errors': [[f'worker {", ".join(group)}', text[-4000:]]]})
     elapsed = time.perf_counter() - started
-    return reports, elapsed, len(groups)
+    return reports, elapsed, len(groups) + bool(timed)
 
 
 def summarise(reports, elapsed, workers):
