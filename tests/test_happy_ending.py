@@ -301,5 +301,69 @@ class HallOfFameWindowTests(unittest.TestCase):
         self.assertIsNone(scene.game_menu.hall_page)
 
 
+@unittest.skipUnless(INSTALLED and (ASSET_DIR / 'happy.json').is_file(), 'Imported NIS 11 required')
+class HappyEndingChapterTests(HallOfFameWindowTests):
+    """The last chapter unlocks when NIS 11 plays; the game after the victory
+    keeps the campaign's cutscenes (New Game+); Alt+N leaves them."""
+
+    def press(self, keysym, char=None, state=0):
+        from types import SimpleNamespace
+
+        event = SimpleNamespace(keysym=keysym, state=state, char=keysym if char is None else char)
+        self.scene.dev_key_press(event)
+        self.scene.dev_key_release(event)
+
+    def win(self):
+        from pop2.cutscenes import CHAPTERS
+        from pop2.environments import Final
+
+        scene = self.scene
+        scene.mark_cutscene_seen('tower')
+        scene.game_menu = None
+        scene.game.story.minutes = 33
+        Final(scene).finish_exit()
+        self.assertEqual(scene.intro.program_kind, 'happy')
+        self.assertIn('happy', scene.cutscene_collection.seen)
+        return [chapter.key for chapter in CHAPTERS].index('happy')
+
+    def finish_scene(self):
+        scene = self.scene
+        scene.intro.advance(100)
+        scene.finish_attract_stage()
+        self.assertEqual(scene.game_menu.page, 'hall')
+
+    def viewer(self):
+        self.press('c', state=0x20000)
+        return self.scene.game_menu.cutscene_viewer
+
+    def test_alt_c_during_the_ending_reveals_it_once(self):
+        index = self.win()
+        self.assertIn(index, self.viewer().reveal)
+        self.scene.close_game_menu()
+        self.finish_scene()
+        self.press('Escape')
+        self.assertNotIn(index, self.viewer().reveal)
+
+    def test_after_the_victory_a_fresh_game_keeps_the_cutscenes_and_reveals_the_ending(self):
+        scene = self.scene
+        index = self.win()
+        self.finish_scene()
+        self.press('Escape')
+        self.assertIsNone(scene.game_menu)
+        self.assertEqual(scene.game.level.number, 1)
+        self.assertEqual(scene.game.story.minutes, 75)
+        self.assertIsNone(scene.active_save_path)
+        self.assertIn('happy', scene.cutscene_collection.seen)
+        gallery = self.viewer()
+        self.assertIn(index, gallery.reveal)
+        self.assertTrue(gallery.chapter_unlocked(index))
+        scene.close_game_menu()
+        scene.new_game()
+        self.assertNotIn('happy', scene.cutscene_collection.seen)
+        gallery = self.viewer()
+        self.assertEqual(gallery.reveal.keys() & {index}, set())
+        self.assertFalse(gallery.chapter_unlocked(index))
+
+
 if __name__ == '__main__':
     unittest.main()

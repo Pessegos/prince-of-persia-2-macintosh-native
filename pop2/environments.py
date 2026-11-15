@@ -576,7 +576,8 @@ class Final(Environment):
 
     def finish_happy_ending(self, minutes):
         scene = self.scene
-        scene.start_intro()
+        # 2:45c2: the next level becomes 0 and RestartGame starts afresh.
+        (scene.new_game_plus if hasattr(scene, 'new_game_plus') else scene.start_intro)()
         if minutes > 0 and hasattr(scene, 'open_hall_of_fame'):
             scene.open_hall_of_fame(minutes)
 

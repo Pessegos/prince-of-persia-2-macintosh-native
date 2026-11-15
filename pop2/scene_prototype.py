@@ -2772,6 +2772,17 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
             self.start_intro()
             self.render()
 
+    def new_game_plus(self):
+        """After the victory the presentation restarts a fresh game (CODE
+        2:45c2 clears the next level). Port choice: that game keeps the
+        finished campaign's cutscenes, and a scene not yet revealed in the
+        viewer is revealed the next time it opens. Alt+N or a load leaves it."""
+        collection = self.cutscene_collection
+        fresh = set(getattr(self, 'cutscene_fresh', ()))
+        self.new_game()
+        self.cutscene_collection = collection
+        self.cutscene_fresh = fresh
+
     def finish_intro(self):
         held = set(self.window_keys_down)
         if self.attract_stage == "ending":
