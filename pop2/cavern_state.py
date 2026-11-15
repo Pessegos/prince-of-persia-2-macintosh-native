@@ -42,6 +42,12 @@ class CavernState:
     trapdoors: TrapDoors = field(default_factory=TrapDoors)
     # a5-0x4818 in level 13's flame room (CUST 4075): 10:2cc2's counter.
     flame: int = 0
+    # Level 14's moving scenery (pop2.final_scenery): (room, cell) -> the
+    # cell's foreground word, the word its image on screen was drawn from,
+    # and the room whose trobs KeepTime last set up.
+    final_scenery: dict = field(default_factory=dict)
+    final_scenery_drawn: dict = field(default_factory=dict)
+    final_scenery_room: int | None = None
     # a5-0x4fd4: 1 once KeepTime shows the death message there, -1 once the
     # shadow (type 1, 10:2b32) has risen.
     altar: int = 0

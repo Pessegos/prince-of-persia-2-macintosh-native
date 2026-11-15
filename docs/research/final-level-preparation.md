@@ -902,3 +902,93 @@ Exclusions:
 - No Macintosh capture of this room is available (the user's winning
   video skips it), so the fight's timing and the pixels of SEQS 238/239
   are unchecked against the original.
+
+## Moving scenery: fangs, face, crystals and gargoyles (ported 2026-11-15)
+
+Every moving object is a trob (AnimTrobs 5:0c38). AnimTrob 5:0cd6 loads
+the trob's room (5:0004) and its cell's foreground word into a5-0x4818
+(5:29a8), dispatches on the type through the table in the unmapped gap at
+5:0d0e, and writes the word back (5:0e24). The drawing hooks read the same
+word from the cell's draw record (a5-0x4f8c + 0x14), move a CUST record of
+the room and call DrawCustomRoomImg 3:2438(record, pass). All tables are in
+the A5 data.
+
+- **Room 3, the spider's fangs** (kind 40, cell 23; CUST 4050).
+  AnimFinlSpider 9:1bf0: bits 0-2 a frame, bits 3-10 a timer. With the
+  timer at 0 the frame advances to 5 and the rectangle a5-0x298e is
+  redrawn; at frame 5 the timer becomes `Rnd(60) + 30`. When the timer
+  runs out, 9:1c66-1c74 draws `Rnd(5) + 1` and sets frame 7 (a5-0x5002,
+  zero in play, would restart the long wait instead). The timer therefore
+  never returns to 0: the fangs move once. DrawFinlSpider 9:1cba (pass
+  11) draws a5-0x29a6[a] + 3 and a5-0x299a[b] + 3; with the timer at 0
+  both are the rest pose, so frames 1-4 are never shown, and frame 5
+  shows the right fang's record 4. The frame-7 word reads a5-0x29a6[7],
+  past the six-entry table, which is a5-0x299a[1]: records 8 and 7, both
+  left-fang images. That change is not redrawn (no 5:19f8 call), so it
+  appears when the room is drawn again: from the second visit on, the
+  right fang is missing. Running the native renderer (`recover_room`)
+  over the words 0x0, 0x2d, 0xf and 0x80d confirms the records drawn for
+  cells 23 and 24 (column 4 draws from the same word).
+- **Room 4, Jaffar's face** (kind 31, cell 1; CUST 4075). 9:1b3a counts
+  the word up by one per frame. Counts 12-15 are redrawn and 9:1ba4 (pass
+  11) draws records a5-0x29ae[count - 12] + 3: 3, 4, 4 and 3, a wink. At
+  16 the trob ends with the word cleared and no redraw, so the half-closed
+  eye stays until the room is drawn again. It happens on each entry.
+- **Room 6, crystal glints** (CUST 4125). Cells with foreground 0x1000 get
+  TriggerFinlCrystal 9:2068 from KeepTime 2:5182-51a8 at room entry:
+  index from a5-0x2872 (reset by the room hook 9:1d84; nine at most),
+  wait `Rnd(40)`, the trob flag, AddTrob type 41. AnimFinlCrystal
+  9:1e30: bits 4-10 a wait, or frames while 0x800 is set. An ended wait
+  activates; frames 1-5 are redrawn; frame 6 starts a wait of `Rnd(40) +
+  40` without a redraw, so the last image (record 8, the smallest glint)
+  stays drawn. DrawFinlCrystal 9:1f5e (pass 1) draws record
+  a5-0x2986[frame - 1] + 8 moved by a5-0x297c[index] (dy, dx) in pass
+  a5-0x2958[index].
+- **Rooms 7 and 8, gargoyle faces** (CUST 4150, 4175). TriggerFinlGargoyle
+  9:233a: index from a5-0x2874, which 9:1d84 starts at 0 in room 7 and 2
+  in room 8, AddTrob type 42. AnimFinlGargoyle 9:20dc is the crystal
+  logic with frames 1-7; an index outside its room's pair ends the trob.
+  DrawFinlGargoyle 9:2238 (pass 1) draws record a5-0x2946[frame - 1] + 2,
+  plus 4 for every gargoyle but the first, at a5-0x2938[index] (bottom,
+  x) in pass a5-0x2928[index], then puts the record back at 0, 0, pass 11.
+
+Port: `pop2/final_scenery.py` holds the routines and tables.
+`Final.advance_scenery` sets up a newly entered room (KeepTime's scan;
+the fangs' and face's words carry over, crystals and gargoyles are
+triggered again) and steps the room's trobs in cell order with the game's
+Rnd, after the room-3 drops. `CavernState.final_scenery` keeps the words
+and `final_scenery_drawn` the word each image was last drawn from: it
+changes on a redraw request or on entering the room, which gives the
+original's lingering images. `draw_final_scenery` draws pass-0/11 images
+in the back layer and pass-1 images in the front layer. The static room 3
+no longer contains the exported rest pose (SHAP 4053-4060).
+
+Evidence:
+- `python -m tools.probe_final_scenery`: 2326 original cases run the face
+  routines, AnimFinlSpider, DrawFinlSpider, the crystal and gargoyle
+  routines and both triggers in Unicorn over the original A5 data and the
+  room's original CUST record. Rnd, the redraw call 5:19f8,
+  DrawCustomRoomImg (with the record's bottom, X and pass at the call),
+  AddTrob and the OffsetRect trap are supplied. Words, Rnd arguments,
+  redraw requests, drawn records and positions, trob ends and counters
+  agree. States the routines never produce are left out: an active frame
+  past the last one, gargoyle indexes above 3 and active-fang frames 6-7.
+- `tests.test_final_scenery`: the fangs' single movement and the
+  never-zero timer (a model that animates again is rejected), the frame-7
+  images, the wink, crystal and gargoyle cycles and records, room-entry
+  triggers, and in hidden level-14 scenes the fangs drawn from their word
+  (absent from the static room), the frame-7 word shown only after
+  re-entry, room 6's glints, and a save round trip.
+
+Exclusions:
+- In the original, an actor moving over these cells redraws them from
+  the current word, so a lingering image can change in patches before
+  the room is drawn again. The port redraws only on the trob's own
+  request or on room entry. DrawFinlSpider's raised clip top for cell 23
+  is not needed with full-room drawing.
+- KeepTime also scans the neighbouring rooms' edge cells; a crystal or
+  gargoyle cell there would get a trob (and Rnd draws) in the original.
+  The port sets up only the room on screen.
+- 9:1d84 also asks for songs (269 in room 6; 262 in rooms 7 and 8 under
+  conditions); not ported here.
+- No Macintosh capture of these rooms is available to compare pixels.

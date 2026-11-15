@@ -580,6 +580,7 @@ class Final(Environment):
             return False
         if getattr(scene.game, 'caverns', None) is not None:
             self.place_drops()
+            self.advance_scenery()
             # The flasks of rooms 7, 8 and 10 (and room 3's drops) heal.
             advance_potions(scene)
         # 16fe runs for him in either palace room; the port's controller
@@ -597,6 +598,32 @@ class Final(Environment):
         scene.clear_keys(None)
         scene.status.set("Jaffar is defeated")
         return True
+
+    def advance_scenery(self):
+        """AnimTrobs 5:0c38 for the room's serpents, face, crystals and
+        gargoyles (pop2.final_scenery), after KeepTime 2:4fd0 set up a newly entered
+        room. Their words are the cells' foregrounds; Rnd is the game's."""
+        from pop2.final_scenery import enter_room, step
+
+        scene = self.scene
+        caverns, room, rng = scene.game.caverns, scene.room_id, scene.combat.rng
+        words, drawn = caverns.final_scenery, caverns.final_scenery_drawn
+        if caverns.final_scenery_room != room:
+            caverns.final_scenery_room = room
+            tiles = {cell: scene.level_map.tile(room, cell % 10, cell // 10) for cell in range(30)}
+            cells = {cell: (tile.kind, words.pop((room, cell), tile.foreground))
+                     for cell, tile in tiles.items()}
+            drawn.clear()
+            for cell, word in enter_room(room, cells, rng).items():
+                words[room, cell] = drawn[room, cell] = word
+        for key in sorted(key for key in words if key[0] == room):
+            word, dirty = step(room, words[key], rng)
+            if word is None:
+                del words[key]
+            else:
+                words[key] = word
+            if dirty:
+                drawn[key] = word
 
     def place_drops(self):
         """9:0142-0194: a dead room-3 copy's flask becomes tile 10 with its

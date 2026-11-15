@@ -199,7 +199,8 @@ def _unpack(value, resources, lava_tables, depth=0):
         optional.update(('fatal', 'float_timer', 'flip_timer'))
     if cls is CavernState:
         optional.update(('bridge', 'carpet', 'phew_countdown', 'scythes', 'alternate_entry',
-                         'throne_done', 'throne_seen', 'altar', 'shadow'))
+                         'throne_done', 'throne_seen', 'altar', 'shadow', 'final_scenery',
+                         'final_scenery_drawn', 'final_scenery_room'))
     if cls is Bridge:
         optional.update(('tension_level', 'tension', 'marks', 'wobble'))
     if (not isinstance(record, dict) or set(record) - allowed

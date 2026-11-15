@@ -677,6 +677,41 @@ def draw_temple_flame(frame, room_id, counter, *, level_number=FLAME_LEVEL):
     return frame
 
 
+# The exported room 3 draws DrawFinlSpider's resting serpents (CUST 4050
+# records 3 and 7); records 3-10 are their frames (SHAP 4053-4060).
+FINAL_MOVING_SHAPES = {2: range(4053, 4061)}
+
+
+def draw_final_scenery(frame, room_id, state, *, level_number=14, front=False):
+    """Level 14's serpents, crystal glints and gargoyle faces
+    (pop2.final_scenery): their CUST records, moved as the drawing hooks
+    move them. Pass 1 is a front image; passes 0 and 11 are back ones."""
+    from pop2.final_scenery import scenery_images
+
+    # The words the images on screen were last drawn from.
+    words = sorted((cell, word) for (room, cell), word in getattr(state, 'final_scenery_drawn', {}).items()
+                   if room == room_id)
+    if not words:
+        return frame
+    _program, resources, palette, shapes = room_assets(level_number, room_id)
+    custom = resources.get('CUST', {}).get(4000 + room_id * 25)
+    if custom is None:
+        return frame
+    data = custom['data']
+    first, count = struct.unpack_from('>H', data, 2)[0], struct.unpack_from('>H', data, 28)[0]
+    for _cell, word in words:
+        for image in scenery_images(room_id, word):
+            if (image.draw_pass == 1) != front or not 0 <= image.record < count:
+                continue
+            shape_index, bottom, x, _pass, mode = struct.unpack_from('>5h', data, 30 + image.record * 32)
+            x = image.x if image.x is not None else x + image.dx
+            bottom = image.bottom if image.bottom is not None else bottom + image.dy
+            sprite = cavern_command_sprite(['back', first + shape_index, x, bottom, mode, 0, [], 4],
+                                           resources, palette, shapes)
+            frame.paste(sprite, (x, bottom - sprite.height), sprite)
+    return frame
+
+
 def draw_cavern_flasks(frame, room_id, state, terrain, *, level_number=3):
     program, resources, palette, shapes = cavern_assets(level_number)
     terrain.caverns = state
@@ -1544,6 +1579,9 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
         library = command[7] if len(command) >= 8 else 4
         if animated and library in (0, 1, 5):
             continue  # Items and the temple flame animate separately.
+        if (animated and level_number in FINAL_LEVELS and library == 4
+                and index in FINAL_MOVING_SHAPES.get(room_id, ())):
+            continue  # Room 3's serpents are drawn from their trob word.
         # These IDs animate torches only in Caverns.rsrc. Ruins.rsrc uses
         # the same numbers for tunnel fronts and floor decorations/cracks.
         if (animated and level_number in SCENERY_LEVELS[3] and program.get('version') >= 4
