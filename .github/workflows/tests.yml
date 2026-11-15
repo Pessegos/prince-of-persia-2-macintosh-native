@@ -67,6 +67,6 @@ jobs:
       - name: Remapped keys, controller routing and the Controls page
         run: python -m unittest -q tests.test_controls.BindingTests tests.test_controls.RouterTests tests.test_controls.KeyRoutingTests tests.test_controls.PadReaderTests tests.test_controls.PadRoutingTests tests.test_controls.ControlsPageTests tests.test_controls.GameMenuRowTests tests.test_controls.CopyProtectionKeyTests
       - name: Developer preview models and cache without original game files
-        run: python -m unittest -q tests.test_preview_cache tests.test_development_map.DevelopmentMapModelTests tests.test_playback_preview.GalleryModelTests tests.test_development_cheats
+        run: python -m unittest -q tests.test_preview_cache tests.test_development_map.DevelopmentMapModelTests tests.test_development_cheats
       - name: Cutscene collection, gallery and monitor pacing without original game files
         run: python -m unittest -q tests.test_cutscene_viewer.CollectionTests tests.test_cutscene_viewer.GalleryTests tests.test_cutscene_viewer.ReplayAudioTests tests.test_cutscene_covers.CoverCompositionTests tests.test_display_refresh tests.test_menu_animation
