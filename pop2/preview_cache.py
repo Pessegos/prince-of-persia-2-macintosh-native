@@ -20,7 +20,8 @@ def preview_fingerprint(directory=ASSET_DIR, code_directory=None):
     if bundled:
         digest.update((code_directory.parent / 'build-info.json').read_bytes())
     for root, patterns in ((Path(directory), ('*.rsrc', '*.json')),
-                           (code_directory, ('*.py', 'cavern_retouch.json', 'cavern_retouch.png'))):
+                           (code_directory, ('*.py', 'cavern_retouch.json', 'cavern_retouch.png',
+                                            'desert_retouch.json', 'desert_retouch.png'))):
         for path in sorted({path for pattern in patterns for path in root.glob(pattern)}):
             # The game uses PYZ while the signed helper uses the same source.
             # Build identity, assets and support art must produce one cache key.

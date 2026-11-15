@@ -18,7 +18,8 @@ from tools.prepare_windows_runtime import validate_runtime, signatures, trim_run
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SUPPORT_FILES = ('pop2/cavern_retouch.json', 'pop2/cavern_retouch.png', 'pop2/lava_recess.json',
+SUPPORT_FILES = ('pop2/cavern_retouch.json', 'pop2/cavern_retouch.png', 'pop2/desert_retouch.json',
+                 'pop2/desert_retouch.png', 'pop2/lava_recess.json',
                  'pop2/save_quill.png', 'pop2/screenshot_lava.png',
                  'pop2/icons/prince.ico', 'pop2/icons/prince.png')
 DEPENDENCIES = ('Pillow', 'pygame', 'mido', 'numpy', 'unicorn')
