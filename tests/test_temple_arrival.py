@@ -465,13 +465,15 @@ class TempleLooseFloorTests(unittest.TestCase):
         level = GameResources.load().level(10).data
         block = FallingFloor(21, 4, 1, 250)
         state = SimpleNamespace(loose=SimpleNamespace(falling=[block]))
-        art = SimpleNamespace(draw_falling_foreground=lambda *args: None)
+        art = SimpleNamespace(foreground=Image.new('RGBA', (510, 365)),
+                              draw_falling_foreground=lambda *args: None)
         frame = draw_cavern_falling(Image.new('RGBA', (510, 365)), 21, state, level, art, level_number=10)
         _program, resources, palette, shapes = room_assets(10, 21)
         expected = Image.new('RGBA', (510, 365))
         for index in (3528, 3529):
             sprite = cavern_command_sprite(['back', index, block.x, 250, 16], resources, palette, shapes)
-            expected.paste(sprite, (block.x, 250 - sprite.height), sprite)
+            # AddImgObj3:0302-030c stores an inclusive moving-image bottom.
+            expected.paste(sprite, (block.x, 250 - sprite.height + 1), sprite)
         self.assertEqual(frame.tobytes(), expected.tobytes())
 
 
