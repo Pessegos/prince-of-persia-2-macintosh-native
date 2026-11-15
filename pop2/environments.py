@@ -14,6 +14,7 @@ exit_scenery, then finish_exit. A new environment (the temple, 10:27ba)
 subclasses Environment and is selected in environment_for.
 """
 
+import struct
 import time
 from types import SimpleNamespace
 
@@ -598,6 +599,41 @@ class Final(Environment):
         scene.clear_keys(None)
         scene.status.set("Jaffar is defeated")
         return True
+
+    def ambient_audio(self, audio, motion):
+        """The mental rooms' themes (pop2.final_music): a room's enter hook
+        asks for its song, and FinlWatchOpps 9:0654-0716 asks again for the
+        room's theme whenever no song plays (the music is on, the Prince
+        alive and no level change pending)."""
+        from pop2.final_music import entry_song, watch_song
+
+        scene = self.scene
+        caverns, combat, room = scene.game.caverns, scene.combat, scene.room_id
+        if caverns is None or combat is None:
+            return
+
+        def bank_count(bank_room):
+            bank = combat.room_encounters.get(bank_room)
+            if bank is not None:
+                return len(bank[0])
+            return struct.unpack_from('>H', combat.level, 0x20e6 + (bank_room + 1) * 0xc0)[0]
+
+        entered = getattr(scene, 'final_music_room', None) != room
+        scene.final_music_room = room
+        if not audio.music_enabled:
+            return
+        if entered:
+            cue = entry_song(room, caverns.final_escher, audio.song_playing, bank_count)
+            if cue is not None:
+                audio.add_song(cue, ambient=True)
+        if (audio.music_busy or not combat.player.alive or scene.level_complete
+                or scene.game.exit is not None):
+            return
+        cue, caverns.final_escher, stop = watch_song(room, caverns.final_escher, bank_count)
+        if stop is not None and audio.song_playing(stop):
+            audio.stop_song(stop)
+        if cue is not None and not audio.song_playing(cue):
+            audio.add_song(cue, ambient=True)
 
     def advance_scenery(self):
         """AnimTrobs 5:0c38 for the room's serpents, face, crystals and

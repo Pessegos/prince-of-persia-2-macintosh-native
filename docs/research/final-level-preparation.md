@@ -992,3 +992,44 @@ Exclusions:
 - 9:1d84 also asks for songs (269 in room 6; 262 in rooms 7 and 8 under
   conditions); not ported here.
 - No Macintosh capture of these rooms is available to compare pixels.
+
+## The mental rooms' themes (ported 2026-11-15)
+
+Environment 6 has no ambient bank (bank 6 is empty), so before this the
+final level was silent apart from effects, and the audio import did not
+render any of its songs. CODE 9 plays four room themes:
+
+- The CUST enter hooks: 9:1a90 (native rooms 3-5) adds Spider (268) in
+  room 3 and ChessRm (267) in room 4, then waits on sound 30500
+  (WaitSndId 16:270e); 9:1d84 (rooms 6-8) adds Crystal (269) in room 6,
+  Escher (262) in room 7 when a5-0x4ff2 is set, and Escher in room 8 when
+  it is not already playing and room 8's bank holds an opponent (LEVL
+  0x26e6 = 0x20e6 + 8 * 0xc0).
+- FinlWatchOpps 9:0654, every frame, when the music is on (a5-0x3738), the
+  current song (a5-0x4398) has ended (PrinceSndOn 5:52c8), the Prince is
+  alive (a5-0x50b6 < 0) and no level change is pending: through the jump
+  table at 9:06aa (in an unmapped gap; decoded with capstone) room 3 asks
+  for Spider, rooms 4 and 5 for ChessRm, room 6 for Crystal while its bank
+  holds opponents (LEVL 0x2566, the false Princes; otherwise Crystal is
+  stopped with PrinceResetSnd 5:5252), room 8 sets a5-0x4ff2 and asks for
+  Escher, and room 7 asks for Escher once a5-0x4ff2 is set. 9:06fc-0714
+  adds the song unless it already plays. a5-0x4ff2 is cleared when an
+  environment-6 level starts (2:6e74).
+
+Port: `pop2/final_music.py` (`entry_song`, `watch_song`) and
+`Final.ambient_audio`; the themes are ambient songs, so the port's music
+switch silences them. `CavernState.final_escher` is a5-0x4ff2. The audio
+import now renders `FINAL_SONGS`: 262-265 and 267-270 and Shadow (290),
+which also gives sound to the shadow form, the spell (265) and the body's
+dissolve (264) that were already requested. Happy1 (266, a .gmf song)
+renders silent and is left out. An older import has no files for these
+and stays silent until the game is imported again.
+
+Evidence: static reading of the hooks and of 9:0654-0716 including the
+decoded table; `tests.test_final_music` checks both tables (a reading
+that swaps rooms 7 and 8 is rejected) and, in hidden level-14 scenes,
+each room's requests, the Escher flag, no new theme while a song plays
+and nothing with the music off. No native CPU probe and no capture.
+
+Exclusions: the room-4 wait on sound 30500; whether other rooms (such as
+native room 10) use the 9:1d84 hook, which would also add Crystal there.

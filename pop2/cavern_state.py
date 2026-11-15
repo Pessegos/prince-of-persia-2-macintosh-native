@@ -48,6 +48,9 @@ class CavernState:
     final_scenery: dict = field(default_factory=dict)
     final_scenery_drawn: dict = field(default_factory=dict)
     final_scenery_room: int | None = None
+    # a5-0x4ff2: level 14's native room 8 has been visited (FinlWatchOpps
+    # 9:06e6), so native room 7 plays Escher too.
+    final_escher: bool = False
     # a5-0x4fd4: 1 once KeepTime shows the death message there, -1 once the
     # shadow (type 1, 10:2b32) has risen.
     altar: int = 0

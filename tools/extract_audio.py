@@ -14,7 +14,7 @@ import numpy as np
 
 from pop2.audio_formats import digitized_sound, mohawk_resources, standard_sound
 from pop2.mac_resources import get_data_fork, parse_resource_fork, _span
-from pop2.music_cues import TEMPLE_SONGS
+from pop2.music_cues import FINAL_SONGS, TEMPLE_SONGS
 from tools.extract_enemy_profiles import expand_a5_data
 
 
@@ -188,7 +188,7 @@ def extract_audio(image, program_bytes, prince_bytes, directory, progress=lambda
             entry["name"] = next((message.name for track in sequence.tracks for message in track
                                    if message.type == "track_name"), "")
             if int(cue) in (LEVEL_ONE_SONGS + DESERT_SONGS + CAVERN_SONGS
-                            + LATE_CAVERN_SONGS + RUINS_SONGS + TEMPLE_SONGS):
+                            + LATE_CAVERN_SONGS + RUINS_SONGS + TEMPLE_SONGS + FINAL_SONGS):
                 entry["file"] = f"cue-{cue}.wav"
                 songs.append((entry, raw_name))
     # Each song is a separate renderer process: render them side by side.

@@ -374,21 +374,25 @@ class AudioEngine:
             self.pending_song_ambient = ambient
             self.pending_music_group = None
 
+    def stop_song(self, cue):
+        """PrinceResetSnd 5:5252 for a song: stop it if it is pending or playing."""
+        if self.pending_song == cue:
+            self.pending_song = None
+            self.pending_song_ambient = False
+            self.pending_music_group = None
+        if self.current_music == cue:
+            self.playback.stop('music')
+            self.current_music = None
+            self.current_music_ambient = False
+            self.current_music_group = None
+
     def room_song(self, location, cue=None):
         """Request a theme once per room visit and stop it on departure."""
         scope = (location, cue)
         if self.room_song_scope != scope:
             previous = self.room_song_scope[1] if self.room_song_scope is not None else None
             if previous is not None:
-                if self.pending_song == previous:
-                    self.pending_song = None
-                    self.pending_song_ambient = False
-                    self.pending_music_group = None
-                if self.current_music == previous:
-                    self.playback.stop('music')
-                    self.current_music = None
-                    self.current_music_ambient = False
-                    self.current_music_group = None
+                self.stop_song(previous)
             self.room_song_scope = scope
             self.room_song_requested = False
         if cue is not None and not self.room_song_requested and self.music_enabled:
