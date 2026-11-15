@@ -183,9 +183,14 @@ class MenuModelTests(unittest.TestCase):
         menu.click(220, popup_y)
         self.assertEqual(menu.section_index, start)
         menu.open_dropdown()
-        menu.scroll(100)
-        self.assertEqual((menu.option_index, menu.popup_start), (29, 20))
-        menu.scroll(-100)
+        # The wheel moves the rows; the highlight is the row under the pointer.
+        highlighted = menu.option_index
+        self.assertTrue(menu.scroll(100))
+        self.assertEqual((menu.option_index, menu.popup_start), (highlighted, 20))
+        self.assertFalse(menu.scroll(100))
+        self.assertTrue(menu.scroll(100, (220, popup_y)))
+        self.assertEqual((menu.option_index, menu.popup_start), (20, 20))
+        menu.scroll(-100, (220, popup_y))
         self.assertEqual((menu.option_index, menu.popup_start), (0, 0))
         self.assertEqual(menu.section_index, start)
 
@@ -393,11 +398,15 @@ class MenuSceneTests(unittest.TestCase):
         scene.dev_menu.show_page('playback')
         scene.dev_menu.focus = 0
         scene.dev_menu.open_dropdown()
+        menu = scene.dev_menu
+        row = int((214 - menu.control_rect(0)[3]) // menu.OPTION_HEIGHT)
         with patch.object(scene, "dev_pointer", return_value=(220, 214)):
             for _ in range(20):
                 self.assertEqual(scene.dev_scroll(event), "break")
-        self.assertEqual(scene.dev_menu.option_index, 20)
-        self.assertEqual(scene.dev_menu.section_index, 0)
+        # The rows stop at the end of the list; the highlight follows the pointer.
+        self.assertEqual(menu.popup_start, 30 - menu.popup_count)
+        self.assertEqual(menu.option_index, menu.popup_start + row)
+        self.assertEqual(menu.section_index, 0)
 
     def test_simulation_and_game_inputs_stay_frozen_and_pause_state_is_restored(self):
         scene = self.scene

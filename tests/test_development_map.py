@@ -95,6 +95,32 @@ class DevelopmentMapModelTests(unittest.TestCase):
             self.assertEqual(layer.getpixel(outside), ground)
             self.assertEqual(layer.getpixel(inside), (200, 10, 10, 255))
 
+    def test_map_picture_is_reused_until_something_it_shows_changes(self):
+        from pop2 import menu_theme
+
+        atlas = preview()
+        font = SimpleNamespace(text=lambda text, color=None: Image.new('RGBA', (len(text) * 6, 9)))
+        menu = self.menu()
+        menu.map_provider = lambda _number: atlas
+        size = (488, 284)
+        menu_theme.use(menu_theme.NEUTRAL)
+        self.addCleanup(menu_theme.use, menu_theme.NEUTRAL)
+        first = menu.map_layer(font, size)
+        with patch.object(menu, 'draw_map_layer', side_effect=AssertionError('Redrew the map')):
+            self.assertIs(menu.map_layer(font, size), first)
+            menu.focus, menu.dropdown, menu.option_index, menu.popup_start = 0, True, 2, 1
+            self.assertIs(menu.map_layer(font, size), first)
+        for change in (lambda: setattr(menu, 'hovered_screen', 'Room 2'),
+                       lambda: menu_theme.use(menu_theme.RUINS),
+                       lambda: menu.__dict__.update(current_level=3, current_screen='Room 3'),
+                       lambda: setattr(menu, 'map_provider', lambda _number: replace(atlas))):
+            change()
+            self.assertIsNot(menu.map_layer(font, size), first)
+            first = menu.map_layer(font, size)
+        menu.map_layer(font, (976, 568))
+        menu.map_layer(font, (1464, 852))
+        self.assertEqual(len(menu.map_layers), 2)
+
     def test_map_hits_are_half_open_and_do_not_select_gaps(self):
         atlas = preview()
         for point, expected in (((0, 0), 'Room 1'), ((49.9, 39.9), 'Room 1'),
@@ -784,6 +810,62 @@ class ImportedDevelopmentMapTests(unittest.TestCase):
         self.assertEqual(s.room_id, 27)
         self.assertIsNone(s.dev_menu)
         self.assertFalse(s.paused)
+
+    def test_level_list_wheel_and_arrows_patch_only_the_list_over_a_frozen_world(self):
+        from PIL import ImageTk
+        from tests.test_terrain import RooftopSceneTests
+
+        RooftopSceneTests.setUp(self)
+        s = self.scene
+        s.load_level(3)
+        s.open_dev_mode()
+        s.apply_dev_action(s.dev_menu.activate())
+        menu = s.dev_menu
+        self.assertTrue(menu.map_enabled)
+        menu.focus = 0
+        with patch.object(s.canvas, 'winfo_width', return_value=2560),                 patch.object(s.canvas, 'winfo_height', return_value=1440):
+            s.apply_dev_action(menu.activate())
+            self.assertTrue(menu.dropdown)
+            self.assertGreater(len(menu.options), menu.popup_count)
+            photo = s.image_ref
+            left, top, right, bottom = menu.popup_rect()
+            point = ((left + right) / 2, top + 2.5 * menu.OPTION_HEIGHT)
+
+            def shown():
+                self.assertIs(s.image_ref, photo)
+                actual = ImageTk.getimage(photo).convert('RGB')
+                native = menu.draw(s.screenshot_viewport, s.ui_font)
+                low = native.crop((1, 0, 511, 384)).resize(actual.size, Image.Resampling.NEAREST)
+                self.assertEqual(actual.tobytes(), menu.present_map(low, s.ui_font).convert('RGB').tobytes())
+
+            menu.popup_start = 0
+            s.redraw_dev_menu()
+            with patch.object(s, 'render', side_effect=AssertionError('The list rendered the world')),                     patch.object(s, 'dev_pointer', return_value=point):
+                # One notch scrolls the rows; the highlight stays on the row under the pointer.
+                s.dev_scroll(SimpleNamespace(delta=-120))
+                self.assertEqual((menu.popup_start, menu.option_index), (1, 3))
+                shown()
+                # A touchpad's quarter notches add up to one row.
+                for _ in range(3):
+                    s.dev_scroll(SimpleNamespace(delta=-30))
+                self.assertEqual(menu.popup_start, 1)
+                s.dev_scroll(SimpleNamespace(delta=-30))
+                self.assertEqual((menu.popup_start, menu.option_index), (2, 4))
+                shown()
+                s.dev_scroll(SimpleNamespace(delta=120))
+                self.assertEqual((menu.popup_start, menu.option_index), (1, 3))
+                # Past the end nothing is redrawn.
+                for _ in range(len(menu.options)):
+                    s.dev_scroll(SimpleNamespace(delta=-120))
+                with patch.object(s, 'present_viewport', side_effect=AssertionError('Redrew a still list')):
+                    s.dev_scroll(SimpleNamespace(delta=-120))
+                shown()
+                s.dev_key_press(SimpleNamespace(keysym='Up', state=0, char=''))
+                s.dev_key_press(SimpleNamespace(keysym='Up', state=0, char=''))
+                shown()
+            # A full redraw afterwards still matches: the remembered frame is what is shown.
+            s.redraw_dev_menu()
+            shown()
 
     def test_actual_presenter_uses_high_resolution_map_after_resize(self):
         from PIL import ImageTk

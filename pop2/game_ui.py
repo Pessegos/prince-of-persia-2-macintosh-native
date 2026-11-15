@@ -89,6 +89,8 @@ class DevelopmentMenu:
     preview_keyboard_selection: bool = False
     god_mode: bool = False
     cutscene_viewer: bool = False
+    # Finished map pictures by size: the native menu and the HD view each keep one.
+    map_layers: dict = field(default_factory=dict, repr=False, compare=False)
 
     CONTROLS = ((200, 138, 392, 166), (120, 180, 392, 210),
                 (120, 231, 252, 263), (264, 231, 392, 263))
@@ -349,12 +351,28 @@ class DevelopmentMenu:
         count = self.popup_count
         self.popup_start = max(0, min(self.option_index - count // 2, len(self.options) - count))
 
-    def scroll(self, delta):
+    def scroll(self, delta, point=None):
+        """Move the open list's rows; the highlight stays on the row under the pointer."""
         if not self.dropdown:
             return False
-        self.option_index = max(0, min(self.option_index + delta, len(self.options) - 1))
-        self.center_popup()
-        return True
+        before = self.popup_start, self.option_index
+        self.popup_start = max(0, min(self.popup_start + delta, len(self.options) - self.popup_count))
+        index = self.hit(*point) if point is not None else None
+        if index is not None:
+            self.option_index = index
+        return (self.popup_start, self.option_index) != before
+
+    def popup_rect(self):
+        """The open list's box in menu coordinates, its outline included."""
+        x1, _y1, x2, y2 = self.control_rect(self.dropdown_control)
+        return x1, y2, x2 + 1, y2 + self.popup_count * self.OPTION_HEIGHT + 1
+
+    @staticmethod
+    def projected_rect(rect, size):
+        """A menu rectangle in the pixels of a visible frame of this size."""
+        sx, sy = size[0] / VISIBLE_SIZE[0], size[1] / VISIBLE_SIZE[1]
+        left, top, right, bottom = rect
+        return round((left - 1) * sx), round(top * sy), round((right - 1) * sx), round(bottom * sy)
 
     def select(self, index):
         self.preview_keyboard_selection = False
@@ -822,6 +840,20 @@ class DevelopmentMenu:
         preview = self.map_preview
         left, top, right, bottom = self.control_rect(4)
         size = size or (right - left, bottom - top)
+        # Everything the picture shows; scrolling a list over it changes none of it.
+        key = (font, menu_theme.current(), self.screen,
+               self.focus == 4 and self.preview_keyboard_selection,
+               self.current_level == self.level_number and self.current_screen, self.hovered_screen)
+        cached = self.map_layers.get(size)
+        if cached is not None and cached[0] is preview and cached[1] == key:
+            return cached[2]
+        image = self.draw_map_layer(preview, font, size)
+        if size not in self.map_layers and len(self.map_layers) >= 2:
+            del self.map_layers[next(iter(self.map_layers))]
+        self.map_layers[size] = preview, key, image
+        return image
+
+    def draw_map_layer(self, preview, font, size):
         image = preview.detail(size).convert('RGBA')
         draw = ImageDraw.Draw(image)
         scale, (ox, oy) = preview.transform(size)
@@ -915,17 +947,12 @@ class DevelopmentMenu:
     def present_map(self, frame, font):
         if not self.preview_enabled:
             return frame
-        sx, sy = frame.width / VISIBLE_SIZE[0], frame.height / VISIBLE_SIZE[1]
-
         def projected(rect):
-            left, top, right, bottom = rect
-            return round((left - 1) * sx), round(top * sy), round((right - 1) * sx), round(bottom * sy)
+            return self.projected_rect(rect, frame.size)
 
         overlay = None
         if self.dropdown:
-            x1, _y1, x2, y2 = self.control_rect(self.dropdown_control)
-            rect = (x1, y2, x2 + 1, y2 + self.popup_count * self.OPTION_HEIGHT + 1)
-            overlay_rect = projected(rect)
+            overlay_rect = projected(self.popup_rect())
             overlay = frame.crop(overlay_rect)
         elif self.map_tooltip(font) is not None:
             _label, (x1, y1, x2, y2) = self.map_tooltip(font)

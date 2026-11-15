@@ -1479,7 +1479,14 @@ class WindowControls(InputRouting):
             return self.escape_key(event)
         if repeated and event.keysym in ("Return", "KP_Enter", "space"):
             return "break"
-        self.apply_dev_action(self.menu_key_action(self.dev_menu, event))
+        listing = self.dev_menu.dropdown
+        action = self.menu_key_action(self.dev_menu, event)
+        if listing and action == 'changed' and self.dev_menu.dropdown:
+            # Arrows in an open list: the world is frozen and only its rows move.
+            self.update_cursor_visibility()
+            self.redraw_dev_menu(popup_only=True)
+        else:
+            self.apply_dev_action(action)
         if self.dev_menu is None:
             self.pause_resume_keys.add(event.keysym)
         return "break"
@@ -1703,7 +1710,7 @@ class WindowControls(InputRouting):
             self.ui_hover_target = target
             if menu.hover(*(point if point is not None else (-1, -1))):
                 if menu is self.dev_menu:
-                    self.redraw_dev_menu()
+                    self.redraw_dev_menu(popup_only=menu.dropdown)
                 elif menu.page == 'saves':
                     self.redraw_save_menu()
                 elif menu.page == 'screenshots' and menu.screenshot_gallery is not None:
@@ -1726,11 +1733,16 @@ class WindowControls(InputRouting):
                 if self.canvas.cget('cursor') != cursor:
                     self.canvas.configure(cursor=cursor)
 
-    def redraw_dev_menu(self):
+    def redraw_dev_menu(self, popup_only=False):
         # F3 pauses the world; pointer changes only need the frozen clean viewport.
+        # popup_only promises that nothing but the open list's rows changed.
         self.native_viewport = self.draw_screenshot_notice(
             self.dev_menu.draw(self.screenshot_viewport, self.ui_font))
-        self.present_viewport()
+        self.dev_popup_only = popup_only and self.dev_menu.dropdown
+        try:
+            self.present_viewport()
+        finally:
+            self.dev_popup_only = False
 
     def dev_pointer_leave(self, _event):
         viewer = self.active_cutscene_gallery() if hasattr(self, 'active_cutscene_gallery') else None
@@ -1810,14 +1822,20 @@ class WindowControls(InputRouting):
         point = self.dev_pointer(event)
         if point is not None and self.dev_menu.hit(*point) is not None:
             delta = getattr(event, "delta", 0)
-            steps = (-max(1, abs(delta) // 120) if delta > 0 else
-                     max(1, abs(delta) // 120) if delta < 0 else
-                     -1 if getattr(event, "num", None) == 4 else 1)
+            if delta:
+                # A touchpad sends many small deltas: one row per whole notch (120).
+                rest = getattr(self, 'dev_wheel_rest', 0)
+                rest = (rest if rest * delta <= 0 else 0) - delta
+                steps = int(rest / 120)
+                self.dev_wheel_rest = rest - steps * 120
+            else:
+                steps = -1 if getattr(event, "num", None) == 4 else 1
             previous = self.dev_menu.option_index
-            self.dev_menu.scroll(steps)
-            if self.dev_menu.option_index != previous:
-                self.play_menu_sound('hover')
-            self.render()
+            if steps and self.dev_menu.scroll(steps, point):
+                if self.dev_menu.option_index != previous:
+                    self.play_menu_sound('hover')
+                # F3 froze the world: only the list's rows change.
+                self.redraw_dev_menu(popup_only=True)
         return "break"
 
     def schedule_save_scroll(self):
@@ -2002,12 +2020,28 @@ class WindowControls(InputRouting):
             if (previous is not None and previous[0] is menu and previous[1].size == frame.size
                     and previous[2] is self.image_ref):
                 # Upload only changed rooms/labels instead of a full 1440p Tk photo.
-                damage = ImageChops.difference(previous[1], frame).getbbox()
+                if getattr(self, 'dev_popup_only', False):
+                    # Only the open list changed: compare its box, and keep the
+                    # remembered frame equal to what the window shows.
+                    rect = menu.projected_rect(menu.popup_rect(), frame.size)
+                    rect = (max(0, rect[0]), max(0, rect[1]),
+                            min(frame.width, rect[2]), min(frame.height, rect[3]))
+                    damage = ImageChops.difference(previous[1].crop(rect), frame.crop(rect)).getbbox()
+                    if damage is not None:
+                        damage = (damage[0] + rect[0], damage[1] + rect[1],
+                                  damage[2] + rect[0], damage[3] + rect[1])
+                    shown = previous[1]
+                else:
+                    damage = ImageChops.difference(previous[1], frame).getbbox()
+                    shown = frame
                 if damage is not None:
-                    patch = ImageTk.PhotoImage(frame.crop(damage))
+                    patch = frame.crop(damage)
+                    if shown is not frame:
+                        shown.paste(patch, damage[:2])
+                    patch = ImageTk.PhotoImage(patch)
                     self.image_ref.tk.call(str(self.image_ref), 'copy', str(patch),
                                            '-to', damage[0], damage[1])
-                self.dev_map_frame = (menu, frame, self.image_ref)
+                self.dev_map_frame = (menu, shown, self.image_ref)
                 self.canvas.coords(self.canvas.find_all()[0], *position)
                 return
         else:
