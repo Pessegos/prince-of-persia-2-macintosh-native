@@ -995,7 +995,7 @@ Exclusions:
   gargoyle cell there would get a trob (and Rnd draws) in the original.
   The port sets up only the room on screen.
 - 9:1d84 also asks for songs (269 in room 6; 262 in rooms 7 and 8 under
-  conditions); not ported here.
+  conditions); see the room themes section below.
 - No Macintosh capture of these rooms is available to compare pixels.
 
 ## The mental rooms' themes (ported 2026-11-15)
