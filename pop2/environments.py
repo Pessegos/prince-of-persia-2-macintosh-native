@@ -372,6 +372,40 @@ class Final(Environment):
         scene.terrain_motion.row = body.row
         scene.action, scene.player_x = state.action, state.target_x
 
+    def defeat(self):
+        """GenCtrl 6:0780-07a0 -> 9:0062 for the dead Kid (type 0, ALIVE
+        > 6): once a rebirth point exists (a5-0x5018, SaveRebirthPtStatus
+        2:1674), his body is put in native room 11 at column 6, row 2, the
+        view follows it (a5-0x4fc4), and SEQS 71 runs five frames. Entering
+        the room restores its scripted Jaffar, who laughs (6:2d7e)."""
+        from pop2.final_magic import (
+            COLLAPSE_SEQUENCE, DEFEAT_COLUMN, DEFEAT_FRAMES, DEFEAT_ROOM, DEFEAT_ROW)
+
+        scene = self.scene
+        motion = scene.terrain_motion
+        if (scene.death.counter <= 6 or scene.checkpoint is None
+                or motion.room == DEFEAT_ROOM or scene.level_complete):
+            return
+        state = scene.sequence_state
+        x = DEFEAT_COLUMN * TILE_WIDTH
+        scene.player_x = state.target_x = state.current_x = x
+        state.current_y = 0
+        motion.room, motion.row = DEFEAT_ROOM, DEFEAT_ROW
+        motion.falling = False
+        scene.room_id = DEFEAT_ROOM
+        room = scene.level_renderer.enter_room(DEFEAT_ROOM, scene.game.caverns)
+        scene.background, scene.foreground = room.background, room.foreground
+        scene.combat.enter_room(DEFEAT_ROOM, DEFEAT_ROW)
+        scene.combat.player.row = DEFEAT_ROW
+        scene.start_sequence(COLLAPSE_SEQUENCE)
+        for _ in range(DEFEAT_FRAMES):
+            scene.sequence_runtime.next_frame()
+        state.current_x = state.target_x
+        # SEQS 71's -19 (SetCharFloor) is the Y set above.
+        state.sequence_events.clear()
+        scene.action, scene.player_x = state.action, state.target_x
+        scene.status.set(scene.screen_label(DEFEAT_ROOM))
+
     def sword_key(self):
         """DoKidEngarde 6:1f4c-1f72: the shadow in native rooms 7/8 casts
         (9:2674) instead of drawing the sword. True when Ctrl was used."""
@@ -426,6 +460,8 @@ class Final(Environment):
                 magic.flash = turn_flash(pose, magic.turns)
         elif state.selected_sequence_id != TURN_SEQUENCE and magic.turns:
             magic.turns, magic.flash = 0, False
+        if not magic.shadow and not scene.combat.player.alive:
+            self.defeat()
         if magic.shadow:
             if not scene.combat.player.alive:
                 self.shadow_died()

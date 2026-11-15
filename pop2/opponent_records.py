@@ -88,6 +88,10 @@ class GuardRoomRecord:
         actor.death_registered = dead
         # Imported room records clear the pending-cue word (6:2e20).
         actor.death_song_frames, actor.death_song_pending = -1, False
+        if not self.cursor and state.actor_type == 6 and sequence == 197:
+            # 6:2d7e: the room-11 Jaffar laughs as the room is entered
+            # (AddSound(0x105)).
+            state.sound_events.append(261)
         actor.targetable = actor.life > 0
         state.animation_state = 1
         state.horizontal_velocity = state.vertical_velocity = 0

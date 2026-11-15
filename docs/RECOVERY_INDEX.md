@@ -199,6 +199,7 @@ or approximation, not a literal translation. Source addresses are CODE:offset.
 | Final palace flasks and the room-3 exit veto | 6:4c50-4c6c; library-1 front commands | T: native room 3 refuses its right exit in environment 6; palace flasks drawn on the front pass and drunk through the shared potion events. Room-3 opponent drops 9:00e2 P | terrain, level_rendering, environments / test_final_route; [scope](research/final-level-preparation.md) |
 | Final completion caller and full-run video reference | 2:4596-45de; 15:00fa, 3c76; 2:1f2c | T/A: 12 original caller cases verify NIS 11 then Hall of Fame with remaining minutes and sentinel/default next level, with both endpoints supplied; 209-second user capture indexed through copy room, blue form/body/projectile victory, epilogue, score entry and start of intro return. Runtime final victory, NIS 11, Hall UI/persistence and outer restart T (below) | probe_final_completion / [video evidence and next tasks](research/final-level-video-reference.md) |
 | NIS 11 epilogue and Hall of Fame | 15:3c76, 44e2, 09c0, 411a, 44b0; 17:0eae; 2:1f2c, 260c, 2220, 28c2 | T/A: coordinator, bedroom and 286 epilogue frames recovered by emulation with persistent callback state; frame offset at cue 102, five voiced dialog lines, -1 end after song 30020; table of five, insertion before the first equal score, name filter/limit, confirmation, empty name not written. Port: JSON table, menu-style page, no song cue 180 | extract_intro.recover_happy, intro, hall_of_fame, game_menu, environments / test_happy_ending; [notes](research/final-level-preparation.md) |
+| Final defeat in the bedroom | 6:0560, 0780-07a0, 2d64-2d86; 9:0062; 2:1674, 179e; 5:4d84 | T: dead type-0 Kid with ALIVE > 6 and a rebirth bank moves to native room 11 column 6 row 2 (X 513, Y 352), view follows, SEQS 71 plus five AnimChar; room-11 figure keeps SEQS 197 and laughs (sound 261); no checkpoint leaves the body in place; retry at the checkpoint. 9:16fe in room 11 not run (port plays the sequence); no native CPU probe or capture | environments, final_magic, opponent_records / test_final_magic; [notes](research/final-level-preparation.md) |
 | Window escape and glass timeline | 2:5d56; CODE:23; DATA/SEQS | T: isolated opening with glass cue | opening_animation, audio / test_opening_animation, test_audio_integration |
 | Opening story, title and audio synchronization | 15:45c2/4ee8/6f1a/6fec; CODE:16 SCRP; NIS/Title archives | T: recovered coordinator calls, native scene/audio program; pixel parity P | intro, extract_intro / test_intro, test_extract_intro, test_intro_scene |
 | Title cloud composition, initial fade and finite playback | 15:7014-7060/7178-7224; 16:0366-0468/14be-14d4; Title SCRP:25004 | T: signed rear-cloud coordinates and original scene deadlines; QoL: continuous cloud motion through both fades, verified seamless script repetition | intro / test_intro, test_intro_scene.OriginalTitleTests |
@@ -525,7 +526,7 @@ compares GetCharEdges' working-X exclusive right edge (4:5d5a-5d6a, drawing
 X + 207 + 1), so the outer-sill landing waits for the step into the window;
 the reset sets a5-0x503c = 1 and AddSound(14) (9:05ec-05f6), leaving the
 Prince armed in room 4.
-GenCtrl 6:079c calls 9:0062 to place the
-character in room 11 under a separate state gate. Full redraw sequencing,
-the death variant and Jaffar encounter conditions remain to be recovered. See
+GenCtrl 6:079c calls 9:0062 to place the dead Kid in room 11 (the
+bedroom, with the laughing false Prince) once a rebirth point exists; this
+defeat variant is now ported. See
 [final-level preparation](research/final-level-preparation.md).

@@ -218,5 +218,82 @@ class ShadowSceneTests(unittest.TestCase):
         self.assertFalse(scene.sword_drawn)
 
 
+@unittest.skipUnless(INSTALLED, 'Imported Macintosh final level required')
+class DefeatSceneTests(unittest.TestCase):
+    """GenCtrl 6:0780-07a0 -> 9:0062: the defeated Kid lies in room 11."""
+
+    def setUp(self):
+        from tools.audit_temple_routes import Harness
+
+        self.harness = Harness(14, peaceful=False)
+        self.scene = self.harness.scene
+
+    def tearDown(self):
+        self.harness.close()
+
+    def die(self, checkpoint=True):
+        from pop2.environments import environment_for
+
+        scene = self.scene
+        scene.jump_to_room(3, row=1, x=218, facing=1, redraw=False)
+        self.harness.tick(1)
+        if checkpoint:
+            scene.capture_rebirth_checkpoint(scene.checkpoints[0])
+        environment_for(scene).kill_prince()
+        trace = []
+        for _ in range(20):
+            self.harness.tick(1)
+            trace.append((scene.death.counter, scene.room_id))
+        return trace
+
+    def test_with_a_rebirth_point_the_body_lies_before_the_laughing_jaffar(self):
+        scene = self.scene
+        trace = self.die()
+        # The move waits for ALIVE > 6 (the counter after the death song).
+        first = next(index for index, (_, room) in enumerate(trace) if room == 10)
+        self.assertEqual(trace[first - 1], (6, 3))
+        self.assertGreater(trace[first][0], 6)
+        state = scene.sequence_state
+        self.assertEqual((scene.terrain_motion.room, scene.terrain_motion.row), (10, 2))
+        self.assertEqual((state.selected_sequence_id, state.action), (COLLAPSE_SEQUENCE, DEAD_POSE))
+        self.assertEqual(scene.combat.player.room, 10)
+        self.assertAlmostEqual(state.target_x, 306, delta=2)
+        jaffar, = scene.combat.room_encounters[10][0]
+        self.assertEqual((jaffar.state.actor_type, jaffar.state.selected_sequence_id), (6, 197))
+        self.assertIn(jaffar.state.action, range(297, 301))
+
+    def test_the_laugh_sounds_as_the_room_is_entered(self):
+        from pop2.environments import environment_for
+
+        scene = self.scene
+        scene.jump_to_room(3, row=1, x=218, facing=1, redraw=False)
+        self.harness.tick(1)
+        scene.capture_rebirth_checkpoint(scene.checkpoints[0])
+        environment_for(scene).kill_prince()
+        sounds = []
+        for _ in range(20):
+            self.harness.tick(1)
+            sounds.extend(scene.sequence_state.sound_events)
+            scene.sequence_state.sound_events.clear()
+            if scene.room_id == 10:
+                break
+        self.assertEqual(scene.room_id, 10)
+        self.assertEqual(sounds.count(261), 1)
+
+    def test_without_a_rebirth_point_the_body_stays(self):
+        trace = self.die(checkpoint=False)
+        self.assertEqual({room for _, room in trace}, {3})
+        self.assertEqual(self.scene.sequence_state.action, DEAD_POSE)
+
+    def test_the_retry_restarts_at_the_rebirth_point(self):
+        scene = self.scene
+        self.die()
+        self.assertEqual(scene.room_id, 10)
+        self.assertTrue(scene.death.can_restart)
+        self.assertTrue(scene.restart_after_death())
+        self.assertEqual(scene.room_id, 3)
+        self.assertTrue(scene.combat.player.alive)
+
+
 if __name__ == '__main__':
     unittest.main()

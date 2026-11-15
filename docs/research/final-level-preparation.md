@@ -777,14 +777,50 @@ Port choices:
 the -1 end, the table rules, the page and the victory flow through real key
 events. No native CPU probe of HappyFunc's timing rules is claimed.
 
-### Next: the defeat variant and the room-3 drops (findings, not yet ported)
+### The defeat variant (ported 2026-11-15)
 
-- **Defeat variant (9:0062).** GenCtrl 6:0780-07a0 calls it for a dead
-  type-0 Kid (ALIVE > 6) in environment 6. When a5-0x5018 (the saved-game
-  structure) is present and he is not already in native room 11, it moves
-  him there (column 6, row 2, Y 352) and sets the camera room a5-0x4fc4 to
-  11. It then selects SEQS 71 and runs AnimChar five times. What room 11's
-  scripted type-6 actor does then (the laughter) still needs a trace.
+GenCtrl 6:0560 sends a dead actor (ALIVE a5-0x503a >= 0) to 6:0762. At
+6:0780-07a0 a dead type-0 Kid in environment 6 with ALIVE > 6 calls 9:0062:
+
+- 9:0066-0074: nothing happens when he is already in native room 11
+  (a5-0x5040) or when no rebirth point exists (a5-0x5018 is zero).
+  SaveRebirthPtStatus 2:1674 allocates that bank at a checkpoint;
+  SetRebirthPtInitials 2:179e frees it at level start. Level 14's only
+  checkpoint (LEVL 0x39a6) is native room 4, cell 14.
+- 9:0076-00a4: the target room a5-0x4fc4 (the view follows, 2:5344) and
+  the Kid's room become 11; column 6 gives X a5-0x4b88[6] = 513 (scene
+  306); row 2 gives Y 2 * 120 + 112 = 352.
+- 9:00a8-00be: SEQS 71 (pose 179, then SEQS 213 to the dead pose 185) and
+  AnimChar five times.
+
+Room 11 is the princess's bedroom. Entering it restores its one record, a
+type-6 figure (the false Prince's frames and CTBL 25008) at zero cursor.
+InitOpps 6:2d64-2d86 keeps its SEQS 197 (poses 297-300, then standing) and
+calls AddSound(0x105): the laugh, sound 261. The two sound routines are
+AddSong 5:4d58 and AddSound 5:4d84; 6:2d82 is the latter.
+
+The port runs this in `Final.defeat` from the environment's GenCtrl hook,
+after the death counter: the scene moves to port room 10 without the audio
+reset of a developer warp, so the death song continues. The retry restores
+the checkpoint as usual. Without a checkpoint the body stays where he fell.
+A dead shadow (type 1) takes 6:07a2 -> 4:2338 instead (already ported).
+
+Exclusions:
+- AutoCtrl sends type-6 figures outside room 6 to the palace path
+  controller 9:16fe. In room 11 the port only plays the figure's sequence.
+  With the Prince dead and fewer than four turns counted, 9:16fe neither
+  flees nor closes in; the flee branch for four or more turns on the same
+  row is not run in room 11.
+- No native CPU probe and no Macintosh capture of this death is available.
+
+`tests.test_final_magic.DefeatSceneTests` checks, in hidden level-14
+scenes: the move on the first frame after ALIVE 6, room 10 row 2 near X 306
+in the dead pose, the laughing figure and one sound 261, a death without a
+checkpoint staying in place, and the retry at the checkpoint. Without the
+change three of the four fail.
+
+### Next: the room-3 drops (findings, not yet ported)
+
 - **Room-3 drops (FinlCheckDeadOpp 9:00e2).** These replace the ordinary
   death counter for room-3 type-2 opponents.
   - At ALIVE 6, Rnd(2) gives 0/1/2 (none, healing, life enhancement).

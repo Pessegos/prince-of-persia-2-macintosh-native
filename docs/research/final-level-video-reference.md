@@ -144,6 +144,8 @@ The zero-minute cases admit no final NIS/Hall calls in this bounded branch.
    the intro, using the port's integrated UI and the recovered game rules.
 6. Recover the player-death/laughter variant and compare the full sequence
    against another native trace; the successful recording cannot cover it.
+   The rules are ported (9:0062, 6:2d7e); a capture of a death is still
+   needed to compare timing.
 
 No gameplay behavior was changed from the video alone. This milestone adds
 the reference timeline, corrects the epilogue target and supplies the bounded

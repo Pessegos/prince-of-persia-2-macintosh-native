@@ -46,6 +46,10 @@ TRANSFORM_TURNS, TRANSFORM_LIFE, GLOW_TURNS = 8, 4, 4
 FIREBALL_START_SPEED, FIREBALL_ACCELERATION, FIREBALL_TOP_SPEED = 12, 3, 25
 FIREBALL_REACH = 17            # 9:256e-2586: a 34-pixel span around it
 ROOM_WIDTH = 510
+# 9:0062: the defeated Kid lies in native room 11 (port 10), column 6
+# (a5-0x4b88[6] = 513, scene X 306), row 2 (Y 2 * 120 + 112 = 352).
+DEFEAT_ROOM, DEFEAT_COLUMN, DEFEAT_ROW = 10, 6, 2
+DEFEAT_FRAMES = 5              # 9:00b2-00be: AnimChar five times
 
 
 def turn_flash(pose, turns):
