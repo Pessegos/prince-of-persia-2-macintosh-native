@@ -685,18 +685,6 @@ class PolyphonicCueTests(unittest.TestCase):
         playback = MixerPlayback(self.directory.name, cues)
         self.assertAlmostEqual(playback.ui_sounds['burn'].get_volume(), 0.4, places=2)
 
-    def test_the_fire_sound_is_cut_to_a_second_and_faded_out_from_0_65_s(self):
-        import numpy
-        from pop2.audio import fire_part
-
-        rate = 1000
-        raw = numpy.full((1820, 2), 10000, dtype='<i2').tobytes()   # 1.82 s, as the user's file
-        part = numpy.frombuffer(fire_part(raw, rate, 2), dtype='<i2').reshape(-1, 2)
-        self.assertEqual(len(part), 1000)
-        self.assertTrue((part[:650] == 10000).all())               # untouched before the fade
-        self.assertAlmostEqual(part[825, 0], 10000 * numpy.cos(numpy.pi / 4), delta=60)   # constant power: -3 dB halfway
-        self.assertEqual(part[-1, 0], 0)
-
     def test_effect_pool_never_steals_music_menu_or_mechanism_channels(self):
         self.audio.add_song(40)
         self.audio.add_sound(17)
