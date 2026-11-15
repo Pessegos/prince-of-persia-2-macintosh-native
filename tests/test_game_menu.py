@@ -212,7 +212,7 @@ class GameMenuSceneTests(unittest.TestCase):
 
     def test_f1_is_a_paused_in_game_overlay_without_another_window(self):
         scene = self.scene
-        scene.jump_to_screen("5")
+        scene.jump_to_screen("Room 5")
         before = scene.native_viewport.copy()
         children = scene.root.winfo_children()
         position = (scene.player_x, scene.action, scene.combat.world_frame)
@@ -754,7 +754,7 @@ class GameMenuSceneTests(unittest.TestCase):
 
     def test_alt_n_never_restarts_until_explicit_confirmation(self):
         scene = self.scene
-        scene.jump_to_screen("9")
+        scene.jump_to_screen("Room 9")
         checkpoint = scene.checkpoint
         before = (scene.room_id, scene.player_x, scene.action)
         self.press("n", 0x20000)
@@ -827,7 +827,7 @@ class GameMenuSceneTests(unittest.TestCase):
 
     def test_alt_r_uses_the_existing_checkpoint_without_a_death_gate(self):
         scene = self.scene
-        scene.jump_to_screen("9")
+        scene.jump_to_screen("Room 9")
         snapshot = scene.checkpoint
         scene.combat.player.life = 1
         self.assertFalse(scene.death.can_restart)
@@ -841,7 +841,7 @@ class GameMenuSceneTests(unittest.TestCase):
 
     def test_restart_without_checkpoint_preserves_capacity_but_new_game_resets_it(self):
         scene = self.scene
-        scene.jump_to_screen("5")
+        scene.jump_to_screen("Room 5")
         scene.combat.player.max_life = 5
         self.press("r", 0x20000)
         self.assertEqual((scene.combat.player.max_life, scene.combat.player.life), (5, 5))
@@ -852,7 +852,7 @@ class GameMenuSceneTests(unittest.TestCase):
 
     def test_menu_restart_resumes_and_clears_menu_and_queued_gameplay(self):
         scene = self.scene
-        scene.jump_to_screen("5")
+        scene.jump_to_screen("Room 5")
         self.press("F1")
         scene.game_menu.focus = 2
         scene.dev_key_press(self.event("Return"))
@@ -972,7 +972,7 @@ class GameMenuSceneTests(unittest.TestCase):
 
     def test_audio_toggle_does_not_consume_an_existing_run_key_release(self):
         scene = self.scene
-        scene.jump_to_screen("5")
+        scene.jump_to_screen("Room 5")
         scene.dev_key_press(self.event("Left"))
         scene.horizontal_key(None, -1, True)
         self.press("m", 0x20000)
@@ -995,7 +995,7 @@ class GameMenuSceneTests(unittest.TestCase):
 
     def test_menu_preferences_survive_new_game_and_restart(self):
         scene = self.scene
-        scene.jump_to_screen("9")
+        scene.jump_to_screen("Room 9")
         scene.peaceful = True
         self.press("m", 0x20000)
         self.press("t", 0x20000)
@@ -1012,7 +1012,7 @@ class GameMenuSceneTests(unittest.TestCase):
 
     def test_disabled_shortcuts_show_the_unavailable_entry_without_mutating_progress(self):
         scene = self.scene
-        scene.jump_to_screen("9")
+        scene.jump_to_screen("Room 9")
         before = (scene.room_id, scene.player_x, scene.checkpoint)
         for key, action in (("h", "hall"),):
             self.press(key, 0x20000)
@@ -1025,7 +1025,7 @@ class GameMenuSceneTests(unittest.TestCase):
 
     def test_removed_end_game_shortcut_does_not_reset_or_open_a_menu(self):
         scene = self.scene
-        scene.jump_to_screen("9")
+        scene.jump_to_screen("Room 9")
         before = scene.room_id, scene.player_x, scene.checkpoint
         for paused in (False, True):
             scene.set_paused(paused)
@@ -1227,7 +1227,7 @@ class GameMenuSceneTests(unittest.TestCase):
                     assert scene.game_menu is None and scene.intro is intro
                     key('space', 8)
                     assert scene.intro is None and scene.opening.active
-                    scene.jump_to_screen('5')
+                    scene.jump_to_screen('Room 5')
                     scene.set_paused(True)
                     root.event_generate('<KeyPress>', keysym='Right', state=8)
                     assert not scene.paused and scene.horizontal_input == 1

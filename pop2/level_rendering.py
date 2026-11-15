@@ -318,7 +318,7 @@ class LevelRenderer:
 
     def screen_entries(self):
         if self.level.kind == 1:
-            return {"1": 1, "2 (Stones)": 0, "Right shore": 2}
+            return {"Room 1": 1, "Room 2": 0, "Room 3": 2}
         if self.level.kind in (2, 3, 4, 6):
             return {f"Room {room + 1}": room for room in self.supported_rooms()
                     if not (self.level.number == 14 and room == 10)}
@@ -330,8 +330,8 @@ class LevelRenderer:
             route.append(room)
             left = terrain.neighbor(room, "left")
             room = left if left in available else terrain.neighbor(room, "down")
-        entries = {str(index + 1): room for index, room in enumerate(route)}
+        entries = {f"Room {index + 1}": room for index, room in enumerate(route)}
         secret = terrain.neighbor(self.level.start_room, "right")
         if secret in available and secret not in route:
-            entries["Secret (right)"] = secret
+            entries["Secret"] = secret
         return entries

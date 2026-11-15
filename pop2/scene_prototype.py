@@ -2205,7 +2205,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
             self.background, self.foreground = room.background, room.foreground
             self.combat.enter_room(self.room_id, motion.row)
             environment_for(self).entered_room()
-            self.status.set(f"Screen {self.screen_label(self.room_id)}")
+            self.status.set(self.screen_label(self.room_id))
         self.combat.player.row = motion.row
         for event in events:
             if event.kind == "next_level":
@@ -3214,7 +3214,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
             else:
                 self.audio.reset()
             self.advance_audio()
-        self.status.set(f"Level {self.game.level.number} / Screen {self.screen_label(room_id)}")
+        self.status.set(f"Level {self.game.level.number} / {self.screen_label(room_id)}")
         if redraw:
             self.render()
 
@@ -3278,15 +3278,15 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
             if not self.game.level.window_escape:
                 return self.load_level(self.game.level.number)
             return self.jump_to_room(room, row=1, x=411, facing=1)
-        secret = label == "Secret (right)"
+        secret = label == "Secret"
         if secret:
             row, column = next((row, column) for row in range(3) for column in range(10)
                                if self.level_map.tile(room, column, row).kind == 1)
             return self.jump_to_room(room, row=row, x=column * TILE_WIDTH + 30, facing=1)
-        if label == "8":
+        if label == "Room 8":
             # Entry from screen 7 is the upper roof, not the quay below.
             row, x = 0, 5 * TILE_WIDTH + 14
-        elif self.game.level.kind == 1 and label == "2 (Stones)":
+        elif self.game.level.kind == 1 and label == "Room 2":
             rows = [row for row in range(3)
                     if self.level_map.tile(room, 9, row).kind == 1]
             if not rows:

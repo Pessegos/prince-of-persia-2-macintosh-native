@@ -25,14 +25,14 @@ class PlaybackNavigationTests(unittest.TestCase):
             {"op": "text", "args": [0, 20]}]}
         data = {"frames": [{"room": room} for room in (4, 4, 2, 4, 10)],
                 "credits": {"pages": [[], []]}}
-        parts = playback_parts(intro, data, lambda room: str({3: 1, 1: 2, 9: 5}[room]))
+        parts = playback_parts(intro, data, lambda room: f'Room {({3: 1, 1: 2, 9: 5}[room])}')
         self.assertEqual([(p.stage, p.index) for p in parts],
                          [("intro", 1), ("intro", 2), ("intro", 4),
                           ("demo", 0), ("demo", 2), ("demo", 4),
                           ("credits", 0), ("credits", 1)])
         self.assertEqual([p.label for p in parts],
-                         ['Scene 1', 'Titles', 'Scene 2', 'Demo - Screen 1',
-                          'Demo - Screen 2', 'Demo - Screen 5', 'Credits - Page 1', 'Credits - Page 2'])
+                         ['Scene 1', 'Titles', 'Scene 2', 'Demo - Room 1',
+                          'Demo - Room 2', 'Demo - Room 5', 'Credits - Page 1', 'Credits - Page 2'])
         self.assertEqual([(group.label, group.part_indices) for group in playback_groups(parts)],
                          [('Opening', tuple(range(8)))])
 

@@ -1046,9 +1046,9 @@ class GameWindowTests(unittest.TestCase):
         scene = self.scene
         cached_rooms = set(scene.room_cache)
         with patch("pop2.level_rendering.build_opening_room") as build:
-            self.assertEqual(scene.screen_label(2), "3")
+            self.assertEqual(scene.screen_label(2), "Room 3")
             self.assertEqual(tuple(scene.dev_screens()),
-                             ("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "Secret (right)"))
+                             ("Room 1", "Room 2", "Room 3", "Room 4", "Room 5", "Room 6", "Room 7", "Room 8", "Room 9", "Room 10", "Secret"))
             build.assert_not_called()
         self.assertEqual(set(scene.room_cache), cached_rooms)
 
@@ -1088,7 +1088,7 @@ class GameWindowTests(unittest.TestCase):
 
     def test_peaceful_keeps_terrain_and_freezes_guards_without_erasing_them(self):
         scene = self.scene
-        scene.jump_to_screen("1")
+        scene.jump_to_screen("Room 1")
         guard = scene.combat.guard
         snapshot = guard.state.__dict__.copy()
         world_frame = scene.combat.world_frame
@@ -1100,7 +1100,7 @@ class GameWindowTests(unittest.TestCase):
         self.assertGreater(scene.combat.world_frame, world_frame)
         self.assertIsNotNone(scene.physics)
         self.assertEqual(scene.combat.player.life, 3)
-        scene.jump_to_screen("5")
+        scene.jump_to_screen("Room 5")
         self.assertTrue(scene.peaceful)
         scene.jump_to_room(9, row=1, x=240, facing=0)
         scene.set_key_state("up", True)
@@ -1112,7 +1112,7 @@ class GameWindowTests(unittest.TestCase):
 
     def test_peaceful_hides_guards_hit_art_and_opponent_meter_only(self):
         scene = self.scene
-        scene.jump_to_screen("1")
+        scene.jump_to_screen("Room 1")
         with patch.object(scene.guard_art, "draw") as guard, \
                 patch.object(scene.hit_art, "draw") as hit, \
                 patch.object(scene.health_art, "draw", wraps=scene.health_art.draw) as health:
@@ -1131,7 +1131,7 @@ class GameWindowTests(unittest.TestCase):
 
     def test_peaceful_does_not_choose_short_sheath_or_auto_rotate_toward_hidden_guard(self):
         scene = self.scene
-        scene.jump_to_screen("1")
+        scene.jump_to_screen("Room 1")
         scene.set_peaceful(True)
         scene.sword_drawn = True
         scene.in_animation_tick = True
@@ -1142,7 +1142,7 @@ class GameWindowTests(unittest.TestCase):
 
     def test_development_menu_can_toggle_peaceful_without_teleporting(self):
         scene = self.scene
-        scene.jump_to_screen("3")
+        scene.jump_to_screen("Room 3")
         before = (scene.room_id, scene.player_x, scene.combat.guard)
         scene.open_dev_mode()
         scene.dev_menu.focus = 1
@@ -1466,7 +1466,7 @@ class GameWindowTests(unittest.TestCase):
             scene.open_dev_mode()
             self.assertTrue(scene.paused)
             self.assertEqual(scene.dev_menu.screens,
-                             ("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "Secret (right)"))
+                             ("Room 1", "Room 2", "Room 3", "Room 4", "Room 5", "Room 6", "Room 7", "Room 8", "Room 9", "Room 10", "Secret"))
             scene.dev_menu.focus = 4
             scene.dev_menu.select(4)
             scene.apply_dev_action("go")
@@ -1476,10 +1476,10 @@ class GameWindowTests(unittest.TestCase):
 
     def test_screen_selection_uses_route_order_and_the_entry_floor(self):
         scene = self.scene
-        for label, room, row, x, facing in (("1", 3, 1, 411, 1), ("2", 1, 1, 489, 0),
-                                           ("3", 2, 1, 489, 0), ("4", 0, 1, 489, 0),
-                                           ("5", 9, 1, 489, 0), ("6", 10, 0, 489, 0),
-                                           ("7", 11, 1, 489, 0), ("Secret (right)", 4, 0, 285, 1)):
+        for label, room, row, x, facing in (("Room 1", 3, 1, 411, 1), ("Room 2", 1, 1, 489, 0),
+                                           ("Room 3", 2, 1, 489, 0), ("Room 4", 0, 1, 489, 0),
+                                           ("Room 5", 9, 1, 489, 0), ("Room 6", 10, 0, 489, 0),
+                                           ("Room 7", 11, 1, 489, 0), ("Secret", 4, 0, 285, 1)):
             with self.subTest(screen=label):
                 scene.jump_to_screen(label)
                 self.clear_guards()
@@ -1523,7 +1523,7 @@ class GameWindowTests(unittest.TestCase):
         scene.peaceful = True
         for release_tick in range(7, 11):
             with self.subTest(release_tick=release_tick):
-                scene.jump_to_screen("7")
+                scene.jump_to_screen("Room 7")
                 scene.horizontal_key(None, -1, True)
                 self.tick(release_tick)
                 scene.horizontal_key(None, -1, False)
@@ -1539,7 +1539,7 @@ class GameWindowTests(unittest.TestCase):
     def test_run_release_after_the_last_safe_foot_does_not_clamp_to_the_ledge(self):
         scene = self.scene
         scene.peaceful = True
-        scene.jump_to_screen("7")
+        scene.jump_to_screen("Room 7")
         scene.horizontal_key(None, -1, True)
         self.tick(11)
         self.assertEqual(scene.action, 12)
@@ -1552,7 +1552,7 @@ class GameWindowTests(unittest.TestCase):
 
     def test_direction_pressed_during_sheathing_starts_run_without_an_idle_frame(self):
         scene = self.scene
-        scene.jump_to_screen("2")
+        scene.jump_to_screen("Room 2")
         self.clear_guards()
         scene.in_animation_tick = True
         scene.sword_drawn = True
@@ -1611,7 +1611,7 @@ class GameWindowTests(unittest.TestCase):
 
     def test_consecutive_running_jumps_cross_both_rooftop_gaps(self):
         scene = self.scene
-        scene.jump_to_screen("3")
+        scene.jump_to_screen("Room 3")
         self.clear_guards()
         scene.in_animation_tick = True
         scene.horizontal_key(None, -1, True)
@@ -1639,7 +1639,7 @@ class GameWindowTests(unittest.TestCase):
 
     def test_sheathing_resumes_a_previously_held_direction(self):
         scene = self.scene
-        scene.jump_to_screen("2")
+        scene.jump_to_screen("Room 2")
         self.clear_guards()
         scene.sword_drawn = True
         scene.held_directions = [-1]
@@ -1741,7 +1741,7 @@ class GameWindowTests(unittest.TestCase):
 
     def test_short_sheath_keeps_its_native_poses_before_buffered_run(self):
         scene = self.scene
-        scene.jump_to_screen("2")
+        scene.jump_to_screen("Room 2")
         self.clear_guards()
         scene.sword_drawn = True
         scene.in_animation_tick = True
@@ -1783,7 +1783,7 @@ class GameWindowTests(unittest.TestCase):
         for direction, runs in ((-1, True), (1, False)):
             with self.subTest(direction=direction):
                 scene = self.scene
-                scene.jump_to_screen("2")
+                scene.jump_to_screen("Room 2")
                 self.clear_guards()
                 self.assertEqual(scene.sequence_state.facing, 0)
                 scene.sword_drawn = True
@@ -1804,7 +1804,7 @@ class GameWindowTests(unittest.TestCase):
 
     def test_building_climb_works_after_running_to_the_wall(self):
         scene = self.scene
-        scene.jump_to_screen("5")
+        scene.jump_to_screen("Room 5")
         self.clear_guards()
         scene.in_animation_tick = True
         scene.horizontal_key(None, -1, True)

@@ -564,7 +564,7 @@ class SaveSceneTests(unittest.TestCase):
     def test_airborne_save_returns_to_entry_without_motion_or_queued_inputs(self):
         scene = self.scene
         scene.peaceful = True
-        scene.jump_to_screen('1')
+        scene.jump_to_screen('Room 1')
         scene.up_key(None)
         self.tick(2)
         scene.save_game_to(self.path)

@@ -861,7 +861,7 @@ class DevelopmentMenu:
             rect = x1, y1, x2 + 1, y2 + 1
             image.paste(ImageEnhance.Brightness(image.crop(rect)).enhance(1.35), (x1, y1))
             draw.rectangle((x1, y1, x2, y2), outline=gold, width=max(1, round(2 * min(sx, sy))))
-            caption = label if label.startswith('Room ') else f'Screen {label}'
+            caption = label
             if label in start_labels:
                 caption += ' - Start'
             if label in preview.exits:

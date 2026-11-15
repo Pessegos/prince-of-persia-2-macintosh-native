@@ -79,7 +79,7 @@ class LevelDefinitionTests(unittest.TestCase):
         level = resources().level(2)
         with patch.object(LevelRenderer, 'room') as prepare:
             renderer = LevelRenderer(level, preload_room=False)
-            self.assertEqual(renderer.screen_entries(), {'1': 1, '2 (Stones)': 0, 'Right shore': 2})
+            self.assertEqual(renderer.screen_entries(), {'Room 1': 1, 'Room 2': 0, 'Room 3': 2})
             self.assertEqual(renderer.rooms, {})
             prepare.assert_not_called()
             LevelRenderer(level)
@@ -327,7 +327,7 @@ class OriginalLevelSessionTests(unittest.TestCase):
         before = set(renderer.rooms)
         with patch("pop2.level_rendering.build_opening_room") as build:
             self.assertEqual(tuple(renderer.screen_entries()),
-                             ("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "Secret (right)"))
+                             ("Room 1", "Room 2", "Room 3", "Room 4", "Room 5", "Room 6", "Room 7", "Room 8", "Room 9", "Room 10", "Secret"))
             build.assert_not_called()
         self.assertEqual(set(renderer.rooms), before)
         for room in (3, 0, 14, 15, 18):
