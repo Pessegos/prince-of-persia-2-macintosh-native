@@ -9,6 +9,44 @@ from pop2 import menu_theme
 from pop2.menu_theme import c
 
 
+# The author's peach beside the About credit: their own pixel art, in the
+# colours of their pessego.svg (leaf with a faint midrib pixel, stem, the red
+# back, its shaded crease and the light front lobe), at half opacity.
+PEACH = (
+    ".LLLLLLS.........",
+    "..LLLdLSS........",
+    "..LLLLLLS........",
+    "...LLLLLPPPPP....",
+    "..rrrrrPPPPPPP...",
+    ".RRRrrPPPPPPPPP..",
+    ".RRRrPPPPPPPPPP..",
+    "RRRRrPPPPPPPPPPP.",
+    "RRRRrPPPPPPPPPPP.",
+    "RRRRrPPPPPPPPPPP.",
+    "RRRRrPPPPPPPPPPP.",
+    "RRRRrPPPPPPPPPPP.",
+    ".RRRrPPPPPPPPPPP.",
+    ".RRRRPPPPPPPPPP..",
+    "..RRRrPPPPPPPP...",
+    "...RRRPPPPPPP....",
+    ".....RRPPPPP.....",
+)
+PEACH_COLOURS = {"L": (76, 176, 80), "d": (72, 166, 75), "S": (121, 85, 71),
+                 "R": (255, 83, 83), "r": (229, 57, 53), "P": (255, 158, 129)}
+_peach = None
+
+
+def peach_mark():
+    global _peach
+    if _peach is None:
+        _peach = Image.new("RGBA", (len(PEACH[0]), len(PEACH)), (0, 0, 0, 0))
+        for y, line in enumerate(PEACH):
+            for x, key in enumerate(line):
+                if key in PEACH_COLOURS:
+                    _peach.putpixel((x, y), (*PEACH_COLOURS[key], 128))
+    return _peach
+
+
 @dataclass(frozen=True)
 class MenuItem:
     action: str
@@ -427,7 +465,8 @@ class GameMenu:
             text("Work in progress", 256, panel_top + 78, muted, "center")
             button(self.ABOUT_BUTTON, "Back" if self.return_to_menu else "Close", True)
             # Clear of the frame's inner edge (the frame stands a few units inside the panel).
-            text("by Pessegos", 412, panel_top + 159, muted, "right")
+            # The peach takes the credit's old right edge; the name moves left of it.
+            text("by Pessegos", 391, panel_top + 159, muted, "right")
         elif self.page == "options":
             text("Options", 256, panel_top + 14, gold, "center")
             items = self.option_items
@@ -453,6 +492,9 @@ class GameMenu:
                 text("Save unavailable right now" if self.items[self.focus].action == 'save'
                      else "Not implemented yet", 256, panel[3] + 5, muted, "center")
         menu_theme.watermark(image, panel)
+        if self.page == "about":
+            # After the theme's sign, which only recolours bare panel pixels.
+            image.alpha_composite(peach_mark(), (396, panel_top + 155))
         return image
 
     def draw_hall(self, image, draw, text, button, font, gold, white, muted):

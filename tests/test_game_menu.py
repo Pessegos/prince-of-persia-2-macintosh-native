@@ -1249,6 +1249,24 @@ class GameMenuSceneTests(unittest.TestCase):
         self.assertIn((153, 153, 153, 255),
                       {color for _count, color in footer.getcolors(footer.width * footer.height)})
 
+    def test_about_peach_sits_right_of_the_credit_at_half_opacity(self):
+        from pop2.game_menu import peach_mark
+        menu = GameMenu(page="about")
+        image = menu.draw(self.scene.native_viewport, self.scene.ui_font)
+        mark = peach_mark()
+        self.assertEqual({a for *_rgb, a in mark.getdata()}, {0, 128})
+        credit = self.scene.ui_font.text("by Pessegos", "#999999")
+        top = menu.ABOUT_DIALOG[1] + 155
+        self.assertLess(396 + mark.width, menu.ABOUT_DIALOG[2] - 4)
+        self.assertGreater(391 - credit.width, menu.ABOUT_DIALOG[0])
+        # The front lobe's centre: the light peach blended halfway into the panel
+        # (the pixel above the lobe, in the mark's empty top row, is bare panel).
+        panel = image.getpixel((396 + 9, top))
+        lobe = image.getpixel((396 + 9, top + 8))
+        expected = tuple(round((p + q) / 2) for p, q in zip((255, 158, 129), panel[:3]))
+        for got, want in zip(lobe[:3], expected):
+            self.assertLessEqual(abs(got - want), 1)
+
     @exclusive_desktop('a mapped, focused menu receiving key events')
     def test_real_tk_bindings_route_alt_n_escape_f1_and_alt_enter(self):
         result = subprocess.run([sys.executable, "-c", textwrap.dedent("""
