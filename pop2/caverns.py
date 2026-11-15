@@ -677,7 +677,7 @@ def draw_temple_flame(frame, room_id, counter, *, level_number=FLAME_LEVEL):
     return frame
 
 
-# The exported room 3 draws DrawFinlSpider's resting serpents (CUST 4050
+# The exported room 3 draws DrawFinlSpider's resting fangs (CUST 4050
 # records 3 and 7); records 3-10 are their frames (SHAP 4053-4060).
 FINAL_MOVING_SHAPES = {2: range(4053, 4061)}
 
@@ -1588,7 +1588,7 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
             continue  # Items and the temple flame animate separately.
         if (animated and level_number in FINAL_LEVELS and library == 4
                 and index in FINAL_MOVING_SHAPES.get(room_id, ())):
-            continue  # Room 3's serpents are drawn from their trob word.
+            continue  # Room 3's spider fangs are drawn from their trob word.
         # These IDs animate torches only in Caverns.rsrc. Ruins.rsrc uses
         # the same numbers for tunnel fronts and floor decorations/cracks.
         if (animated and level_number in SCENERY_LEVELS[3] and program.get('version') >= 4

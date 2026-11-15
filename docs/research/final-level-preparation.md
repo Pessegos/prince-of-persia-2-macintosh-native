@@ -934,6 +934,10 @@ the A5 data.
   right fang is missing. Running the native renderer (`recover_room`)
   over the words 0x0, 0x2d, 0xf and 0x80d confirms the records drawn for
   cells 23 and 24 (column 4 draws from the same word).
+  **Port exception (the user's choice, 2026-11-15):** an index past the
+  first table draws the left fang at rest, so both fangs stay on every
+  visit. `spider_images(word, native=True)` keeps the original reading,
+  which the probe checks.
 - **Room 4, Jaffar's face** (kind 31, cell 1; CUST 4075). 9:1b3a counts
   the word up by one per frame. Counts 12-15 are redrawn and 9:1ba4 (pass
   11) draws records a5-0x29ae[count - 12] + 3: 3, 4, 4 and 3, a wink. At

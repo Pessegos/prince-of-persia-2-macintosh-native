@@ -636,7 +636,7 @@ class Final(Environment):
             audio.add_song(cue, ambient=True)
 
     def advance_scenery(self):
-        """AnimTrobs 5:0c38 for the room's serpents, face, crystals and
+        """AnimTrobs 5:0c38 for the room's spider fangs, face, crystals and
         gargoyles (pop2.final_scenery), after KeepTime 2:4fd0 set up a newly entered
         room. Their words are the cells' foregrounds; Rnd is the game's."""
         from pop2.final_scenery import enter_room, step

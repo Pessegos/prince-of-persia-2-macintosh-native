@@ -17,7 +17,7 @@ from pathlib import Path
 import struct
 
 from pop2.final_scenery import (
-    crystal_image, crystal_step, face_images, face_step, invalidates, gargoyle_image, gargoyle_step, serpent_images, serpent_step,
+    crystal_image, crystal_step, face_images, face_step, invalidates, gargoyle_image, gargoyle_step, spider_images, spider_step,
     trigger,
 )
 from pop2.mac_resources import parse_resource_fork
@@ -136,29 +136,29 @@ def run_probe(recovery):
         check(('face draw', word), machine.calls,
               [('draw', image.record, 11, face_records[image.record][1], face_records[image.record][2], 11)
                for image in face_images(word)])
-    serpent_words = [frame | timer << 3 | flag
+    spider_words = [frame | timer << 3 | flag
                      for frame, timer, flag in product(range(8), (0, 1, 2, 5, 90), (0, ACTIVE_BIT))]
-    for word, paused, roll in product(serpent_words, (0, 1), (0, 3, 5)):
+    for word, paused, roll in product(spider_words, (0, 1), (0, 3, 5)):
         prepare(2, word, paused)
         machine.roll = roll
         machine.call(9, 0x1bf0)
         draws = Draws(roll)
-        wanted = serpent_step(word, draws, bool(paused))
+        wanted = spider_step(word, draws, bool(paused))
         rnd = [('rnd', stop - 1) for stop in draws.stops]
         dirty = [('dirty',)] if invalidates(2, word, wanted) else []
-        check(('serpent', word, paused, roll),
+        check(('spider', word, paused, roll),
               (machine.word(STATE) & 0xffff, [c for c in machine.calls if c[0] != 'dirty'],
                [c for c in machine.calls if c[0] == 'dirty']),
               (wanted, rnd, dirty))
-    serpent_records = records(custom[2])
-    for word in serpent_words:
+    spider_records = records(custom[2])
+    for word in spider_words:
         if word & ACTIVE_BIT and word & 7 > 5:
             continue  # b index past the table: never reached from the level's word
         prepare(2, word, draw_pass=11)
         machine.call(9, 0x1cba)
-        wanted = [('draw', image.record, 11, serpent_records[image.record][1],
-                   serpent_records[image.record][2], 11) for image in serpent_images(word)]
-        check(('serpent draw', word), machine.calls, wanted)
+        wanted = [('draw', image.record, 11, spider_records[image.record][1],
+                   spider_records[image.record][2], 11) for image in spider_images(word, native=True)]
+        check(('spider draw', word), machine.calls, wanted)
 
     glint_words = [index | value << 4 | flag | TROB_BIT
                    for index, value, flag in product((0, 1, 2, 3, 8), (0, 1, 2, 5, 6, 7, 8, 80),

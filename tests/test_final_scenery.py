@@ -1,11 +1,11 @@
-"""Level 14's moving scenery (CODE 9 trobs): serpents, face, crystals, gargoyles."""
+"""Level 14's moving scenery (CODE 9 trobs): spider fangs, face, crystals, gargoyles."""
 
 import random
 import unittest
 
 from pop2.final_scenery import (
     ACTIVE, TROB, SceneryImage, crystal_image, crystal_step, enter_room, face_images,
-    face_step, gargoyle_image, gargoyle_step, invalidates, serpent_images, serpent_step, step,
+    face_step, gargoyle_image, gargoyle_step, invalidates, spider_images, spider_step, step,
 )
 from pop2.paths import ASSET_DIR
 
@@ -20,35 +20,38 @@ class FixedRandom:
         return self.values.pop(0)
 
 
-class SerpentTests(unittest.TestCase):
+class SpiderTests(unittest.TestCase):
     def test_the_frames_run_once_then_the_timer_never_returns_to_zero(self):
         rng = FixedRandom(0, 4, 0)
         word, words = 0, []
         for _ in range(6):
-            word = serpent_step(word, rng)
+            word = spider_step(word, rng)
             words.append(word)
         # Frames 1-5 with the timer at zero, then Rnd(60) + 30 at frame 5.
         self.assertEqual(words, [1, 2, 3, 4, 5, 5 | 30 << 3])
         for _ in range(29):
-            word = serpent_step(word, rng)
+            word = spider_step(word, rng)
         self.assertEqual(word, 5 | 1 << 3)
         # 9:1c66-1c74: the expired wait draws Rnd(5) + 1 and sets frame 7.
-        word = serpent_step(word, rng)
+        word = spider_step(word, rng)
         self.assertEqual(word, 7 | 5 << 3)
         for _ in range(4):
-            word = serpent_step(word, rng)
-        word = serpent_step(word, rng)
+            word = spider_step(word, rng)
+        word = spider_step(word, rng)
         self.assertEqual(word, 7 | 1 << 3)
         self.assertEqual(rng.calls, [61, 6, 6])
         # A model whose wait ends in a new animation (timer 0) is rejected.
         self.assertNotEqual(word & 0x7f8, 0)
 
-    def test_the_frame_seven_word_draws_only_the_left_fang(self):
+    def test_the_frame_seven_word_keeps_both_fangs_in_the_port(self):
         # DrawFinlSpider 9:1d28: a5-0x29a6[7] reads a5-0x299a[1].
-        self.assertEqual(serpent_images(0), (SceneryImage(3, 11), SceneryImage(7, 11)))
-        self.assertEqual(serpent_images(5 | 30 << 3), (SceneryImage(4, 11), SceneryImage(7, 11)))
-        self.assertEqual(serpent_images(7 | 3 << 3), (SceneryImage(8, 11), SceneryImage(7, 11)))
-        self.assertEqual(serpent_images(ACTIVE | 2 | 3 << 3),
+        self.assertEqual(spider_images(0), (SceneryImage(3, 11), SceneryImage(7, 11)))
+        self.assertEqual(spider_images(5 | 30 << 3), (SceneryImage(4, 11), SceneryImage(7, 11)))
+        self.assertEqual(spider_images(7 | 3 << 3, native=True),
+                         (SceneryImage(8, 11), SceneryImage(7, 11)))
+        # Port exception: both fangs stay, the left one at rest.
+        self.assertEqual(spider_images(7 | 3 << 3), (SceneryImage(3, 11), SceneryImage(7, 11)))
+        self.assertEqual(spider_images(ACTIVE | 2 | 3 << 3),
                          (SceneryImage(3, 11), SceneryImage(9, 11)))
 
     def test_only_a_zero_timer_redraws(self):
@@ -168,6 +171,9 @@ class LevelFourteenSceneryTests(unittest.TestCase):
         scene.jump_to_room(2, row=2, x=450, facing=0)
         self.harness.tick(1)
         self.assertEqual(self.caverns.final_scenery_drawn[2, 23] & 7, 7)
+        # Port exception: the revisit shows both fangs at rest, as the
+        # first visit did (the original shows only one).
+        self.assertEqual(self.frame().crop((143, 290, 244, 348)).tobytes(), rest.tobytes())
 
     def test_a_room_not_yet_entered_draws_its_resting_fangs(self):
         # A map preview: no trob words yet, so the level's own word (rest).

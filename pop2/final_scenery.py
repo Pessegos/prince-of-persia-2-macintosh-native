@@ -1,4 +1,4 @@
-"""Level 14's moving scenery: room 3's serpents, room 6's crystal glints
+"""Level 14's moving scenery: room 3's spider fangs, room 6's crystal glints
 and the gargoyle faces of rooms 7 and 8 (CODE 9).
 
 Each object is a trob (AnimTrobs 5:0c38) whose state is its cell's
@@ -9,15 +9,15 @@ Rooms are the port's zero-based ones; the native rooms are one higher.
 
 from dataclasses import dataclass
 
-SERPENT_ROOM, FACE_ROOM, CRYSTAL_ROOM, GARGOYLE_ROOMS = 2, 3, 5, (6, 7)
+SPIDER_ROOM, FACE_ROOM, CRYSTAL_ROOM, GARGOYLE_ROOMS = 2, 3, 5, (6, 7)
 # The kinds whose cells KeepTime 2:5170 makes trobs with their own word.
-TROB_KINDS = {SERPENT_ROOM: 40, FACE_ROOM: 31}
+TROB_KINDS = {SPIDER_ROOM: 40, FACE_ROOM: 31}
 ACTIVE, TROB = 0x800, 0x1000
 # a5-0x29a6 and a5-0x299a, contiguous: an 'a' index past its six entries
 # reads on into the 'b' table (DrawFinlSpider 9:1d28-1d3c).
-SERPENT_FRAMES = (0, 1, 2, 3, 2, 1, 4, 5, 6, 7, 6, 5)
-SERPENT_B = 6
-SERPENT_RECORD = 3
+SPIDER_FRAMES = (0, 1, 2, 3, 2, 1, 4, 5, 6, 7, 6, 5)
+SPIDER_B = 6
+SPIDER_RECORD = 3
 # Room 4's face (trob type 31, 9:1b3a/1ba4): a5-0x29ae, record - 3.
 FACE_FRAMES = (0, 1, 1, 0)
 FACE_RECORD = 3
@@ -59,7 +59,7 @@ def _timer(word, shift, mask):
     return (word & mask) >> shift
 
 
-def serpent_step(word, rng, paused=False):
+def spider_step(word, rng, paused=False):
     """AnimFinlSpider 9:1bf0. Bits 0-2 are the frame and bits 3-10 a timer.
     With the timer at zero the frame advances to 5, which sets the timer to
     Rnd(60) + 30. An expired timer draws Rnd(5) + 1 again and sets frame 7
@@ -84,16 +84,24 @@ def serpent_step(word, rng, paused=False):
     return (word & 0xf807) | ((timer << 3) & 0xffff)
 
 
-def serpent_images(word):
-    """DrawFinlSpider 9:1cba, in pass 11: the two serpents' records."""
+def spider_images(word, native=False):
+    """DrawFinlSpider 9:1cba, in pass 11: the two fangs' records.
+
+    Port exception (the user's choice, 2026-11-15): after the first
+    visit the native word keeps frame 7 (spider_step), whose left index
+    reads past the six-entry table into the right fang's frames, so the
+    original then shows only one fang. The port draws the left fang at
+    rest instead; `native` keeps the original reading (for the probe)."""
     if not word & 0x7f8:
         first = second = 0
     elif word & ACTIVE:
         first, second = 0, word & 7
     else:
         first, second = word & 7, 0
-    return (SceneryImage(SERPENT_FRAMES[first] + SERPENT_RECORD, 11),
-            SceneryImage(SERPENT_FRAMES[SERPENT_B + second] + SERPENT_RECORD, 11))
+    if not native and first >= SPIDER_B:
+        first = 0
+    return (SceneryImage(SPIDER_FRAMES[first] + SPIDER_RECORD, 11),
+            SceneryImage(SPIDER_FRAMES[SPIDER_B + second] + SPIDER_RECORD, 11))
 
 
 def face_step(word):
@@ -174,8 +182,8 @@ def gargoyle_image(word):
 
 def scenery_images(room, word):
     """The images a trob's word draws in its room."""
-    if room == SERPENT_ROOM:
-        return serpent_images(word)
+    if room == SPIDER_ROOM:
+        return spider_images(word)
     if room == FACE_ROOM:
         return face_images(word)
     image = (crystal_image(word) if room == CRYSTAL_ROOM else
@@ -187,8 +195,8 @@ def invalidates(room, before, after):
     """Whether the AnimTrob call from `before` asked for its rectangle to be
     redrawn (5:19f8). The screen keeps the last drawn image otherwise: a
     crystal's or gargoyle's final frame, the face's last blink image and
-    the serpents' pose stay until the room is drawn again."""
-    if room == SERPENT_ROOM:
+    the fangs' pose stay until the room is drawn again."""
+    if room == SPIDER_ROOM:
         return not before & 0x7f8
     if room == FACE_ROOM:
         return after is not None and (after & 31) >= FACE_FIRST
@@ -199,8 +207,8 @@ def invalidates(room, before, after):
 def step(room, word, rng):
     """One AnimTrob call: (the new word, or None when the trob ends, and
     whether its rectangle is redrawn)."""
-    if room == SERPENT_ROOM:
-        after = serpent_step(word, rng)
+    if room == SPIDER_ROOM:
+        after = spider_step(word, rng)
     elif room == FACE_ROOM:
         after = face_step(word)
     elif room == CRYSTAL_ROOM:
@@ -219,7 +227,7 @@ def trigger(index, rng):
 def enter_room(room, cells, rng):
     """KeepTime 2:4fd0's scan of a room (cells 0-29): the words its moving
     scenery starts with. `cells` maps cells to (kind, current word). The
-    serpent and the face keep their words; crystals and gargoyles are set
+    spider and the face keep their words; crystals and gargoyles are set
     up again (crystals stop at nine, 9:2070; gargoyles count on from
     9:1d84's start)."""
     words = {}
