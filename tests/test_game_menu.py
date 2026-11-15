@@ -525,6 +525,19 @@ class GameMenuSceneTests(unittest.TestCase):
                             scene.dev_hover(SimpleNamespace(x=x, y=y))
                             actual = ImageTk.getimage(scene.image_ref).convert('RGB')
                             self.assertEqual(actual.tobytes(), scene.screenshot_gallery_frame[1].tobytes())
+                        # Moving the held picture compares only around it, never the whole frame.
+                        scene.dev_hover(SimpleNamespace(x=250, y=160))
+                        compared = []
+                        difference = ImageChops.difference
+                        with patch('pop2.window_controls.ImageChops.difference',
+                                   side_effect=lambda a, b: compared.append(a.size) or difference(a, b)):
+                            scene.dev_hover(SimpleNamespace(x=260, y=170))
+                        frame = scene.screenshot_gallery_frame[1]
+                        self.assertTrue(compared)
+                        self.assertNotIn(frame.size, compared)
+                        actual = ImageTk.getimage(scene.image_ref).convert('RGB')
+                        self.assertEqual(actual.tobytes(), frame.tobytes())
+                        scene.dev_hover(SimpleNamespace(x=drop[0], y=drop[1]))
                         scene.dev_release(SimpleNamespace(x=drop[0], y=drop[1], num=1))
                         self.assertTrue(gallery.deleting)
                         self.assertEqual(gallery.focus, 60)

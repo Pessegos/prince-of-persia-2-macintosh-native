@@ -400,6 +400,7 @@ class ScreenshotGallery:
         self.burn_seconds, self.burn_image = None, None
         self.burn_target = None
         self.burn_cue = False
+        self.held_rect = None
         self.hovered = None
         self.keyboard_navigation = False
         self.draft, self.caret, self.anchor = '', 0, 0
@@ -1071,6 +1072,8 @@ class ScreenshotGallery:
             else:
                 text('Del', self.DELETE[0] + 8, self.DELETE[1] + 8, 30, white, 0.6)
 
+        held = []   # where the held or burning picture is drawn, in pixels
+
         def draw_held_image():
             if modal or not self.overlay_active:
                 return
@@ -1114,6 +1117,9 @@ class ScreenshotGallery:
                 # stays in front of it.
                 lava = point(0, self.DELETE[1] + self.BURN_ENTRY)[1]
                 sprite = sprite.crop((0, 0, sprite.width, max(0, min(sprite.height, lava - top))))
+                rise = min((spark_y for _x, spark_y, _colour in sparks), default=0)
+                held.append((left - block, top + min(0, rise) - block,
+                                  left + sprite.width + 2 * block, max(top + sprite.height, lava) + block))
                 for spark_x, spark_y, colour in sparks:
                     if top + spark_y < lava:
                         draw.rectangle((left + spark_x, top + spark_y,
@@ -1121,14 +1127,19 @@ class ScreenshotGallery:
             if sprite.height:
                 image.paste(sprite, (left, top), sprite)
                 if self.dragging:
+                    outline = max(1, round(sx))
                     draw.rectangle((left - 1, top - 1, left + sprite.width, top + sprite.height), outline=gold,
-                                   width=max(1, round(sx)))
+                                   width=outline)
+                    held.append((left - 1 - outline, top - 1 - outline,
+                                 left + sprite.width + outline + 1, top + sprite.height + outline + 1))
 
         if surface is not None:
             draw_list()
             menu_theme.watermark(image, self.PANEL, point, shown)   # the list was repainted over it
             draw_delete()
             draw_held_image()
+            if visible:   # the window compares only around it
+                self.held_rect = held[0] if held else None
             return image
 
         if cached is None:
@@ -1242,4 +1253,6 @@ class ScreenshotGallery:
             for i, (rect, label) in enumerate(zip(self.CONFIRM_BUTTONS, ('Cancel', 'Delete'))):
                 button(rect, label, 60 + i, scale=1, centered=True)
         draw_held_image()
+        if visible:
+            self.held_rect = held[0] if held else None
         return image

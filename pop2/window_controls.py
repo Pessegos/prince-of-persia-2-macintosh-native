@@ -1915,13 +1915,19 @@ class WindowControls(InputRouting):
             previous = getattr(self, 'screenshot_gallery_frame', None)
             state = id(self.screenshot_viewport), id(self.ui_font), gallery.surface_state, gallery.overlay_active
             if previous is not None and previous[0] is gallery and previous[1].size == size and previous[2] is self.image_ref:
-                if previous[3] == state and not (gallery.choosing or gallery.deleting or gallery.overlay_active):
-                    # Only the thumbnail strip and animated delete button can change.
+                if previous[3] == state and not (gallery.choosing or gallery.deleting):
+                    # Only the thumbnail strip, the animated delete button and a held or
+                    # burning picture (where it was and where it is) can change.
                     damages = []
-                    for rect in (gallery.LIST, gallery.DELETE):
-                        region = gallery.pixel_rect(rect, size)
-                        region = (*region[:2], region[2] + 1, region[3] + 1)
-                        if rect is gallery.LIST and gallery.scrolling:
+                    regions = [(*region[:2], region[2] + 1, region[3] + 1)
+                               for region in (gallery.pixel_rect(rect, size) for rect in (gallery.LIST, gallery.DELETE))]
+                    regions += [rect for rect in (previous[4], gallery.held_rect) if rect is not None]
+                    for index, region in enumerate(regions):
+                        region = (max(0, region[0]), max(0, region[1]),
+                                  min(frame.width, region[2]), min(frame.height, region[3]))
+                        if region[0] >= region[2] or region[1] >= region[3]:
+                            continue
+                        if index == 0 and gallery.scrolling:
                             # A moving list changes all over: send it without comparing.
                             local = (0, 0, min(region[2], frame.width) - region[0],
                                      min(region[3], frame.height) - region[1])
@@ -1944,7 +1950,7 @@ class WindowControls(InputRouting):
                     self.canvas.coords(self.canvas.find_all()[0], *position)
                 else:
                     self.canvas.create_image(*position, image=self.image_ref, anchor='nw')
-            self.screenshot_gallery_frame = gallery, frame, self.image_ref, state
+            self.screenshot_gallery_frame = gallery, frame, self.image_ref, state, gallery.held_rect
             return
         self.screenshot_gallery_frame = self.screenshot_gallery_source = None
         if getattr(game_menu, 'page', None) == 'saves':
