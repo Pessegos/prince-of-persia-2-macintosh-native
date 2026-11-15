@@ -379,6 +379,7 @@ class WindowControls(InputRouting):
         )
         if self.dev_menu.map_available:
             self.dev_menu.focus = 4
+            self.warm_dev_maps((0, 1, -1))
         self.dev_was_paused = was_paused
         self.set_paused(True)
         self.clear_keys(None)
@@ -394,6 +395,7 @@ class WindowControls(InputRouting):
         self.dev_menu = None
         self.ui_hover_target = None
         self.dev_map_frame = None
+        self.warm_dev_maps(())
         self.clear_keys(None)
         self.update_cursor_visibility()
         self.set_paused(self.dev_was_paused)
@@ -440,7 +442,56 @@ class WindowControls(InputRouting):
             self.render()
         else:
             self.update_cursor_visibility()
-            self.render()
+            if self.dev_menu.map_enabled and getattr(self, 'screenshot_viewport', None) is not None:
+                # F3 froze the world: the map page only redraws the menu over it.
+                self.redraw_dev_menu()
+                if getattr(self, 'dev_maps_warmed', None) != self.dev_menu.level_index:
+                    self.warm_dev_maps((1, -1))
+            else:
+                self.render()
+
+    def warm_dev_maps(self, offsets):
+        """Load the maps the ◀ ▶ buttons lead to while the player looks at this one.
+
+        One level per idle moment: reading a map and scaling it to the window
+        takes 50-100 ms, which is felt when it happens on the click instead.
+        """
+        pending = getattr(self, 'dev_maps_warm_id', None)
+        if pending is not None:
+            try:
+                self.root.after_cancel(pending)
+            except tk.TclError:
+                pass
+        self.dev_maps_warm_id = None
+        menu = self.dev_menu
+        if menu is None or not offsets or menu.map_provider is None or not menu.level_options:
+            self.dev_maps_warmed = None
+            return
+        self.dev_maps_warmed = menu.level_index
+        count = len(menu.level_options)
+        numbers = list(dict.fromkeys(menu.level_options[(menu.level_index + offset) % count][0]
+                                     for offset in offsets))
+
+        def step():
+            self.dev_maps_warm_id = None
+            if self.dev_menu is not menu or not numbers:
+                return
+            try:
+                atlas = menu.map_provider(numbers.pop(0))
+                width, height = self.canvas.winfo_width(), self.canvas.winfo_height()
+                if width <= 1 or height <= 1:
+                    width, height = VISIBLE_SIZE[0] * 2, VISIBLE_SIZE[1] * 2
+                frame, _position = fit_viewport(width, height)
+                rect = menu.MAP_CONTROLS[4]
+                left, top, right, bottom = menu.projected_rect(rect, frame)
+                for size in ((rect[2] - rect[0], rect[3] - rect[1]), (right - left, bottom - top)):
+                    atlas.detail(size)
+            except Exception:  # noqa: BLE001 - best effort; the click loads it as before
+                return
+            if numbers:
+                self.dev_maps_warm_id = self.root.after(40, step)
+
+        self.dev_maps_warm_id = self.root.after(40, step)
 
     def choose_screenshot_folder(self):
         if self.game_menu.screenshot_gallery is None:
@@ -1479,14 +1530,7 @@ class WindowControls(InputRouting):
             return self.escape_key(event)
         if repeated and event.keysym in ("Return", "KP_Enter", "space"):
             return "break"
-        listing = self.dev_menu.dropdown
-        action = self.menu_key_action(self.dev_menu, event)
-        if listing and action == 'changed' and self.dev_menu.dropdown:
-            # Arrows in an open list: the world is frozen and only its rows move.
-            self.update_cursor_visibility()
-            self.redraw_dev_menu(popup_only=True)
-        else:
-            self.apply_dev_action(action)
+        self.apply_dev_action(self.menu_key_action(self.dev_menu, event))
         if self.dev_menu is None:
             self.pause_resume_keys.add(event.keysym)
         return "break"
@@ -1710,7 +1754,7 @@ class WindowControls(InputRouting):
             self.ui_hover_target = target
             if menu.hover(*(point if point is not None else (-1, -1))):
                 if menu is self.dev_menu:
-                    self.redraw_dev_menu(popup_only=menu.dropdown)
+                    self.redraw_dev_menu()
                 elif menu.page == 'saves':
                     self.redraw_save_menu()
                 elif menu.page == 'screenshots' and menu.screenshot_gallery is not None:
@@ -1733,16 +1777,11 @@ class WindowControls(InputRouting):
                 if self.canvas.cget('cursor') != cursor:
                     self.canvas.configure(cursor=cursor)
 
-    def redraw_dev_menu(self, popup_only=False):
+    def redraw_dev_menu(self):
         # F3 pauses the world; pointer changes only need the frozen clean viewport.
-        # popup_only promises that nothing but the open list's rows changed.
         self.native_viewport = self.draw_screenshot_notice(
             self.dev_menu.draw(self.screenshot_viewport, self.ui_font))
-        self.dev_popup_only = popup_only and self.dev_menu.dropdown
-        try:
-            self.present_viewport()
-        finally:
-            self.dev_popup_only = False
+        self.present_viewport()
 
     def dev_pointer_leave(self, _event):
         viewer = self.active_cutscene_gallery() if hasattr(self, 'active_cutscene_gallery') else None
@@ -1835,7 +1874,7 @@ class WindowControls(InputRouting):
                 if self.dev_menu.option_index != previous:
                     self.play_menu_sound('hover')
                 # F3 froze the world: only the list's rows change.
-                self.redraw_dev_menu(popup_only=True)
+                self.redraw_dev_menu()
         return "break"
 
     def schedule_save_scroll(self):
@@ -1884,6 +1923,32 @@ class WindowControls(InputRouting):
         if self.combat is not None:
             self.combat.god_mode = self.god_mode
         self.render()
+
+    @staticmethod
+    def dev_map_damage(menu, previous, native, entry, size):
+        """Regions of the enlarged map page that may differ from the shown frame.
+
+        Outside the map the frame is the native menu enlarged, so a small native
+        comparison finds the change; inside it the HD map picture names its own
+        highlights. Anything unknown compares the whole frame.
+        """
+        whole = [(0, 0, *size)]
+        if len(previous) < 5 or previous[3].size != native.size or not menu.map_enabled:
+            return whole
+        layer = DevelopmentMenu.map_layer_damage(previous[4], entry)
+        if layer is None:
+            return whole
+        rects = []
+        changed = ImageChops.difference(previous[3], native).getbbox()
+        if changed is not None:
+            rects.append(menu.projected_rect(changed, size))
+        if layer:
+            left, top, _right, _bottom = menu.projected_rect(menu.control_rect(4), size)
+            rects += [(x1 + left, y1 + top, x2 + left, y2 + top) for x1, y1, x2, y2 in layer]
+        pad = max(2, round(size[1] / 384))  # nearest-neighbour edges of a native pixel
+        rects = [(max(0, x1 - pad), max(0, y1 - pad), min(size[0], x2 + pad), min(size[1], y2 + pad))
+                 for x1, y1, x2, y2 in rects]
+        return [rect for rect in rects if rect[0] < rect[2] and rect[1] < rect[3]]
 
     def present_viewport(self):
         if self.native_viewport is None:
@@ -2012,36 +2077,37 @@ class WindowControls(InputRouting):
         else:
             self.save_menu_frame = None
             self.save_menu_source = None
-            frame = self.native_viewport.crop(VISIBLE_VIEWPORT).resize(size, Image.Resampling.NEAREST)
+            menu = getattr(self, 'dev_menu', None)
+            source = self.native_viewport.crop(VISIBLE_VIEWPORT)
+            if menu is not None and menu.preview_enabled:
+                source = source.convert('RGB')  # cheaper here than on the enlarged frame
+            frame = source.resize(size, Image.Resampling.NEAREST)
         menu = getattr(self, 'dev_menu', None)
         if menu is not None and menu.preview_enabled:
-            frame = menu.present_map(frame, self.ui_font).convert('RGB')
+            # RGB: an RGBA difference's bounding box would only see alpha.
+            native = self.native_viewport.convert('RGB')
+            frame = menu.present_map(frame, self.ui_font)
+            if frame.mode != 'RGB':
+                frame = frame.convert('RGB')
+            entry = menu.map_layer_entry(frame.size)
             previous = getattr(self, 'dev_map_frame', None)
             if (previous is not None and previous[0] is menu and previous[1].size == frame.size
                     and previous[2] is self.image_ref):
                 # Upload only changed rooms/labels instead of a full 1440p Tk photo.
-                if getattr(self, 'dev_popup_only', False):
-                    # Only the open list changed: compare its box, and keep the
-                    # remembered frame equal to what the window shows.
-                    rect = menu.projected_rect(menu.popup_rect(), frame.size)
-                    rect = (max(0, rect[0]), max(0, rect[1]),
-                            min(frame.width, rect[2]), min(frame.height, rect[3]))
-                    damage = ImageChops.difference(previous[1].crop(rect), frame.crop(rect)).getbbox()
-                    if damage is not None:
-                        damage = (damage[0] + rect[0], damage[1] + rect[1],
-                                  damage[2] + rect[0], damage[3] + rect[1])
-                    shown = previous[1]
-                else:
-                    damage = ImageChops.difference(previous[1], frame).getbbox()
-                    shown = frame
-                if damage is not None:
+                shown = previous[1]
+                for rect in self.dev_map_damage(menu, previous, native, entry, frame.size):
+                    damage = ImageChops.difference(shown.crop(rect), frame.crop(rect)).getbbox()
+                    if damage is None:
+                        continue
+                    damage = (damage[0] + rect[0], damage[1] + rect[1],
+                              damage[2] + rect[0], damage[3] + rect[1])
                     patch = frame.crop(damage)
-                    if shown is not frame:
-                        shown.paste(patch, damage[:2])
+                    # The remembered frame stays exactly what the window shows.
+                    shown.paste(patch, damage[:2])
                     patch = ImageTk.PhotoImage(patch)
                     self.image_ref.tk.call(str(self.image_ref), 'copy', str(patch),
                                            '-to', damage[0], damage[1])
-                self.dev_map_frame = (menu, shown, self.image_ref)
+                self.dev_map_frame = (menu, shown, self.image_ref, native, entry)
                 self.canvas.coords(self.canvas.find_all()[0], *position)
                 return
         else:
@@ -2050,7 +2116,7 @@ class WindowControls(InputRouting):
         if getattr(game_menu, 'page', None) == 'saves':
             self.save_menu_frame = (game_menu, frame, self.image_ref, state)
         if menu is not None and menu.preview_enabled:
-            self.dev_map_frame = (menu, frame, self.image_ref)
+            self.dev_map_frame = (menu, frame, self.image_ref, native, entry)
         if self.canvas.find_all():
             self.canvas.itemconfigure(self.canvas.find_all()[0], image=self.image_ref)
             self.canvas.coords(self.canvas.find_all()[0], *position)

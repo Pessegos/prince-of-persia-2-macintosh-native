@@ -11,7 +11,7 @@ from PIL import Image, ImageChops
 
 from pop2.development_map import (DevelopmentMap, MAP_SIZE, build_development_map,
                                   level_landmarks, room_positions)
-from pop2.game_ui import DevelopmentMenu
+from pop2.game_ui import DevelopmentMenu, fit_viewport
 from pop2.paths import ASSET_DIR
 
 
@@ -866,6 +866,94 @@ class ImportedDevelopmentMapTests(unittest.TestCase):
             # A full redraw afterwards still matches: the remembered frame is what is shown.
             s.redraw_dev_menu()
             shown()
+
+    def test_map_page_patches_match_full_frames_through_hover_keys_levels_and_lists(self):
+        from PIL import ImageTk
+        from tests.test_terrain import RooftopSceneTests
+
+        RooftopSceneTests.setUp(self)
+        s = self.scene
+        s.load_level(3)
+        s.open_dev_mode()
+        s.apply_dev_action(s.dev_menu.activate())
+        menu = s.dev_menu
+
+        def key(name):
+            event = SimpleNamespace(keysym=name, state=0, char='')
+            s.dev_key_press(event)
+            s.dev_key_release(event)
+
+        def focus(control):
+            menu.focus = control
+            s.redraw_dev_menu()
+
+        for width, height in ((2560, 1440), (1020, 768)):
+            with self.subTest(size=(width, height)),                     patch.object(s.canvas, 'winfo_width', return_value=width),                     patch.object(s.canvas, 'winfo_height', return_value=height),                     patch.object(s, 'render', side_effect=AssertionError('The map page rendered the world')):
+                s.redraw_dev_menu()
+                photo = s.image_ref
+
+                def pointer(point):
+                    with patch.object(s, 'dev_pointer', return_value=point):
+                        s.dev_hover(SimpleNamespace())
+
+                def toolbar(control):
+                    x1, y1, x2, y2 = menu.control_rect(control)
+                    return (x1 + x2) / 2, (y1 + y2) / 2
+
+                steps = [lambda label=label: pointer(room_point(menu, label))
+                         for label in ('Room 1', 'Room 32', 'Room 15', 'Room 2')]
+                steps += [lambda: pointer(toolbar(6)), lambda: pointer(toolbar(7)), lambda: pointer((-1, -1)),
+                          lambda: focus(4), lambda: key('Right'), lambda: key('Down'),
+                          lambda: key('Left'), lambda: focus(6), lambda: key('Return'),
+                          lambda: pointer(room_point(menu, menu.screen_options[-1])),
+                          lambda: focus(5), lambda: key('Return'),
+                          lambda: focus(0), lambda: key('Return'),
+                          lambda: key('Down'), lambda: key('Escape')]
+                levels = []
+                for index, step in enumerate(steps):
+                    step()
+                    levels.append(menu.level_number)
+                    self.assertIs(s.image_ref, photo)
+                    actual = ImageTk.getimage(photo).convert('RGB')
+                    native = menu.draw(s.screenshot_viewport, s.ui_font)
+                    low = native.crop((1, 0, 511, 384)).resize(actual.size, Image.Resampling.NEAREST)
+                    expected = menu.present_map(low, s.ui_font).convert('RGB')
+                    self.assertEqual(actual.tobytes(), expected.tobytes(), f'step {index}')
+                self.assertTrue(menu.map_enabled)
+                self.assertEqual(len(set(levels)), 2)
+                self.assertFalse(menu.dropdown)
+
+    def test_neighbouring_maps_are_loaded_and_scaled_while_idle(self):
+        from tests.test_terrain import RooftopSceneTests
+
+        RooftopSceneTests.setUp(self)
+        s = self.scene
+        s.load_level(3)
+        scheduled = []
+        with patch.object(s.root, 'after', side_effect=lambda _ms, step: scheduled.append(step) or 'id'),                 patch.object(s.root, 'after_cancel'),                 patch.object(s, 'development_map', wraps=s.development_map) as load,                 patch.object(s.canvas, 'winfo_width', return_value=2560),                 patch.object(s.canvas, 'winfo_height', return_value=1440):
+            s.open_dev_mode()
+            menu = s.dev_menu
+            menu.map_provider = s.development_map
+            numbers = [option[0] for option in menu.level_options]
+            here = numbers.index(3)
+            self.assertEqual(load.call_count, 0)  # nothing is read on the F3 key itself
+            while scheduled:
+                scheduled.pop(0)()
+            expected = [3, numbers[(here + 1) % len(numbers)], numbers[here - 1]]
+            self.assertEqual([call.args[0] for call in load.call_args_list], expected)
+            size, _ = fit_viewport(2560, 1440)
+            left, top, right, bottom = menu.projected_rect(menu.MAP_CONTROLS[4], size)
+            for number in expected:
+                self.assertIn((right - left, bottom - top), s.development_map(number).scaled_images)
+            s.apply_dev_action(menu.activate())  # open the map
+            self.assertEqual(scheduled, [])  # the same level: its neighbours are warm already
+            menu.focus = 6
+            s.apply_dev_action(menu.activate())  # the next level warms its own neighbours
+            self.assertEqual(len(scheduled), 1)
+            s.close_dev_mode()
+            load.reset_mock()
+            scheduled.pop()()  # a step left over after closing does nothing
+            load.assert_not_called()
 
     def test_actual_presenter_uses_high_resolution_map_after_resize(self):
         from PIL import ImageTk

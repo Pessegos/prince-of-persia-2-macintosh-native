@@ -91,6 +91,8 @@ class DevelopmentMenu:
     cutscene_viewer: bool = False
     # Finished map pictures by size: the native menu and the HD view each keep one.
     map_layers: dict = field(default_factory=dict, repr=False, compare=False)
+    # The plain map on the theme's ground by size, before any marker or highlight.
+    map_bases: dict = field(default_factory=dict, repr=False, compare=False)
 
     CONTROLS = ((200, 138, 392, 166), (120, 180, 392, 210),
                 (120, 231, 252, 263), (264, 231, 392, 263))
@@ -847,15 +849,36 @@ class DevelopmentMenu:
         cached = self.map_layers.get(size)
         if cached is not None and cached[0] is preview and cached[1] == key:
             return cached[2]
-        image = self.draw_map_layer(preview, font, size)
+        decor = []
+        image = self.draw_map_layer(preview, font, size, decor)
         if size not in self.map_layers and len(self.map_layers) >= 2:
             del self.map_layers[next(iter(self.map_layers))]
-        self.map_layers[size] = preview, key, image
+        self.map_layers[size] = preview, key, image, tuple(decor)
         return image
 
-    def draw_map_layer(self, preview, font, size):
-        image = preview.detail(size).convert('RGBA')
-        draw = ImageDraw.Draw(image)
+    def map_layer_entry(self, frame_size):
+        """The finished map picture shown in a visible frame of this size, if any."""
+        if not self.map_enabled:
+            return None
+        left, top, right, bottom = self.projected_rect(self.control_rect(4), frame_size)
+        return self.map_layers.get((right - left, bottom - top))
+
+    @staticmethod
+    def map_layer_damage(before, after):
+        """Where two map pictures can differ, or None when it may be anywhere.
+
+        Each picture lists the rectangles its highlights, outlines and tooltip
+        cover; everything else is the same plain map when the level, font and
+        theme are the same.
+        """
+        if before is after:
+            return ()
+        if before is None or after is None or before[0] is not after[0] or before[1][:2] != after[1][:2]:
+            return None
+        return before[3] + after[3]
+
+    def draw_map_layer(self, preview, font, size, decor=None):
+        decor = [] if decor is None else decor
         scale, (ox, oy) = preview.transform(size)
         sx = sy = scale
         gold = c('#f4d873')
@@ -866,21 +889,34 @@ class DevelopmentMenu:
                     round(x2 * sx + ox) - 1, round(y2 * sy + oy) - 1)
 
         ground = c('#101010')
-        if ground != '#101010':
-            # The map picture is built (and kept on disk) on neutral grey. Under a
-            # theme, stand its rooms on the theme's own ground instead.
-            themed = Image.new('RGBA', image.size, ground)
-            for label in preview.rooms:
-                x1, y1, x2, y2 = room_rect(label)
-                themed.paste(image.crop((x1, y1, x2 + 1, y2 + 1)), (x1, y1))
-            image = themed
-            draw = ImageDraw.Draw(image)
+        base = self.map_bases.get(size)
+        if base is None or base[0] is not preview or base[1] != ground:
+            image = preview.detail(size).convert('RGBA')
+            if ground != '#101010':
+                # The map picture is built (and kept on disk) on neutral grey. Under a
+                # theme, stand its rooms on the theme's own ground instead.
+                themed = Image.new('RGBA', image.size, ground)
+                for label in preview.rooms:
+                    x1, y1, x2, y2 = room_rect(label)
+                    themed.paste(image.crop((x1, y1, x2 + 1, y2 + 1)), (x1, y1))
+                image = themed
+            if size not in self.map_bases and len(self.map_bases) >= 2:
+                del self.map_bases[next(iter(self.map_bases))]
+            base = self.map_bases[size] = preview, ground, image
+        image = base[2].copy()
+        draw = ImageDraw.Draw(image)
 
         start_labels = preview.starts | {preview.start}
         markers = [(label, 'Start', (127, 223, 170))
                    for label in sorted(label for label in start_labels if label in preview.rooms)]
         markers += [(label, 'End', (255, 157, 122))
                     for label in sorted(preview.exits) if label in preview.rooms]
+        for label in (self.screen if self.focus == 4 and self.preview_keyboard_selection else None,
+                      self.current_screen if self.current_level == self.level_number else None,
+                      self.hovered_screen):
+            if label in preview.rooms:
+                x1, y1, x2, y2 = room_rect(label)
+                decor.append((x1, y1, x2 + 1, y2 + 1))
         if self.screen in preview.rooms and self.focus == 4 and self.preview_keyboard_selection:
             draw.rectangle(room_rect(self.screen), outline=c('#eeeeee'), width=max(1, round(min(sx, sy))))
         if self.current_level == self.level_number and self.current_screen in preview.rooms:
@@ -911,8 +947,16 @@ class DevelopmentMenu:
                 tooltip = (tx, ty, width, glyphs)
         overlay = Image.new('RGBA', size)
         marker_draw = ImageDraw.Draw(overlay)
+        marked = {}  # each marked room's drawn box: only these are blended below
+
+        def mark(label, box):
+            old = marked.get(label, box)
+            marked[label] = (min(old[0], box[0]), min(old[1], box[1]),
+                             max(old[2], box[2]), max(old[3], box[3]))
+
         for label, caption, color in markers:
             x1, y1, x2, y2 = room_rect(label)
+            mark(label, (x1, y1, x2 + 1, y2 + 1))
             active = (label == self.hovered_screen or
                       (self.current_level == self.level_number and label == self.current_screen) or
                       (self.focus == 4 and self.preview_keyboard_selection and label == self.screen))
@@ -934,11 +978,22 @@ class DevelopmentMenu:
             top = y2 + 1 - glyphs.height - pad * 3 if caption == 'End' else y1 + pad
             marker_draw.rectangle((x1, top, x1 + glyphs.width + pad * 2, top + glyphs.height + pad * 2),
                                   fill=(12, 15, 13, 130))
+            mark(label, (x1, top, x1 + glyphs.width + pad * 2 + 1, top + glyphs.height + pad * 2 + 1))
             overlay.alpha_composite(glyphs, (x1 + pad, top + pad))
-        image = Image.alpha_composite(image, overlay)
+        boxes = [(max(0, x1), max(0, y1), min(size[0], x2), min(size[1], y2))
+                 for x1, y1, x2, y2 in marked.values()]
+        boxes = [box for box in boxes if box[0] < box[2] and box[1] < box[3]]
+        if any(a[0] < b[2] and b[0] < a[2] and a[1] < b[3] and b[1] < a[3]
+               for i, a in enumerate(boxes) for b in boxes[i + 1:]):
+            image = Image.alpha_composite(image, overlay)
+        else:
+            # The overlay is clear everywhere else: blend only the marked rooms.
+            for box in boxes:
+                image.alpha_composite(overlay, box[:2], box)
         draw = ImageDraw.Draw(image)
         if tooltip is not None:
             tx, ty, width, glyphs = tooltip
+            decor.append((tx, ty, tx + width + 1, ty + round(18 * sy) + 1))
             draw.rectangle((tx, ty, tx + width, ty + round(18 * sy)),
                            fill=c('#181818'), outline=gold, width=max(1, round(min(sx, sy))))
             image.paste(glyphs, (tx + round(6 * sx), ty + round(4 * sy)), glyphs)
