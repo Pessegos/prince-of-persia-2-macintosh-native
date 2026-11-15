@@ -682,15 +682,22 @@ def draw_temple_flame(frame, room_id, counter, *, level_number=FLAME_LEVEL):
 FINAL_MOVING_SHAPES = {2: range(4053, 4061)}
 
 
-def draw_final_scenery(frame, room_id, state, *, level_number=14, front=False):
-    """Level 14's serpents, crystal glints and gargoyle faces
+def draw_final_scenery(frame, room_id, state, *, level_number=14, front=False, terrain=None):
+    """Level 14's fangs, face, crystal glints and gargoyle faces
     (pop2.final_scenery): their CUST records, moved as the drawing hooks
-    move them. Pass 1 is a front image; passes 0 and 11 are back ones."""
-    from pop2.final_scenery import scenery_images
+    move them. Pass 1 is a front image; passes 0 and 11 are back ones.
+    A room not yet entered (a map preview) draws its trob cells from the
+    level's own words, `terrain` being its LevelMap."""
+    from pop2.final_scenery import TROB_KINDS, scenery_images
 
     # The words the images on screen were last drawn from.
-    words = sorted((cell, word) for (room, cell), word in getattr(state, 'final_scenery_drawn', {}).items()
-                   if room == room_id)
+    drawn = {cell: word for (room, cell), word in getattr(state, 'final_scenery_drawn', {}).items()
+             if room == room_id}
+    if not drawn and terrain is not None and room_id in TROB_KINDS:
+        tiles = {cell: terrain.tile(room_id, cell % 10, cell // 10) for cell in range(30)}
+        drawn = {cell: tile.foreground for cell, tile in tiles.items()
+                 if tile.kind == TROB_KINDS[room_id]}
+    words = sorted(drawn.items())
     if not words:
         return frame
     _program, resources, palette, shapes = room_assets(level_number, room_id)

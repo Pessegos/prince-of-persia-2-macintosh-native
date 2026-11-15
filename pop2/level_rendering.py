@@ -252,14 +252,15 @@ class LevelRenderer:
             from pop2.terrain import LevelMap
             from pop2.caverns import draw_cavern_flasks, draw_final_scenery
 
-            if not front:
-                return draw_final_scenery(frame, room_id, caverns, level_number=self.level.number)
             if self.cavern_map is None:
                 self.cavern_map = LevelMap(self.level.data)
+            if not front:
+                return draw_final_scenery(frame, room_id, caverns, level_number=self.level.number,
+                                          terrain=self.cavern_map)
             frame = draw_cavern_flasks(frame, room_id, caverns, self.cavern_map,
                                        level_number=self.level.number)
             return draw_final_scenery(frame, room_id, caverns, level_number=self.level.number,
-                                      front=True)
+                                      front=True, terrain=self.cavern_map)
         if self.level.kind in (2, 3, 4) and caverns is not None:
             from pop2.terrain import LevelMap
             from pop2.caverns import (

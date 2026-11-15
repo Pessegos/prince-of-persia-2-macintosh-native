@@ -169,6 +169,23 @@ class LevelFourteenSceneryTests(unittest.TestCase):
         self.harness.tick(1)
         self.assertEqual(self.caverns.final_scenery_drawn[2, 23] & 7, 7)
 
+    def test_a_room_not_yet_entered_draws_its_resting_fangs(self):
+        # A map preview: no trob words yet, so the level's own word (rest).
+        from pop2.caverns import draw_final_scenery
+        from pop2.cavern_state import CavernState
+        from pop2.terrain import LevelMap
+
+        renderer = self.scene.level_renderer
+        background = renderer.room(2, self.caverns).background.convert('RGBA')
+        fresh = CavernState()
+        self.assertFalse(fresh.final_scenery_drawn)
+        bare = draw_final_scenery(background.copy(), 2, fresh)
+        fangs = draw_final_scenery(background.copy(), 2, fresh,
+                                   terrain=LevelMap(renderer.level.data))
+        box = (142, 290, 243, 348)
+        self.assertEqual(bare.crop(box).tobytes(), background.crop(box).tobytes())
+        self.assertNotEqual(fangs.crop(box).tobytes(), background.crop(box).tobytes())
+
     def test_room_six_crystals_glint_and_keep_a_small_glint(self):
         scene = self.scene
         scene.jump_to_room(5, row=2, x=250, facing=0)
