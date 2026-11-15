@@ -61,13 +61,13 @@ class DevelopmentMapModelTests(unittest.TestCase):
         self.assertEqual(level_landmarks(level, terrain, labels),
                          ('Room 1', frozenset({'Room 13', 'Room 30'})))
 
-    def test_custom_endings_are_the_ship_and_stone_chamber_not_the_far_shore(self):
+    def test_level_one_ends_at_the_ship_and_the_desert_shows_no_markers(self):
         terrain = SimpleNamespace(tile=lambda *_: SimpleNamespace(kind=1))
         self.assertEqual(level_landmarks(SimpleNamespace(number=1, start_room=3), terrain,
                                          {3: '1', 18: '10'}), ('1', frozenset({'10'})))
         self.assertEqual(level_landmarks(SimpleNamespace(number=2, start_room=1), terrain,
                                          {0: '2 (Stones)', 1: '1', 2: 'Right shore'}),
-                         ('1', frozenset({'2 (Stones)'})))
+                         (None, frozenset()))
 
     def menu(self, opened=True):
         atlas = preview()
@@ -396,7 +396,7 @@ class ImportedDevelopmentMapTests(unittest.TestCase):
             with self.subTest(level=number):
                 level = self.resources.level(number)
                 atlas = build_development_map(level)
-                expected = {1: ('1', {'10'}), 2: ('1', {'2 (Stones)'}),
+                expected = {1: ('1', {'10'}), 2: (None, set()),
                             3: ('Room 1', {'Room 13', 'Room 30'}),
                             4: ('Room 1', {'Room 22'})}[number]
                 self.assertEqual((atlas.start, atlas.exits), expected)

@@ -88,8 +88,9 @@ These secondary references use 62% text opacity, 85/255 border opacity and
 and keyboard-selection borders take priority over landmark borders.
 Hover labels include Start/End where applicable. Level 3 marks Room 1 as Start
 and Rooms 13 and 30 as End; the kind-17 entrance door is excluded, matching
-the native exit handler. Level 1 ends at the ship (screen 10), and level 2
-ends through the stone chamber (2 (Stones)), not the far-right shore.
+the native exit handler. Level 1 ends at the ship (screen 10). Level 2 shows
+no Start or End markers: its three open-shore rooms read as one picture
+(user decision, 2026-11-15); it still ends through the stone chamber's door.
 Keyboard destination selection is white only after arrow-key navigation; opening
 the map, changing levels or moving the mouse clears that pending marker. It does
 not move the current-room marker to a different room/level. Hovering brightens only the room

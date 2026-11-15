@@ -280,8 +280,9 @@ def level_landmarks(level, terrain, labels):
 
         exits.add(SHIP_ROOM)
     elif level.number == 2:
-        # DesertFunc leaves through the left side of the stone chamber.
-        exits.add(0)
+        # Three open-shore rooms: a start and an end marker only clutter the
+        # picture (the exit is the stone chamber's own door), so none are drawn.
+        return None, frozenset()
     return labels.get(level.start_room), frozenset(labels[room] for room in exits if room in labels)
 
 
