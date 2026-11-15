@@ -1036,8 +1036,15 @@ that swaps rooms 7 and 8 is rejected) and, in hidden level-14 scenes,
 each room's requests, the Escher flag, no new theme while a song plays
 and nothing with the music off. No native CPU probe and no capture.
 
-Exclusions: whether other rooms (such as native room 10) use the 9:1d84
-hook, which would also add Crystal there. ChessRm starts after the room-4
+Which rooms run each hook: LoadCustomRoomData 3:1378 loads CUST 3975 +
+native room * 25 and, with a record, takes the enter hook through
+3:18aa (table a5-0x4c2e by CUST kind, 3:13ec-13f8). The
+expanded DATA gives kinds 25-27 (rooms 3-5) the 9:1a90 entry, kinds 28-30
+(rooms 6-8) 9:1d84, kind 23 (room 1) 9:1a4c and kind 9 (room 11) 9:00c6 (the
+CTBL 3503 hook). Rooms 9 and 10 have no CUST resource, so no hook runs there
+and room 10 gets no Crystal.
+
+Exclusion: ChessRm starts after the room-4
 wait below, about two seconds later than the Macintosh, whose hook adds it
 before waiting.
 
