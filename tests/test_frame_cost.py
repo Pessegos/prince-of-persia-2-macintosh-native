@@ -18,6 +18,7 @@ from unittest.mock import patch
 from pop2.caverns import scenery_available
 from pop2.paths import ASSET_DIR
 from pop2.scene_prototype import ANIMATION_INTERVAL_MS
+from tests.slow import slow_test
 
 # A median frame within half a frame interval; nine in ten room entries
 # within three quarters of one, so that a room change does not drop a frame.
@@ -30,6 +31,7 @@ def level_available(level):
     return level <= 2 or scenery_available(level)
 
 
+@slow_test("frame timing over every level (about 20 s); a loaded machine distorts it")
 @unittest.skipUnless((ASSET_DIR / 'Prince.rsrc').is_file(), 'Imported game resources required')
 class FrameCostTests(unittest.TestCase):
     def setUp(self):

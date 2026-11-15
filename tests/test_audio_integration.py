@@ -17,6 +17,7 @@ from pop2.audio import AudioEngine
 from pop2.audio_formats import digitized_sound, mohawk_resources
 from pop2.mac_resources import get_data_fork
 from pop2.paths import ASSET_DIR
+from tests.slow import slow_test
 from tests.test_audio import TimedPlayback
 import tests.test_terrain as terrain_tests
 
@@ -111,6 +112,7 @@ class ImportedAudioTests(unittest.TestCase):
         self.assertTrue(scene.audio.current_music_ambient)
         scene.audio.playback.play.assert_called_with('music', scene.audio.current_music)
 
+    @slow_test("a full import from the original disk image (about 80 s)")
     def test_fresh_import_and_launcher_work_without_sibling_research_folders(self):
         project = Path(__file__).resolve().parents[1]
         image = project.parent / "pop2.hfs"
