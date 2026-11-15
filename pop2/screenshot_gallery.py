@@ -343,6 +343,7 @@ class ScreenshotGallery:
     BURN_LANDING = 0.35  # the share of it spent falling to the lava
     BURN_SINK = 0.6      # how much of its height sinks under the lava while it burns
     BURN_ENTRY = 10      # the line, from the lava button's top, where the picture enters the lava
+    BURN_LEAD = 6 / 60   # the fire sound starts six video frames (60 fps) before the picture alights
     WIDE_COLUMNS = 4   # thumbnails across on the wide page
     WIDE_DROP = 28     # how much taller the wide page is
 
@@ -644,6 +645,12 @@ class ScreenshotGallery:
         step = math.floor(seconds * 12 + 1e-9)
         return min(1, step / 12 / self.BURN_SECONDS) >= self.BURN_LANDING
 
+    def burn_heard(self, seconds):
+        """Whether the fire sound has started by then: BURN_LEAD before the step the
+        picture meets the lava and starts to burn, as the user timed it on a recording."""
+        alight = math.ceil(self.BURN_LANDING * self.BURN_SECONDS * 12 - 1e-9) / 12
+        return seconds + 1e-9 >= alight - self.BURN_LEAD
+
     def ensure_visible(self, immediate=False):
         row = self.selected // self.COLUMNS
         top, bottom = row * self.row_height, (row + 1) * self.row_height
@@ -659,10 +666,10 @@ class ScreenshotGallery:
             return False
         icon_changed = self.burn_seconds is not None
         if self.burn_seconds is not None:
-            landed = self.burn_landed(self.burn_seconds)
+            heard = self.burn_heard(self.burn_seconds)
             self.burn_seconds += max(0, seconds)
-            if not landed and self.burn_landed(self.burn_seconds):
-                self.burn_cue = True   # the scene plays the lava's sound and clears it
+            if not heard and self.burn_heard(self.burn_seconds):
+                self.burn_cue = True   # the scene plays the fire's sound and clears it
             if self.burn_seconds >= self.BURN_SECONDS:
                 self.burn_seconds, self.burn_image = None, None
                 self.burn_target = None

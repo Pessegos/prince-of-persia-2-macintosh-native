@@ -42,6 +42,10 @@ BURN_VOLUME = 0.4   # cue 69 peaks at 23% of full scale: 9%, as the reveal
 # as recorded is about as loud as the lava sound above.
 BURN_FILE = "menu-burn.wav"
 BURN_FILE_VOLUME = 1.0
+# The user's edit of it: its first second, faded out from 0.65 s to the end
+# (39 to 60 frames of a 60 fps timeline) with a constant-power curve.
+BURN_FILE_LENGTH = 1.0
+BURN_FILE_FADE = 0.65
 # Cue 69 opens with a bright pulsing rattle (to 0.165 s, a quiet gap), like
 # bones; only the lava's bubbling after it is kept, faded in over 5 ms. It is
 # short (0.34 s), so it bubbles twice, the second time over the end of the
@@ -71,6 +75,19 @@ def lava_part(raw, rate, channels, start=BURN_START, fade=BURN_FADE_IN,
         half = len(part) // 2
         out[len(out) - half:] *= numpy.linspace(1, 0, half)[:, None]
     return numpy.clip(out.round(), -32768, 32767).astype('<i2').tobytes()
+
+def fire_part(raw, rate, channels, length=BURN_FILE_LENGTH, fade=BURN_FILE_FADE):
+    """The mixer's 16-bit samples of the fire sound, cut to ``length`` seconds and
+    faded out (constant power, as Premiere's default) from ``fade`` to the end."""
+    import numpy
+
+    part = numpy.frombuffer(raw, dtype='<i2').reshape(-1, channels)[:round(length * rate)].astype(float)
+    start = min(len(part), round(fade * rate))
+    tail = len(part) - start
+    if tail:
+        part[start:] *= numpy.cos(numpy.arange(1, tail + 1) / tail * numpy.pi / 2)[:, None]
+    return numpy.clip(part.round(), -32768, 32767).astype('<i2').tobytes()
+
 
 class MixerPlayback:
     def __init__(self, directory, cues, mix_mechanisms=False, split_mechanisms=False):
@@ -114,6 +131,7 @@ class MixerPlayback:
         if burn_file.is_file():
             try:
                 burn = mixer.Sound(file=io.BytesIO(burn_file.read_bytes()))   # the file is not kept open
+                burn = mixer.Sound(buffer=fire_part(burn.get_raw(), rate, channels))
             except Exception:   # an unreadable file: the lava sound instead
                 burn = None
             if burn is not None:

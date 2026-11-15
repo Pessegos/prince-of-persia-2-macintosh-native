@@ -698,7 +698,7 @@ class ScreenshotGalleryTests(unittest.TestCase):
             cached = gallery.draw(canvas, font, visible=visible)
             gallery.surface_cache.clear()
             self.assertEqual(cached.tobytes(), gallery.draw(canvas, font, visible=visible).tobytes())
-        # The lava's sound is asked for once, on the step the picture's foot meets the lava.
+        # The fire's sound is asked for once, six video frames before the picture alights.
         steps = []
         while gallery.burn_seconds is not None and gallery.burn_seconds < gallery.BURN_LANDING + 0.2:
             gallery.animate(1 / 60)
@@ -707,8 +707,9 @@ class ScreenshotGalleryTests(unittest.TestCase):
                 landing = gallery.burn_seconds
                 gallery.burn_cue = False
         self.assertEqual(steps.count(True), 1)
-        self.assertTrue(gallery.burn_landed(landing))
-        self.assertFalse(gallery.burn_landed(landing - 1 / 60))
+        alight = next(n / 12 for n in range(13) if gallery.burn_landed(n / 12))
+        self.assertAlmostEqual(landing, alight - 0.1, delta=1 / 60 + 1e-6)
+        self.assertFalse(gallery.burn_landed(landing))   # not yet on the step it lands
         gallery.animate(gallery.BURN_SECONDS + 0.01)
         self.assertIsNone(gallery.burn_seconds)
         self.assertFalse(gallery.burn_cue)
