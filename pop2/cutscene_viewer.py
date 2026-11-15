@@ -192,6 +192,8 @@ class CutsceneControls:
                 except (OSError, ValueError, KeyError, RuntimeError):
                     pass  # The card and replay action provide the import error.
         fresh = getattr(self, 'cutscene_fresh', set())
+        # A new game or a load drops what the previous campaign had unlocked.
+        fresh &= self.cutscene_collection.seen
         if not developer and fresh:
             gallery.begin_reveal(index for index, chapter in enumerate(CHAPTERS) if chapter.key in fresh)
             self.cutscene_collection.revealed |= fresh

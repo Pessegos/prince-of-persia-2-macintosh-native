@@ -4,7 +4,7 @@ import random
 import struct
 import unittest
 
-from pop2.final_jaffars import JaffarSpawn, next_jaffar_spawn
+from pop2.final_jaffars import JaffarSpawn, dead_copy_step, drop_foreground, next_jaffar_spawn
 from pop2.paths import ASSET_DIR
 
 
@@ -21,31 +21,67 @@ class FixedRandom:
 
 
 class JaffarRulesTests(unittest.TestCase):
-    def test_first_copy_uses_opposite_column_and_independent_row_and_life_draws(self):
-        for player_row, column, base_row in ((2, 1, 4), (0, 2, 2), (1, 2, 2)):
+    def test_first_copy_takes_the_other_row_and_a_column_and_life_draw(self):
+        # 9:0202 pushes the row (d6) and then the column (d3): 9:03c8 reads
+        # the column first. Life is Rnd(2) + 3, inclusive.
+        for player_row, row, base in ((2, 1, 4), (0, 2, 2), (1, 2, 2)):
             for boost in (0, 1):
-                for life_roll in (0, 1):
+                for life_roll in (0, 1, 2):
                     rng = FixedRandom(boost, life_roll)
-                    self.assertEqual(next_jaffar_spawn(0, 2, 0, player_row, rng),
-                                     JaffarSpawn((base_row + 4 * boost) * 10 + column,
-                                                 column, base_row + 4 * boost, 3 + life_roll))
-                    self.assertEqual(rng.calls, [2, 2])
+                    column = base + 4 * boost
+                    spawn = next_jaffar_spawn(0, 2, 0, player_row, rng)
+                    self.assertEqual(spawn, JaffarSpawn(row * 10 + column, column, row,
+                                                        3 + life_roll))
+                    self.assertEqual(rng.calls, [2, 3])
+                    self.assertEqual((spawn.native_x, spawn.facing_right),
+                                     (207 + 51 * column, column < 5))
 
-    def test_second_copy_checks_sequence_column_and_one_in_twenty_one_gate(self):
+    def test_the_old_reading_of_rows_four_to_eight_is_rejected(self):
+        spawn = next_jaffar_spawn(0, 2, 0, 2, FixedRandom(1, 0))
+        self.assertEqual((spawn.cell, spawn.row, spawn.column), (18, 1, 8))
+        self.assertLess(spawn.row, 3)
+        self.assertFalse(spawn.facing_right)
+
+    def test_second_copy_checks_sequence_row_and_one_in_twenty_one_gate(self):
         for sequence, first_row, player_row, expected_calls in (
-                (238, 0, 2, []), (2, 1, 2, []), (2, 0, 1, []),
-                (2, 1, 1, [21]), (2, 0, 2, [21])):
+                (238, 1, 0, []), (2, 1, 2, []), (2, 2, 1, []),
+                (2, 1, 1, [21]), (2, 2, 2, [21])):
             rng = FixedRandom(1)
             self.assertIsNone(next_jaffar_spawn(1, sequence, first_row, player_row, rng))
             self.assertEqual(rng.calls, expected_calls)
         rng = FixedRandom(0, 1, 0)
-        self.assertEqual(next_jaffar_spawn(1, 2, 1, 1, rng),
-                         JaffarSpawn(62, 2, 6, 3))
-        self.assertEqual(rng.calls, [21, 2, 2])
+        self.assertEqual(next_jaffar_spawn(1, 2, 2, 2, rng), JaffarSpawn(18, 8, 1, 3))
+        self.assertEqual(rng.calls, [21, 2, 3])
 
     def test_two_copies_are_the_limit_without_rng_use(self):
         rng = FixedRandom()
         self.assertIsNone(next_jaffar_spawn(2, 2, 0, 0, rng))
+        self.assertEqual(rng.calls, [])
+
+
+class DeadCopyTests(unittest.TestCase):
+    def test_alive_six_draws_and_drops_on_floor_only(self):
+        for roll, kind, objects, cell_row, column, drop in (
+                (1, 1, 0, 2, 5, 1), (2, 1, 3, 1, 4, 2), (0, 1, 0, 2, 5, 0),
+                (2, 0, 0, 2, 5, 0), (2, 10, 0, 2, 5, 0), (1, 1, 4, 2, 5, 0),
+                (1, 1, 0, 2, 2, 0), (1, 1, 0, 2, 4, 0), (1, 1, 0, 2, 1, 1)):
+            rng = FixedRandom(roll)
+            step = dead_copy_step(6, True, 0, kind, objects, cell_row, column, rng)
+            self.assertEqual(rng.calls, [3])
+            self.assertEqual((step.alive, step.drop, step.vanish), (7, drop, False))
+            self.assertEqual(step.cell, cell_row * 10 + column if drop else 0)
+        self.assertEqual(drop_foreground(2), 0x4040)
+
+    def test_count_runs_on_once_the_cue_is_consumed_and_shimmers_at_ninety_six(self):
+        rng = FixedRandom()
+        self.assertEqual(dead_copy_step(5, False, 0, 1, 0, 2, 5, rng).alive, 5)
+        self.assertEqual(dead_copy_step(7, True, 0, 1, 0, 2, 5, rng).alive, 7)
+        self.assertEqual(dead_copy_step(7, False, 0, 1, 0, 2, 5, rng).alive, 8)
+        step = dead_copy_step(96, False, 0, 1, 0, 2, 5, rng)
+        self.assertEqual((step.alive, step.vanish), (98, True))
+        self.assertEqual(dead_copy_step(98, False, 239, 1, 0, 2, 5, rng),
+                         dead_copy_step(98, False, 239, 1, 0, 2, 5, rng))
+        self.assertFalse(dead_copy_step(98, False, 239, 1, 0, 2, 5, rng).vanish)
         self.assertEqual(rng.calls, [])
 
 
@@ -81,19 +117,19 @@ class OriginalFinalLevelTests(unittest.TestCase):
         self.assertEqual((first.guard_record.cell, first.row, first.state.target_x,
                           first.state.facing, first.state.source_sequence_id,
                           first.state.action, first.skill, first.palette_variant),
-                         (41, 4, 51, 0, 238, 230, 5, 3))
+                         (14, 1, 204, 1, 238, 230, 5, 3))
         self.assertEqual(len(game.combat.guards), 1)
         game.combat.enter_room(0, 1)
         game.combat.enter_room(2, 2)
         self.assertIs(game.combat.guards[0], first)
-        self.assertEqual(first.guard_record.cell, 41)
+        self.assertEqual(first.guard_record.cell, 14)
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'copies.pop2save'
             write_save(path, capture_snapshot(game))
             restored, _ = read_snapshot(path, self.resources)
         copy = restored.combat.guards[0]
         self.assertEqual((copy.final_jaffar, copy.guard_record.cell, copy.row,
-                          copy.state.source_sequence_id), (True, 41, 4, 238))
+                          copy.state.source_sequence_id), (True, 14, 1, 238))
 
     def test_two_copies_enter_the_bank_with_the_original_visible_guard_frame(self):
         from pop2.animation_data import parse_frame_records, shape_id_for_action
@@ -120,8 +156,12 @@ class OriginalFinalLevelTests(unittest.TestCase):
         self.assertEqual(game.combat.guards[0].state.source_sequence_id, 0)
         game.combat.player.row = 2
         game.combat.generate_opponents()
-        self.assertEqual([actor.guard_record.cell for actor in game.combat.guards], [22, 41])
-        self.assertEqual(rng.calls, [2, 2, 21, 2, 2])
+        self.assertEqual([actor.guard_record.cell for actor in game.combat.guards], [22, 14])
+        # Native X 309 and 411 face right; SEQS 238's -5 -1 has stepped the
+        # first one a pixel back.
+        self.assertEqual([(actor.row, actor.state.target_x, actor.state.facing)
+                          for actor in game.combat.guards], [(2, 101, 1), (1, 204, 1)])
+        self.assertEqual(rng.calls, [2, 3, 21, 2, 3])
         game.combat.generate_opponents()
         self.assertEqual(len(game.combat.guards), 2)
         guard_resource = load_resource_file('Guard.rsrc')
@@ -143,7 +183,9 @@ class OriginalFinalLevelTests(unittest.TestCase):
         game.combat.rng = random.Random(1)
         for frame in range(25):
             game.combat.step(frame / 12, 1 / 12)
-        self.assertEqual([actor.guard_record.cell for actor in game.combat.guards], [41, 81])
+        # The copy is born on row 1; a second one would need the Prince
+        # off row 2.
+        self.assertEqual([actor.guard_record.cell for actor in game.combat.guards], [14])
         self.assertTrue(all(actor.final_jaffar for actor in game.combat.guards))
 
 

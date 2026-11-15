@@ -65,7 +65,7 @@ class AudioNoticeSceneTests(unittest.TestCase):
     def setUp(self):
         from tests.test_terrain import RooftopSceneTests
         RooftopSceneTests.setUp(self)
-        self.scene.jump_to_screen('5')
+        self.scene.jump_to_screen('Room 5')
 
     def press(self, key):
         event = SimpleNamespace(keysym=key, state=0x20000)

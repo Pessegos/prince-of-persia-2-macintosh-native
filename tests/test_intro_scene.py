@@ -277,14 +277,14 @@ class IntroSceneTests(unittest.TestCase):
 
     def test_f2_warp_leaves_intro_and_establishes_normal_checkpoint(self):
         scene = self.scene
-        scene.jump_to_screen("9")
+        scene.jump_to_screen("Room 9")
         self.assertIsNone(scene.intro)
         self.assertIsNotNone(scene.checkpoint)
-        self.assertEqual(scene.screen_label(scene.room_id), "9")
+        self.assertEqual(scene.screen_label(scene.room_id), "Room 9")
 
     def test_new_game_replays_intro_and_clears_checkpoint(self):
         scene = self.scene
-        scene.jump_to_screen("9")
+        scene.jump_to_screen("Room 9")
         scene.apply_game_action("new_game")
         self.assertIsNotNone(scene.intro)
         self.assertIsNone(scene.checkpoint)

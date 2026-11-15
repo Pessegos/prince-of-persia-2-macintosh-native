@@ -54,7 +54,7 @@ def playback_parts(intro_program, attract_data, screen_label):
     for index, frame in enumerate(attract_data["frames"]):
         room = frame["room"] - 1
         if room not in seen:
-            parts.append(PlaybackPart(f'Demo - Screen {screen_label(room)}', 'demo', index, 'Opening'))
+            parts.append(PlaybackPart(f'Demo - {screen_label(room)}', 'demo', index, 'Opening'))
             seen.add(room)
     for index in range(len(attract_data["credits"]["pages"])):
         parts.append(PlaybackPart(f'Credits - Page {index + 1}', 'credits', index, 'Opening'))

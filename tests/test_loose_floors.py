@@ -42,6 +42,33 @@ class LooseFloorTests(unittest.TestCase):
         self.loose.advance_tiles(self.terrain)
         return result
 
+    def test_native_spawn_type_height_and_below_clear_are_environment_specific(self):
+        from pop2.loose_floors import cleared_below_cell
+
+        for environment in (2, 3, 4):
+            for row in range(3):
+                with self.subTest(environment=environment, row=row):
+                    terrain = LevelMap(bytearray(self.terrain.level))
+                    struct.pack_into('>H', terrain.level, 0x2186, environment)
+                    terrain.caverns = CavernState()
+                    loose = terrain.caverns.loose
+                    cell = row * 10 + 7
+                    below = cleared_below_cell(terrain, 0, cell)
+                    target_room, target_cell = below
+                    struct.pack_into('>H', terrain.level,
+                                     0x780 + target_room * 120 + target_cell * 4, 0x0a00)
+                    loose.tiles[0, cell] = 11, 11
+                    loose.active[0, cell] = 39
+                    loose.advance_tiles(terrain)
+                    block, = loose.falling
+                    self.assertEqual((block.y, block.mob_type, block.velocity),
+                                     ((row + 1) * 120 + (23 if environment == 3 else 5),
+                                      0 if environment == 3 else 3, 39))
+                    self.assertEqual(below in loose.tiles, environment == 3)
+                    self.assertEqual(terrain.tile(target_room, target_cell % 10,
+                                                   target_cell // 10).foreground,
+                                     0 if environment == 3 else 0x0a00)
+
     def test_native_twelve_phase_collapse_preserves_floor_until_detachment(self):
         self.assertEqual(self.loose.press(self.terrain, self.motion, self.state, self.record), (28,))
         for phase in range(1, 12):

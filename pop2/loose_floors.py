@@ -172,16 +172,19 @@ class LooseFloors:
                 self.tiles[key] = tile.kind, value
             else:
                 self.tiles[key] = 0, space_foreground(value)
-                below = cleared_below_cell(terrain, room, cell)
+                # AnimLoose5:44b2/4546: only environment3 uses MOB0,
+                # the extra18px Y offset and ClearCaveBelowFloor. Temple
+                # and ruins both use MOB3 at the floor's own bottom.
+                cave = struct.unpack_from('>H', terrain.level, 0x2186)[0] == 3
+                below = cleared_below_cell(terrain, room, cell) if cave else None
                 if below is not None:
                     target = terrain.tile(below[0], below[1] % 10, below[1] // 10)
                     self.tiles[below] = target.kind, target.foreground & 0xf0ff
                 self.cleared.add(key)
                 if len(self.falling) < 30:
-                    ruins = struct.unpack_from('>H', terrain.level, 0x2186)[0] == 4
                     self.falling.append(FallingFloor(room, cell % 10, cell // 10,
-                                        (cell // 10 + 1) * 120 + (5 if ruins else 23),
-                                        velocity, 3 if ruins else 0))
+                                        (cell // 10 + 1) * 120 + (23 if cave else 5),
+                                        velocity, 0 if cave else 3))
                 del self.active[key]
 
     def advance_falling(self, terrain, state=None, motion=None, record=None):

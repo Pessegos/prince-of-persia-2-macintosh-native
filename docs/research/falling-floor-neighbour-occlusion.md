@@ -63,3 +63,14 @@ Final focused check: `tests.test_falling_floor_occlusion`, `test_loose_floors`,
 pass 167 tests without skips (69.351 seconds). Dependency, Ruff F/E9,
 recovery-catalogue and whitespace checks pass. No full-discovery run is
 claimed for this bounded rendering change.
+
+## Follow-up: original temple MOB type (2026-11-14)
+
+The subsequent [room14 contact investigation](temple-room14-loose-landing.md)
+recovered the upstream reason for the87px temple box: the port had created
+the cave's MOB0/Y+23 instead of the temple's native MOB3/Y+5. Its91px native
+box already contains the90px lip. That spawn is now corrected, including the
+18px vertical offset; this full-raster painter safeguard remains. The room8
+regression now expects first detached Y245/MOB3, rather than the earlier
+port-specific Y263/MOB0. Earlier audit counts above describe the painter
+change on its original baseline, not a new whole-game native claim.

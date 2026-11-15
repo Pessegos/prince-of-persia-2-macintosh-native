@@ -42,6 +42,15 @@ class CavernState:
     trapdoors: TrapDoors = field(default_factory=TrapDoors)
     # a5-0x4818 in level 13's flame room (CUST 4075): 10:2cc2's counter.
     flame: int = 0
+    # Level 14's moving scenery (pop2.final_scenery): (room, cell) -> the
+    # cell's foreground word, the word its image on screen was drawn from,
+    # and the room whose trobs KeepTime last set up.
+    final_scenery: dict = field(default_factory=dict)
+    final_scenery_drawn: dict = field(default_factory=dict)
+    final_scenery_room: int | None = None
+    # a5-0x4ff2: level 14's native room 8 has been visited (FinlWatchOpps
+    # 9:06e6), so native room 7 plays Escher too.
+    final_escher: bool = False
     # a5-0x4fd4: 1 once KeepTime shows the death message there, -1 once the
     # shadow (type 1, 10:2b32) has risen.
     altar: int = 0
@@ -114,7 +123,10 @@ class CavernState:
 
     def foreground(self, room, cell, value):
         if (room, cell) in self.potions.tiles:
-            value = self.potions.tiles[room, cell][1]
+            kind, value = self.potions.tiles[room, cell]
+            if kind == 10:
+                # A flask written during play (9:00e2) bubbles like the rest.
+                value = self.potions.phases.get((room, cell), value)
             changed = self.loose.tiles.get((room, cell))
             if changed is None or changed[0] in (10, 22):
                 return value

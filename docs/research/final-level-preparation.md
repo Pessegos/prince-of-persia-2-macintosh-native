@@ -3,10 +3,10 @@
 Status: 2026-11-11. The level-13 completion path through NIS 3, all 11 static rooms, entry
 placement and saving are integrated. The final battle and ending are not.
 
-Latest playtest blockers: NIS 5 fires on the room-2 outside landing before
-window entry, and gameplay freezes after the room-4 sword draw. These new
-reports remain open despite the earlier audio-manifest repair. Prioritize
-[the Claude handoff](final-level-claude-handoff.md), which also records the
+The two playtest blockers of 2026-11-11 (NIS 5 on the room-2 outside
+landing, and the freeze after the room-4 sword draw) are fixed; see
+[the 2026-11-14 section](#room-2-window-gate-and-armed-reset-2026-11-14).
+[The Claude handoff](final-level-claude-handoff.md) also records the
 manual's shadow/fireball rules and the optional room-3 potion recovery route.
 
 The player's complete Macintosh run is now indexed in
@@ -15,7 +15,9 @@ sequence, separate blue form/body, projectile victory, bedroom aftermath,
 final epilogue and Hall of Fame. The final epilogue is NIS 11 (15:3c76);
 the existing `ending.json` is the level-1 voyage and must not be reused for it.
 The bounded final completion caller now has 12 original CPU checks with
-PlayNIS and HallOfFameDialog supplied; the UI/epilogue/restart loop remain open.
+PlayNIS and HallOfFameDialog supplied. The port now plays NIS 11 from the
+original coordinator, then the Hall of Fame takes the remaining minutes and
+the introduction restarts (see "NIS 11 and the Hall of Fame" below).
 Names in the inventory below come from preserved symbols.
 
 ## The level
@@ -107,25 +109,24 @@ at a5-0x51e0 and a5-0x51fa are the **first active opponent's** selected
 sequence and row (+0x28 and +0x0e from a5-0x5208); a5-0x50c4 is the
 Prince's row. They must not be read as Prince sequence/facing.
 
-- At count 0, column 1 is chosen if the Prince is on row 2; otherwise column
-  2. At count 1, selected `SEQS 238` blocks another birth. Otherwise column
-  2 is chosen when the first opponent is on row 1, column 1 otherwise. A
-  match between that column and the Prince's row blocks birth. Next,
-  `Rnd(20) == 0` admits it: `Rnd` is inclusive, so this is **1/21**.
-  Count 2 stops further births.
-- The constructor 9:03c8 increments the room-3 count and calls
-  `GetOppInfoIdx(3, old_count)` 6:3642. `FirstInRow` 4:322a plus the selected
-  column writes cell 21/22, 41/42, 61/62 or 81/82; `Rnd(1)` independently
-  adds 4 to the base row (2 for column 2, 4 for column 1). Those larger
-  values are positions for Jaffar's later vertical path, not regular cells
-  to clamp to 0..29. The original X table at a5-0x4b88 gives native X 258
-  or 309; the constructor faces left, sets skill 5 and life 3 or 4 from a
-  second independent `Rnd(1)`, then starts `SEQS 238`. When the first
-  palette-bank slot is empty, 9:042a-043e and 6:40f6 assign variant 3;
-  Guard.rsrc CTBL 752 gives Jaffar's red and white outfit. Its frame 233
-  resolves to SHAP 782. The port stores these as marked
-  type-2 room-3 opponents, keeps their path cell in the room record, starts
-  that sequence and persists them through room visits and saves.
+- At count 0, row 1 is chosen if the Prince is on row 2; otherwise row 2.
+  At count 1, selected `SEQS 238` blocks another birth. Otherwise row 2 is
+  chosen when the first opponent is on row 1, row 1 otherwise. A match
+  between that row and the Prince's row blocks birth. Next, `Rnd(20) == 0`
+  admits it: `Rnd` is inclusive, so this is **1/21**. Count 2 stops
+  further births.
+- The column is 4 on row 1 and 2 on row 2, plus 4 when `Rnd(1)` is
+  nonzero. The constructor 9:03c8 increments the room-3 count, calls
+  `GetOppInfoIdx(3, old_count)` 6:3642 and writes cell `FirstInRow(row) +
+  column` (14/18 or 22/26), native X a5-0x4b88[column] (411/615 or
+  309/513), facing right below column 5, skill 5 and life `Rnd(2) + 3`
+  (3-5), then starts `SEQS 238`. (This bullet was corrected on
+  2026-11-15; an earlier reading swapped row and column and described
+  cells 21-82 as path rows.) When the first palette-bank slot is empty,
+  9:042a-043e and 6:40f6 assign variant 3; Guard.rsrc CTBL 752 gives
+  Jaffar's red and white outfit. Its frame 233 resolves to SHAP 782. The
+  port stores these as marked type-2 room-3 opponents and persists them
+  through room visits and saves.
 - Despite its preserved name, `FinlGenerateOpp` 9:02a6 is called from
   `DrawBFItem` 3:2cc8-2d16. It scans 38-byte background/foreground item
   records and chooses which entries to draw (including `0x1025..0x1028`,
@@ -142,12 +143,9 @@ checked separately by `tests.test_final_jaffars`. Port tests also reject an
 immediate second birth during `SEQS 238`, a third birth, loss on room exit
 and loss on save. They do not establish full frame cadence or pixel parity.
 
-The path controller beginning at 9:09ca, later copy movement between rooms,
-combat, finishing logic, moving scenery and ending remain open. The next
-bounded task is to recover Jaffar's position transitions and the mapping of
-these extended record cells to visible tower rooms. Until then, copies can
-appear in room 3's visible row 2; path rows 4/6/8 are retained but are not
-drawn or run through ordinary guard AI.
+**Superseded (2026-11-15):** the "column" and "row" in this block are
+swapped. See "The room-3 copies and their flasks" below: the copies stand on
+rows 1/2 of room 3 and are ordinary guards; there are no path rows 4-8.
 
 ## Level-14 handoff and developer warp follow-up (2026-11-10)
 
@@ -430,3 +428,643 @@ Focused shared-desktop checks: 185 tests passed across temple arrival,
 developer map/menu, level ending, music transition and installation. Dependency,
 Ruff, recovery catalogue and diff checks passed. Full discovery was not repeated
 because the prior shared-desktop run grew to about 15 GB without finishing.
+
+## Room-2 window gate and armed reset (2026-11-14)
+
+Both reported blockers reproduced with real keys from the native entry in a
+hidden scene: step to the roof edge, turn, climb down and drop.
+
+- **Early spell.** `GetCharEdges` 4:5cbc stores a5-0x3566 at 4:5d5a-5d6a
+  as left + width, where left already includes `X + 0xcf`: the edge is in
+  working X (drawing X + 207) and exclusive. `Final.frame_start` passed the
+  port's inclusive drawing column instead, so 486 admitted every room-2
+  position. The landing on the outer sill now gives native edge 534 and
+  plays no scene; the first step left reaches 481 and plays NIS 5 on the
+  next frame, with the Prince hidden in the window as in the video at
+  00:44-00:44.5. The edge comes from the existing collision bounds, which
+  add 4:5e6e's sword extension.
+- **Freeze in room 4.** After NIS 5 the reset 9:05d2 selects SEQS 55
+  (9:05e2), sets a5-0x503c = 1 (sword drawn, 9:05ec) and calls
+  `AddSound(14)` (9:05f6). The port selected SEQS 55 without the sword flag.
+  SEQS 55 ends in the en-garde hold (pose 171), which only the armed
+  controls leave, so no key did anything. `finish_spell` now sets the flag
+  and queues sound 14. Advance, sheathe and run respond afterwards.
+
+Also read but not changed: 9:05d6 sets the Kid draw mode a5-0x5020 to 16;
+9:064a clears the Up-held catch flag a5-0x3480; 9:0758 writes -1 to
+a5-0x5000. The port already draws the Prince with CTBL 25006 in level 14,
+which matches the red Prince of the video after the spell.
+
+`tests.test_final_spell_flow` now plays that real-key route with an
+`AudioEngine` over mocked playback. It checks the landing and the window
+step, the NIS 5 audio, room 4, and then advance, sheathe and run. Two direct
+regressions cover the native edge and the armed reset. The previous code
+fails all three (three failures, no errors). A separate run with SDL's dummy
+audio device and the real mixer completed the same route with no Tk
+callback exception. The route keys are supplied; they are not the video's
+recorded input.
+
+## Room-6 false-Prince controller (2026-11-14)
+
+`pop2/final_tower.py` translates 9:1526, the AutoCtrl branch for type-6
+figures in native room 6, and `CombatEncounter` now runs it for actor
+type 6 in environment 6 instead of the generic scripted advance.
+
+- **Shimmer of the last figure.** 9:1568-1594 counts the room bank (less
+  one when the Prince is the shadow, type 1). With one figure left, a
+  selected sequence other than 240 and the saved Prince alive
+  (a5-0x50b6 < 0), it selects SEQS 240: nine idle frames, sound 270, then
+  SEQS 196. The branch then falls through to the pose tests, so a
+  shimmering idle figure can still strike.
+- **Strike.** In pose 15 the figure strikes only when the Prince is alive,
+  not in SEQS 44/6, type 0, in an exposed pose (FRAM +8 flag 0x40 or poses
+  191-205) and not in animation state 3/4. With CharDistance 4:49ee:
+  same facing 24 < d-15 < 71; behind it (d < 0) 24 < -15-d < 71 with a
+  turn; facing a landing Prince (pose 145) 24 < d-15 < 78. The strike
+  moves 15 px (AddCharX 4:2bae), draws the sword and selects SEQS 75.
+- **After the strike.** Pose 171 sheathes (sword off, SEQS 92); pose 52
+  after the Prince's death laughs (SEQS 197, sound 261); pose 109 rises
+  (SEQS 49).
+- **Fatal hits.** CheckStab 6:52b8-52ca deals 100 points when either side
+  is type 6. The kill routine 6:5562 gives a type-6 victim SEQS 196
+  (sound 260, poses 301-305, then `-17` removal). When a type-6 figure
+  kills the Prince, 6:56a6 calls `AllOtherJaffarsShimmerAway` 9:090e:
+  every other idle figure of the bank selects SEQS 240. The death method
+  table at 6:570e gives 17 for a type-6 killer.
+- **Transfer.** `RemoveChar` 4:48f8 removes a figure; in room 6 with
+  SEQS 240 and the Prince alive it calls 9:19fa, which sets column 17,
+  X 1132, row -3, path index 0 and SEQS 2. In the port the figure enters
+  native room 8 at native X 622 (1132 - 510), row 0, facing left, marked
+  `final_path` for the path controller.
+
+The path controller that then drives this figure is described in the next
+section. The room-6 random facing draw 6:39a2 is ported (2026-11-15): every
+entry into native room 6 runs CheckSideRoomsForVisibleOpps 6:2b7e (PrepCut
+2:5394, after KeepTime), whose 6:3972 call draws `Rnd(1) - 1` for each
+actor-6 record in bank order; `Combat.enter_room` does this after the
+records are restored. The port draws them before the crystals' triggers of
+the same entry (the original draws them after); both use the game's Rnd.
+
+`tests.test_final_tower` covers the decision windows without the scene,
+then in a hidden level-14 scene: three hits dissolve three figures and the
+last shimmers into room 8; a figure that kills the Prince stays while the
+others shimmer; a crouching Prince ahead of a figure is struck and the
+figure laughs. The earlier port played SEQS 2 without control, so these
+scene checks fail on it. No native CPU probe of 9:1526 is claimed yet.
+
+## Palace path controller (2026-11-14)
+
+`pop2/final_path.py` translates 9:16fe and its helpers for the figure that
+9:19fa moved to native room 8. The figure keeps actor type 6 and the Kid's
+frames. It runs the Kid's own control routines, so it climbs, hangs, drops
+and run-jumps like the Prince.
+
+- **Decision (9:16fe).** The opponent record holds +0x1c mode (1 fleeing,
+  2 closing in), +0x1e target position and +0x20 last position reached;
+  all three are zero in LEVL. Against the ordinary Prince (type 0): if his
+  ALIVE is 1 (just dead) and the figure is within 91 px (and not in poses
+  207-210 or 158), the body takes SEQS 241 with AddSong 264 and loses the
+  sword. Otherwise, on the figure's row while a5-0x5004 >= 4 (his turn
+  count, 4:1fb2), it flees if his life is above 2 or he is in SEQS 242.
+  Otherwise it closes in while he lives. Against the shadow (type 1) it
+  flees while his life is above 2 or he casts, and closes in otherwise.
+  SEQS 230 in mode 12 (burnt) increments a5-0x4f92.
+- **Positions.** DATA a5-0x2a06 gives four 22-byte entries (global column,
+  row, facing, arrival X1..X2 in the target room's coordinates, then the
+  ShadowInRange 9:1954 zones). In order: upper right of room 8, lower
+  right of room 8, lower left of room 7, upper left of room 7. Fleeing
+  (9:0b28) moves away from the side where the Prince stands. Closing in
+  (9:0a42) moves the other way. On arrival with the Prince in range
+  (9:0ba6), 9:09ca turns to face him or selects SEQS 242.
+- **Spell.** Pose 281 of SEQS 242 plays sound 289. At pose 282, with the
+  Prince still in range, 9:14c8 selects SEQS 244 for the figure. The
+  Prince gets SEQS 71, sound 12, 100 points of damage and death method 17.
+  In range (9:0ba6) means the same row and the Prince's life above zero.
+  The pose tests at 9:0bee-0c2c read -0x504c, the Char record: the
+  figure's own pose must be exposed (FRAM 0x40, or 191-205) and must not
+  be the crouch (109). A crouching Prince is still struck. On the upper floor the figure must be at
+  global column <= 6 or >= 13. On the middle floor both must be on the same
+  side of column 13.
+- **Routes (9:0d28).** 0ed2/107c/11fe/136e choose the Kid routine from the
+  position, the row and the pose: forward 6:11a0, standing jump 6:15ea,
+  DoJumpUp 6:1600, climb 6:1998, release 6:1a84, DoRunJump(4) 6:1c14,
+  StairClimbing 6:0e8e (lower over the edge), DoStepFwd 6:1276. They also
+  select SEQS 5 (turn), 13 (stop) and 49 (rise). HoneIn 9:0dac steps into
+  the X window and sets the last position reached.
+- **Away from the palace.** JaffarUpdateOppInfo 9:185a puts a travelling
+  figure at its target (X1 + 10, the position's facing, SEQS 2). The port
+  applies this while the Prince is outside native rooms 7/8.
+
+HitFloor 6:036a-0374 lands types 1 and 6 in SEQS 17 (crouch) instead of
+the armed SEQS 63; the port's landing rule now follows that. The type-6
+figure's footsteps (`-15 1`) are played like the Kid's.
+
+Port choices, not recovered behaviour: the Kid routines reuse the Prince's
+terrain helpers (ledge, step, run-jump and release tests) with the figure's
+foot column. CutOpponent 6:424c -> UpdateOppInfo 6:30b0 moves a record
+that leaves the Prince's room to the other room's bank and drops it from
+the active list, so out of view the figure keeps the move it was in and
+resumes when the Prince comes (6:42fc-430a). The port lets only a burning
+figure (SEQS 230) finish out of view, so the victory still arrives. The
+video supports the view rule: the Prince crosses room 7's upper floor
+unharmed while the figure stands in room 8. The relocation's call site is assumed, not traced.
+The turn count (a5-0x5004) and the shadow are now ported (next section),
+so the figure flees from a strong shadow.
+
+`tests.test_final_path` covers decisions with a recording Kid. In a hidden
+scene it checks four cases: standing on the figure's floor is fatal
+(method 17); the figure waits in room 8 while the Prince is in room 7; a
+Prince below sends it through room 7's upper floor and down its ledge
+toward position 2; and relocation away from the palace. No native CPU
+probe of 9:16fe is claimed yet.
+
+## Route playthrough fixes (2026-11-15)
+
+Playing native room 1 to Jaffar in a hidden scene found six faults. Each
+has a regression in `tests.test_final_route` or `tests.test_final_path`
+that fails on the earlier port.
+
+- **Room 3 right exit (CutChar 6:4c50-4c6c).** In environment 6 native
+  room 3 refuses its right exit, so the Prince bumps against the wall
+  column and never reaches room 9. The port had let him walk into room 9.
+- **False Princes' strike range (6:5b38).** For a type-6 defender the
+  Kid's window is (16, 86) facing each other and (16, 79) facing the same
+  way (6:5bd2-5c06); a type-6 attacker gets (16, 79) (6:5cd4-5cec). The
+  ordinary (61, 99) left all four room-6 figures out of reach. Not ported:
+  with sword type -0x500a == 2 (levels 7-8) the Kid's high bound is 10
+  lower.
+- **Flasks.** The palace flasks are library-1 front commands left out of
+  the static room. `animated_layer` now draws them on the front pass in
+  environment 6, and `Final.level_events` consumes potion events, so
+  drinking heals (`advance_potions`, shared with the caverns).
+- **Jaffar's in-range pose** reads his own record, as above.
+- **Jaffar out of view** freezes in his move, as above, instead of running
+  on through room 7.
+- **Casting at rest.** After the eight turns the waiting controls own the
+  Ctrl bank, and their Ctrl branch drew the sword. It now calls the same
+  DoKidEngarde 6:1f4c-1f72 cast as the standing gate.
+
+Played in the hidden scene: room 6 (climb, kill the left figure from 76 px,
+run-jump, kill the right one, descend, kill the bottom one, the last
+shimmers away), the climb through rooms 7/8, the eight turns (12 -> 4 life
+with the body's fall), the chase across both views, and a cast on
+Jaffar's row that burns him (SEQS 230 to pose 185) and returns to the
+introduction.
+
+Open: standing in range on Jaffar's floor kills before four turns are
+possible (SEQS 242 reaches pose 282 in 11 frames; four standing turns take
+about 15). The video's player survived it; only a native trace can say
+which gate the port misses.
+
+## Shadow form and magic fire (2026-11-14)
+
+`pop2/final_magic.py` holds the rules. `Final` in `pop2/environments.py`
+runs them in the scene. Native facing word 0 is the port's facing 1.
+
+- **Turns (4:1fb2).** The standing turn calls it at 6:1184, before
+  JumpSeq(5). This happens in environments 2 and 6, but not in native
+  rooms 1/2 of level 14.
+  - A type-0 Kid already in SEQS 5 adds one to a5-0x5004; otherwise the
+    count becomes 1.
+  - On the fourth turn, palette 2000 + IsShadowImbued is loaded at 48.
+  - From the fourth turn on, each turn plays sound 288 and costs one point
+    (DecLifePts(1)) and one unit of capacity. A fatal point gives SEQS 71
+    with death method 17.
+  - On the eighth turn, the 4:2046 test reads the life from before this
+    turn's pending point. Above 4, LeaveBody runs and the Kid becomes type
+    1 (draw mode 0x30, SEQS 2, sound 260, song 290). Otherwise he takes
+    SEQS 71 and 100 points.
+  - 6:1188 skips the turn after SEQS 71.
+- **Flashes (4:2174).** GenCtrl runs this before the turn decision.
+  - Pose 15 clears the count.
+  - Poses 45-52 with a count of 4 or more select draw mode 0x30 when
+    4:250a says so.
+  - Any other sequence clears the count and restores the palette.
+- **The body (4:2206, 6:0bcc).** LeaveBody shifts the Kid 25 px away from
+  an empty cell, first behind him, then ahead. It then leaves a type-0
+  record with his position, facing and life, running SEQS 71 (179, then
+  SEQS 213 to 185). While the body falls through poses other than
+  179/183/185, every frame costs the Prince a point and a unit of
+  capacity. From 12 life this gives 7 at the change and 4 after the fall,
+  as in the video.
+- **Lying down and rejoining.** The shadow's Down (6:1068 -> 4:1f1e) acts
+  within 51 px of the body (4:24b2 distance: 6 more when both face the
+  same way):
+  - A shadow facing away from the body turns and moves 6 px.
+  - X then becomes X - (d - sign * 7), and the shadow takes SEQS 71.
+  - At pose 185 within 2 px, 6:0b5a -> 4:25ce removes the body and gives
+    type 0, draw mode 0 and SEQS 231.
+  - A dead shadow goes back into the dead body (4:2338).
+- **Cast (9:2674, from DoKidEngarde 6:1f4c).** This needs the type-1 Kid
+  in native rooms 7/8 of environment 6.
+  - With life above 2, a barrier closer than 35 moves him back by
+    AddCharX(d - 35). Then SEQS 242, DecLifePts(2) and AddSong 265.
+  - Otherwise nothing happens, and no sword is drawn either way.
+  - Poses 272-281 play sound 258 (9:2868). Pose 281 throws (9:2880): X is
+    AddCharX(43) - 207, Y is the Kid's Y - 55, the room is his, and the
+    speed is +-12.
+- **Flight (ATM 9:27a0, 9:25e4).**
+  - The speed changes by 3 a frame while below 25, reaching 27.
+  - In room 0 the fire ends.
+  - The wall test reads the cell at X - 22 + image width, or at
+    X - 22 - width when flying left. The width is a5-0x44e4, from the last
+    drawing. A negative X steps one column left.
+  - At a wall the fire aligns to the cell, bursts (state 8), plays 259
+    and stops song 265.
+  - Flying frames cycle through four images, with sound 258. A burst shows
+    frames 0-3 and ends.
+  - When the fire ends with the Prince's life at 2 or less, palette 2000
+    returns.
+  - The drawing (9:23a8) moves the fire into a side room as it crosses the
+    edge. It uses SHAP 4115-4118 in flight and 4119-4122 for the burst, in
+    CTBL 2001, centred on its point.
+- **Burning Jaffar (9:24ee).** For a living type-6 record not in SEQS 230:
+  - The fire must be on his row and not bursting.
+  - The span [x + speed - 17, x + speed + 17] must overlap his edges, ±510
+    between the palace rooms.
+  - Then the fire bursts at his edge, he takes DecLifePts(100) and SEQS
+    230 (AnimChar at once), and sound 289 plays.
+  - SEQS 230 ends in mode 12 at pose 185. 9:16fe then increments a5-0x4f92
+    to 15, and CODE 2:4596 starts NIS 11 and the Hall of Fame.
+
+Port choices:
+- The port's controller runs only in view, so the burnt Jaffar is also
+  read directly by `Final.level_events`.
+- The victory plays NIS 11 and the Hall of Fame, then the introduction
+  (see the next section).
+- The lie-down's native Y - 1 is left out to keep the Kid on his floor.
+- The shadow's fall off the bottom of the screen (4:3780) is not
+  separately ported.
+- The flame behind the shadow reuses the temple's SetupShadowFlame
+  drawing (4:2630) while his life is above 2.
+
+`tests.test_final_magic` checks the following:
+- the flash table, body distance, fire acceleration, wall bursts and the
+  hit span;
+- in hidden scenes, eight turns from 12 life leave the body and end at 4;
+- a weak Prince (8 life) collapses on the eighth turn with method 17;
+- lying down on the body rejoins it;
+- a dead shadow returns to the dead body;
+- from room 7, the fire burns Jaffar in room 8 and the game returns to the
+  introduction;
+- with 2 life the shadow cannot cast and draws no sword.
+
+No native CPU probe is claimed.
+
+### NIS 11 and the Hall of Fame (ported 2026-11-15)
+
+**NIS 11 (HappyEnding 15:3c76).** `tools.extract_intro.recover_happy` runs
+the coordinator with Happy.rsrc open (a5-0x26b0, resource offset 1000000):
+
+- 15:44e2, the victory bedroom, runs inline. It uses palette 0x7919 and
+  SHAP 0x7a47, then ANI 0x7918 with flags 0x0e and callback
+  TransFuncSetCTABframe1 15:09c0, which sets brightness (0x51, 100) at
+  frame 1.
+- SetForeColor 17:0eae and the PaintRect trap after it become a `fill`.
+- The epilogue ANI 30004 (286 frames, callback HappyFunc 15:411a) is
+  recovered one frame at a time into a table (`happy_frames` in
+  `happy.json`). Each frame's callback runs with persistent state
+  a5-0x2340/-0x2342/-0x2344 and sound status a5-0x1f7c/-0x1f6e; the
+  sound-ensure call at 15:448c is left out. The player then applies the
+  rules of HappyFunc that depend on time:
+  - frames 131..141 with song cue 102 or later (a5-0x1f6e, set by
+    PoPAudioCallBack 16:2054) move the remaining frames on to 142, once;
+  - from frame 3, whenever no digitized sound plays (a5-0x1f7c), one
+    frame passes and HappyDialog 15:44b0 starts the next line: voice
+    30004 + line and text 30000 entry line + 4, for five lines, then the
+    panel is cleared;
+  - past frame 182, once song 30020 has ended, the callback returns -1 and
+    the animation ends.
+- HappyDialog draws its panel through NISTextDraw (a5-0x27de) on the
+  picture under it, in colours (8, 255), (6, 253), (5, 254).
+- SetNISCTAB flags 0x2000/0x4000 blend the current or target table with the
+  third table (palette flag 0x1000) as (a * p + b * (100 - p)) / 100.
+
+Timeline in the port: bedroom 0-6 s, song 30010 from 8.35 s, the three
+narrative panels, the epilogue from 32.1 s, voices and dialog 32.7-46.1 s,
+fade 46.6 s, the observer from 50.6 s, done at 64.7 s once song 30020 ends.
+This matches the user's Macintosh capture (circle on black about 50 s,
+observer dimmed about 62 s, scene about 64.7 s). In that timeline the 286
+frames run out before song 30020 ends, so the -1 path is checked only with
+a shortened song in the test.
+
+**Hall of Fame (CODE 2).** `pop2/hall_of_fame.py` and the `hall` menu page:
+
+- HOFAddPlayer 2:260c: at most five 30-byte entries (Pascal name, word
+  minutes); a new score goes before the first entry it equals or beats; a
+  full table drops its last entry and a lower score still takes fifth
+  place.
+- GetHallOfFameName 2:2220: '<', '>' and NUL are refused and names stay
+  below 24 characters; Return asks whether this is the name to insert
+  (2:235e-237e); an empty name is not written (2:254c-2560, 2:1f88).
+- After the name is saved the table stays up for 900 ticks or a click
+  (2:1fa4-1fd8). ShowHallOfFame 2:28c2 (Alt+H) shows the table.
+- CODE 2:4596-45c2: only with minutes left does the victory play NIS 11 and
+  the Hall of Fame; the next level becomes 0 and the presentation restarts.
+
+Port choices:
+- The table is JSON beside the saves (`hall_of_fame.json`), not the
+  Macintosh Hall of Fame file (2:29de, creator 'PRNc').
+- The page uses the port's menu style; its look awaits the user's review.
+  Escape leaves the victory row unnamed, as an empty name does. An empty
+  table shows "No names yet" (ShowHallOfFame shows nothing then).
+- ShowHallOfFame's song cue 180 and the native pixel-width limit on the
+  name are not ported.
+- The introduction is started under the Hall page and runs once it closes.
+- `happy.json` is optional at launch; without it the victory goes straight
+  to the Hall of Fame. A reimport writes it.
+
+`tests.test_happy_ending` checks the recovered program, the dialog order and
+the -1 end, the table rules, the page and the victory flow through real key
+events. No native CPU probe of HappyFunc's timing rules is claimed.
+
+### The defeat variant (ported 2026-11-15)
+
+GenCtrl 6:0560 sends a dead actor (ALIVE a5-0x503a >= 0) to 6:0762. At
+6:0780-07a0 a dead type-0 Kid in environment 6 with ALIVE > 6 calls 9:0062:
+
+- 9:0066-0074: nothing happens when he is already in native room 11
+  (a5-0x5040) or when no rebirth point exists (a5-0x5018 is zero).
+  SaveRebirthPtStatus 2:1674 allocates that bank at a checkpoint;
+  SetRebirthPtInitials 2:179e frees it at level start. Level 14's only
+  checkpoint (LEVL 0x39a6) is native room 4, cell 14.
+- 9:0076-00a4: the target room a5-0x4fc4 (the view follows, 2:5344) and
+  the Kid's room become 11; column 6 gives X a5-0x4b88[6] = 513 (scene
+  306); row 2 gives Y 2 * 120 + 112 = 352.
+- 9:00a8-00be: SEQS 71 (pose 179, then SEQS 213 to the dead pose 185) and
+  AnimChar five times.
+
+Room 11 is the princess's bedroom. Entering it restores its one record, a
+type-6 figure (the false Prince's frames and CTBL 25008) at zero cursor.
+InitOpps 6:2d64-2d86 keeps its SEQS 197 (poses 297-300, then standing) and
+calls AddSound(0x105): the laugh, sound 261. The two sound routines are
+AddSong 5:4d58 and AddSound 5:4d84; 6:2d82 is the latter.
+
+The port runs this in `Final.defeat` from the environment's GenCtrl hook,
+after the death counter: the scene moves to port room 10 without the audio
+reset of a developer warp, so the death song continues. The retry restores
+the checkpoint as usual. Without a checkpoint the body stays where he fell.
+A dead shadow (type 1) takes 6:07a2 -> 4:2338 instead (already ported).
+
+Exclusions:
+- AutoCtrl sends type-6 figures outside room 6 to the palace path
+  controller 9:16fe. In room 11 the port only plays the figure's sequence.
+  With the Prince dead and fewer than four turns counted, 9:16fe neither
+  flees nor closes in; the flee branch for four or more turns on the same
+  row is not run in room 11.
+- No native CPU probe and no Macintosh capture of this death is available.
+
+`tests.test_final_magic.DefeatSceneTests` checks, in hidden level-14
+scenes: the move on the first frame after ALIVE 6, room 10 row 2 near X 306
+in the dead pose, the laughing figure and one sound 261, a death without a
+checkpoint staying in place, and the retry at the checkpoint. Without the
+change three of the four fail.
+
+### The room-3 copies and their flasks (ported 2026-11-15)
+
+**Correction.** The generation block above read 9:0202's two pushed
+values the wrong way round. 9:0202 pushes d6 and then d3, so the
+constructor's first argument `$8(a6)` is d3 and its second `$a(a6)` is d6.
+9:03c8 uses the first as the **column** (X from a5-0x4b88, the facing,
+-0x504a) and the second as the **row** (FirstInRow, -0x5048 and +0x20).
+So d6, the value compared with the Prince's row, is the copy's row (1 or
+2), and d3 (2 or 4, plus 4 from `Rnd(1)`) is its column. There are no path
+rows 4-8: a copy stands on room 3's row 1 at column 4 or 8 (cells 14/18,
+native X 411/615) or row 2 at column 2 or 6 (cells 22/26, X 309/513). It
+is born on the row the Prince is not on. Columns below 5 face right
+(9:040c-0420). Life is `Rnd(2) + 3`, so 3, 4 or 5 (the old port drew
+only 3 or 4). The constructor also arms the cue word (-0x503e = 1), sets
+ALIVE -1 and calls AddSound(0xf3), sound 243, as SEQS 238 starts.
+
+**Control.** The copies are ordinary type-2 guards: AutoCtrl 6:4e90's
+table sends type 2 to 6:4f04 -> 6:4f60, the ordinary guard controller,
+with skill 5. The port no longer parks them in their sequence: they
+alert, draw and fight like the other guards.
+
+**Death (FinlCheckDeadOpp 9:00e2).** GenCtrl 6:0762 sends a dead type-2
+actor in native room 3 of environment 6 to 9:00e2 (6:07b8-07d6). PlayerCtrl
+4:3d24 still counts ALIVE 0..6 while the cue word is set and then plays the
+opponent's death song as usual (4:3d32).
+
+- At ALIVE 6: ReadCell(room, column, row) 4:27ee, then `Rnd(2)` is always
+  drawn. With a nonzero draw, a floor cell (kind 1), fewer than four
+  animated objects (a5-0x43e6) and a cell (`row * 10 + column`) outside
+  22-24, room 3's tile becomes 10 and its foreground `(draw << 5) |
+  0x4000`: 1 a healing flask, 2 a life enhancement. TriggerFlask 5:1ce8
+  starts the bubbling at `Rnd(26) + 1` and 5:18f0 redraws the cell. ALIVE
+  becomes 7.
+- 9:01d4-01e2: once the cue word is clear and ALIVE > 6, ALIVE goes up by
+  one per call.
+- At ALIVE 96, unless +0x28 is already 239: SEQS 239 (poses 242-254), sound
+  243, the target (a5-0x5098) reset when it was this copy. The sequence's
+  -17 is RemoveChar 4:48f8, which takes the record out of the room-3 bank,
+  so FinlCheckGenOpp can bring another copy: the respawning opponents the
+  strategy guide describes.
+
+Port: `final_jaffars.dead_copy_step` is the routine; combat runs it from
+the dead-guard path with `death_song_frames` as ALIVE up to 6 and
+`final_alive` after it, queues the flask in `final_drops`, and removes the
+copy on SEQS 239's -17. `Final.place_drops` writes it into the flasks'
+state (tile and phase), and `cavern_flask_instances` gives such a flask the
+same front command as the imported ones (shape 3001, X `column * 51 + 29`,
+bottom `row * 120 + 110`), so it is drawn, bubbles and can be drunk.
+
+Evidence:
+- `python -m tools.probe_final_jaffar_record`: 144 original cases run
+  9:0202 and 9:03c8 with FirstInRow 4:322a and GetOppInfoIdx 6:3642
+  native; Rnd, the palette-bank helpers 6:40f6/41dc, 4:31fa, 4:34e2,
+  SetSeq, 4:2c0c, AddSound and 4:4a46 are supplied and only record their
+  arguments. The room-3 count, the record's cell, X, facing, skill,
+  palette slot, index, life words and row, the character words and the
+  target agree. A model that always faces left is rejected.
+- `python -m tools.probe_final_dead_copy`: 1684 original cases of 9:00e2
+  with ReadCell, FirstInRow and the room loader 5:0004 native and Rnd,
+  TriggerFlask, the redraw, SetSeq and AddSound supplied. ALIVE, the
+  level's tile and foreground bytes, the supplied calls and the target
+  agree. Dropping the 22-24 exclusion, allowing four objects or moving
+  the shimmer to 97 is each rejected.
+- `python -m tools.probe_final_jaffar_generation` (216 cases) now
+  compares the constructor's arguments as (column, row).
+- `tests.test_final_jaffars` and `tests.test_final_copies` (hidden level-14
+  scenes): the copy on row 1 at cell 14, a copy that draws and wounds a
+  Prince on its row, the life-enhancement flask on its cell at ALIVE 6,
+  drawn in the front layer, SEQS 239 on the 97th frame after the death,
+  removal 13 frames later and a new copy, and drinking the flask
+  (maximum life 4 -> 5).
+
+Exclusions:
+- a5-0x43e6 is the trob count of the room on screen (capacity 20,
+  5:20bc). KeepTime 2:4fd0 adds one per flask, per cell of kinds
+  28/29/31/40/43 and, in native rooms 6-8, per crystal/gargoyle cell
+  (foreground 0x1000). Room 3's spider is kind 40, so with it three flasks
+  already refuse a fourth. The port counts these cells in the Prince's
+  room; the neighbouring rooms' edge cells that KeepTime also scans are
+  left out (room 3 has none of those kinds).
+- A copy that dies outside native room 3 keeps the ordinary body (6:07b8
+  requires room 3); the port does not let copies follow the Prince out of
+  room 3 (it has no exit they can walk through: CutChar refuses the right
+  edge and the other links are vertical).
+- No Macintosh capture of this room is available (the user's winning
+  video skips it), so the fight's timing and the pixels of SEQS 238/239
+  are unchecked against the original.
+
+## Moving scenery: fangs, face, crystals and gargoyles (ported 2026-11-15)
+
+Every moving object is a trob (AnimTrobs 5:0c38). AnimTrob 5:0cd6 loads
+the trob's room (5:0004) and its cell's foreground word into a5-0x4818
+(5:29a8), dispatches on the type through the table in the unmapped gap at
+5:0d0e, and writes the word back (5:0e24). The drawing hooks read the same
+word from the cell's draw record (a5-0x4f8c + 0x14), move a CUST record of
+the room and call DrawCustomRoomImg 3:2438(record, pass). All tables are in
+the A5 data.
+
+- **Room 3, the spider's fangs** (kind 40, cell 23; CUST 4050).
+  AnimFinlSpider 9:1bf0: bits 0-2 a frame, bits 3-10 a timer. With the
+  timer at 0 the frame advances to 5 and the rectangle a5-0x298e is
+  redrawn; at frame 5 the timer becomes `Rnd(60) + 30`. When the timer
+  runs out, 9:1c66-1c74 draws `Rnd(5) + 1` and sets frame 7 (a5-0x5002,
+  zero in play, would restart the long wait instead). The timer therefore
+  never returns to 0: the fangs move once. DrawFinlSpider 9:1cba (pass
+  11) draws a5-0x29a6[a] + 3 and a5-0x299a[b] + 3; with the timer at 0
+  both are the rest pose, so frames 1-4 are never shown, and frame 5
+  shows the right fang's record 4. The frame-7 word reads a5-0x29a6[7],
+  past the six-entry table, which is a5-0x299a[1]: records 8 and 7, both
+  left-fang images. That change is not redrawn (no 5:19f8 call), so it
+  appears when the room is drawn again: from the second visit on, the
+  right fang is missing. Running the native renderer (`recover_room`)
+  over the words 0x0, 0x2d, 0xf and 0x80d confirms the records drawn for
+  cells 23 and 24 (column 4 draws from the same word).
+  **Port exception (the user's choice, 2026-11-15):** an index past the
+  first table draws the left fang at rest, so both fangs stay on every
+  visit. `spider_images(word, native=True)` keeps the original reading,
+  which the probe checks.
+- **Room 4, Jaffar's face** (kind 31, cell 1; CUST 4075). 9:1b3a counts
+  the word up by one per frame. Counts 12-15 are redrawn and 9:1ba4 (pass
+  11) draws records a5-0x29ae[count - 12] + 3: 3, 4, 4 and 3, a wink. At
+  16 the trob ends with the word cleared and no redraw, so the half-closed
+  eye stays until the room is drawn again. It happens on each entry.
+- **Room 6, crystal glints** (CUST 4125). Cells with foreground 0x1000 get
+  TriggerFinlCrystal 9:2068 from KeepTime 2:5182-51a8 at room entry:
+  index from a5-0x2872 (reset by the room hook 9:1d84; nine at most),
+  wait `Rnd(40)`, the trob flag, AddTrob type 41. AnimFinlCrystal
+  9:1e30: bits 4-10 a wait, or frames while 0x800 is set. An ended wait
+  activates; frames 1-5 are redrawn; frame 6 starts a wait of `Rnd(40) +
+  40` without a redraw, so the last image (record 8, the smallest glint)
+  stays drawn. DrawFinlCrystal 9:1f5e (pass 1) draws record
+  a5-0x2986[frame - 1] + 8 moved by a5-0x297c[index] (dy, dx) in pass
+  a5-0x2958[index].
+- **Rooms 7 and 8, gargoyle faces** (CUST 4150, 4175). TriggerFinlGargoyle
+  9:233a: index from a5-0x2874, which 9:1d84 starts at 0 in room 7 and 2
+  in room 8, AddTrob type 42. AnimFinlGargoyle 9:20dc is the crystal
+  logic with frames 1-7; an index outside its room's pair ends the trob.
+  DrawFinlGargoyle 9:2238 (pass 1) draws record a5-0x2946[frame - 1] + 2,
+  plus 4 for every gargoyle but the first, at a5-0x2938[index] (bottom,
+  x) in pass a5-0x2928[index], then puts the record back at 0, 0, pass 11.
+
+Port: `pop2/final_scenery.py` holds the routines and tables.
+`Final.advance_scenery` sets up a newly entered room (KeepTime's scan;
+the fangs' and face's words carry over, crystals and gargoyles are
+triggered again) and steps the room's trobs in cell order with the game's
+Rnd, after the room-3 drops. `CavernState.final_scenery` keeps the words
+and `final_scenery_drawn` the word each image was last drawn from: it
+changes on a redraw request or on entering the room, which gives the
+original's lingering images. `draw_final_scenery` draws pass-0/11 images
+in the back layer and pass-1 images in the front layer. The static room 3
+no longer contains the exported rest pose (SHAP 4053-4060).
+
+Evidence:
+- `python -m tools.probe_final_scenery`: 2326 original cases run the face
+  routines, AnimFinlSpider, DrawFinlSpider, the crystal and gargoyle
+  routines and both triggers in Unicorn over the original A5 data and the
+  room's original CUST record. Rnd, the redraw call 5:19f8,
+  DrawCustomRoomImg (with the record's bottom, X and pass at the call),
+  AddTrob and the OffsetRect trap are supplied. Words, Rnd arguments,
+  redraw requests, drawn records and positions, trob ends and counters
+  agree. States the routines never produce are left out: an active frame
+  past the last one, gargoyle indexes above 3 and active-fang frames 6-7.
+- `tests.test_final_scenery`: the fangs' single movement and the
+  never-zero timer (a model that animates again is rejected), the frame-7
+  images, the wink, crystal and gargoyle cycles and records, room-entry
+  triggers, and in hidden level-14 scenes the fangs drawn from their word
+  (absent from the static room), the frame-7 word shown only after
+  re-entry, room 6's glints, and a save round trip.
+
+Exclusions:
+- In the original, an actor moving over these cells redraws them from
+  the current word, so a lingering image can change in patches before
+  the room is drawn again. The port redraws only on the trob's own
+  request or on room entry. DrawFinlSpider's raised clip top for cell 23
+  is not needed with full-room drawing.
+- KeepTime also scans the neighbouring rooms' edge cells; a crystal or
+  gargoyle cell there would get a trob (and Rnd draws) in the original.
+  The port sets up only the room on screen.
+- 9:1d84 also asks for songs (269 in room 6; 262 in rooms 7 and 8 under
+  conditions); see the room themes section below.
+- No Macintosh capture of these rooms is available to compare pixels.
+
+## The mental rooms' themes (ported 2026-11-15)
+
+Environment 6 has no ambient bank (bank 6 is empty), so before this the
+final level was silent apart from effects, and the audio import did not
+render any of its songs. CODE 9 plays four room themes:
+
+- The CUST enter hooks: 9:1a90 (native rooms 3-5) adds Spider (268) in
+  room 3 and ChessRm (267) in room 4, then waits on sound 30500
+  (WaitSndId 16:270e); 9:1d84 (rooms 6-8) adds Crystal (269) in room 6,
+  Escher (262) in room 7 when a5-0x4ff2 is set, and Escher in room 8 when
+  it is not already playing and room 8's bank holds an opponent (LEVL
+  0x26e6 = 0x20e6 + 8 * 0xc0).
+- FinlWatchOpps 9:0654, every frame, when the music is on (a5-0x3738), the
+  current song (a5-0x4398) has ended (PrinceSndOn 5:52c8), the Prince is
+  alive (a5-0x50b6 < 0) and no level change is pending: through the jump
+  table at 9:06aa (in an unmapped gap; decoded with capstone) room 3 asks
+  for Spider, rooms 4 and 5 for ChessRm, room 6 for Crystal while its bank
+  holds opponents (LEVL 0x2566, the false Princes; otherwise Crystal is
+  stopped with PrinceResetSnd 5:5252), room 8 sets a5-0x4ff2 and asks for
+  Escher, and room 7 asks for Escher once a5-0x4ff2 is set. 9:06fc-0714
+  adds the song unless it already plays. a5-0x4ff2 is cleared when an
+  environment-6 level starts (2:6e74).
+
+Port: `pop2/final_music.py` (`entry_song`, `watch_song`) and
+`Final.ambient_audio`; the themes are ambient songs, so the port's music
+switch silences them. `CavernState.final_escher` is a5-0x4ff2. The audio
+import now renders `FINAL_SONGS`: 262-265 and 267-270 and Shadow (290),
+which also gives sound to the shadow form, the spell (265) and the body's
+dissolve (264) that were already requested. Happy1 (266, a .gmf song)
+renders silent and is left out. An older import has no files for these
+and stays silent until the game is imported again.
+
+Evidence: static reading of the hooks and of 9:0654-0716 including the
+decoded table; `tests.test_final_music` checks both tables (a reading
+that swaps rooms 7 and 8 is rejected) and, in hidden level-14 scenes,
+each room's requests, the Escher flag, no new theme while a song plays
+and nothing with the music off. No native CPU probe and no capture.
+
+Which rooms run each hook: LoadCustomRoomData 3:1378 loads CUST 3975 +
+native room * 25 and, with a record, takes the enter hook through
+3:18aa (table a5-0x4c2e by CUST kind, 3:13ec-13f8). The
+expanded DATA gives kinds 25-27 (rooms 3-5) the 9:1a90 entry, kinds 28-30
+(rooms 6-8) 9:1d84, kind 23 (room 1) 9:1a4c and kind 9 (room 11) 9:00c6 (the
+CTBL 3503 hook). Rooms 9 and 10 have no CUST resource, so no hook runs there
+and room 10 gets no Crystal.
+
+Exclusion: ChessRm starts after the room-4
+wait below, about two seconds later than the Macintosh, whose hook adds it
+before waiting.
+
+### The spell's last sound and room 4's wait (2026-11-15)
+
+From frame 51 `TransFuncJaffarMagic` checks sound 10055 (SoundIdOn
+16:25b0): once it has ended and a5-0x245a is clear (cleared at 15:0918),
+it starts 30500 with StartSndId 16:2396 and sets the flag (15:0ae4-0b0c).
+The extractor reported SoundIdOn as playing and emitted the throne scene's
+"restart when ended" operation, so the port replayed 10055 and never played
+30500. The scene now has a `sound_after` operation. Room 4's enter hook
+(9:1ab4-1b06) sets the room palettes, adds ChessRm, erases the screen and
+calls WaitSndId(30500, 1) 16:270e; the scene's black last frame is held by
+a closing `wait_sound` (30500, 1) tagged `code: 9`. In the scene's own
+timeline 30500 starts at 8.6 s and ends at 11.5 s, after the scene's 9.5 s.
+
+Evidence: static reading; `tests.test_final_spell` rejects the old
+operation and checks the follow sound plays once and holds the end. A
+re-import writes the corrected scene and its 30500 entry.

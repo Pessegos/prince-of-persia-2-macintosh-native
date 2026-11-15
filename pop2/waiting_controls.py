@@ -197,7 +197,13 @@ class WaitingControls:
                     self.down_held and self.shift_held and self._try_start_ledge_hang()):
                 self.start_crouch_lower()
         elif request == 'draw':
-            self.start_sword_action('sword_draw')
+            # DoKidEngarde 6:1f4c-1f72: the final shadow casts instead.
+            from pop2.environments import environment_for
+            cast = getattr(environment_for(self), 'sword_key', None)
+            if cast is None or not cast():
+                self.start_sword_action('sword_draw')
+            elif not self.in_animation_tick:
+                self.advance_animation_now()
         return True
 
     def clear_waiting_controls(self):

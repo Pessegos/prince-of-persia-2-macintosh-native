@@ -19,7 +19,10 @@ from pop2.flame_sword import (
     GLIDE_SEQUENCE as FLAME_GLIDE, PARRY_CUE as FLAME_PARRY_CUE,
     PARRY_WINDOW as FLAME_PARRY_WINDOW, STRIKE_RANGE,
 )
-from pop2.final_jaffars import next_jaffar_spawn
+from pop2.final_jaffars import (
+    APPEAR_SEQUENCE, DROP_ALIVE, SKILL as COPY_SKILL, FLASK_TILE, SHIMMER_SOUND, VANISH_SEQUENCE,
+    dead_copy_step, drop_foreground, next_jaffar_spawn,
+)
 from pop2.opponent_selection import nearest_opponent
 from pop2.sequence_runtime import SequenceRuntime, SequenceState
 from pop2.control_mapping import IDLE_SEQUENCE
@@ -196,10 +199,18 @@ class Fighter:
     ruins: object | None = None
     # Level twelve's flaming sword (actor type 10).
     flame_sword: object | None = None
-    # CODE 9 room-3 copy: its record cell can encode path rows 4, 6 or 8.
+    # CODE 9 room-3 copy (9:03c8), an ordinary skill-5 guard in Jaffar's
+    # colours; `final_alive` is its ALIVE word after the drop (9:00e2).
     final_jaffar: bool = False
+    final_alive: int | None = None
     # Final tower raw-kind-3 actors: Jaffar disguised as the Prince (type 6).
     final_clone: bool = False
+    # The last room-6 figure, moved to the palace by 9:19fa (path 9:16fe).
+    final_path: bool = False
+    # 9:16fe's opponent-record path fields (+0x1c mode, +0x1e/+0x20).
+    final_info: object | None = None
+    # DoStepFwd's warning flag (+0x18) for the Kid routines it runs.
+    final_cautious: bool = True
 
     @property
     def state(self):
@@ -221,6 +232,132 @@ class CombatEvent:
     death_method: int | None = None
     # None keeps the host's ordinary hit/parry sound; 0 is silent.
     sound: int | None = None
+
+
+# Native rooms 7 and 8. The final Jaffar acts only while he is in the
+# Prince's active opponent list: in the Prince's room (or a visible side
+# slot). Running out of it, CutOpponent 6:424c -> UpdateOppInfo 6:30b0
+# moves his record to the other room's bank and drops him from the list,
+# so he waits there, mid-move, until the Prince comes (the video's Prince
+# crosses room 7's upper floor unharmed while he stands in room 8). The
+# port lets a burning Jaffar (SEQS 230) finish there, so that a fire that
+# crossed the border still ends the game.
+PALACE_ROOMS = (6, 7)
+# Native room 3: the Jaffar copies' room (FinlWatchOpps 9:0874).
+FINAL_COPY_ROOM = 2
+# Native room 6, the false Princes' room.
+FALSE_PRINCE_ROOM = 5
+# KeepTime 2:4fd0: tile kinds that add an animated object (trob).
+TROB_KINDS = (FLASK_TILE, 28, 29, 31, 40, 43)
+
+
+class _FinalKid:
+    """The Kid control routines that 9:16fe calls on the Jaffar's record,
+    over the port's terrain helpers (port facing: 1 right)."""
+
+    def __init__(self, encounter, figure, frames):
+        self.encounter, self.figure, self.frames = encounter, figure, frames
+        self.terrain = encounter.terrain
+
+    @property
+    def state(self):
+        return self.figure.state
+
+    def _record(self):
+        return self.frames[self.state.action]
+
+    def _bounds(self):
+        return self.encounter.guard_art.bounds(self.state, floor_y(self.figure.row))
+
+    def _move(self, offset):
+        self.state.target_x += offset
+        self.state.current_x = self.state.target_x
+
+    def select(self, sequence):
+        select_sequence(self.figure, sequence)
+
+    def step(self, distance):
+        # DoStepFwd 6:1276; 0 measures GetBarrDistances (4:5eae).
+        from pop2.mac_input import StepBoundary, plan_cautious_step
+
+        figure = self.figure
+        boundary = (StepBoundary(distance) if distance else self.terrain.step_boundary(
+            figure.room, figure.row, self.state, self._record(), self._bounds(), cautious=True))
+        plan, figure.final_cautious = plan_cautious_step(boundary, figure.final_cautious)
+        self._move(plan.pre_offset if self.state.facing else -plan.pre_offset)
+        if plan.sequence_id is not None:
+            self.select(plan.sequence_id)
+
+    def forward(self):
+        # 6:11a0: within 27 pixels of a solid barrier, DoStepFwd(0);
+        # otherwise SEQS 1, the start of the run.
+        figure = self.figure
+        boundary = self.terrain.step_boundary(figure.room, figure.row, self.state,
+                                              self._record(), self._bounds())
+        if boundary.barrier_type == 1 and boundary.clearance < 27:
+            self.step(0)
+        else:
+            self.select(1)
+
+    def stand_jump(self):
+        # 6:15ea: JumpSeq(3).
+        self.select(3)
+
+    def jump_up(self):
+        # DoJumpUp 6:1600: a ledge ahead (SEQS 24), behind (24/16), or the
+        # vertical jump (28/14).
+        figure, state, record = self.figure, self.state, self._record()
+        offset = self.terrain.upper_ledge(figure.room, figure.row, state, record)
+        if offset is not None:
+            sequence = 24
+        else:
+            back = self.terrain.back_ledge_jump(figure.room, figure.row, state, record)
+            if back is not None:
+                sequence, offset = back
+            else:
+                sequence, offset = self.terrain.vertical_jump(
+                    figure.room, figure.row, state, record, self._bounds())
+        self._move(offset)
+        self.select(sequence)
+
+    def climb(self):
+        # 6:1998: SEQS 10 (73 below a low gate).
+        self.select(self.terrain.climb_sequence(self.figure.room, self.figure.row,
+                                                self.state, self._record()))
+
+    def release(self):
+        # 6:1a84: drop from the hang.
+        figure = self.figure
+        sequence, offset = self.terrain.release_ledge(
+            figure.room, figure.row, self.state, self._record(),
+            next_action=figure.runtime.peek_frame().action)
+        self._move(offset)
+        if figure.terrain_motion is not None:
+            figure.terrain_motion.falling = sequence in (23, 99)
+        self.select(sequence)
+
+    def run_jump(self):
+        # DoRunJump(4) 6:1c14 from run poses 7-14.
+        if not 7 <= self.state.action <= 14:
+            return
+        offset = self.terrain.run_jump_offset(self.figure.room, self.figure.row,
+                                              replace(self.state, actor_type=0))
+        if offset is not None:
+            self._move(offset)
+            self.select(4)
+
+    def descend(self):
+        # StairClimbing 6:0e8e: lower himself over the edge behind (SEQS 68).
+        offset = self.terrain.descend_ledge(self.figure.room, self.figure.row,
+                                            self.state, self._record())
+        if offset is not None:
+            self._move(offset)
+            self.select(68)
+
+    def add_x(self, distance):
+        # AddCharX 4:2bae: forward along the facing.
+        self._move(distance if self.state.facing else -distance)
+        return self.state.target_x
 
 
 @dataclass(frozen=True)
@@ -249,6 +386,12 @@ def strike_range(attacker, defender):
         # 6:5c58: the flaming sword's own reach.
         return STRIKE_RANGE
     opposed = attacker.state.facing != defender.state.facing
+    if attacker.state.actor_type == 6 or (attacker.state.actor_type in (0, 1)
+                                          and defender.state.actor_type == 6):
+        # 6:5bd2-5c06 and 6:5cd4-5cec: Jaffar's false Princes (type 6) are
+        # struck, and strike, at close range: 16..79, or 16..86 when the
+        # Prince faces a copy.
+        return 16, (86 if opposed and attacker.state.actor_type != 6 else 79)
     if attacker.state.actor_type in (0, 1):
         low, high = 61, 99
         # 0x5c18 tests engagement, unlike the NPC branch's sword-flag test.
@@ -322,6 +465,11 @@ class CombatEncounter:
         self.reset()
 
     def reset(self):
+        # Final-path results for the host: Prince events and AddSong cues.
+        self.final_events = []
+        self.final_songs = []
+        # 9:00e2 flasks left by room-3 copies: (room, cell, foreground).
+        self.final_drops = []
         if self.spawn is None:
             if self.level is None:
                 raise ValueError("An encounter without an initial guard needs LEVL data")
@@ -463,6 +611,13 @@ class CombatEncounter:
             # InitOpps -> CheckLoadedOppSet 3:5278 loads the room's set.
             art.select_room(self.guards)
         self._restore_opponent_records()
+        if self.level_kind == 6 and room == FALSE_PRINCE_ROOM and previous_room != room:
+            # CheckSideRoomsForVisibleOpps 6:2b7e -> 6:3972, actor 6 in
+            # native room 6 (6:39a2-39c8): each figure faces Rnd(1) - 1 on
+            # entry, native -1 (left, port 0) or 0 (right, port 1).
+            for actor in self.guards:
+                if actor.state.actor_type == 6:
+                    actor.state.facing = self.rng.randrange(2)
         self.guard = self._nearest_guard() or next(iter(self.active_guards()), None)
 
     def _restore_opponent_records(self):
@@ -610,9 +765,11 @@ class CombatEncounter:
         terrain = getattr(self, "terrain", None)
         if terrain is None:
             return list(self.guards)
+        palace = self.level_kind == 6 and self.player.room in PALACE_ROOMS
         active = [guard for room, (guards, _points) in self.room_encounters.items()
                 for guard in guards
-                if room == self.player.room or guard.bank_room == self.player.room]
+                if room == self.player.room or guard.bank_room == self.player.room
+                or palace and guard.final_path and room in PALACE_ROOMS]
         return sorted(active, key=lambda guard: guard.bank_slot)
 
     def _room_offset(self, source, destination):
@@ -656,7 +813,6 @@ class CombatEncounter:
 
     def visible_guards(self):
         return [view for guard in self.active_guards()
-                if not guard.final_jaffar or 0 <= guard.row < 3
                 if (view := self._project_fighter(guard, self.player.room)) is not None]
 
     def health_opponent(self):
@@ -1074,6 +1230,8 @@ class CombatEncounter:
             guard.death_registered = True
             guard.native_alive = False
             self._advance_guard_death_song(guard)
+            if guard.final_jaffar and self.level_kind == 6:
+                self._final_jaffar_dead(guard)
             if guard.skeleton is not None:
                 guard.skeleton.native_alive = False
                 if guard.skeleton.phase in ('active', 'rising'):
@@ -1205,8 +1363,6 @@ class CombatEncounter:
     def update_guard_alerts(self):
         self.wake_skeletons()
         for guard in self.active_guards():
-            if guard.final_jaffar:
-                continue
             with self._local_opponents(guard):
                 self._update_guard_alert(guard)
 
@@ -1546,24 +1702,102 @@ class CombatEncounter:
             first.row if first else 0, self.player.row, self.rng)
         if spawn is None:
             return
-        x = scene_x(207 + 51 * spawn.column)
-        state = SequenceState(238, current_x=x, target_x=x, facing=0,
+        x = scene_x(spawn.native_x)
+        state = SequenceState(APPEAR_SEQUENCE, current_x=x, target_x=x,
+                              facing=1 if spawn.facing_right else 0,
                               actor_type=2, level_kind=6)
         actor = Fighter(SequenceRuntime(self.sequences, state), spawn.life,
-                        spawn.life, self.player.room, spawn.row, skill=5,
-                        selected_sequence=238, palette_variant=3,
-                        final_jaffar=True, native_alive=True)
+                        spawn.life, self.player.room, spawn.row, skill=COPY_SKILL,
+                        selected_sequence=APPEAR_SEQUENCE, palette_variant=3,
+                        final_jaffar=True, native_alive=True,
+                        # 9:04d6: the pending-cue word starts armed.
+                        death_song_pending=True)
+        actor.runtime.rng = self.rng
         actor.runtime.next_frame()
-        actor.guard_record = GuardRoomRecord(238, 0, spawn.life, False,
+        # 9:04f2: AddSound(0xf3) as the copy appears.
+        state.sound_events.append(SHIMMER_SOUND)
+        actor.guard_record = GuardRoomRecord(APPEAR_SEQUENCE, 0, spawn.life, False,
                                              spawn.cell, pending=False)
         actor.bank_room, actor.bank_slot = self.player.room, len(self.guards)
         self.guards.append(actor)
         self.refresh_target()
 
+    def _final_jaffar_dead(self, guard):
+        """FinlCheckDeadOpp 9:00e2, run by GenCtrl 6:07b8-07d6 for a dead
+        type-2 copy in native room 3 of environment 6. Until PlayerCtrl's
+        count (death_song_frames) reaches 6 the native ALIVE word is that
+        count; `final_alive` carries it from then on."""
+        if guard.room != FINAL_COPY_ROOM:
+            return
+        alive = guard.final_alive
+        if alive is None:
+            alive = guard.death_song_frames
+            if alive < DROP_ALIVE:
+                return
+        column = self._supporting_column(guard)
+        tile = None
+        terrain = getattr(self, 'terrain', None)
+        if alive == DROP_ALIVE and terrain is not None:
+            tile = terrain.tile(guard.room, column, guard.row)
+        step = dead_copy_step(
+            alive, guard.death_song_pending, guard.state.selected_sequence_id,
+            tile.kind if tile is not None and tile.room is not None else 0,
+            self._final_room_objects(guard.room), guard.row, column, self.rng)
+        if step.drop:
+            self.final_drops.append((guard.room, step.cell, drop_foreground(step.drop)))
+        if step.vanish:
+            select_sequence(guard, VANISH_SEQUENCE)
+            guard.state.sound_events.append(SHIMMER_SOUND)
+            if self.guard is guard:
+                self.guard = None
+        guard.final_alive = step.alive
+
+    def _final_jaffar_removed(self, guard):
+        """SEQS 239's -17: RemoveChar 4:48f8 takes the copy out of the
+        room-3 bank, so FinlCheckGenOpp may bring another."""
+        events = guard.state.sequence_events
+        if not any(event[0] == -17 for event in events):
+            return False
+        events[:] = [event for event in events if event[0] != -17]
+        bank = self.room_encounters.get(guard.room, ([], []))[0]
+        if guard in bank:
+            bank.remove(guard)
+        for slot, other in enumerate(bank):
+            other.bank_slot = slot
+        if self.guard is guard:
+            self.guard = None
+        if guard.state.sound_events:
+            self.player.state.sound_events.extend(guard.state.sound_events)
+            guard.state.sound_events.clear()
+        self.refresh_target()
+        return True
+
+    def _final_room_objects(self, room):
+        """a5-0x43e6, the animated objects (trobs) of the room on screen.
+        KeepTime 2:4fd0 adds one for each flask (TriggerFlask 5:1ce8), each
+        cell of kinds 28/29/31/40/43 (5:20a0) and, in native rooms 6-8,
+        each crystal or gargoyle cell (foreground 0x1000, 9:2068/233a);
+        room 3's spider is kind 40. Neighbour edge cells are left out."""
+        terrain = getattr(self, 'terrain', None)
+        if terrain is None:
+            return 0
+        room = self.player.room
+        count = 0
+        for cell in range(30):
+            tile = terrain.tile(room, cell % 10, cell // 10)
+            if tile.kind in TROB_KINDS or (room in (5, 6, 7) and tile.foreground & 0x1000):
+                count += 1
+        return count
+
     def advance_guard(self):
         terrain = getattr(self, "terrain", None)
+        if self.level_kind == 6 and self.player.room not in PALACE_ROOMS:
+            self._relocate_final_jaffar()
         for guard in self.active_guards():
-            if guard.final_jaffar or guard.state.actor_type == 6:
+            if guard.state.actor_type == 6 and self.level_kind == 6:
+                self._advance_final_figure(guard)
+                continue
+            if guard.state.actor_type == 6:
                 # These scripted actors need CODE 9's path/copy controller.
                 guard.runtime.next_frame()
                 continue
@@ -1582,7 +1816,11 @@ class CombatEncounter:
                 with self._local_opponents(guard):
                     self.choose_guard_action(guard)
             steps = guard.state.callback_counter
+            if guard.final_jaffar:
+                guard.runtime.rng = self.rng
             guard.runtime.next_frame()
+            if guard.final_jaffar and self._final_jaffar_removed(guard):
+                continue
             if guard.skeleton is not None:
                 guard.skeleton.after_frame(guard)
                 if (guard.state.callback_counter != steps
@@ -1610,6 +1848,234 @@ class CombatEncounter:
             if guard.recovering and guard.state.sequence_id == 227:
                 guard.recovering = False
         self._present_flame_swords()
+
+    def final_prince_view(self):
+        from pop2.final_tower import PrinceView
+
+        player = self.player
+        counter = getattr(self, 'player_death_counter', -1)
+        alive = -1 if player.alive else max(0, counter if counter is not None else 0)
+        state = player.state
+        return PrinceView(alive, state.selected_sequence_id, state.actor_type or 0,
+                          state.action, state.animation_state, state.facing,
+                          player.room, player.row, state.target_x)
+
+    def _advance_final_figure(self, figure):
+        """One opponent frame of a type-6 figure: AutoCtrl 6:4efe -> 9:08e8
+        (9:1526 in native room 6), then AnimChar. SEQS 196/240 end in -17,
+        RemoveChar 4:48f8."""
+        from pop2.final_tower import COPY_ROOM, copy_control
+
+        state = figure.state
+        if figure.final_path:
+            self._advance_final_path(figure)
+            return
+        if figure.room == COPY_ROOM:
+            frames = getattr(self, 'player_frames', None)
+            count = len(self.room_encounters.get(figure.room, ([], []))[0])
+            if frames is not None:
+                decision = copy_control(figure, self.final_prince_view(), count, frames)
+                if decision.turn:
+                    state.facing = 1 - state.facing
+                if decision.x_offset:
+                    state.target_x += decision.x_offset if state.facing else -decision.x_offset
+                    state.current_x = state.target_x
+                if decision.sword_drawn is not None:
+                    figure.sword_drawn = decision.sword_drawn
+                if decision.sound is not None:
+                    state.sound_events.append(decision.sound)
+                if decision.sequence is not None:
+                    select_sequence(figure, decision.sequence)
+        figure.runtime.rng = self.rng
+        figure.runtime.next_frame()
+        state.current_x = state.target_x
+        if any(event[0] == -17 for event in state.sequence_events):
+            state.sequence_events.clear()
+            self._remove_final_figure(figure)
+        else:
+            state.sequence_events.clear()
+        # Kid-framed sounds (SEQS 196's 260, 240's 270) join the actor cues.
+        if state.sound_events:
+            self.player.state.sound_events.extend(state.sound_events)
+            state.sound_events.clear()
+
+    def _final_view(self, fighter, record):
+        from pop2.final_path import Figure
+
+        state = fighter.state
+        column = character_column(floor_contact_x(state.target_x, state.facing, record))
+        return Figure(state.action, state.selected_sequence_id, 0 if state.facing else -1,
+                      state.target_x + NATIVE_X_ORIGIN, column, fighter.row, fighter.room + 1,
+                      fighter.life, -1 if fighter.alive else 0, state.actor_type or 0,
+                      state.sequence_mode)
+
+    def _advance_final_path(self, figure):
+        """AutoCtrl 9:16fe for the final Jaffar, then AnimChar, the Kid's
+        terrain rules and the palace room crossing (UpdateOppInfo 6:30b0)."""
+        from pop2.final_path import Controller, PathInfo
+        from pop2.final_tower import FATAL_DAMAGE
+
+        frames = getattr(self, 'player_frames', None)
+        state = figure.state
+        if figure.final_info is None:
+            figure.final_info = PathInfo()
+        old_x = state.target_x
+        in_view = figure.room == self.player.room or figure.bank_room == self.player.room
+        if not in_view and state.selected_sequence_id != 230:
+            # Out of the active list: his record keeps the move he was in.
+            return
+        if in_view and frames is not None and getattr(self, 'terrain', None) is not None:
+            view = self.final_prince_view()
+            player = self.player
+            prince = replace(self._final_view(player, frames[player.state.action]),
+                             alive=view.alive, turns=getattr(self, 'final_turns', 0))
+            jaffar = self._final_view(figure, frames[state.action])
+            kid = _FinalKid(self, figure, frames)
+            for event in Controller(jaffar, prince, figure.final_info, frames, kid).run():
+                if event[0] == 'sound':
+                    state.sound_events.append(event[1])
+                elif event[0] == 'hit':
+                    self.final_hits = getattr(self, 'final_hits', 0) + 1
+                elif event[0] == 'kill' and player.alive and not getattr(self, 'god_mode', False):
+                    # 9:14c8: the Prince takes SEQS 71, sound 12, 100 points
+                    # (DecLifePts 4:34f2) and death method 17 (4:3196).
+                    player.life = max(0, player.life - FATAL_DAMAGE)
+                    player.sword_drawn = False
+                    select_sequence(player, 71)
+                    player.runtime.next_frame()
+                    self.final_events.append(CombatEvent('death', 'player', 17))
+                elif event[0] == 'dissolve':
+                    # 9:177e-17bc: SEQS 241 and AddSong 264 for the body.
+                    player.sword_drawn = False
+                    player.sword_lost = True
+                    select_sequence(player, event[1])
+                    self.final_songs.append(event[2])
+        figure.runtime.rng = self.rng
+        figure.runtime.next_frame()
+        state.current_x = state.target_x
+        state.sequence_events.clear()
+        if frames is not None and getattr(self, 'terrain', None) is not None:
+            self._final_path_terrain(figure, frames, old_x)
+        if state.sound_events:
+            self.player.state.sound_events.extend(state.sound_events)
+            state.sound_events.clear()
+
+    def _final_path_terrain(self, figure, frames, old_x):
+        from pop2.final_path import LEDGE_SEQUENCES
+
+        state = figure.state
+        if state.engine_counter:
+            # SEQS -3/-4 change the floor row.
+            figure.row += state.engine_counter
+            state.current_y -= state.engine_counter * TILE_HEIGHT
+            state.engine_counter = 0
+        if figure.terrain_motion is None:
+            figure.terrain_motion = TerrainMotion(figure.room, figure.row)
+        motion = figure.terrain_motion
+        motion.room, motion.row = figure.room, figure.row
+        if not hasattr(self, 'final_physics'):
+            self.final_physics = RooftopPhysics(self.terrain, frames)
+        bounds = lambda view=None: self.guard_art.bounds(
+            state if view is None else view, floor_y(motion.row))
+        self.final_physics.advance(
+            motion, figure.runtime, old_x, bounds(), frame_record=frames[state.action],
+            bounds_for_state=bounds, cut_enabled=False,
+            protected=state.sequence_id in LEDGE_SEQUENCES)
+        state.current_x = state.target_x
+        figure.row = motion.row
+        # UpdateOppInfo 6:30b0: crossing a side moves the record to that room.
+        for side, delta in (('left', 510), ('right', -510)):
+            outside = state.target_x < 0 if side == 'left' else state.target_x >= 510
+            neighbor = self.terrain.neighbor(figure.room, side) if outside else None
+            if neighbor is not None:
+                if neighbor not in self.room_encounters:
+                    self._load_room(neighbor)
+                self.room_encounters[figure.room][0].remove(figure)
+                self.room_encounters[neighbor][0].append(figure)
+                figure.room = motion.room = neighbor
+                state.target_x += delta
+                state.current_x = state.target_x
+                # CutOpponent 6:42fc-430a: the cut record leaves the active
+                # opponent list (it is no longer the Prince's bank).
+                if neighbor != self.player.room:
+                    figure.bank_room = None
+                if self.guard is figure:
+                    self.guard = None
+                break
+
+    def _relocate_final_jaffar(self):
+        """JaffarUpdateOppInfo 9:185a: away from the palace, a Jaffar
+        travelling to a position is put there at once, standing (SEQS 2)."""
+        from pop2.final_path import POSITIONS
+
+        for room in PALACE_ROOMS:
+            for figure in tuple(self.room_encounters.get(room, ([], []))[0]):
+                info = figure.final_info
+                if not figure.final_path or info is None or info.pos == info.prev:
+                    continue
+                info.prev = info.pos
+                target = POSITIONS[info.pos]
+                destination = PALACE_ROOMS[1] if target.column >= 10 else PALACE_ROOMS[0]
+                # 9:18ca-18d2: X + 10, which lies inside the arrival window
+                # HoneIn 9:0dac tests in the target room's coordinates. (The
+                # 18d6 room-8 adjustment applies to the record's own room.)
+                x = target.x1 + 10
+                if destination != room:
+                    if destination not in self.room_encounters:
+                        self._load_room(destination)
+                    self.room_encounters[room][0].remove(figure)
+                    self.room_encounters[destination][0].append(figure)
+                figure.room, figure.row = destination, target.row
+                state = figure.state
+                state.target_x = state.current_x = x - NATIVE_X_ORIGIN
+                state.current_y = 0
+                state.facing = 1 if target.facing == 0 else 0
+                if figure.terrain_motion is not None:
+                    figure.terrain_motion = TerrainMotion(destination, target.row)
+                select_sequence(figure, 2)
+                figure.runtime.next_frame()
+
+    def _remove_final_figure(self, figure):
+        """RemoveChar 4:48f8. In native room 6 of environment 6, the last
+        figure (selected SEQS 240) leaving while the Prince lives is not
+        removed: 9:19fa moves it to the palace as the final Jaffar."""
+        from pop2.final_tower import COPY_ROOM, SHIMMER_SEQUENCE
+
+        guards = self.room_encounters.get(figure.room, ([], []))[0]
+        if figure in guards:
+            guards.remove(figure)
+        if (figure.room == COPY_ROOM and figure.state.selected_sequence_id == SHIMMER_SEQUENCE
+                and self.player.alive):
+            self._transfer_final_jaffar(figure)
+        if self.guard is figure:
+            self.guard = None
+        self.refresh_target()
+
+    def _transfer_final_jaffar(self, figure):
+        """9:19fa: column 17, row -3 and native X 1132 from room 6 are native
+        room 8 (up to 7, right to 8), column 7, row 0, X 622, with the
+        facing of path position 0 (a5-0x2a02: -1, left); SEQS 2."""
+        from pop2.final_tower import FINAL_ROOM, FINAL_START_X
+
+        if FINAL_ROOM not in self.room_encounters:
+            self._load_room(FINAL_ROOM)
+        state = figure.state
+        figure.room, figure.row = FINAL_ROOM, 0
+        state.target_x = state.current_x = FINAL_START_X
+        state.current_y = 0
+        state.facing = 0
+        figure.sword_drawn = False
+        figure.targetable = True
+        figure.final_path = True
+        from pop2.final_path import PathInfo
+
+        # The LEVL record's +0x1c/+0x1e/+0x20 words are zero for all four
+        # room-6 records; 9:19fa clears +0x22.
+        figure.final_info = PathInfo()
+        select_sequence(figure, 2)
+        figure.runtime.next_frame()
+        figure.bank_room = None
+        self.room_encounters[FINAL_ROOM][0].append(figure)
 
     def _present_flame_swords(self):
         # SetupSword 3:0b1c/4:1be4 and SetupOpponent 3:0f3e run as the Kid
@@ -1778,8 +2244,11 @@ class CombatEncounter:
             # takes no damage; only the falling bridge defeats it.
             protected = True
         fatal_sequence = not protected and target.state.sequence_id in FATAL_STAB_SEQUENCES
+        # CheckStab 6:52b8-52ca: a hit by or on a type-6 figure costs 100.
+        final_figure = self.level_kind == 6 and 6 in (target.state.actor_type,
+                                                       attacker.state.actor_type)
         if not protected:
-            target.life = 0 if fatal_sequence else max(0, target.life - 1)
+            target.life = 0 if fatal_sequence or final_figure else max(0, target.life - 1)
         if target.state.actor_type == 2:
             # CheckStab 6:556c-556e arms the pending cue on a sword hit.
             target.death_song_pending = True
@@ -1820,6 +2289,23 @@ class CombatEncounter:
                        target.room, target.row, target.state, record, column)
                        if not target.alive and not fatal_sequence
                        and terrain is not None and record is not None else None)
+        if not target.alive and final_figure and target.state.actor_type == 6:
+            # CheckStab's kill routine 6:55ca-55d6: SEQS 196, the dissolve.
+            from pop2.final_tower import DISSOLVE_SEQUENCE
+
+            target.targetable = False
+            target.sword_drawn = False
+            select_sequence(target, DISSOLVE_SEQUENCE)
+            target.runtime.next_frame()
+            target.state.current_x = target.state.target_x
+            return CombatEvent("death", name)
+        if not target.alive and final_figure and name == "player":
+            # 6:56a6-56ae: Jaffar's other idle figures shimmer away.
+            from pop2.final_tower import SHIMMER_SEQUENCE, shimmer_others
+
+            for figure in shimmer_others(self.room_encounters.get(attacker.room, ([], []))[0],
+                                         attacker):
+                select_sequence(figure, SHIMMER_SEQUENCE)
         if not target.alive:
             sequence, offset = 85, -17 if target.state.actor_type == 2 else 0
             if fall_offset is not None:
@@ -1873,8 +2359,10 @@ class CombatEncounter:
         if name == "player" and not target.alive:
             # CheckStab 6:5704-5748: ordinary type-2 guards on supported
             # levels (LEVL 21a4 == 0) select 14, not skeleton method 2.
+            # 6:570e: a type-6 killer selects method 17 (6:574e).
             death_method = (14 if attacker.state.actor_type == 2 else
-                            FLAME_DEATH_METHOD if attacker.state.actor_type == 10 else 2)
+                            FLAME_DEATH_METHOD if attacker.state.actor_type == 10 else
+                            17 if attacker.state.actor_type == 6 else 2)
         return CombatEvent("hit" if target.alive else "death", name, death_method)
 
     def kill_room_enemies(self, room):
@@ -1992,7 +2480,12 @@ class CombatEncounter:
                 self.last_guard_at = now
             else:
                 self.last_guard_at += interval_seconds
-        return self.resolve_contacts()
+        events = self.resolve_contacts()
+        final = getattr(self, 'final_events', None)
+        if final:
+            events[:0] = final
+            final.clear()
+        return events
 
     def advance_player_recovery(self):
         player = self.player

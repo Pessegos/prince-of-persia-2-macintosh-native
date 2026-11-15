@@ -43,6 +43,22 @@ def floor_redraw_cells(state, bounds):
                  for column in range(first, last + 1))
 
 
+def loose_contact_floor_cell(terrain, loose, room, row, state, record):
+    """User-approved leg reveal at the temple running-jump's first slab impact."""
+    if (terrain is None or loose is None or record is None or row not in range(3)
+            or state.level_kind != 2 or state.actor_type != 0
+            or state.source_sequence_id != 21 or state.action != 106
+            or state.animation_state != 4 or state.current_y != 6):
+        return None
+    column = character_column(floor_contact_x(state.target_x, state.facing, record))
+    tile = terrain.tile(room, column, row)
+    key = room, row * 10 + column
+    if (tile.room == room and tile.kind == 11 and tile.foreground & 0x4f == 11
+            and loose.active.get(key, 0) > 1):
+        return column, row
+    return None
+
+
 def falling_floor_redraw_cells(x, y, height=43):
     # Cave loose MOB: 5:3128-32e0 marks the next column at the bottom
     # and, if different, at the top of its 43-unit bounding rectangle.
@@ -103,8 +119,25 @@ class CavernRoom(OpeningRoom):
                 mask.paste(ImageChops.lighter(mask.crop(rect), cover), (x, y))
         return mask
 
-    def draw_actor_foreground(self, frame, state, bounds):
-        frame = self.draw_actor_floor_foreground(frame, state, bounds)
+    def contact_floor_mask(self, mask, cell):
+        # The one-frame leg reveal must also reach the earlier actor-alpha
+        # mask: a neighbouring stone base can overlap the struck slab.
+        # Remove only the slab's real silhouette, retaining the statue above.
+        positioned = None
+        # QuickFloor's half repaint stops at the tile boundary; the visible
+        # slab contour extends into the next cell, where the toe was cut.
+        for sprite, position in (self.platform_contours or {}).get(cell, ()):
+            positioned = merge_positioned_mask(positioned, sprite.getchannel('A'), position)
+        if positioned is None:
+            return mask
+        cover, (x, y) = positioned
+        rect = (x, y, x + cover.width, y + cover.height)
+        result = mask.copy()
+        result.paste(ImageChops.subtract(mask.crop(rect), cover), (x, y))
+        return result
+
+    def draw_actor_foreground(self, frame, state, bounds, floor_exclusion=None):
+        frame = self.draw_actor_floor_foreground(frame, state, bounds, floor_exclusion)
         frame = self.draw_walkoff_tip(frame, state, bounds)
         if (self.exit_foreground and state.actor_type == 0
                 and 217 <= state.action <= 226
@@ -128,7 +161,7 @@ class CavernRoom(OpeningRoom):
         return self.draw_floor_records(frame, records,
             (max(0, bounds[0]), max(0, bounds[1]), min(510, bounds[2] + 1), min(365, bounds[3] + 1)))
 
-    def draw_actor_floor_foreground(self, frame, state, bounds):
+    def draw_actor_floor_foreground(self, frame, state, bounds, floor_exclusion=None):
         surface = ledge_surface_clip(state, bounds)
         if surface is not None and self.floor_redraw is not None:
             # Intentional improvement over ComputeHalfRect: the support line
@@ -151,6 +184,7 @@ class CavernRoom(OpeningRoom):
             records = self.climb_redraw.get((state.action, column, row), ())
         elif self.floor_redraw:
             records = [record for cell in floor_redraw_cells(state, bounds)
+                       if cell != floor_exclusion
                        for record in self.floor_redraw.get(cell, ())]
             clip = (max(0, bounds[0] + int(bool(state.facing))), max(0, bounds[1]),
                     min(510, bounds[2] + 1), min(365, bounds[3] + 1))
@@ -552,12 +586,33 @@ def flask_assets():
 
 
 def cavern_flask_instances(program, room_id, terrain):
+    placed = set()
     for command in program['rooms'][str(room_id)]:
         if len(command) < 10 or command[7] != 1 or command[1] not in (3001, 3002):
             continue
+        placed.add((command[8], command[9]))
         tile = terrain.tile(room_id, command[8], command[9])
         if tile.room is not None and tile.kind == 10:
             yield command, tile
+    # Flasks written during play (the final tower's room-3 drops, 9:00e2)
+    # have no static command: place them like the imported ones.
+    state = getattr(terrain, 'caverns', None)
+    if state is None:
+        return
+    for (room, cell), (kind, _value) in sorted(state.potions.tiles.items()):
+        column, row = cell % 10, cell // 10
+        if room != room_id or kind != 10 or (column, row) in placed:
+            continue
+        tile = terrain.tile(room_id, column, row)
+        if tile.room is not None and tile.kind == 10:
+            yield flask_command(column, row), tile
+
+
+def flask_command(column, row):
+    """A library-1 flask's front command: shape 3001 with its bottom at the
+    floor line (row * 120 + 110), 29 pixels into the cell."""
+    x, y = column * 51 + 29, row * 120 + 110
+    return ['front', 3001, x, y, 16, row, [y - 16, x, y, x + 12], 1, column, row]
 
 
 FLAME_LEVEL, FLAME_ROOM, FLAME_CUSTOM = 13, 3, 4075
@@ -619,6 +674,48 @@ def draw_temple_flame(frame, room_id, counter, *, level_number=FLAME_LEVEL):
     sprite = cavern_command_sprite(['back', shape, x, bottom, mode, 0, [], 5], resources, palette, shapes)
     frame = frame.copy()
     frame.paste(sprite, (x, bottom - sprite.height), sprite)
+    return frame
+
+
+# The exported room 3 draws DrawFinlSpider's resting fangs (CUST 4050
+# records 3 and 7); records 3-10 are their frames (SHAP 4053-4060).
+FINAL_MOVING_SHAPES = {2: range(4053, 4061)}
+
+
+def draw_final_scenery(frame, room_id, state, *, level_number=14, front=False, terrain=None):
+    """Level 14's fangs, face, crystal glints and gargoyle faces
+    (pop2.final_scenery): their CUST records, moved as the drawing hooks
+    move them. Pass 1 is a front image; passes 0 and 11 are back ones.
+    A room not yet entered (a map preview) draws its trob cells from the
+    level's own words, `terrain` being its LevelMap."""
+    from pop2.final_scenery import TROB_KINDS, scenery_images
+
+    # The words the images on screen were last drawn from.
+    drawn = {cell: word for (room, cell), word in getattr(state, 'final_scenery_drawn', {}).items()
+             if room == room_id}
+    if not drawn and terrain is not None and room_id in TROB_KINDS:
+        tiles = {cell: terrain.tile(room_id, cell % 10, cell // 10) for cell in range(30)}
+        drawn = {cell: tile.foreground for cell, tile in tiles.items()
+                 if tile.kind == TROB_KINDS[room_id]}
+    words = sorted(drawn.items())
+    if not words:
+        return frame
+    _program, resources, palette, shapes = room_assets(level_number, room_id)
+    custom = resources.get('CUST', {}).get(4000 + room_id * 25)
+    if custom is None:
+        return frame
+    data = custom['data']
+    first, count = struct.unpack_from('>H', data, 2)[0], struct.unpack_from('>H', data, 28)[0]
+    for _cell, word in words:
+        for image in scenery_images(room_id, word):
+            if (image.draw_pass == 1) != front or not 0 <= image.record < count:
+                continue
+            shape_index, bottom, x, _pass, mode = struct.unpack_from('>5h', data, 30 + image.record * 32)
+            x = image.x if image.x is not None else x + image.dx
+            bottom = image.bottom if image.bottom is not None else bottom + image.dy
+            sprite = cavern_command_sprite(['back', first + shape_index, x, bottom, mode, 0, [], 4],
+                                           resources, palette, shapes)
+            frame.paste(sprite, (x, bottom - sprite.height), sprite)
     return frame
 
 
@@ -943,10 +1040,18 @@ def draw_cavern_falling(frame, room_id, state, level, art, *, level_number=3, ac
         for index, bottom in pieces:
             sprite = cavern_command_sprite(['back', index, block.x, bottom, 16],
                                             resources, palette, shapes)
-            frame.paste(sprite, (block.x, bottom - sprite.height), sprite)
-            # The host paints complete SHAPs: the temple lip is 90px wide,
-            # beyond ComputeMobRect's 87px logical box. Repaint the whole
-            # drawn footprint so its last pixels cannot cover the next tile.
+            # DrawForeImg is independent of DrawFloorBuf. A statue/pillar
+            # can have no floor record, but still occludes the moving slab.
+            # Mask the slab to preserve live lighting on the foreground.
+            # AddImgObj3:0302-030c stores top = bottom - height + 1.
+            # Unlike static room commands, a MOB's bottom is inclusive.
+            rect = (block.x, bottom - sprite.height + 1, block.x + sprite.width, bottom + 1)
+            cover = art.foreground.crop(rect).getchannel('A')
+            sprite = sprite.copy()
+            sprite.putalpha(ImageChops.multiply(sprite.getchannel('A'), ImageChops.invert(cover)))
+            frame.paste(sprite, rect[:2], sprite)
+            # The host paints complete SHAPs. Include any raster pixels
+            # beyond the logical MOB box in the neighbouring-floor repaint.
             width = max(width, sprite.width)
             height = max(height, y - bottom + sprite.height)
         redraw.append((block.x, y, (width, height)))
@@ -1481,6 +1586,9 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
         library = command[7] if len(command) >= 8 else 4
         if animated and library in (0, 1, 5):
             continue  # Items and the temple flame animate separately.
+        if (animated and level_number in FINAL_LEVELS and library == 4
+                and index in FINAL_MOVING_SHAPES.get(room_id, ())):
+            continue  # Room 3's spider fangs are drawn from their trob word.
         # These IDs animate torches only in Caverns.rsrc. Ruins.rsrc uses
         # the same numbers for tunnel fronts and floor decorations/cracks.
         if (animated and level_number in SCENERY_LEVELS[3] and program.get('version') >= 4

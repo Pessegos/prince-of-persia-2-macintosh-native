@@ -1,0 +1,48 @@
+{
+  "schema": 1,
+  "level": 2,
+  "records": [
+    {
+      "room": 0,
+      "size": [
+        510,
+        365
+      ],
+      "source_sha256": "ecc6c270093f5d8faa397b5557e8b98b6260eb7c6b31b55af120538791231465",
+      "source_rect": [
+        0,
+        0,
+        510,
+        190
+      ],
+      "atlas_rect": [
+        0,
+        0,
+        510,
+        190
+      ],
+      "pixels": 65127
+    },
+    {
+      "room": 1,
+      "size": [
+        510,
+        365
+      ],
+      "source_sha256": "9ceb4c1fc8ec22428ab87e5889d49e299f0e9bcab55a49741ac1e1720d17aacc",
+      "source_rect": [
+        0,
+        120,
+        88,
+        129
+      ],
+      "atlas_rect": [
+        0,
+        190,
+        88,
+        199
+      ],
+      "pixels": 107
+    }
+  ]
+}

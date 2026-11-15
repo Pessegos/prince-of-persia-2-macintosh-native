@@ -190,7 +190,7 @@ class RebirthSceneTests(unittest.TestCase):
     def test_gameplay_retry_key_remains_held_through_the_restarted_opening(self):
         scene = self.scene
         scene.peaceful = True
-        scene.jump_to_screen("1")
+        scene.jump_to_screen("Room 1")
         self.die()
         self.eligible()
         self.assertFalse(scene.death.prompt_visible)
@@ -560,7 +560,7 @@ class RebirthSceneTests(unittest.TestCase):
 
     def test_combat_death_completes_its_sequence_before_retry(self):
         scene = self.scene
-        scene.jump_to_screen("1")
+        scene.jump_to_screen("Room 1")
         scene.peaceful = True
         scene.combat.player.life = 1
         scene.combat.player.sword_drawn = scene.sword_drawn = True
@@ -692,7 +692,7 @@ class RebirthSceneTests(unittest.TestCase):
 
     def test_fresh_restart_and_dev_warp_discard_checkpoint_and_death_state(self):
         scene = self.scene
-        for reset in (scene.restart_opening, lambda: scene.jump_to_screen("3")):
+        for reset in (scene.restart_opening, lambda: scene.jump_to_screen("Room 3")):
             self.checkpoint()
             self.die()
             reset()
@@ -703,7 +703,7 @@ class RebirthSceneTests(unittest.TestCase):
     def test_dev_warp_after_checkpoint_retries_at_the_native_checkpoint(self):
         scene = self.scene
         scene.peaceful = True
-        for label in ("8", "9", "10"):
+        for label in ("Room 8", "Room 9", "Room 10"):
             with self.subTest(screen=label):
                 scene.jump_to_screen(label)
                 snapshot = scene.checkpoint
@@ -721,19 +721,19 @@ class RebirthSceneTests(unittest.TestCase):
     def test_dev_warp_uses_resource_checkpoints_in_route_order_not_slot_order(self):
         scene = self.scene
         scene.checkpoints = (Checkpoint(1, 2, 16), Checkpoint(2, 1, 18))
-        scene.jump_to_screen("7")
+        scene.jump_to_screen("Room 7")
         self.assertEqual(scene.checkpoint.checkpoint, Checkpoint(1, 2, 16))
-        scene.jump_to_screen("2")
+        scene.jump_to_screen("Room 2")
         self.assertEqual(scene.checkpoint.checkpoint, Checkpoint(2, 1, 18))
-        scene.jump_to_screen("1")
+        scene.jump_to_screen("Room 1")
         self.assertIsNone(scene.checkpoint)
-        scene.jump_to_screen("Secret (right)")
+        scene.jump_to_screen("Room 11")
         self.assertIsNone(scene.checkpoint)
 
     def test_going_back_before_checkpoint_or_restarting_clears_dev_checkpoint(self):
         scene = self.scene
-        for reset in (lambda: scene.jump_to_screen("7"), scene.restart_opening):
-            scene.jump_to_screen("10")
+        for reset in (lambda: scene.jump_to_screen("Room 7"), scene.restart_opening):
+            scene.jump_to_screen("Room 10")
             self.assertIsNotNone(scene.checkpoint)
             reset()
             self.assertIsNone(scene.checkpoint)

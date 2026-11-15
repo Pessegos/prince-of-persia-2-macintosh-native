@@ -60,7 +60,7 @@ from pop2.game_session import GameResources, GameSession
 from pop2.level_rendering import LevelRenderer
 from pop2.environments import environment_for
 from pop2.carpet import carpet_room
-from pop2.caverns import cavern_clip_top, cavern_exit_clip
+from pop2.caverns import cavern_clip_top, cavern_exit_clip, loose_contact_floor_cell
 from pop2.render_opening import (
     OPENING_FLOOR_Y,
     ROOF_GLASS_OFFSETS,
@@ -723,6 +723,12 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
             return False
         # GenCtrl6:0c90-0cba accepts only fresh Ctrl with no directions;
         # running6:11e4 does not consume it or request a sword animation.
+        cast = getattr(environment_for(self), 'sword_key', None)
+        if cast is not None and cast():
+            self.modifier_input = 2
+            if not self.in_animation_tick:
+                self.advance_animation_now()
+            return True
         return self.start_sword_action('sword_draw')
 
     def latch_request(self, command):
@@ -1337,6 +1343,11 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
                 self.frames[state.action], self.player_bounds())
             self.player_x += offset
             state.current_x = state.target_x = self.player_x
+        standing_turn = getattr(environment_for(self), 'standing_turn', None)
+        if standing_turn is not None and standing_turn():
+            # 4:1fb2 replaced the turn (6:1188 skips JumpSeq(5) after SEQS 71).
+            self.advance_animation_now()
+            return
         self.start_sequence(STANDING_TURN_SEQUENCE)
         self.status.set("Standing turn: original SEQS:5")
         self.advance_animation_now()
@@ -1377,6 +1388,10 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         self.run_active = False
         self.run_stop_requested = False
         sequence = CROUCH_LOWER_SEQUENCE if running else CROUCH_STANDING_LOWER_SEQUENCE
+        crouch = getattr(environment_for(self), 'crouch_sequence', None)
+        lie_down = crouch() if crouch is not None and not running else None
+        if lie_down is not None:
+            sequence = lie_down
         self.start_sequence(sequence)
         self.status.set(f"Crouch: original SEQS:{sequence}")
         if not self.in_animation_tick:
@@ -2190,7 +2205,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
             self.background, self.foreground = room.background, room.foreground
             self.combat.enter_room(self.room_id, motion.row)
             environment_for(self).entered_room()
-            self.status.set(f"Screen {self.screen_label(self.room_id)}")
+            self.status.set(self.screen_label(self.room_id))
         self.combat.player.row = motion.row
         for event in events:
             if event.kind == "next_level":
@@ -2368,6 +2383,12 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         events = combat.step(
             time.perf_counter(), self.current_animation_interval_ms() / 1000,
         )
+        songs = getattr(combat, 'final_songs', None)
+        if songs:
+            if getattr(self, 'audio', None) is not None:
+                for song in songs:
+                    self.audio.add_song(song)
+            songs.clear()
         for event in events:
             sound = (event.sound if event.sound is not None else
                      11 if event.kind == "parry" else 12 if event.actor == "player" else
@@ -2523,6 +2544,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
             self.game.caverns.potions.float_timer = 0
             # 2:5bfe clears a5-0x4fd4 at every level start.
             self.game.caverns.altar, self.game.caverns.shadow = 0, None
+            self.game.caverns.final_magic = None
         self.remember_development_room()
         held = set(self.window_keys_down)
         self.repair_throne_checkpoint()
@@ -2749,6 +2771,17 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         if self.with_intro:
             self.start_intro()
             self.render()
+
+    def new_game_plus(self):
+        """After the victory the presentation restarts a fresh game (CODE
+        2:45c2 clears the next level). Port choice: that game keeps the
+        finished campaign's cutscenes, and a scene not yet revealed in the
+        viewer is revealed the next time it opens. Alt+N or a load leaves it."""
+        collection = self.cutscene_collection
+        fresh = set(getattr(self, 'cutscene_fresh', ()))
+        self.new_game()
+        self.cutscene_collection = collection
+        self.cutscene_fresh = fresh
 
     def finish_intro(self):
         held = set(self.window_keys_down)
@@ -3192,7 +3225,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
             else:
                 self.audio.reset()
             self.advance_audio()
-        self.status.set(f"Level {self.game.level.number} / Screen {self.screen_label(room_id)}")
+        self.status.set(f"Level {self.game.level.number} / {self.screen_label(room_id)}")
         if redraw:
             self.render()
 
@@ -3256,15 +3289,15 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
             if not self.game.level.window_escape:
                 return self.load_level(self.game.level.number)
             return self.jump_to_room(room, row=1, x=411, facing=1)
-        secret = label == "Secret (right)"
+        secret = label == "Room 11" and self.game.level.number == 1
         if secret:
             row, column = next((row, column) for row in range(3) for column in range(10)
                                if self.level_map.tile(room, column, row).kind == 1)
             return self.jump_to_room(room, row=row, x=column * TILE_WIDTH + 30, facing=1)
-        if label == "8":
+        if label == "Room 8" and self.game.level.number == 1:
             # Entry from screen 7 is the upper roof, not the quay below.
             row, x = 0, 5 * TILE_WIDTH + 14
-        elif self.game.level.kind == 1 and label == "2 (Stones)":
+        elif self.game.level.kind == 1 and label == "Room 2":
             rows = [row for row in range(3)
                     if self.level_map.tile(room, 9, row).kind == 1]
             if not rows:
@@ -3442,7 +3475,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
             caverns.crush.last_updated_at = now
             self.schedule_gate_presentation()
 
-    def player_sprite(self, action=None):
+    def player_sprite(self, action=None, ctbl=None):
         # Lava's SEQS 116 is drawn by its pool. Scythes also use death
         # method 5, but their ordinary Kid frames 267-271 must remain visible.
         death = getattr(self, 'death', None)
@@ -3453,12 +3486,36 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
                                       self.action if action is None else action)
         if shape_id is None:
             return None
+        if ctbl is not None:
+            # Draw mode 0x30: the Kid's image in palette entries 48-63.
+            key = (ctbl, shape_id)
+            if key not in self.sprite_cache:
+                data = self.kid["SHAP"].get(shape_id)
+                if data is None:
+                    return None
+                colours = decode_ctbl(self.kid["CTBL"][ctbl]["data"])
+                self.sprite_cache[key] = decode_shap(data["data"], colours)
+            return self.sprite_cache[key]
         if shape_id not in self.sprite_cache:
             data = self.kid["SHAP"].get(shape_id)
             if data is None:
                 return None
             self.sprite_cache[shape_id] = decode_shap(data["data"], self.palette)
         return self.sprite_cache[shape_id]
+
+    def shadow_flame_sprite(self):
+        """SetupShadowFlame 4:2630: SHAP 4102 + frame % 9 in CTBL 4077,
+        whose entries 224-239 colour the images' 1-16."""
+        from pop2.temple_shadow import FLAME_PALETTE, flame_shape
+
+        combat = getattr(self, 'combat', None)
+        shape = flame_shape(combat.world_frame if combat is not None else 0)
+        key = (FLAME_PALETTE, shape)
+        if key not in self.sprite_cache:
+            colours = decode_ctbl(self.kid["CTBL"][FLAME_PALETTE]["data"])
+            colours = {index - 223: colour for index, colour in colours.items()}
+            self.sprite_cache[key] = decode_shap(self.kid["SHAP"][shape]["data"], colours)
+        return self.sprite_cache[key]
 
     def sword_set(self):
         """LoadSwordSet 3:5a4e: sword type 2 draws SHPL 1200 with AFRM 25201
@@ -3527,8 +3584,16 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         # An upper roof's foreground must not erase a lower-row fall.
         rooms = getattr(self, "room_cache", {})
         room = rooms.get(getattr(self, "room_id", None))
+        floor_exclusion = None
+        if room is not None and state is not None and bounds is not None:
+            caverns = getattr(getattr(self, 'game', None), 'caverns', None)
+            floor_exclusion = loose_contact_floor_cell(
+                getattr(self, 'level_map', None), getattr(caverns, 'loose', None),
+                self.room_id, row, state, record)
         mask = (room.actor_mask(row, bottom, state, bounds, record)
                 if room is not None and row is not None else self.foreground.getchannel("A"))
+        if floor_exclusion is not None:
+            mask = room.contact_floor_mask(mask, floor_exclusion)
         layer.putalpha(ImageChops.multiply(layer.getchannel("A"), ImageChops.invert(mask)))
         level = getattr(getattr(self, 'game', None), 'level', None)
         level_kind = getattr(state, 'level_kind', getattr(level, 'kind', None))
@@ -3552,7 +3617,9 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
             layer.paste((0, 0, 0, 0), (0, 243, layer.width, layer.height))
         frame = Image.alpha_composite(frame, layer)
         if level_kind in (2, 3, 4, 6) and room is not None and state is not None and bounds is not None:
-            frame = room.draw_actor_foreground(frame, state, bounds)
+            # Only the struck floor's repaint is deferred. The statue mask
+            # above and the following frame's detached slab retain their order.
+            frame = room.draw_actor_foreground(frame, state, bounds, floor_exclusion)
             if (state.actor_type in (0, 2, 4) and record is not None
                     and actor_draw_order(state, record, bounds, row)[0] == 0):
                 # IndexCell1 maps offscreen actors to bucket30, drawn before
@@ -3703,7 +3770,9 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         player_layer = Image.new("RGBA", frame.size)
         draw_state, draw_height = environment.drawn_player(self.sequence_state)
         draw_action = self.action if draw_height is None else draw_state.action
-        sprite = self.player_sprite(draw_action)
+        player_palette = getattr(environment, 'player_palette', None)
+        sprite = self.player_sprite(draw_action,
+                                    ctbl=player_palette() if player_palette is not None else None)
         drawn_bounds = None
         if sprite is not None:
             record = self.frames[draw_action]
@@ -3721,6 +3790,13 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
                 + (environment.draw_sag(combat.player) if combat is not None else 0),
                 sprite.height,
             )
+            player_flame = getattr(environment, 'player_flame', None)
+            if player_flame is not None and player_flame():
+                flame = self.shadow_flame_sprite()
+                if draw_state.facing:
+                    flame = ImageOps.mirror(flame)
+                player_layer.paste(flame, (x + sprite.width // 2 - flame.width // 2,
+                                           y + sprite.height - flame.height), flame)
             player_layer.paste(sprite, (x, y), sprite)
             drawn_bounds = (x, y, x + sprite.width - 1, y + sprite.height - 1)
             attachment = self.sword_sprite()

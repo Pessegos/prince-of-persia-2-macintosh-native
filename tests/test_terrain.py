@@ -1579,7 +1579,7 @@ class RooftopSceneTests(unittest.TestCase):
 
     def test_f2_first_screen_uses_settled_curtain(self):
         scene = self.scene
-        scene.jump_to_screen("1")
+        scene.jump_to_screen("Room 1")
         self.assertEqual(scene.opening.curtain_frame, 8)
         after_jump = scene.native_viewport.crop((220, 30, 350, 140)).tobytes()
         scene.restart_opening()
@@ -1920,7 +1920,7 @@ class RooftopSceneTests(unittest.TestCase):
         for delay in (0, 1, 3):
             with self.subTest(delay=delay), patch.object(scene, "render"):
                 scene.set_peaceful(True)
-                scene.jump_to_screen("1")
+                scene.jump_to_screen("Room 1")
                 scene.horizontal_key(None, -1, True)
                 scene.horizontal_key(None, -1, False)
                 self.tick(10)

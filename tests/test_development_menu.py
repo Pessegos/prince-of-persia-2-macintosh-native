@@ -11,7 +11,7 @@ from pop2.playback_navigation import PlaybackGroup
 from pop2.screenshots import ScreenshotSettings
 
 
-SCREENS = ("1", "2", "3", "4", "5", "6", "7", "Secret (right)")
+SCREENS = ("Room 1", "Room 2", "Room 3", "Room 4", "Room 5", "Room 6", "Room 7", "Room 11")
 
 
 class MenuModelTests(unittest.TestCase):
@@ -36,25 +36,25 @@ class MenuModelTests(unittest.TestCase):
     def test_screen_keys_wrap_and_popup_commits_only_on_selection(self):
         menu = self.menu
         menu.key("Right")
-        self.assertEqual(menu.screen, "6")
+        self.assertEqual(menu.screen, "Room 6")
         menu.key("Return")
         menu.key("Down")
-        self.assertEqual(menu.screen, "6")
+        self.assertEqual(menu.screen, "Room 6")
         self.assertEqual(menu.option_index, 6)
         menu.key("Return")
-        self.assertEqual(menu.screen, "7")
+        self.assertEqual(menu.screen, "Room 7")
         menu.key("Right")
         menu.key("Right")
-        self.assertEqual(menu.screen, "1")
+        self.assertEqual(menu.screen, "Room 1")
         menu.key("Left")
-        self.assertEqual(menu.screen, "Secret (right)")
+        self.assertEqual(menu.screen, "Room 11")
 
     def test_escape_cancels_popup_before_closing_menu(self):
         menu = self.menu
         menu.key("Return")
         menu.key("Down")
         self.assertEqual(menu.key("Escape"), "changed")
-        self.assertEqual(menu.screen, "5")
+        self.assertEqual(menu.screen, "Room 5")
         self.assertFalse(menu.dropdown)
         self.assertEqual(menu.key("Escape"), "resume")
 
@@ -77,7 +77,7 @@ class MenuModelTests(unittest.TestCase):
         menu.click(220, menu.control_rect(0)[1] + 8)
         self.assertTrue(menu.dropdown)
         menu.click(220, menu.control_rect(0)[3] + 3 * 19 + 8)
-        self.assertEqual(menu.screen, "4")
+        self.assertEqual(menu.screen, "Room 4")
         self.assertFalse(menu.peaceful)
         menu.click(220, menu.control_rect(0)[1] + 8)
         menu.click(150, menu.control_rect(1)[1] + 8)
@@ -94,7 +94,7 @@ class MenuModelTests(unittest.TestCase):
             with self.subTest(key=key, focus=focus):
                 self.assertEqual(menu.key(key), "changed")
                 self.assertEqual(menu.focus, focus)
-                self.assertEqual(menu.screen, "5")
+                self.assertEqual(menu.screen, "Room 5")
                 self.assertFalse(menu.peaceful)
                 self.assertFalse(menu.dropdown)
         menu.focus = 1
@@ -110,7 +110,7 @@ class MenuModelTests(unittest.TestCase):
         menu.open_dropdown()
         self.assertTrue(menu.hover(220, menu.control_rect(0)[3] + 6))
         self.assertEqual(menu.option_index, 0)
-        self.assertEqual(menu.screen, "5")
+        self.assertEqual(menu.screen, "Room 5")
 
     def test_playback_back_and_debug_checkbox_are_keyboard_accessible(self):
         menu = self.menu
@@ -155,19 +155,19 @@ class MenuModelTests(unittest.TestCase):
 
     def test_level_selector_updates_screens_before_screen_selection(self):
         levels = ((1, "Level 1", SCREENS),
-                  (2, "Level 2", ("1", "2 (Stones)", "Right shore")))
+                  (2, "Level 2", ("Room 1", "Room 2", "Room 3")))
         menu = DevelopmentMenu(SCREENS, 4, False, level_options=levels)
 
         menu.open_dropdown()
         menu.select(1)
         self.assertEqual(menu.level_number, 2)
-        self.assertEqual(menu.screen, "1")
+        self.assertEqual(menu.screen, "Room 1")
         self.assertEqual(menu.screen_options, levels[1][2])
 
         menu.focus = 4
         menu.open_dropdown()
         menu.select(1)
-        self.assertEqual(menu.screen, "2 (Stones)")
+        self.assertEqual(menu.screen, "Room 2")
 
     def test_popup_hover_keeps_rows_stable_and_wheel_reaches_both_ends(self):
         menu = self.menu
@@ -277,7 +277,7 @@ class MenuSceneTests(unittest.TestCase):
 
     def test_overlay_is_in_the_viewport_without_another_window_or_texture_mutation(self):
         scene = self.scene
-        scene.jump_to_screen("5")
+        scene.jump_to_screen("Room 5")
         before = scene.native_viewport.copy()
         scenery = scene.background.tobytes()
         children = scene.root.winfo_children()
@@ -302,7 +302,7 @@ class MenuSceneTests(unittest.TestCase):
 
     def test_clean_capture_matches_unpaused_game_and_excludes_menu_and_pause_text(self):
         scene = self.scene
-        scene.jump_to_screen("5")
+        scene.jump_to_screen("Room 5")
         original = scene.native_viewport.crop((1, 0, 511, 384)).convert("RGB")
         scene.set_paused(True)
         scene.toggle_screenshot_menu()
@@ -401,7 +401,7 @@ class MenuSceneTests(unittest.TestCase):
 
     def test_simulation_and_game_inputs_stay_frozen_and_pause_state_is_restored(self):
         scene = self.scene
-        scene.jump_to_screen("5")
+        scene.jump_to_screen("Room 5")
         for was_paused in (False, True):
             scene.set_paused(was_paused)
             scene.open_dev_mode()
@@ -532,7 +532,7 @@ class MenuSceneTests(unittest.TestCase):
 
     def test_text_keys_resume_pause_without_gameplay_or_repeat_until_release(self):
         scene = self.scene
-        scene.jump_to_screen("5")
+        scene.jump_to_screen("Room 5")
         for key in ("a", "space", "Return", "Tab", "KP_0"):
             with self.subTest(key=key):
                 scene.set_paused(True)
@@ -631,7 +631,7 @@ class MenuSceneTests(unittest.TestCase):
 
     def test_held_navigation_key_cannot_reach_gameplay_after_keyboard_close(self):
         scene = self.scene
-        scene.jump_to_screen("1")
+        scene.jump_to_screen("Room 1")
         scene.open_dev_mode()
         scene.apply_dev_action(scene.dev_menu.activate())
         scene.dev_menu.focus = 2

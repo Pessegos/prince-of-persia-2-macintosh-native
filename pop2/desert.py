@@ -5,6 +5,7 @@ import struct
 
 from PIL import Image
 
+from pop2.desert_retouch import retouched_background
 from pop2.render_opening import (
     OpeningRoom, ROOM_HEIGHT, ROOM_WIDTH, decode_ctbl, decode_shap,
 )
@@ -71,7 +72,7 @@ class DesertScene:
         return frame
 
     @classmethod
-    def read(cls, resources, room_id):
+    def read(cls, resources, room_id, retouch=True):
         data = resources['CUST'][4000 + room_id * 25]['data']
         kind, first_shape = struct.unpack_from('>2H', data)
         count = struct.unpack_from('>H', data, 28)[0]
@@ -95,6 +96,8 @@ class DesertScene:
                 sprite = shapes[first_shape + index]
                 layer = foreground if draw_pass == 1 else background
                 layer.paste(sprite, (x, bottom - sprite.height), sprite)
+        if retouch:
+            background = retouched_background(room_id, background)
         masks = {row: foreground.getchannel('A') for row in range(-1, 5)}
         room = OpeningRoom(background, foreground, masks, (), (), room_id, 1)
         return cls(room, records, shapes, kind, first_shape)

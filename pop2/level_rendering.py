@@ -244,6 +244,23 @@ class LevelRenderer:
         return frame
 
     def animated_layer(self, frame, room_id, harbor, front=False, frame_number=0, desert=None, caverns=None):
+        if self.level.kind == 6 and caverns is not None:
+            # The final tower's flasks (native rooms 7, 8 and 10, and room
+            # 3's drops) are front commands like the caverns' own; the static
+            # room leaves their library-1 commands out.
+            # Its moving scenery (pop2.final_scenery) has images in both.
+            from pop2.terrain import LevelMap
+            from pop2.caverns import draw_cavern_flasks, draw_final_scenery
+
+            if self.cavern_map is None:
+                self.cavern_map = LevelMap(self.level.data)
+            if not front:
+                return draw_final_scenery(frame, room_id, caverns, level_number=self.level.number,
+                                          terrain=self.cavern_map)
+            frame = draw_cavern_flasks(frame, room_id, caverns, self.cavern_map,
+                                       level_number=self.level.number)
+            return draw_final_scenery(frame, room_id, caverns, level_number=self.level.number,
+                                      front=True, terrain=self.cavern_map)
         if self.level.kind in (2, 3, 4) and caverns is not None:
             from pop2.terrain import LevelMap
             from pop2.caverns import (
@@ -305,7 +322,7 @@ class LevelRenderer:
 
     def screen_entries(self):
         if self.level.kind == 1:
-            return {"1": 1, "2 (Stones)": 0, "Right shore": 2}
+            return {"Room 1": 1, "Room 2": 0, "Room 3": 2}
         if self.level.kind in (2, 3, 4, 6):
             return {f"Room {room + 1}": room for room in self.supported_rooms()
                     if not (self.level.number == 14 and room == 10)}
@@ -317,8 +334,8 @@ class LevelRenderer:
             route.append(room)
             left = terrain.neighbor(room, "left")
             room = left if left in available else terrain.neighbor(room, "down")
-        entries = {str(index + 1): room for index, room in enumerate(route)}
+        entries = {f"Room {index + 1}": room for index, room in enumerate(route)}
         secret = terrain.neighbor(self.level.start_room, "right")
         if secret in available and secret not in route:
-            entries["Secret (right)"] = secret
+            entries[f"Room {len(entries) + 1}"] = secret
         return entries

@@ -18,9 +18,9 @@ class CollectionTests(unittest.TestCase):
     def test_whole_story_catalog_includes_recent_films_and_excludes_tree_and_gameplay(self):
         self.assertEqual([chapter.program for chapter in CHAPTERS],
                          ['intro.json', 'intro.json', 'intro.json', 'ending.json', 'discovery.json', 'carpet.json',
-                          'throne.json', 'temple.json', 'tower.json'])
+                          'throne.json', 'temple.json', 'tower.json', 'final_spell.json', 'happy.json'])
         self.assertEqual(len(CHAPTER_KEYS), len(CHAPTERS))
-        self.assertEqual(len({chapter.program for chapter in CHAPTERS}), 7)
+        self.assertEqual(len({chapter.program for chapter in CHAPTERS}), 9)
 
     def test_collections_keep_independent_chronological_progress(self):
         first, second = CutsceneCollection(), CutsceneCollection()
@@ -112,11 +112,11 @@ class GalleryTests(unittest.TestCase):
         gallery.key('Right')
         self.assertEqual(gallery.key('Return'), 'changed')
         gallery.key('End')
-        self.assertEqual(gallery.index, 8)
+        self.assertEqual(gallery.index, 10)
         gallery.advance(1)
-        self.assertEqual(list(gallery.visible), [4, 5, 6, 7, 8])
+        self.assertEqual(list(gallery.visible), [6, 7, 8, 9, 10])
         gallery.key('Right')
-        self.assertEqual(gallery.index, 8)
+        self.assertEqual(gallery.index, 10)
         gallery.key('Home')
         gallery.key('Tab')
         self.assertEqual(gallery.index, 1)
@@ -521,7 +521,7 @@ class GalleryTests(unittest.TestCase):
         gallery.advance(1)
         gallery.draw(Image.new('RGBA', (1020, 768)), font, visible=True)
         self.assertLessEqual(gallery.scroll, gallery.max_scroll)
-        self.assertEqual(gallery.index, 8)
+        self.assertEqual(gallery.index, 10)
 
     def test_scroll_frames_do_not_load_redraw_fonts_or_resample_images(self):
         gallery, font = self.gallery(), CaptionFont()
@@ -751,7 +751,7 @@ class ViewerSceneTests(unittest.TestCase):
         gallery.key('End')
         scene.start_cutscene_replay()
         self.assertIsNotNone(scene.cutscene_replay)
-        self.assertEqual(scene.cutscene_replay.chapter.key, 'tower')
+        self.assertEqual(scene.cutscene_replay.chapter.key, 'happy')
         scene.cutscene_replay.player.advance(1200)
         scene.advance_cutscene_replay()
         self.assertIsNone(scene.cutscene_replay)

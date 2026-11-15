@@ -41,6 +41,7 @@ class GameMenu:
     screenshot_gallery: object = None
     cutscene_viewer: object = None
     controls_page: object = None
+    hall_page: object = None
 
     ROW_HEIGHT = 22
     VISIBLE_ROWS = 11
@@ -52,6 +53,11 @@ class GameMenu:
     BACK_GAP = 10
     OPTIONS_PANEL = centered_panel(384, 36 + 3 * HEADING_HEIGHT + 7 * ROW_HEIGHT + BACK_GAP + 14)
     DIALOG = centered_panel(352, 166)
+    # Hall of Fame: a heading row and five names (ComputeHallPlayerRect 2:20a6).
+    HALL_PANEL = centered_panel(384, 300)
+    HALL_TOP = HALL_PANEL[1] + 82
+    HALL_ROW = 32
+    HALL_BUTTON = (190, HALL_PANEL[3] - 44, 322, HALL_PANEL[3] - 14)
     ABOUT_DIALOG = centered_panel(352, 184)
     BUTTONS = ((100, DIALOG[1] + 120, 242, DIALOG[1] + 150),
                (254, DIALOG[1] + 120, 412, DIALOG[1] + 150))
@@ -77,7 +83,7 @@ class GameMenu:
             MenuItem("options", "Options", "Alt+P"),
             MenuItem("controls", "Controls", "Alt+K"),
             MenuItem("cutscenes", "Cutscene Viewer", "Alt+C"),
-            MenuItem("hall", "Hall of Fame", "Alt+H", False),
+            MenuItem("hall", "Hall of Fame", "Alt+H"),
             MenuItem("about", "About", "Alt+V"),
             MenuItem("quit", "Quit to Desktop", "Alt+Q"),
         )
@@ -117,6 +123,8 @@ class GameMenu:
         return "changed"
 
     def activate(self):
+        if self.page == 'hall' and self.hall_page is not None:
+            return self.hall_page.activate() if self.hall_page.confirming else self.hall_page.key('Return')
         if self.page == 'controls' and self.controls_page is not None:
             return self.controls_page.activate()
         if self.page == 'cutscenes':
@@ -141,6 +149,8 @@ class GameMenu:
         return item.action if item.enabled else "changed"
 
     def key(self, key, backwards=False, char='', control=False):
+        if self.page == 'hall' and self.hall_page is not None:
+            return self.hall_page.key(key, '' if control else char)
         if self.page == 'controls' and self.controls_page is not None:
             return self.controls_page.key(key, backwards, char, control)
         if self.page == 'cutscenes':
@@ -223,6 +233,11 @@ class GameMenu:
         return True
 
     def hit(self, x, y):
+        if self.page == 'hall' and self.hall_page is not None:
+            if self.hall_page.confirming:
+                return next((i for i, rect in enumerate(self.BUTTONS)
+                             if DevelopmentMenu.contains(rect, x, y)), None)
+            return 0 if not self.hall_page.editing and DevelopmentMenu.contains(self.HALL_BUTTON, x, y) else None
         if self.page == 'controls' and self.controls_page is not None:
             return self.controls_page.hit(x, y)
         if self.page == 'cutscenes':
@@ -247,6 +262,12 @@ class GameMenu:
                      if DevelopmentMenu.contains(rect, x, y)), None)
 
     def hover(self, x, y):
+        if self.page == 'hall' and self.hall_page is not None:
+            index = self.hit(x, y)
+            if index is None or not self.hall_page.confirming or index == self.hall_page.focus:
+                return False
+            self.hall_page.focus = index
+            return True
         if self.page == 'controls' and self.controls_page is not None:
             return self.controls_page.hover(x, y)
         if self.page == 'cutscenes':
@@ -263,6 +284,14 @@ class GameMenu:
         return True
 
     def click(self, x, y):
+        if self.page == 'hall' and self.hall_page is not None:
+            index = self.hit(x, y)
+            if index is None:
+                return 'changed'
+            if self.hall_page.confirming:
+                self.hall_page.focus = index
+                return self.hall_page.activate()
+            return 'hall_close'
         if self.page == 'controls' and self.controls_page is not None:
             return self.controls_page.click(x, y)
         if self.page == 'cutscenes':
@@ -343,7 +372,7 @@ class GameMenu:
             text(item.shortcut.replace("+", "-"), rect[2] - 10, y, color, "right", 100)
 
         panel = {"screenshots": self.SCREENSHOT_PANEL, "menu": self.PANEL, "options": self.OPTIONS_PANEL,
-                 "about": self.ABOUT_DIALOG}.get(self.page, self.DIALOG)
+                 "about": self.ABOUT_DIALOG, "hall": self.HALL_PANEL}.get(self.page, self.DIALOG)
         # The menu's scroll arrows sit at the panel's right edge: keep the frame clear of them.
         menu_theme.panel(image, panel, clear_sides=self.page == "menu")
         draw = ImageDraw.Draw(image)
@@ -389,6 +418,9 @@ class GameMenu:
             text("Unsaved progress will be lost.", 256, panel_top + 79, muted, "center", 312)
             for i, (rect, label) in enumerate(zip(self.BUTTONS, ("Cancel", "New game"))):
                 button(rect, label, i == self.focus)
+        elif self.page == "hall" and self.hall_page is not None:
+            self.draw_hall(image, draw, text, button, font, gold, white, muted)
+            return image
         elif self.page == "about":
             text("Prince of Persia 2", 256, panel_top + 20, gold, "center", 312)
             text("Macintosh Native", 256, panel_top + 46, align="center")
@@ -422,3 +454,45 @@ class GameMenu:
                      else "Not implemented yet", 256, panel[3] + 5, muted, "center")
         menu_theme.watermark(image, panel)
         return image
+
+    def draw_hall(self, image, draw, text, button, font, gold, white, muted):
+        """DrawHallOfFameDialog 2:20f4: the title, Name and Time, then each
+        name with its minutes; the row being named is an edit field."""
+        page = self.hall_page
+        left, top, right, _bottom = self.HALL_PANEL
+        name_x, time_x = left + 40, right - 40
+        text("Hall of Fame", 256, top + 16, gold, "center")
+        text("Name", name_x, top + 50, gold)
+        text("Time", time_x, top + 50, gold, "right")
+        draw.line(((name_x - 6, top + 68), (time_x + 6, top + 68)), fill=c("#626262"))
+        rows = page.rows()
+        if not rows:
+            text("No names yet", 256, self.HALL_TOP + 2 * self.HALL_ROW, muted, "center")
+        for index, (name, minutes, named) in enumerate(rows):
+            y = self.HALL_TOP + index * self.HALL_ROW
+            if named:
+                field = (name_x - 6, y - 6, time_x - 60, y + 18)
+                draw.rectangle(field, fill=c("#303030"), outline=gold)
+                text(name, name_x, y, white, max_width=field[2] - field[0] - 12)
+                if page.editing:
+                    cursor = name_x + (font.text(name[:page.caret], white).width if page.caret else 0)
+                    draw.line(((cursor, y - 3), (cursor, y + 14)), fill=gold)
+            else:
+                text(name, name_x, y, white, max_width=time_x - name_x - 70)
+            text(str(minutes), time_x, y, gold if named else white, "right")
+        if page.confirming:
+            image.alpha_composite(Image.new("RGBA", image.size, (0, 0, 0, 140)))
+            menu_theme.panel(image, self.DIALOG)
+            dialog_top = self.DIALOG[1]
+            text("Hall of Fame", 256, dialog_top + 20, gold, "center")
+            # The question of GetHallOfFameName's alert (2:235e-237e).
+            text(f'Put "{page.draft.strip()}"', 256, dialog_top + 57, align="center", max_width=312)
+            text("in the Hall of Fame?", 256, dialog_top + 79, align="center", max_width=312)
+            for i, (rect, label) in enumerate(zip(self.BUTTONS, ("No", "Yes"))):
+                button(rect, label, i == page.focus)
+        elif page.editing:
+            text("Type your name, then press Enter", 256, self.HALL_BUTTON[1] + 10, muted, "center", 312)
+        else:
+            button(self.HALL_BUTTON, "Continue" if page.position is not None else
+                   "Back" if self.return_to_menu else "Close", True)
+        menu_theme.watermark(image, self.HALL_PANEL)

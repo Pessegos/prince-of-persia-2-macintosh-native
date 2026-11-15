@@ -140,6 +140,7 @@ def recover_scenes(program, nis, entries=(0x45c2, 0x4ee8), arguments=(), a5_word
         operations = []
         # FreeShpInfo 17:5fd0 orientations, SaveRect 17:520a handles.
         mirrored, saved, panel = set(), {}, []
+        fore_color = []
 
         def word(address):
             return struct.unpack(">h", cpu.mem_read(address, 2))[0]
@@ -163,6 +164,13 @@ def recover_scenes(program, nis, entries=(0x45c2, 0x4ee8), arguments=(), a5_word
             instruction = bytes(cpu.mem_read(address, 4))
             opcode = instruction[:2]
             if instruction[0] & 0xf0 == 0xa0:
+                if opcode == b"\xa8\xa2" and fore_color:
+                    # QuickDraw PaintRect(rect) in SetForeColor's colour
+                    # (17:0eae), as HappyEnding 15:3c9e-3cac clears the
+                    # screen. The trap removes its argument.
+                    sp = cpu.reg_read(UC_M68K_REG_A7)
+                    emit("fill", fore_color[0], rectangle(long(sp)))
+                    cpu.reg_write(UC_M68K_REG_A7, sp + 4)
                 cpu.reg_write(UC_M68K_REG_PC, address + 2)
                 return
             if opcode not in (b"\x4e\xad", b"\x4e\xba", b"\x4e\x90"):
@@ -298,7 +306,7 @@ def recover_scenes(program, nis, entries=(0x45c2, 0x4ee8), arguments=(), a5_word
                     emit("wait_sound", w(), w(2))
                 elif target == 0xf5a:
                     callback = callbacks.get(l(6) - a5) if l(6) else None
-                    if (l(6) and callback is None) or w(16) not in (6, 0x0c, 0x14, 0x1c):
+                    if (l(6) and callback is None) or w(16) not in (6, 0x0c, 0x0e, 0x14, 0x1c):
                         raise ValueError(f"Unsupported scene animation callback or flags {w(16):#x}")
                     # PlayTheAnimation 16:10ba-10e8: flag 2 places the
                     # animation at the given point, flag 16 at the ANI
@@ -362,6 +370,9 @@ def recover_scenes(program, nis, entries=(0x45c2, 0x4ee8), arguments=(), a5_word
                 elif target == 0x12da:
                     # 17:6dd6: PaintRect(rect) in palette index `color`.
                     emit("fill", w(4) & 255, rectangle(l()))
+                elif target == 0x1342:
+                    # SetForeColor 17:0eae(index): PaintRect's colour.
+                    fore_color[:] = [w() & 255]
                 elif target == 0x132a:
                     # SetSHAPColors 17:0a52 loads CTBL(id at sp+4) and
                     # ShowColors immediately displays its original indices.
@@ -401,6 +412,14 @@ def recover_scenes(program, nis, entries=(0x45c2, 0x4ee8), arguments=(), a5_word
                 elif target == 0x1242:
                     # RestoreRectKeep 17:544a.
                     emit("restore_rect", saved[l()])
+                elif target == 0xff2 and address - base == 0x0aec:
+                    # TransFuncJaffarMagic 15:0ae4-0b0c: when SoundIdOn is
+                    # false and a5-0x245a is clear, StartSndId(30500, 1)
+                    # and set the flag. The probe reports it playing.
+                    if word(base + 0x0b00) != 0x3f3c or word(base + 0x0afc) != 0x7001:
+                        raise ValueError("Unsupported spell sound order")
+                    emit("sound_after", w(), w(2), word(base + 0x0b02), 1)
+                    result = 1
                 elif target == 0xff2:
                     # SoundIdOn 16:25b0: the scene restarts the sound when it
                     # has ended; it is reported as playing here.
@@ -529,8 +548,10 @@ def extract_scene_audio(image, operations, directory, progress=lambda _text: Non
     manifest_path = directory / "audio/manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="ascii"))
     audio = {}
-    for resource_id, kind in sorted({tuple(item["args"]) for item in operations
-                                     if item["op"] == "sound" and not item.get("song")}):
+    sounds = {tuple(item["args"]) for item in operations
+              if item["op"] == "sound" and not item.get("song")}
+    sounds |= {tuple(item["args"][2:]) for item in operations if item["op"] == "sound_after"}
+    for resource_id, kind in sorted(sounds):
         progress(f"Preparing intro audio {resource_id}...")
         key = scene_sound_key(resource_id, kind) if banked else str(resource_id)
         stem = key if banked else f"intro-{resource_id}"
@@ -937,7 +958,12 @@ def recover_final_spell(program, nis, happy):
                 item['args'][0] = palette
         if items:
             callbacks[frame] = items
-    return expand_animations(operations, resources, {'jaffar_magic': callbacks})
+    operations = expand_animations(operations, resources, {'jaffar_magic': callbacks})
+    # The scene returns to native room 4, whose CUST enter hook (CODE
+    # 9:1ab4-1b06) erases the screen and waits on sound 30500, started near
+    # the scene's end (15:0afc-0b08): the black screen stays until it ends.
+    operations.append({'op': 'wait_sound', 'args': [30500, 1], 'pc': 0x1afe, 'code': 9})
+    return operations
 
 
 def extract_final_spell(image, program, nis, happy, directory, progress=lambda _text: None):
@@ -949,6 +975,99 @@ def extract_final_spell(image, program, nis, happy, directory, progress=lambda _
               'resource_files': {'Happy.rsrc': 1000000},
               'operations': operations, 'audio': audio}
     (directory / 'final_spell.json').write_text(json.dumps(result, indent=2) + '\n', encoding='ascii')
+
+
+# HappyEnding (NIS 11, 15:3c76) keeps Happy.rsrc open (A5 file record
+# -0x26b0). PlayTheAnimation calls TransFuncSetCTABframe1 (15:09c0, A5
+# jump-table offset 0xf0a) for the victory bedroom and HappyFunc (15:411a,
+# offset 0xeaa) for the long epilogue animation.
+HAPPY_OFFSET = 1000000
+HAPPY_FILES = {0x26b0: ('Happy.rsrc', HAPPY_OFFSET)}
+HAPPY_CALLBACKS = {0xf0a: ('bedroom', 0x09c0), 0xeaa: ('happy', 0x411a)}
+# The HappyFunc state a per-frame probe must not see: no frame offset
+# (a5-0x2340), a pending dialog delay (a5-0x2344) and a digitized voice
+# playing (a5-0x1f7c), so only the frame switch 15:4124-4414 emits.
+HAPPY_FRAME_STATE = {0x2340: 0, 0x2342: 0, 0x2344: 1, 0x1f6e: 0, 0x1f7c: 1}
+
+
+def happy_resources(nis, happy):
+    merged = {kind: dict(items) for kind, items in parse_resource_fork(nis).items()}
+    for kind, items in parse_resource_fork(happy).items():
+        merged.setdefault(kind, {}).update({HAPPY_OFFSET + key: value for key, value in items.items()})
+    return merged
+
+
+def recover_happy(program, nis, happy):
+    """NIS 11 (the 15:00fa dispatcher's HappyEnding 15:3c76), the epilogue
+    after Jaffar's defeat. Returns the scene program and HappyFunc's frame
+    switch as {frame: operations}.
+
+    The coordinator first runs 15:44e2, the victory bedroom (ANI 31001 with
+    TransFuncSetCTABframe1), then the Princess, the text panels and ANI
+    30004 with HappyFunc. HappyFunc's persistent state (its frame offset at
+    a5-0x2340, the dialog index/delay at a5-0x2342/-0x2344, the playing
+    voice a5-0x1f7c and music cue a5-0x1f6e) depends on the sound
+    playback, so the animation's frames carry `happy_frame` steps that the
+    player resolves against this table (pop2.intro.IntroPlayer)."""
+    parsed = {record: (offset, parse_resource_fork(happy)) for record, (_name, offset) in HAPPY_FILES.items()}
+    names = {offset: name for offset, (name, _entry) in HAPPY_CALLBACKS.items()}
+    operations = recover_scenes(program, nis, entries=(0x3c76,), files=parsed, inline=(0x44e2,),
+                                callbacks=names)
+    resources = happy_resources(nis, happy)
+    happy_ids = {kind: set(items) for kind, items in parse_resource_fork(happy).items()}
+
+    def scene_file_id(item):
+        # The callbacks run while Happy.rsrc is open: it is searched first.
+        kind = {'palette': 'CTBL', 'shape': 'SHAP'}.get(item['op'])
+        if kind is None or item['args'][0] >= HAPPY_OFFSET or item['args'][0] not in happy_ids.get(kind, ()):
+            return item
+        return {**item, 'args': [HAPPY_OFFSET + item['args'][0], *item['args'][1:]]}
+
+    frames = {}
+    for item in operations:
+        if item['op'] == 'animation' and len(item['args']) == 5:
+            base, index = item['args'][:2]
+            layers, script_id = struct.unpack_from('>2h', resources['ANI '][base + index]['data'], 8)
+            script = ScriptAnimation(resources['SCRP'][base - base % 100000 + script_id]['data'], layers)
+            count = 0
+            while not script.done:
+                script.step()
+                count += 1
+            frames[item['args'][4]] = count
+    bedroom = {}
+    for frame in range(frames['bedroom'] + 1):
+        items = recover_scenes(program, nis, entries=(0x09c0,), arguments=(frame,), files=parsed)
+        if items:
+            bedroom[frame] = [scene_file_id(entry) for entry in items]
+    table = {}
+    for frame in range(frames['happy'] + 1):
+        items = [scene_file_id(entry) for entry in recover_scenes(
+            program, nis, entries=(0x411a,), arguments=(frame,), files=parsed, a5_words=HAPPY_FRAME_STATE)
+            # 15:447e-4496 SoundIdOn ends the animation instead (`happy_after`).
+            if entry['pc'] != 0x448c]
+        if items:
+            table[frame] = items
+    steps = {frame: [{'op': 'happy_frame', 'args': [frame], 'pc': 0x411a}] for frame in range(frames['happy'] + 1)}
+    operations = expand_animations(operations, resources, {'bedroom': bedroom, 'happy': steps})
+    # The end of HappyFunc's animation, where its -1 result leaves it.
+    last = max(index for index, item in enumerate(operations) if item['pc'] == 0x40ae)
+    operations.insert(last + 1, {'op': 'happy_end', 'args': [], 'pc': 0x40ae})
+    return operations, table
+
+
+def extract_happy(image, program, nis, happy, directory, progress=lambda _text: None):
+    """Write NIS 11, the epilogue after the final victory."""
+    directory = Path(directory)
+    operations, table = recover_happy(program, nis, happy)
+    sounds = [*operations, *(item for items in table.values() for item in items),
+              # HappyDialog's voices (15:4434-443e): 30004 + line, digitized.
+              *({'op': 'sound', 'args': [30004 + line, 1]} for line in range(5))]
+    audio = extract_scene_audio(image, sounds, directory, progress, banked=True)
+    result = {'schema': 1, 'kind': 'happy',
+              'resource_files': {'Happy.rsrc': HAPPY_OFFSET},
+              'operations': operations, 'happy_frames': {str(frame): items for frame, items in table.items()},
+              'audio': audio}
+    (directory / 'happy.json').write_text(json.dumps(result, indent=2) + '\n', encoding='ascii')
 
 
 TREE_VARIANTS = range(1, 10)

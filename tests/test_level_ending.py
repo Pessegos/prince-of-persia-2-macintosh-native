@@ -286,7 +286,7 @@ class OriginalEndingTests(unittest.TestCase):
     def test_beach_dev_jump_replays_arrival_instead_of_using_the_palace_position(self):
         scene = self.scene
         scene.load_level(2)
-        scene.jump_to_screen("1")
+        scene.jump_to_screen("Room 1")
         self.assertEqual((scene.game.level.number, scene.action, scene.player_x), (2, 256, 277))
         self.assertTrue(scene.game.entry_active)
 

@@ -4,6 +4,10 @@ Level 2 uses the original LEVL resource and Desert.rsrc CUST/SHAP/CTBL data.
 The shore's planks advance through six animation steps, two per image
 (Anim/DrawDsrtPlanks, CODE:18 0808-08b4).
 
+The stone chamber's painting is lifted 20 pixels to meet the shore. This is
+an approved port artwork exception, not native behaviour. See
+[Desert artwork](DESERT_ARTWORK.md).
+
 ## Stones And Exit
 
 `DesertState` implements the CODE:18 desert controller independently of the

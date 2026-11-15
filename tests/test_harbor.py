@@ -498,7 +498,7 @@ class HarborSceneTests(unittest.TestCase):
                 break
 
     def test_route_from_last_rooftop_to_ship_completes_without_teleporting(self):
-        self.prepare('7')
+        self.prepare('Room 7')
         seen = set()
         scene = self.scene
         scene.horizontal_key(None, -1, True)
@@ -559,7 +559,7 @@ class HarborSceneTests(unittest.TestCase):
         self.assertGreater(scene.combat.player.life, 0)
 
     def test_boat_climb_follows_original_poses_and_drifts_with_ship(self):
-        self.prepare('9')
+        self.prepare('Room 9')
         scene = self.scene
         scene.horizontal_key(None, -1, True)
         poses = []
@@ -580,7 +580,7 @@ class HarborSceneTests(unittest.TestCase):
         self.assertTrue(scene.level_complete)
 
     def test_guards_stay_lowered_from_ship_grip_through_climb_and_exit_music(self):
-        self.prepare('9')
+        self.prepare('Room 9')
         scene = self.scene
         scene.peaceful = False
         scene.combat.last_guard_at = None
@@ -614,7 +614,7 @@ class HarborSceneTests(unittest.TestCase):
         self.assertFalse(scene.combat.rooftop_escape)
 
     def test_dock_ledge_without_ship_grip_does_not_trigger_cinematic_standby(self):
-        self.prepare('10')
+        self.prepare('Room 10')
         scene = self.scene
         scene.sequence_state.animation_state = 2
         scene.sequence_state.action = 80
@@ -626,7 +626,7 @@ class HarborSceneTests(unittest.TestCase):
         scene = self.scene
         for ship_frame in (31, 32, 33):
             with self.subTest(ship_frame=ship_frame):
-                self.prepare('10')
+                self.prepare('Room 10')
                 scene.set_key_state('shift', True)
                 scene.set_key_state('up', True)
                 state = scene.sequence_state
@@ -661,7 +661,7 @@ class HarborSceneTests(unittest.TestCase):
         scene = self.scene
         for jump_x in (330, 340, 350):
             with self.subTest(jump_x=jump_x):
-                self.prepare('9')
+                self.prepare('Room 9')
                 scene.horizontal_key(None, -1, True)
                 jumps, entered_in_jump = 0, False
                 for _ in range(180):
@@ -686,7 +686,7 @@ class HarborSceneTests(unittest.TestCase):
                 self.assertFalse(scene.terrain_motion.dead)
 
     def test_missing_ship_grip_drowns_instead_of_completing(self):
-        self.prepare('10')
+        self.prepare('Room 10')
         scene = self.scene
         scene.horizontal_key(None, -1, True)
         for _ in range(140):
@@ -699,7 +699,7 @@ class HarborSceneTests(unittest.TestCase):
         self.assertGreater(scene.harbor.water[0].age, 6)
 
     def catch_ship_without_climbing(self):
-        self.prepare('10')
+        self.prepare('Room 10')
         scene = self.scene
         scene.horizontal_key(None, -1, True)
         for _ in range(60):
@@ -759,7 +759,7 @@ class HarborSceneTests(unittest.TestCase):
                 self.assertEqual(scene.terrain_motion.dead, not climb)
 
     def test_expired_ship_cannot_be_caught(self):
-        self.prepare('10')
+        self.prepare('Room 10')
         self.tick(120)
         scene = self.scene
         scene.horizontal_key(None, -1, True)
@@ -770,7 +770,7 @@ class HarborSceneTests(unittest.TestCase):
         self.assertFalse(scene.level_complete)
 
     def test_completion_holds_actors_but_ship_and_development_controls_continue(self):
-        self.prepare('9')
+        self.prepare('Room 9')
         self.run_to_ship()
         scene = self.scene
         self.assertTrue(scene.level_complete)
@@ -779,7 +779,7 @@ class HarborSceneTests(unittest.TestCase):
         self.tick(20)
         self.assertEqual(snapshot, (scene.player_x, scene.action, scene.combat.world_frame))
         self.assertGreater(scene.harbor.ship_frame, ship_frame)
-        scene.jump_to_screen('10')
+        scene.jump_to_screen('Room 10')
         self.assertFalse(scene.level_complete)
         self.assertEqual(scene.harbor.ship_frame, 0)
         scene.restart_opening()
@@ -788,7 +788,7 @@ class HarborSceneTests(unittest.TestCase):
         self.assertFalse(scene.harbor.ship_active)
 
     def test_actual_boarding_runs_through_voyage_to_the_level_two_arrival(self):
-        self.prepare('9')
+        self.prepare('Room 9')
         self.run_to_ship()
         scene = self.scene
         self.assertTrue(scene.level_complete)
@@ -808,7 +808,7 @@ class HarborSceneTests(unittest.TestCase):
         self.assertEqual(scene.combat.player.life, 3)
 
     def test_f2_entry_for_descent_starts_on_upper_roof(self):
-        self.prepare('8')
+        self.prepare('Room 8')
         scene = self.scene
         self.assertEqual((scene.room_id, scene.terrain_motion.row, scene.player_x), (14, 0, 269))
         self.tick(20)
@@ -818,7 +818,7 @@ class HarborSceneTests(unittest.TestCase):
     def test_harbor_generators_use_extracted_profiles(self):
         scene = self.scene
         for label, room, skill, remaining, max_between in (
-                ('8', 14, 3, 2, 1), ('9', 15, 3, 5, 1), ('10', 18, 4, 7, 2)):
+                ('Room 8', 14, 3, 2, 1), ('Room 9', 15, 3, 5, 1), ('Room 10', 18, 4, 7, 2)):
             scene.jump_to_screen(label)
             points = scene.combat.generation_points
             self.assertEqual(len(points), 1)
@@ -833,7 +833,7 @@ class HarborSceneTests(unittest.TestCase):
             self.assertTrue(all(guard.skill == skill for guard in scene.combat.guards))
 
     def test_harbor_void_limit_does_not_bypass_the_water_death_delay(self):
-        self.prepare('9')
+        self.prepare('Room 9')
         scene = self.scene
         for actor_type in (0, 2):
             with self.subTest(actor_type=actor_type):
@@ -858,7 +858,7 @@ class HarborSceneTests(unittest.TestCase):
                 self.assertTrue(harbor.watch_water(0, 15, motion.row, state))
 
     def test_a_guard_killed_on_the_quay_tumbles_into_the_water(self):
-        self.scene.jump_to_screen('9')
+        self.scene.jump_to_screen('Room 9')
         scene = self.scene
         scene.combat.guards.clear()
         scene.combat.generation_points.clear()

@@ -17,10 +17,10 @@ def smoke_test():
     if errors:
         raise RuntimeError('\n'.join(errors))
     support = Path(__file__).parent
-    for name in ('cavern_retouch.png', 'save_quill.png', 'screenshot_lava.png'):
+    for name in ('cavern_retouch.png', 'desert_retouch.png', 'save_quill.png', 'screenshot_lava.png'):
         with Image.open(support / name) as image:
             image.load()
-    for name in ('cavern_retouch.json', 'lava_recess.json'):
+    for name in ('cavern_retouch.json', 'desert_retouch.json', 'lava_recess.json'):
         json.loads((support / name).read_text())
     if not (ICON_DIR / 'prince.ico').is_file():
         raise RuntimeError('Bundled application icon is missing')
