@@ -19,3 +19,20 @@ def watch_parent():
             os._exit(1)
 
         threading.Thread(target=watch, daemon=True).start()
+
+
+def background_worker():
+    """Pool initializer for bulk work beside a serial chain: watch_parent, and
+    run below normal priority so the importer's own (serial) steps keep their
+    processor share. The bulk jobs still use every idle processor."""
+    watch_parent()
+    if os.name == 'nt':
+        import ctypes
+
+        kernel = ctypes.windll.kernel32
+        kernel.SetPriorityClass(kernel.GetCurrentProcess(), 0x4000)  # BELOW_NORMAL_PRIORITY_CLASS
+    else:
+        try:
+            os.nice(5)
+        except OSError:
+            pass

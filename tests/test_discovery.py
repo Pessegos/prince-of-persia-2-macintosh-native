@@ -54,7 +54,7 @@ class DiscoveryFormatTests(unittest.TestCase):
             (directory / 'audio/manifest.json').write_text(json.dumps(
                 {'schema': 1, 'cues': {'29100': {'file': 'legacy.wav'}}}))
 
-            def render(_directory, _name, output):
+            def render(_directory, _name, output, **_options):
                 output.write_bytes(Sample(bytes(8), 8, 1, 2).wav())
                 return 0.5
 

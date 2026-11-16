@@ -4,6 +4,7 @@ Only the CODE 15 coordinators execute here. Their drawing, sound and timing
 calls become a portable scene program; no Macintosh CPU runs in the game.
 """
 
+from concurrent.futures import ThreadPoolExecutor
 import io
 import json
 from pathlib import Path
@@ -551,11 +552,25 @@ def extract_scene_audio(image, operations, directory, progress=lambda _text: Non
     sounds = {tuple(item["args"]) for item in operations
               if item["op"] == "sound" and not item.get("song")}
     sounds |= {tuple(item["args"][2:]) for item in operations if item["op"] == "sound_after"}
-    for resource_id, kind in sorted(sounds):
-        progress(f"Preparing intro audio {resource_id}...")
+    def names(resource_id, kind):
         key = scene_sound_key(resource_id, kind) if banked else str(resource_id)
         stem = key if banked else f"intro-{resource_id}"
-        filename = f"{stem}.wav"
+        return key, stem, f"{stem}.wav"
+
+    # Each song is a separate renderer process: render them side by side,
+    # each with its own working files.
+    with ThreadPoolExecutor(8) as renderers:
+        renders = {}
+        for resource_id, kind in sorted(sounds):
+            if kind == 0:
+                _key, stem, filename = names(resource_id, kind)
+                (directory / "audio" / f"{stem}.mid").write_bytes(banks[kind][resource_id])
+                renders[resource_id, kind] = renderers.submit(
+                    render_midi, directory / "audio", f"{stem}.mid", directory / "audio" / filename,
+                    work=f"{stem}.")
+    for resource_id, kind in sorted(sounds):
+        progress(f"Preparing intro audio {resource_id}...")
+        key, stem, filename = names(resource_id, kind)
         output = directory / "audio" / filename
         data = banks[kind][resource_id]
         markers = {}
@@ -569,9 +584,7 @@ def extract_scene_audio(image, operations, directory, progress=lambda _text: Non
                 elapsed += event.time
                 if event.type == "cue_marker":
                     markers[event.text.strip()] = elapsed
-            midi_path = directory / "audio" / f"{stem}.mid"
-            midi_path.write_bytes(data)
-            duration = render_midi(directory / "audio", midi_path.name, output)
+            duration = renders[resource_id, kind].result()
             entry["playback_duration"] = duration
         else:
             sample = digitized_sound(data)

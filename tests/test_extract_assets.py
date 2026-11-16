@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 import json
 from pathlib import Path
 import tempfile
@@ -18,6 +19,11 @@ class AssetImportTests(unittest.TestCase):
         self.forks = {name: name.encode("ascii") for name in extract_assets.RESOURCE_FILES}
         self.forks["Prince of Persia 2"] = b"synthetic application"
         self.profiles = {"schema": 1, "profiles": [{"skill": 0}]}
+        # The demo and scene helpers run in threads here, so the patched
+        # recoveries below apply to them (the import uses processes).
+        helpers = patch.object(extract_assets, "_helper_pool", lambda: ThreadPoolExecutor(4))
+        helpers.start()
+        self.addCleanup(helpers.stop)
         audio = patch.object(extract_assets, "extract_audio")
         self.audio = audio.start()
         self.addCleanup(audio.stop)
@@ -298,3 +304,36 @@ class AssetImportTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SceneMergeTests(unittest.TestCase):
+    def test_scenes_merge_in_serial_order_without_their_shared_audio(self):
+        base = {"songs": {"1": {"file": "cue-1.mid"}}, "volume": 3}
+        with tempfile.TemporaryDirectory() as directory:
+            staging = Path(directory)
+            (staging / "audio").mkdir()
+            (staging / "audio/manifest.json").write_text(json.dumps(base), encoding="ascii")
+            (staging / "audio/cue-1.mid").write_bytes(b"song")
+            first = extract_assets._scene_directory(staging, "first")
+            second = extract_assets._scene_directory(staging, "second")
+            self.assertEqual((first / "audio/cue-1.mid").read_bytes(), b"song")
+            (first / "audio/manifest.json").write_text(json.dumps(
+                {"songs": {"1": {"file": "cue-1.mid"}, "7": {"file": "a.wav"}}, "volume": 3,
+                 "intro": {"x": 1}}), encoding="ascii")
+            (first / "audio/a.wav").write_bytes(b"a")
+            (first / "first.json").write_bytes(b"{}")
+            (second / "audio/manifest.json").write_text(json.dumps(
+                {"songs": {"1": {"file": "cue-1.mid"}, "2": {"file": "b.wav"}}, "volume": 4,
+                 "intro": {"y": 2}}), encoding="ascii")
+            (second / "audio/b.wav").write_bytes(b"b")
+            manifest = json.loads(json.dumps(base))
+            extract_assets._merge_scene(staging, first, manifest, base)
+            extract_assets._merge_scene(staging, second, manifest, base)
+            self.assertEqual(manifest, {"songs": {"1": {"file": "cue-1.mid"}, "7": {"file": "a.wav"},
+                                                  "2": {"file": "b.wav"}},
+                                        "volume": 4, "intro": {"x": 1, "y": 2}})
+            self.assertEqual(list(manifest["songs"]), ["1", "7", "2"])
+            self.assertEqual((staging / "audio/a.wav").read_bytes(), b"a")
+            self.assertEqual((staging / "audio/b.wav").read_bytes(), b"b")
+            self.assertEqual((staging / "first.json").read_bytes(), b"{}")
+            self.assertEqual((staging / "audio/cue-1.mid").read_bytes(), b"song")

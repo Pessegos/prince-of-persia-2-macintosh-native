@@ -111,7 +111,7 @@ class IntroExtractionTests(unittest.TestCase):
             audio = directory / "audio"
             audio.mkdir()
             (audio / "manifest.json").write_text('{"schema":1,"cues":{}}')
-            def render(_directory, _name, output):
+            def render(_directory, _name, output, **_options):
                 output.write_bytes(Sample(b"\0\0" * 48000, 48000, 1, 2).wav())
                 return 1
             with (
