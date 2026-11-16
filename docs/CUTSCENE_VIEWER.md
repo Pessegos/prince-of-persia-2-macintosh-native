@@ -64,7 +64,7 @@ The page takes the level's menu theme (docs/MENU_THEMES.md).
 The catalog in `pop2/cutscenes.py` includes Prologue, Title and The Palace
 Escape from the opening, voyage after level 1,
 discovery after level 3, carpet flight after level 5, The Mother's Vision in
-level 8, the horse ride after level 9, the flight after level 13, The Mental
+level 8, the horse ride after level 9, the flight after level 13, The Final
 Battle (Jaffar's spell, NIS 5, in level 14) and Happily Ever After? (NIS 11 after
 Jaffar falls). These are port chapter labels. All eleven covers are the
 user's chosen crops (`pop2/cutscene_covers.py`). The vision is the mother's; its persistent collection key

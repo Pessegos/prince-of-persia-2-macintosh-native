@@ -29,7 +29,7 @@ CHAPTERS = (
     CutsceneChapter('horse', 'The Statue Awakens', 'temple.json', 5, 9),
     CutsceneChapter('tower', 'The Flight Home', 'tower.json', 6, 13),
     # Level 14: Jaffar's spell in the palace (NIS 5) and NIS 11 after his fall.
-    CutsceneChapter('spell', 'The Mental Battle', 'final_spell.json', 5),
+    CutsceneChapter('spell', 'The Final Battle', 'final_spell.json', 5),
     CutsceneChapter('happy', 'Happily Ever After?', 'happy.json', 38),  # the epilogue's cliffhanger
 )
 OPENING_KEYS = frozenset(('opening', 'opening_titles', 'opening_story'))
