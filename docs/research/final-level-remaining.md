@@ -52,6 +52,9 @@ still waiting for the user's review, which must not reach main with this work.
   a fireball in flight, with Jaffar between positions, with a room-3 flask
   pending, and in room 4 just after NIS 5. Older saves must still load
   (optional fields). Each test must fail on the current code.
+- The temple has two faults of the same kind (`CavernState.jinnee` and
+  `Jinnee`; [temple queue](temple-remaining.md) item 1). Fix all of them in
+  one change, together with the test that walks every saved type.
 
 ### 2. Jaffar's floor kills too soon (open divergence)
 
@@ -118,6 +121,10 @@ rejects a wrong model:
 - The mode-13 palette compared with the video (inventory milestone 1).
 - The Hall of Fame's song cue 180 and the native pixel limit on the name.
   Both are on the Hall page, which is a menu, so they wait for the user.
+
+## After this queue
+
+Continue with [the temple's queue](temple-remaining.md).
 
 ## Rules for this queue
 
