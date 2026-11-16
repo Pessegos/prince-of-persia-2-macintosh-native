@@ -103,6 +103,24 @@ class NativePathControllerTests(unittest.TestCase):
                 probe_final_defeat.run_probe(RECOVERY)
         self.assertIs(probe_final_defeat.fresh_sequence, opponent_records.fresh_sequence)
 
+    def test_the_original_fire_agrees_with_the_port(self):
+        from pop2 import final_magic
+        from tools import probe_final_fire
+
+        totals = probe_final_fire.run_probe(RECOVERY, count=1200)
+        self.assertEqual((totals['9:2880'], totals['9:27a0']), (300, 1200))
+        self.assertGreater(totals['thrown into a wall'], 0)
+        self.assertEqual(set(totals['outcomes']),
+                         {'gone', 'flight', 'burst', 'wall', 'burst end', 'idle'})
+        # The earlier port: the fire started in state 0, and a wall hit
+        # left the cast's song 265 playing.
+        with patch.object(final_magic, 'THROWN_FRAME', 0):
+            with self.assertRaises(AssertionError):
+                probe_final_fire.run_probe(RECOVERY, count=1200)
+        with patch.object(final_magic, 'CAST_SONG', None):
+            with self.assertRaises(AssertionError):
+                probe_final_fire.run_probe(RECOVERY, count=1200)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -1163,7 +1163,7 @@ return and a transform threshold of 3.
 
 ## The fire, traced (2026-11-16)
 
-Read from CODE 9 (not yet run natively):
+Read from CODE 9, then run natively (below):
 
 - 9:2674, the cast at pose 281, already matched `final_magic.throw_fireball`.
 - 9:2880 starts the fire in state 2 (the port started it in 0) and tests
@@ -1209,3 +1209,27 @@ Read from CODE 9 (not yet run natively):
 
 No difference was found. `tests.test_probe_final_path` rejects an ALIVE
 bound of 5 and a laugh for every type.
+
+### Native probe of the fire (2026-11-16)
+
+`python -m tools.probe_final_fire` runs 9:2880 (the throw, with its wall
+test 9:25e4) for 1,000 cases and 9:27a0 (one frame of flight or burst,
+with 9:25e4 and the end at 9:2838-2850) for 4,000 cases over LEVL 2013,
+GetRow 4:3afa included. Supplied and recorded: AddCharX 4:2bae, ReadCell
+4:27ee with IsWall 3:4ef2 over a synthetic wall map given to both sides,
+AddSound, PrinceResetSnd 5:5252, PoPSetPalette 3:508a and AddObject
+5:2914. The cases cover flight in both directions at speeds 1-26, bursts
+and their end, walls ahead (aligned bursts, sound 259 and reset 265), a
+fire in native room 0 (reset 258), an ended fire, and a weak Prince's CTBL
+2000. X, speed, state, room, row, the calls and their order agree with
+`throw_fireball`, `fire_hits_wall`, `advance_fireball` and the palette in
+`Final.advance_fireball`; no difference.
+
+Excluded: the drawing and side transfer 9:23a8 (the original moves the
+fire into the view room when it enters it and keeps the room while it
+leaves, reading the side room's cells through ReadCell's columns 10 and
+up; the port moves it when it leaves a room), the fire's Y, the drawing
+width's source (the probe gives 9:25e4 the port's width; at the throw the
+original reads the previous fire's last width) and the hit 9:24ee.
+`tests.test_probe_final_path` rejects the old state 0 and a wall hit
+without the 265 reset.
