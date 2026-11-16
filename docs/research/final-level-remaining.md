@@ -115,7 +115,11 @@ rejects a wrong model:
   (a5-0x4fc4) to the burning Jaffar's room, so the original never burns him
   out of view; the port has no separate view room and keeps its exception.
 - The video reference's "victory bedroom actors, native room 11 and the
-  following NIS call", end to end.
+  following NIS call", end to end. **Answered 2026-11-16**: the video's
+  victory bedroom (02:12.5-02:20.5) is NIS 11's own inline scene 15:44e2
+  (ANI 0x7918, ported in `happy.json`), reached through 2:4596 after the
+  next level becomes 15 (9:182e). Gameplay room 11 is only the defeat's
+  room; no gameplay actor of room 11 takes part in the victory.
 
 ### 5. Small rules not yet ported
 

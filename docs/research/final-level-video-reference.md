@@ -88,8 +88,10 @@ the key combination, projectile admission rules or all possible miss cases.
 The initial spell, victory bedroom scene, and the player's previously
 reported defeat/laughter scene must be tracked separately. This successful
 run contains no player-death example, so it does not verify that defeat
-variant or its timing. The relationship between the victory bedroom actors,
-native room 11 and the subsequent NIS call remains to be traced end to end.
+variant or its timing. The victory bedroom (02:12.5-02:20.5) is NIS 11's
+inline scene 15:44e2, played through 2:4596 once the burnt Jaffar has set
+the next level to 15 (9:182e); gameplay room 11 is not involved (it is the
+defeat's room). Traced 2026-11-16 from the recovered program.
 
 The right palace view is reached after the copies disappear. This run does
 not visit it before solving that sequence, so it does not prove the proposed
