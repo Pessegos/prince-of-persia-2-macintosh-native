@@ -30,7 +30,7 @@ stay neutral.
 | Theme | Levels | Look |
 | --- | --- | --- |
 | neutral | cutscenes, and the rooms of the last level that have no theme yet | grey panel, gold accent |
-| palace | 1 | dark blue panel, cream cornice frame with turquoise and orange trim and a soft mauve-grey outline, red selection |
+| palace | 1 | dark blue panel, the first room's cream cornice with its pearls and the wall's dotted turquoise and orange trim, a soft mauve-grey outline, red selection |
 | desert | 2 | dark sea panel, frame of sand with a wet inner edge, sun-yellow accent |
 | caverns | 3-5 | dark brown panel, rough rock frame, bone text, flame accent, darker room behind |
 | ruins | 6-9 | indigo panel, violet band of square sockets falling apart, the serpent sign as a watermark, sand-gold accent |
@@ -60,7 +60,7 @@ for another. The theme names its kind in `frame`:
 
 | Kind | Theme | What is drawn |
 | --- | --- | --- |
-| `bands` | palace | a straight moulding; the theme lists its rows from the outside inwards |
+| `bands` | palace | a straight moulding; the theme lists its rows from the outside inwards. A row of several colours is speckled with them; a `_Weave` row is laid in its order along each side, over and over: the palace's pearls, stone joints and dotted trim are one 51-pixel stone of the first room's wall, as the wall repeats it |
 | `sand` | desert | grainy sand with rounded corners, wind marks that are all different (dunes, hollows, streaks, pebbles), damp where it meets the panel, and one small starfish |
 | `rock` | caverns | speckled stone with a worn edge; the theme gives its `grain` and the extra `shades` for lit and shadowed edges |
 | `studs` | ruins | the palace wall's band of sunk square sockets with a carved ring at each corner; straight edges, damaged in a different way at each place (a piece broken out, a flake, a nick, a crack, a bite out of the inner edge, a crumbled socket, one lost corner), never deeper than five of its nine rows |

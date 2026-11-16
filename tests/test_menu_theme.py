@@ -386,6 +386,26 @@ class MenuThemeTest(unittest.TestCase):
         menu_theme.watermark(plain, (64, 7, 448, 357))
         self.assertEqual(len(plain.getcolors()), 1)           # only the ruins carry a sign
 
+    def test_palace_cornice_is_laid_stone_by_stone_like_the_first_rooms_wall(self):
+        # The pearls, the stone joints and the dotted trim repeat every 51 pixels
+        # in the same order along every side, as on the room's wall; none of them
+        # is speckled at random any more.
+        woven = {depth for depth, band in enumerate(PALACE.bands) if isinstance(band, menu_theme._Weave)}
+        self.assertEqual(woven, {3, 4, 5, 6, 8, 10})
+        self.assertEqual(set(PALACE.bands[10]), {'#52b5bd', '#4993b5'})     # the wall's two turquoises
+        width, height = size = (300, 200)
+        picture = menu_theme._frame_picture('palace', size).load()
+        for depth in woven:
+            band = PALACE.bands[depth]
+            self.assertEqual(len(band), 51)
+            row = [menu_theme._rgb(colour) + (255,) for colour in band]
+            for x in range(depth, width - depth):
+                self.assertEqual(picture[x, depth], row[x % 51])
+                self.assertEqual(picture[x, height - 1 - depth], row[x % 51])
+            for y in range(depth + 1, height - 1 - depth):
+                self.assertEqual(picture[depth, y], row[y % 51])
+                self.assertEqual(picture[width - 1 - depth, y], row[y % 51])
+
     def test_spider_coat_stands_out_of_the_band_and_never_into_the_panel(self):
         size = (200, 150)
         picture = menu_theme._frame_picture('spider', size)

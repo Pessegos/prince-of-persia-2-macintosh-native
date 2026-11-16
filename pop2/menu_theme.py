@@ -50,7 +50,7 @@ class MenuTheme:
     frame: str | None = None
     grow: tuple = (0, 0, 0)   # how far the frame reaches beyond a panel: sides, top, bottom
     # 'bands': the moulding's rows from the outside inwards; a row of several
-    # colours is speckled with them.
+    # colours is speckled with them, and a _Weave row is laid in its order.
     bands: tuple = ()
     # 'rock': the stone's grain as (colour, how often), then the extra shades
     # that lit and shadowed edges may use. None of them is black, so a frame
@@ -81,6 +81,26 @@ class MenuTheme:
 
 NEUTRAL = MenuTheme('neutral')
 
+
+class _Weave(tuple):
+    """A moulding row laid along each side in this order, over and over, rather than speckled."""
+
+
+# One stone of the cream cornice in level 1's first room, which the wall repeats
+# every 51 pixels (rows 81-86 of the room's picture). Its pearls are a regular
+# weave of three creams in two rows, and the stone ends in a joint: a paler
+# pixel under the pearls and two like mauves together where the next one
+# starts. The turquoise trim with the wall's darker turquoise dots runs under the
+# same wall's frieze, in stones of the same length (row 117).
+_PALACE_STONE_COLOURS = {'a': '#f7e3b0', 'l': '#f0d6ae', 'm': '#f7f7ad', 'n': '#e5e3c6', 'k': '#e7cead',
+                         'h': '#cebea7', 'o': '#d6c6a5', 'c': '#8c6d87', 'd': '#876e77',
+                         't': '#52b5bd', 'b': '#4993b5'}
+
+
+def _palace_stone(letters):
+    return _Weave(_PALACE_STONE_COLOURS[letter] for letter in letters)
+
+
 # Level 1: the palace's dark blue frieze, cream cornice and red wall band.
 PALACE = MenuTheme('palace', {
     'accent': '#fdae61', 'text': '#ffffd6', 'muted': '#6f8ca8', 'muted_light': '#9fb6c9',
@@ -94,12 +114,19 @@ PALACE = MenuTheme('palace', {
     'active_field': '#153a55', 'text_selection': '#347d95',
     'danger': '#5a1030', 'danger_soft': '#3a1030',
 }, dim=100, frame='bands', grow=(1, 6, 7), bands=(
-    # A cream cornice with the light on its outer edge, then the wall's
-    # turquoise and orange trim lines. The outline round it is a dark
-    # mauve-grey, softer on the room than black.
-    ('#4a3a4a',), ('#ffffd6',), ('#e5e3c6',), ('#f7e3b0', '#f7f7ad', '#f0d6ae'),
-    ('#f7e3b0', '#f0d6ae', '#f7e3b0', '#f7f7ad'), ('#e7cead', '#e7cead', '#e7cead', '#e7cead', '#f0d6ae'),
-    ('#cebea7',), ('#ae9594',), ('#8c6d87', '#876e77'), ('#000010',), ('#52b5bd',), ('#fdae61',),
+    # The room's cream cornice with the light on its outer edge and its pearls,
+    # stone by stone, then the wall's turquoise and orange trim lines. The
+    # outline round it is a dark mauve-grey, softer on the room than black.
+    ('#4a3a4a',), ('#ffffd6',), ('#e5e3c6',),
+    _palace_stone('mlamalmalmalamlamlamanmalmalamlamlamalmalmalamlamla'),
+    _palace_stone('alaamlamlamllaalalaaalamlamllaalalaamlamlamllaalala'),
+    _palace_stone('klkkkkkkkkklkkkkklkkklkkkkklkkkkklkkkkkkkkklkkkkklk'),
+    _palace_stone('ohhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh'),
+    ('#ae9594',),
+    _palace_stone('cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdc'),
+    ('#000010',),
+    _palace_stone('tttbbtttbttttbtttbbtttbbtttbbtttbttttbtttbbtttbbttt'),
+    ('#fdae61',),
 ))
 
 # Level 2: sandstone around the dark sea, with the sun's yellow.
@@ -395,13 +422,18 @@ def _band_frame(theme, size, fill):
     pixels = picture.load()
     rng = random.Random(0xC0)
     bands = [[_rgb(colour) + (255,) for colour in band] for band in theme.bands]
+    woven = [isinstance(band, _Weave) for band in theme.bands]
     for y in range(height):
         for x in _edge_columns(width, height, y, len(bands)):
             vertical, horizontal = min(y, height - 1 - y), min(x, width - 1 - x)
             depth = min(vertical, horizontal)
             if depth < len(bands):
                 band = bands[depth]
-                pixels[x, y] = band[0] if len(band) == 1 else rng.choice(band)
+                if woven[depth]:
+                    # Along the top and the foot from the left, down the sides from the top.
+                    pixels[x, y] = band[(x if vertical <= horizontal else y) % len(band)]
+                else:
+                    pixels[x, y] = band[0] if len(band) == 1 else rng.choice(band)
     return picture
 
 
