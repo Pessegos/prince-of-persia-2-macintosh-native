@@ -162,7 +162,8 @@ under `rendered/temple-loose-shake`.
 Separate research finding: original temple shake phases include both
 3545/3547 and3546/3548 pairs, but legacy temple imports retain only the first
 shake state. That affects other attached shake phases and is not the cause
-of this fixed-to-MOB transition; it remains a bounded importer follow-up.
+of this fixed-to-MOB transition; it remains a bounded importer follow-up
+(done 2026-11-16: the temple export keeps phase 3's image, `shake_pairs`).
 No shake table, imported artwork or resource data is changed by this fix.
 
 Validation for this origin correction:246 focused tests pass without skips

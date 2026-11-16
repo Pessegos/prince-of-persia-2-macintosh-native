@@ -87,6 +87,16 @@ class InstallationTests(unittest.TestCase):
                 self.assertIn(name, run_game.missing_assets(self.project))
                 path.write_bytes(original)
 
+    def test_temple_exports_without_the_second_shake_image_request_reimport(self):
+        path = self.project / 'assets' / 'temple_level11.json'
+        program = {'scythes': {'schema': 1}, 'loose_floors': {'schema': 2, 'shake_pairs': True}}
+        path.write_text(json.dumps(program))
+        self.assertEqual(run_game.missing_assets(self.project), [])
+        del program['loose_floors']['shake_pairs']
+        path.write_text(json.dumps(program))
+        self.assertEqual(run_game.missing_assets(self.project),
+                         ['temple_level11.json (needs the second loose-floor shake)'])
+
     def test_old_ruins_exports_without_scythes_request_reimport(self):
         for number, label in ((6, 'six'), (7, 'seven')):
             path = self.project / 'assets' / f'ruins_level{number}.json'

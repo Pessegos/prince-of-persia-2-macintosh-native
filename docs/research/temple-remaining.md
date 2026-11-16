@@ -77,6 +77,18 @@ and find which differs. Do not tune the route to hide it.
 
 ### 5. The loose floors' second shake pair (importer)
 
+**Done 2026-11-16.** `loose_floor_cells` now exports phase 3's image for
+the temple (environment 2) as it did for the ruins: 7:2bd6 serves both with
+the parity tables a5-0x2c66/-0x2c7e. A new export carries
+`loose_floors.shake_pairs`; `run_game` asks an older temple export for a
+reimport ("needs the second loose-floor shake"). Only `loose_floors`
+changes (48 of 101 cells, 58 room units). An odd column now shows its
+second image in phases 3-4; in an even column the table's value 1 draws
+the same pixels as the resting floor, so phases 3-4 rest there, as the
+original's drawer gives. **The user's installation needs a reimport.**
+`tests.test_temple_loose_shake`, `tests.test_loose_floors`,
+`tests.test_run_game`.
+
 Original temple shake phases use two pairs of pieces, 3545/3547 and
 3546/3548. The temple import keeps only the first, so attached shakes whose
 native phase 3 differs from phase 1 lose a step of the tremor. The user

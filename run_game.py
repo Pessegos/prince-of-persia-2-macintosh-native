@@ -162,6 +162,9 @@ def missing_assets(project=PROJECT):
             # An earlier export lacks the blades, so its traps would never run.
             if cavern['scythes'].get('schema') != 1:
                 raise ValueError('Scythe scenery needs reimport')
+            # Before 2026-11-16 a loose floor kept only phase 1's shake image.
+            if not cavern['loose_floors'].get('shake_pairs'):
+                missing.append(f'{name} (needs the second loose-floor shake)')
         except (OSError, ValueError, KeyError, TypeError, AttributeError):
             missing.append(f'{name} (needs the temple blades)')
     final_path = project / 'assets' / 'final_level14.json'

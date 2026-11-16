@@ -118,6 +118,17 @@ class LooseFloorTests(unittest.TestCase):
         self.assertEqual([(b.row, b.y, b.velocity) for b in self.loose.falling],
                          [(1, 143, 24), (0, 125, 0)])
 
+    def test_temple_loose_cells_export_their_phase_three_shake_last(self):
+        # 7:2bd6 serves the ruins (4) and the temple (2) with two shake
+        # images per column parity; the caverns (3) have one.
+        self.assertEqual(loose_floor_cells(self.terrain)[0, 7],
+                         ((11, 0x1100), (11, 0x1101), (0, 0x103)))
+        for environment in (2, 4):
+            with self.subTest(environment=environment):
+                struct.pack_into('>H', self.terrain.level, 0x2186, environment)
+                self.assertEqual(loose_floor_cells(self.terrain)[0, 7],
+                                 ((11, 0x1100), (11, 0x1101), (0, 0x103), (11, 0x1103)))
+
     def test_special_floor_export_includes_its_removed_state_and_impact_surface(self):
         self.set_tile(0, 7, 15, 0x1100)
         cells = loose_floor_cells(self.terrain)
