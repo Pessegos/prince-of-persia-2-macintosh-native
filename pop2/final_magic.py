@@ -132,19 +132,47 @@ class FinalMagic:
     fresh_turn: bool = False
 
 
+# 9:2880-28d8 starts the fire in state 2 (frame 2, not bursting).
+THROWN_FRAME = 2
+
+
 def throw_fireball(state, room, row, floor):
-    """9:2880: X = AddCharX(43) - 207, Y = Y - 55, speed 12 along the facing."""
+    """9:2880: X = AddCharX(43) - 207, Y = Y - 55, speed 12 along the facing,
+    state 2. The caller then runs the wall test 9:25e4 (`fire_hits_wall`)."""
     direction = 1 if state.facing else -1
     return Fireball(room, state.target_x + 43 * direction, floor + state.current_y - 55, row,
-                    FIREBALL_START_SPEED * direction)
+                    FIREBALL_START_SPEED * direction, frame=THROWN_FRAME)
 
 
-def advance_fireball(ball, wall_column, width=0):
+def fire_hits_wall(ball, wall_column, width, sounds, resets):
+    """9:25e4: the cell at X - 22 + width ahead (X - 22 - width flying
+    left); divs truncates, then a negative X steps one column left. A wall
+    aligns the burst to the cell, plays sound 259 and resets the cast's
+    song 265 (PrinceResetSnd 5:5252)."""
+    lead = ball.x - 22 + width
+    if ball.speed < 0:
+        lead -= 2 * width
+    column = int(lead / 51)
+    if lead < 0:
+        column -= 1
+    if not wall_column(ball.room, column, ball.row):
+        return False
+    ball.x = column * 51 + 22 + (51 if ball.speed < 0 else 0)
+    ball.burst, ball.frame = True, 0
+    sounds.append(WALL_SOUND)
+    resets.append(CAST_SONG)
+    return True
+
+
+def advance_fireball(ball, wall_column, width=0, resets=None):
     """ATM 9:27a0 for one frame. ``wall_column(room, column, row)`` is IsWall
     for the cell (columns outside 0-9 belong to the side rooms); ``width``
     is the last drawn image's width (a5-0x44e4, 9:24b6). Returns the sounds
-    and whether the fire ended this frame."""
+    and whether the fire ended this frame; ``resets`` receives the cues
+    PrinceResetSnd 5:5252 stops (258 when the fire leaves the level, 265
+    at a wall)."""
     sounds = []
+    resets = [] if resets is None else resets
     if not ball.active:
         return sounds, False
     if ball.burst:
@@ -161,19 +189,9 @@ def advance_fireball(ball, wall_column, width=0):
     ball.x += ball.speed
     if ball.room is None:
         ball.active = False
+        resets.append(FIREBALL_SOUND)
         return sounds, True
-    # 9:25e4: X - 22 + width ahead, X - 22 - width when flying left;
-    # divs truncates, then a negative X steps one column left.
-    lead = ball.x - 22 + width
-    if ball.speed < 0:
-        lead -= 2 * width
-    column = int(lead / 51)
-    if lead < 0:
-        column -= 1
-    if wall_column(ball.room, column, ball.row):
-        ball.x = column * 51 + 22 + (51 if ball.speed < 0 else 0)
-        ball.burst, ball.frame = True, 0
-        sounds.append(WALL_SOUND)
+    if fire_hits_wall(ball, wall_column, width, sounds, resets):
         return sounds, False
     ball.frame = (ball.frame + 1) % SHAPE_FRAMES
     sounds.append(FIREBALL_SOUND)

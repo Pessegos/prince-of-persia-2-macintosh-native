@@ -1160,3 +1160,29 @@ and capacity agree in every case, as do the palette (2000 + imbued at the
 fourth turn), sound 288 and the shadow's SEQS 2, sound 260 and song 290.
 `tests.test_final_magic` and `tests.test_probe_final_path` reject the old
 return and a transform threshold of 3.
+
+## The fire, traced (2026-11-16)
+
+Read from CODE 9 (not yet run natively):
+
+- 9:2674, the cast at pose 281, already matched `final_magic.throw_fireball`.
+- 9:2880 starts the fire in state 2 (the port started it in 0) and tests
+  the cell it is thrown into at once: a wall there stops it before its
+  first flight frame, with the wall sound and a reset of song 265. It also
+  runs whenever the pose is 281, so a second cast restarts a fire that is
+  still in flight; the port ignored that cast.
+- 9:25e4 (the wall hit) stops song 265; 9:27a0 stops sound 258 when the
+  fire leaves the screen. The port's `fire_hits_wall` and `advance_fireball`
+  now return those resets, and `Final.reset_sounds` stops them (a song with
+  `stop_song`, a sound with `stop_sound`).
+- 9:24ee, the hit on Jaffar, already matched; its room offset is a plain
+  +/-510 with no adjacency check.
+- 9:25d0 moves the view room (a5-0x4fc4) to the burning Jaffar's room. The
+  original therefore never lets him burn out of view; the port has no
+  separate view room and keeps its exception that a burning figure
+  (SEQS 230) finishes out of view, so the victory stays reachable.
+- The native burst X is written in Jaffar's room's coordinates; the port
+  keeps the fire room's coordinates (port exception, same picture).
+
+`tests.test_final_magic` checks the initial state 2, the throw-time wall
+(column 2, X 124, sound 259, reset 265) and the off-screen reset 258.

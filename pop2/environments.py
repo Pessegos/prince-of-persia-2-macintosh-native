@@ -445,7 +445,7 @@ class Final(Environment):
         (6:0b5a) and the body's own frame."""
         from pop2.final_magic import (
             CAST_POSES, DEAD_POSE, FIREBALL_SOUND, REJOIN_REACH, THROW_POSE, body_distance,
-            count_turn_frame, throw_fireball)
+            count_turn_frame, fire_hits_wall, throw_fireball)
 
         scene = self.scene
         if getattr(scene.game, 'caverns', None) is None or scene.terrain_motion is None:
@@ -464,9 +464,15 @@ class Final(Environment):
             elif pose in CAST_POSES:
                 # 9:2868: sound 258 each cast frame; pose 281 throws.
                 state.sound_events.append(FIREBALL_SOUND)
-                if pose == THROW_POSE and magic.fireball is None:
-                    magic.fireball = throw_fireball(state, motion.room, motion.row,
-                                                    floor_y(motion.row))
+                if pose == THROW_POSE:
+                    # 9:2880 restarts the one fire object even in flight,
+                    # then tests its cell at once (9:28dc).
+                    ball = magic.fireball = throw_fireball(state, motion.room, motion.row,
+                                                           floor_y(motion.row))
+                    resets = []
+                    fire_hits_wall(ball, self.fire_wall, self.fireball_sprite(ball.shape).width,
+                                   state.sound_events, resets)
+                    self.reset_sounds(resets)
             elif pose == DEAD_POSE and magic.body is not None and magic.body.room == motion.room:
                 distance = body_distance(state, magic.body.state, magic.body.row, motion.row)
                 if abs(distance) <= REJOIN_REACH:
@@ -509,12 +515,26 @@ class Final(Environment):
             cache[shape] = decode_shap(scene.kid['SHAP'][shape]['data'], colours)
         return cache[shape]
 
+    def fire_wall(self, room, column, row):
+        """IsWall 3:4ef2 of ReadCell 4:27ee for the fire's cell."""
+        from pop2.opponent_generation import WALL_TILES
+
+        return self.scene.level_map.tile(room, column, row).kind in WALL_TILES
+
+    def reset_sounds(self, cues):
+        """PrinceResetSnd 5:5252: the cast's song 265 or the fire's 258."""
+        from pop2.final_magic import CAST_SONG
+
+        audio = getattr(self.scene, 'audio', None)
+        for cue in cues:
+            if audio is not None:
+                (audio.stop_song if cue == CAST_SONG else audio.stop_sound)(cue)
+
     def advance_fireball(self):
         """ATM 9:27a0 and, for Jaffar, the fire's collision 9:24ee."""
         from pop2.combat import select_sequence
         from pop2.final_magic import (
             BURN_SEQUENCE, BURN_SOUND, ROOM_WIDTH, SHADOW_PALETTE, advance_fireball, fireball_hits)
-        from pop2.opponent_generation import WALL_TILES
 
         scene = self.scene
         if getattr(scene.game, 'caverns', None) is None:
@@ -526,9 +546,9 @@ class Final(Environment):
         level_map = scene.level_map
         combat = scene.combat
         width = self.fireball_sprite(ball.shape).width
-        sounds, ended = advance_fireball(
-            ball, lambda room, column, row: level_map.tile(room, column, row).kind in WALL_TILES,
-            width)
+        resets = []
+        sounds, ended = advance_fireball(ball, self.fire_wall, width, resets)
+        self.reset_sounds(resets)
         if ball.active and not 0 <= ball.x < ROOM_WIDTH:
             # 9:23d4-2432: the fire passing a side is drawn in the next room.
             side, shift = ('right', -ROOM_WIDTH) if ball.x >= ROOM_WIDTH else ('left', ROOM_WIDTH)

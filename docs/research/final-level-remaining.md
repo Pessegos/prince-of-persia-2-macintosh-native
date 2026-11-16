@@ -95,6 +95,10 @@ rejects a wrong model:
    2026-11-16** (`tools.probe_final_magic`; the fatal eighth turn fixed).
    LeaveBody, lying down, rejoining and 4:2338 are not probed.
 4. The fire: 9:2674 (cast), 9:27a0 and 9:25e4 (flight), 9:24ee (hit).
+   **Traced 2026-11-16**: the cast and hit already matched; the fire now
+   starts in state 2, tests its cell when thrown, restarts on a second cast
+   and resets songs 265/258 as 9:2880, 9:25e4 and 9:27a0 do. Traced by
+   reading, not yet run natively.
 5. 9:0062 (the defeat) and InitOpps' room-11 laugh.
 
 ### 4. Behaviour that was assumed, not traced
@@ -102,7 +106,9 @@ rejects a wrong model:
 - The relocation's call site: CutOpponent 6:424c -> UpdateOppInfo 6:30b0.
 - The port choice that only a burning figure (SEQS 230) finishes out of
   view: establish what the original does out of view, and keep the victory
-  reachable.
+  reachable. **Answered 2026-11-16**: 9:25d0 moves the view room
+  (a5-0x4fc4) to the burning Jaffar's room, so the original never burns him
+  out of view; the port has no separate view room and keeps its exception.
 - The video reference's "victory bedroom actors, native room 11 and the
   following NIS call", end to end.
 

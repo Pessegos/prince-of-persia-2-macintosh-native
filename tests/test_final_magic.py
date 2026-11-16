@@ -63,6 +63,23 @@ class RuleTests(unittest.TestCase):
         advance_fireball(ball, lambda room, column, row: column == -1, 20)
         self.assertEqual((ball.burst, ball.x), (True, -51 + 22 + 51))
 
+    def test_the_fire_starts_in_state_two_and_resets_its_sounds(self):
+        # 9:28d6: state 2; 9:2804/2664: PrinceResetSnd(258) when it leaves
+        # the level, PrinceResetSnd(265), the cast's song, at a wall.
+        from pop2.final_magic import fire_hits_wall
+
+        ball = throw_fireball(pose(281, facing=1, x=100), 6, 0, 60)
+        self.assertEqual((ball.frame, ball.shape), (2, 4117))
+        sounds, resets = [], []
+        # X 143 - 22 + 20 lies in column 2: a wall there bursts it at once.
+        self.assertTrue(fire_hits_wall(ball, lambda room, column, row: column == 2, 20,
+                                       sounds, resets))
+        self.assertEqual((ball.burst, ball.x, sounds, resets), (True, 124, [259], [265]))
+        ball = Fireball(None, 300, 50, 0, 27)
+        resets = []
+        self.assertEqual(advance_fireball(ball, lambda *cell: False, 20, resets), ([], True))
+        self.assertEqual(resets, [258])
+
     def test_the_fire_span_reaches_seventeen_pixels(self):
         ball = Fireball(7, 380, 50, 0, 27)
         self.assertTrue(fireball_hits(ball, 0, 423, 460, 0))
