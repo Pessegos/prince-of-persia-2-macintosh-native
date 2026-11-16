@@ -824,9 +824,12 @@ A dead shadow (type 1) takes 6:07a2 -> 4:2338 instead (already ported).
 Exclusions:
 - AutoCtrl sends type-6 figures outside room 6 to the palace path
   controller 9:16fe. In room 11 the port only plays the figure's sequence.
-  With the Prince dead and fewer than four turns counted, 9:16fe neither
-  flees nor closes in; the flee branch for four or more turns on the same
-  row is not run in room 11.
+  With the Prince dead (life 0), 9:16fe never moves him: the flee branch
+  for four or more turns on the row needs life above 2, closing in moves
+  only towards a Prince with life (9:0a42's `life > 0`) and CharDistance's
+  life gate blocks the sword dissolve. Only the invisible PathInfo target
+  may change, so playing the sequence is the whole behaviour
+  (`tests.test_final_path`).
 - No native CPU probe and no Macintosh capture of this death is available.
 
 `tests.test_final_magic.DefeatSceneTests` checks, in hidden level-14

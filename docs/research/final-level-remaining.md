@@ -127,7 +127,10 @@ rejects a wrong model:
   SEQS 71 opens with SetCharFloor (-19, 4:2f72 -> 4:31fa), which sets Y to
   row * 120 + 106 before the frame is drawn.
 - In room 11 after a defeat, the 9:16fe flee branch (four or more turns on
-  the same row).
+  the same row). **Answered 2026-11-16**: with the Kid at life 0 the flee
+  needs life above 2, closing in moves only towards a Prince with life and
+  CharDistance's life gate blocks the dissolve, so 9:16fe never moves the
+  figure there (`tests.test_final_path`, the probe's life 0 cases).
 - KeepTime's trobs for crystal and gargoyle cells on the neighbouring rooms'
   edges, with their Rnd draws.
 - The ChessRm song starts about two seconds later than on the Macintosh

@@ -69,6 +69,19 @@ class DecisionTests(unittest.TestCase):
         _calls, events, _info = run(jaffar(pose=281, selected=SPELL_SEQUENCE), prince())
         self.assertEqual(events, [('sound', 289)])
 
+    def test_over_the_defeated_prince_he_does_not_move(self):
+        # Native room 11 after 9:0062: the Kid lies dead (life 0). With four
+        # or more turns on his row the flee branch needs life above 2;
+        # otherwise closing in may pick a target but moves only towards a
+        # Prince with life, and CharDistance's life gate blocks the sword
+        # dissolve. Playing his sequence there is the whole behaviour.
+        room = 11
+        for turns, armed, row in ((5, -1, 2), (0, -1, 2), (0, 1, 2), (6, 0, 2), (0, -1, 1)):
+            dead = prince(life=0, room=room, row=row, column=6, x=513, turns=turns,
+                          armed=armed, pose=185, selected=71)
+            calls, events, _info = run(jaffar(room=room, row=2, column=4, x=430), dead)
+            self.assertEqual((calls, events), ([], []), (turns, armed, row))
+
     def test_upper_floor_range_skips_the_middle_columns(self):
         self.assertTrue(prince_in_range(jaffar(column=3, room=8), prince(), EXPOSED))
         self.assertFalse(prince_in_range(jaffar(column=1, room=8), prince(), EXPOSED))
