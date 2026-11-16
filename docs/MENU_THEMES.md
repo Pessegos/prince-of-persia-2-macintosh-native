@@ -30,7 +30,7 @@ stay neutral.
 | Theme | Levels | Look |
 | --- | --- | --- |
 | neutral | cutscenes, and the rooms of the last level that have no theme yet | grey panel, gold accent |
-| palace | 1 | dark blue panel, cream cornice frame with turquoise and orange trim, red selection |
+| palace | 1 | dark blue panel, cream cornice frame with turquoise and orange trim and a soft mauve-grey outline, red selection |
 | desert | 2 | dark sea panel, frame of sand with a wet inner edge, sun-yellow accent |
 | caverns | 3-5 | dark brown panel, rough rock frame, bone text, flame accent, darker room behind |
 | ruins | 6-9 | indigo panel, violet band of square sockets falling apart, the serpent sign as a watermark, sand-gold accent |

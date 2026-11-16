@@ -253,6 +253,8 @@ class MenuThemeTest(unittest.TestCase):
                     picture = menu_theme._frame_picture(theme.name, (120, 90)).load()
                     self.assertEqual(picture[60, 1], menu_theme._rgb(theme.bands[1][0]) + (255,))
                     self.assertEqual(picture[60, 45], menu_theme._rgb(theme.colour('panel')) + (255,))
+                    for point in ((60, 0), (60, 89), (0, 45), (119, 45)):
+                        self.assertGreater(sum(picture[point][:3]), 150)    # a soft dark outline, not black
                 elif theme.frame == 'spider':
                     # A coat of hair: the band is solid, the hairs beyond it leave the room showing.
                     self.assertEqual(theme.frame_width, 18)

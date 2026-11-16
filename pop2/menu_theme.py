@@ -95,8 +95,9 @@ PALACE = MenuTheme('palace', {
     'danger': '#5a1030', 'danger_soft': '#3a1030',
 }, dim=100, frame='bands', grow=(1, 6, 7), bands=(
     # A cream cornice with the light on its outer edge, then the wall's
-    # turquoise and orange trim lines.
-    ('#000010',), ('#ffffd6',), ('#e5e3c6',), ('#f7e3b0', '#f7f7ad', '#f0d6ae'),
+    # turquoise and orange trim lines. The outline round it is a dark
+    # mauve-grey, softer on the room than black.
+    ('#4a3a4a',), ('#ffffd6',), ('#e5e3c6',), ('#f7e3b0', '#f7f7ad', '#f0d6ae'),
     ('#f7e3b0', '#f0d6ae', '#f7e3b0', '#f7f7ad'), ('#e7cead', '#e7cead', '#e7cead', '#e7cead', '#f0d6ae'),
     ('#cebea7',), ('#ae9594',), ('#8c6d87', '#876e77'), ('#000010',), ('#52b5bd',), ('#fdae61',),
 ))
