@@ -18,6 +18,11 @@ Supplied or left out:
 
 - `peaceful`: opponents do not act. The routes prove the terrain and
   mechanisms, not the fights. With opponents on, exact key scripts diverge.
+  Since 2026-11-16 levels 10 and 13 also have searched routes with
+  opponents on from a fresh load (`LEVEL_10_HOSTILE`, `LEVEL_13_HOSTILE`,
+  life 12 supplied), the latter with a real step wake at the altar
+  (`wake`); level 12 has its video route. See the
+  [temple queue](temple-remaining.md) item 2.
 - The `altar` macro supplies level 13's death: a birdhead kills the Prince
   east of the chasm. See the open questions below.
 - The final macro of level 11's plate return (`rushcatchL`) was found by a

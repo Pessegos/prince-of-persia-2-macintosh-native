@@ -209,7 +209,7 @@ def altar_death(harness):
         return
     guards[0].state.facing = 1
     scene.combat.player.life = 1
-    scene.peaceful = False
+    peaceful, scene.peaceful = scene.peaceful, False
     press(harness, 'ctrl', True)
     harness.tick(2)
     press(harness, 'ctrl', False)
@@ -217,8 +217,20 @@ def altar_death(harness):
         harness.tick()
         if scene.combat.player.alive and scene.game.caverns.altar == -1:
             break
-    scene.peaceful = True
+    scene.peaceful = peaceful
 
+
+def altar_wake(harness):
+    """Level 13, opponents on: three steps west behind the altar's birdhead
+    wake it (no supplied waking); it kills the Prince and the shadow brings
+    the flame. Waits for the merge (altar -1)."""
+    scene = harness.scene
+    for _ in range(3):
+        play(harness, MACROS['stepL'])
+    for _ in range(600):
+        harness.tick()
+        if scene.combat.player.alive and scene.game.caverns.altar == -1:
+            break
 
 def sword_duel(harness, limit=400):
     """Level 12: leap from gate 3:18 onto room 7's top floor and parry the
@@ -369,6 +381,7 @@ def macros():
     for ticks in (4, 8, 12, 16, 20):
         result[f'wait{ticks}'] = [((), (), ticks)]
     result['altar'] = altar_death
+    result['wake'] = altar_wake
     # Level 12, replays only. A short standing hop, then the room-9 guard met
     # on landing: ten stabs push him off the platform onto plate 9:24.
     result['hopshortR'] = [(('up', 'R'), (), 3), ((), ('up',), 6), ((), ('R',), 1)]
@@ -390,7 +403,7 @@ def macros():
 MACROS = macros()
 # Fewer run lengths for the search; a replay can name any of MACROS.
 SEARCHED = {name: script for name, script in MACROS.items()
-            if not name.startswith(('rush', 'hopshort', 'strike', 'sword', 'duel'))
+            if not name.startswith(('rush', 'hopshort', 'strike', 'sword', 'duel', 'wake'))
             and not any(name.endswith(suffix) for suffix in ('R7', 'L7', 'R9', 'L9', 'R13', 'L13',
                                                              'R15', 'L15', 'R16', 'L16', 'R28', 'L28'))}
 

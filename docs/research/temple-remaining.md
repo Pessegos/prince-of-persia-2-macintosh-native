@@ -85,6 +85,14 @@ supplied life. Each defect found gets its own trace, fix and regression.
   missing opponent types (actors 6, 7, 8 and 11 never stop him;
   [final-level ledger](final-level-preparation.md), "The bump's opponent
   types").
+- Level 13 with opponents on from a fresh load: the search (life 12
+  supplied) found a 50-macro route to the stairway; with the altar's
+  birdhead woken by three steps (`wake`, then `runR5` back east) instead of
+  the supplied fixture, it still finishes. With three life points he dies
+  in native room 7. `LEVEL_13_HOSTILE`. The search showed a fixture fault:
+  `altar` left the scene peaceful, so a hostile replay through it ran its
+  second half without opponents; it now restores the mode.
+  `tests.test_temple_routes`.
 
 ### 3. Level 12: the landing beside the flaming sword
 

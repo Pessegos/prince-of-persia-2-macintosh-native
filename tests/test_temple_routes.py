@@ -85,6 +85,18 @@ LEVEL_12_VIDEO_LIFE = 12
 LEVEL_10_HOSTILE = ['leapL5', 'runR20', 'leapR20', 'leapR5', 'crawlL', 'crawlR', 'crawlR', 'crawlL',
                     'hopL', 'leapcatchR5', 'leapcatchR5', 'leapR5', 'hopcatchR', 'leapR5', 'hopcatchL']
 
+# Searched with opponents on (2026-11-16, life 12 supplied): from a fresh load
+# to the stairway, with the altar birdhead woken by three steps (`wake`), not
+# supplied. With the three of a level loaded alone he dies in native room 7.
+LEVEL_13_HOSTILE = ['runL8', 'hopcatchR', 'crawlL', 'leapcatchL14', 'leapL5', 'leapcatchL20',
+                    'runR11', 'runL5', 'descendhangL', 'jump', 'crawlL', 'runL20', 'leapL5',
+                    'climb', 'climb', 'hopL', 'hopcatchL', 'leapcatchR5', 'climb', 'hopcatchR',
+                    'climb', 'climb', 'runR8', 'descendR', 'leapR5', 'leapL20', 'hopL',
+                    'hopcatchL', 'leapcatchL8', 'descendL', 'descendL', 'leapL11', 'tapR',
+                    'crawlL', 'runL20', 'crawlL', 'wait4', 'creepL32', 'leapL8', 'leapL11',
+                    'descendR', 'leapL20', 'wake', 'runR5', 'leapR11', 'leapcatchR20', 'runR11',
+                    'descendR', 'leapR11', 'leapcatchR20']
+
 INSTALLED = all(blades_exported(number) for number in (10, 11, 12, 13))
 
 
@@ -160,6 +172,24 @@ class TempleRouteTests(unittest.TestCase):
         self.addCleanup(harness.close)
         self.assertTrue(reached, trace[-3:])
         self.assertEqual(trace[-1][1:3], (19, 1))
+
+    def test_level_13_is_finished_with_opponents_on(self):
+        reached, trace, harness = replay(13, LEVEL_13_HOSTILE, draw=False, peaceful=False,
+                                         life=LEVEL_12_VIDEO_LIFE)
+        self.addCleanup(harness.close)
+        self.assertTrue(reached, trace[-3:])
+        self.assertFalse(harness.scene.peaceful)
+        self.assertEqual(harness.scene.game.caverns.altar, -1)
+
+    def test_the_supplied_altar_death_keeps_opponents_on(self):
+        # The fixture used to leave the scene peaceful, so a hostile replay
+        # through it ran its second half without opponents.
+        route = LEVEL_13_HOSTILE[:LEVEL_13_HOSTILE.index('wake')] + ['altar']
+        _reached, trace, harness = replay(13, route, draw=False, peaceful=False, life=LEVEL_12_VIDEO_LIFE)
+        self.addCleanup(harness.close)
+        self.assertEqual(trace[-1][0], 'altar')
+        self.assertEqual(harness.scene.game.caverns.altar, -1)
+        self.assertFalse(harness.scene.peaceful)
 
     def test_level_12s_loose_floors_hold_their_gates_open(self):
         _reached, trace, harness = replay(12, LEVEL_12_GATES, draw=False)
