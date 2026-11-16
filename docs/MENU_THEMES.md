@@ -72,6 +72,17 @@ for another. The theme names its kind in `frame`:
 temple's bands and columns are thicker than the others, so its frame reaches a
 few pixels further into a panel's top and bottom margins.
 
+The pages were laid out to clear the first five frames (palace to temple), so a
+later frame's band reaches no deeper into any panel than theirs do
+(`test_new_frames_take_no_more_of_a_panel_than_the_first_ones`). The spider's
+frame is 18 pixels thick, but its outer 11 are only hairs over the room: it
+grows further out (`grow` 7, 11, 13) so that its velvet band lies where the
+temple's band lies. The chess frame's foot is one row lower than the others'
+(`grow` bottom 8) for its board's front face. A frame that would cross the
+area it may cover is drawn smaller; the spider's loose hairs (`_LOOSE`) are cut
+off at that edge instead, so that its band keeps its place on the Controls
+page, which fills the playfield.
+
 Frames are drawn by code from a few hard shades taken from the level's
 palette. They contain none of the game's pictures, so they need no imported
 resources and the tests run without assets. The rock frame has no outline and
@@ -82,8 +93,10 @@ visit only the band of pixels near the edge; visiting the whole panel made a
 menu hesitate the first time it opened. For the same reason the spider's lobes
 (`_spider_shade`) are looked for only near each lobe's centre, and the frame
 skips the lobes that cannot reach its band. The result is the same, pixel for
-pixel, as comparing every lobe with every pixel, and the F1 menu's spider frame
-is drawn in a tenth of a second instead of more than three.
+pixel, as comparing every lobe with every pixel. The spider is still the
+costliest theme the first time a page opens, because its band and its fur are
+both computed: about a tenth of a second for the F1 menu (the other themes
+take one or two hundredths), once per page size.
 
 Saves and screenshots are drawn at the window's resolution. They call
 `menu_theme.panel_scaled(image, rect, point)`, which draws the same frame at
@@ -180,6 +193,12 @@ nothing. Three things a page must take care of:
   the sign would otherwise show there and vanish when the picture arrives.
 - Pages drawn at the window's resolution pass `point`; the sign is drawn at
   the game's resolution and enlarged without smoothing.
+
+These pages are redrawn on every key, so `watermark` looks only at the sign's
+own pixels, whose places it keeps for each size (`_spots`). The spider's fur
+covers the whole panel and costs about 8 ms a redraw on a 1080p saves page
+(the serpent about 4). Each window size has its own enlarged sign, so the
+caches keep only the latest two dozen.
 
 The level map, the playback page and the Cutscene Viewer carry no sign: the
 viewer's shelf of covers moves over the page and would cover it.

@@ -175,7 +175,7 @@ CHESS = MenuTheme('chess', {
     'active': '#99c8c2', 'active_map': '#99c8c2', 'active_fill': '#2e3a44',
     'active_field': '#242030', 'text_selection': '#553c59',
     'danger': '#5a1830', 'danger_soft': '#3a1028',
-}, dim=130, frame='chess', grow=(2, 5, 7))
+}, dim=130, frame='chess', grow=(2, 5, 8))
 
 # Level 14, native rooms 3 and 9: the giant spider's hairy browns over the
 # void, its lit orange, and the mauve of the rocks round it.
@@ -190,7 +190,7 @@ SPIDER = MenuTheme('spider', {
     'active': '#c9a8c0', 'active_map': '#c9a8c0', 'active_fill': '#2e1e24',
     'active_field': '#24141a', 'text_selection': '#642f42',
     'danger': '#5a1810', 'danger_soft': '#3a100c',
-}, dim=135, frame='spider', grow=(2, 8, 10), mark='#030100')
+}, dim=135, frame='spider', grow=(7, 11, 13), mark='#030100')
 
 THEMES = {theme.name: theme for theme in (NEUTRAL, PALACE, DESERT, CAVERNS, RUINS, TEMPLE, CHESS, SPIDER)}
 
@@ -287,6 +287,25 @@ def wide_layout(width, height, basis=510, limit=WIDE_SPREAD):
     return spread, (extra - spread) / 2
 
 
+# A frame's loose outer pixels: hairs standing out over the room.
+_LOOSE = {'spider': 11}
+
+
+def _frame_place(rect, theme, clear_sides, limit):
+    """Where a panel's frame picture lies, and the part of it that is shown.
+
+    A frame that would cross the area it may cover is drawn smaller, except
+    for its loose outer pixels (the spider's hairs): those are cut off at the
+    edge instead, so that the band stays in its place round the page.
+    """
+    shown = frame_rect(rect, theme, clear_sides, limit)
+    loose = _LOOSE.get(theme.frame, 0)
+    if not loose:
+        return shown, shown
+    wider = (limit[0] - loose, limit[1] - loose, limit[2] + loose, limit[3] + loose)
+    return frame_rect(rect, theme, clear_sides, wider), shown
+
+
 def panel(image, rect, clear_sides=False, limit=_LIMIT):
     """Draw a menu panel: its fill and the current theme's frame, in place.
 
@@ -296,10 +315,12 @@ def panel(image, rect, clear_sides=False, limit=_LIMIT):
     if theme.frame is None:
         ImageDraw.Draw(image).rectangle(rect, fill=c('#181818'), outline=c('#858585'))
         return
-    outer = frame_rect(rect, theme, clear_sides, limit)
-    size = (outer[2] - outer[0] + 1, outer[3] - outer[1] + 1)
-    picture = _frame_picture(theme.name, size)
-    image.paste(picture, outer[:2], picture)
+    whole, shown = _frame_place(rect, theme, clear_sides, limit)
+    picture = _frame_picture(theme.name, (whole[2] - whole[0] + 1, whole[3] - whole[1] + 1))
+    if shown != whole:
+        picture = picture.crop((shown[0] - whole[0], shown[1] - whole[1],
+                                shown[2] - whole[0] + 1, shown[3] - whole[1] + 1))
+    image.paste(picture, shown[:2], picture)
 
 
 def panel_scaled(image, rect, point, limit=None):
@@ -314,17 +335,23 @@ def panel_scaled(image, rect, point, limit=None):
     theme = _current
     if theme.frame is None:
         return False
-    outer = frame_rect(rect, theme, True, limit or _SCREEN)
-    size = (outer[2] - outer[0] + 1, outer[3] - outer[1] + 1)
-    left, top = point(outer[0], outer[1])
-    right, bottom = point(outer[2] + 1, outer[3] + 1)
+    whole, shown = _frame_place(rect, theme, True, limit or _SCREEN)
+    size = (whole[2] - whole[0] + 1, whole[3] - whole[1] + 1)
+    left, top = point(whole[0], whole[1])
+    right, bottom = point(whole[2] + 1, whole[3] + 1)
     scaled = max(1, right - left), max(1, bottom - top)
     key = theme.name, size, scaled
     if key not in _frames:
         if len(_frames) > 24:
             _frames.clear()
         _frames[key] = _frame_picture(theme.name, size).resize(scaled, Image.Resampling.NEAREST)
-    image.paste(_frames[key], (left, top), _frames[key])
+    picture = _frames[key]
+    if shown != whole:
+        cut_left, cut_top = point(shown[0], shown[1])
+        cut_right, cut_bottom = point(shown[2] + 1, shown[3] + 1)
+        picture = picture.crop((cut_left - left, cut_top - top, cut_right - left, cut_bottom - top))
+        left, top = cut_left, cut_top
+    image.paste(picture, (left, top), picture)
     return True
 
 
@@ -812,15 +839,16 @@ def _spider_pattern(width, height):
     return Image.fromarray(numpy.where(marks, 255, 0).astype(numpy.uint8))
 
 
-def _spider_shade(width, height, cell=15.0, margin=None):
+def _spider_shade(width, height, cell=15.0, margin=None, reach=2.5):
     """How shadowed each pixel is among the spider's lobes, 0 to 1, and the
     random sequence that drew them (the panel's specks follow from it).
 
     Rounded lobes packed together, a little stretched and bent, each lit
     from the upper left: the shadowed side of each lobe and the crevice
     under it are dark. Each lobe is only looked for near its centre: some
-    forty others lie closer to any pixel than that reach, so its nearest two
-    are always among them and the field is the same as looking everywhere.
+    twenty lie that near any pixel. A pixel whose nearest two are not both
+    that near (hardly ever) is then compared with every lobe, so the field
+    is exactly the one that comparing every lobe with every pixel gives.
     With ``margin``, only the strip that far in from each edge is wanted (a
     frame's band); lobes that cannot reach it are skipped, and the shade
     inside the strip means nothing.
@@ -836,24 +864,45 @@ def _spider_shade(width, height, cell=15.0, margin=None):
     second = numpy.full((height, width), numpy.inf)
     near_x = numpy.zeros((height, width))
     near_y = numpy.zeros((height, width))
-    reach, bend = 3.5 * cell, 4.3       # how far a lobe is looked for; the most the bending moves a pixel
+    reach, bend = reach * cell, 4.3     # how far a lobe is looked for (in cells); the most the bending moves a pixel
     for (px, py), squash in zip(points, stretch):
         across, down = reach / squash + bend, reach * squash + bend
         left, right = max(0, int(px - across)), min(width, int(px + across) + 2)
         top, bottom = max(0, int(py - down)), min(height, int(py + down) + 2)
         if left >= right or top >= bottom:
             continue
-        if margin is not None and margin <= left and right <= width - margin                 and margin <= top and bottom <= height - margin:
+        if margin is not None and (margin <= left and right <= width - margin
+                                   and margin <= top and bottom <= height - margin):
             continue                    # wholly inside the strip: it cannot reach it
         window = slice(top, bottom), slice(left, right)
-        dx, dy = (wx[window] - px) * squash, (wy[window] - py) / squash
+        dx = wx[window] - px
+        dx *= squash
+        dy = wy[window] - py
+        dy /= squash
         distance = numpy.hypot(dx, dy)
-        nearest = first[window]
+        nearest, runner_up = first[window], second[window]      # views, changed in place
         closer = distance < nearest
-        second[window] = numpy.where(closer, nearest, numpy.minimum(second[window], distance))
-        near_x[window] = numpy.where(closer, dx, near_x[window])
-        near_y[window] = numpy.where(closer, dy, near_y[window])
-        first[window] = numpy.where(closer, distance, nearest)
+        numpy.minimum(runner_up, distance, out=runner_up)
+        numpy.copyto(runner_up, nearest, where=closer)
+        numpy.copyto(nearest, distance, where=closer)
+        numpy.copyto(near_x[window], dx, where=closer)
+        numpy.copyto(near_y[window], dy, where=closer)
+    # Beyond the reach a nearer lobe may have been missed: every lobe, in the
+    # same order (the first of two equally near is the nearest, as above).
+    missed = second > reach
+    if margin is not None:
+        missed[margin:height - margin, margin:width - margin] = False
+    rows, columns = numpy.nonzero(missed)
+    for start in range(0, len(rows), 512):
+        ys, xs = rows[start:start + 512], columns[start:start + 512]
+        dx = (wx[ys, xs][:, None] - points[:, 0]) * stretch
+        dy = (wy[ys, xs][:, None] - points[:, 1]) / stretch
+        distance = numpy.hypot(dx, dy)
+        nearest = distance.argmin(axis=1)
+        picked = numpy.arange(len(ys)), nearest
+        first[ys, xs] = distance[picked]
+        second[ys, xs] = numpy.partition(distance, 1, axis=1)[:, 1] if len(points) > 1 else numpy.inf
+        near_x[ys, xs], near_y[ys, xs] = dx[picked], dy[picked]
     with numpy.errstate(invalid='ignore'):      # unreached pixels inside a strip
         radius = numpy.maximum(1.0, (first + second) / 2)
         away = numpy.clip((near_x + near_y) / (1.41 * radius), 0, 1)
@@ -863,6 +912,7 @@ def _spider_shade(width, height, cell=15.0, margin=None):
 
 
 _marks = {}
+_spots = {}     # where each sign has its pixels
 
 
 def watermark(image, rect, point=None, avoid=()):
@@ -897,27 +947,42 @@ def watermark(image, rect, point=None, avoid=()):
         left = (rect[0] + rect[2] + 1 - mask.width) // 2
         top = (rect[1] + rect[3] + 1 - mask.height) // 2 + 6
         box = (left, top, left + mask.width, top + mask.height)
+    key = height
     if point is not None:
         box = (*point(box[0], box[1]), *point(box[2], box[3]))
         key = height, box[2] - box[0], box[3] - box[1]
         if key not in _marks:
+            if len(_marks) > 24:        # each window size has its own: keep only the recent ones
+                _marks.clear()
             _marks[key] = mask.resize(key[1:], Image.Resampling.NEAREST)
         mask = _marks[key]
-    # One pass over the pixels under the sign: these pages are redrawn on every key.
-    region = image.crop(box)
-    pixels = numpy.array(region.convert('RGB'))
-    packed = (pixels[..., 0].astype(numpy.uint32) << 16) | (pixels[..., 1].astype(numpy.uint32) << 8) | pixels[..., 2]
-    inside = numpy.asarray(mask) > 0
-    for left, top, right, bottom in avoid:
-        inside[max(0, top - box[1]):max(0, bottom + 1 - box[1]), max(0, left - box[0]):max(0, right + 1 - box[0])] = False
+    # Only the sign's own pixels are looked at: these pages are redrawn on every key.
+    if key not in _spots:
+        if len(_spots) > 24:
+            _spots.clear()
+        _spots[key] = numpy.flatnonzero(numpy.asarray(mask)).astype(numpy.int32)
+    spots = _spots[key]
+    if avoid:
+        rows, columns = numpy.divmod(spots, mask.width)
+        keep = numpy.ones(len(spots), dtype=bool)
+        for left, top, right, bottom in avoid:
+            keep &= ~((rows >= top - box[1]) & (rows <= bottom - box[1])
+                      & (columns >= left - box[0]) & (columns <= right - box[0]))
+        spots = spots[keep]
+    pixels = numpy.array(image.crop(box).convert('RGBA'))
+    flat = pixels.reshape(-1, 4)
+    under = flat[spots, :3].astype(numpy.uint32)
+    packed = under[:, 0] << 16 | under[:, 1] << 8 | under[:, 2]
     toward = _rgb(theme.mark)
-    changed = numpy.zeros(inside.shape, dtype=bool)
+    changed = False
     for colour in {_rgb(theme.colour(role)) for role in ('panel', 'row', 'row_dark', 'selected', 'hover')}:
-        same = inside & (packed == (colour[0] << 16 | colour[1] << 8 | colour[2]))
-        pixels[same] = tuple(round(a + (b - a) * _MARK_STRENGTH.get(theme.name, 0.4))
-                             for a, b in zip(colour, toward))
-        changed |= same
-    image.paste(Image.fromarray(pixels), box, Image.fromarray(changed))
+        same = spots[packed == (colour[0] << 16 | colour[1] << 8 | colour[2])]
+        if len(same):
+            flat[same] = tuple(round(a + (b - a) * _MARK_STRENGTH.get(theme.name, 0.4))
+                               for a, b in zip(colour, toward)) + (255,)
+            changed = True
+    if changed:
+        image.paste(Image.fromarray(pixels, 'RGBA'), box)
 
 
 # --- The temple: carved red stone. Two columns with leaf capitals carry a lintel
@@ -1132,27 +1197,33 @@ def _spider_frame(theme, size, fill):
     band_pores = [_rgb(colour) + (255,) for colour in _SPIDER_PORES]
     outside = zone - len(velvet)    # the outer pixels, where only hairs reach
     opaque = fill + (255,)
-    lobes = _spider_shade(width, height, _SPIDER_FUR_LOBE, zone)[0]
-    for y in range(height):
-        for x in _edge_columns(width, height, y, zone + 1):
+    lobes = _spider_shade(width, height, _SPIDER_FUR_LOBE, zone)[0].tolist()    # plain floats: quicker to read one by one
+    choose, roll_next = rng.choice, pattern.random
+    # Only the band's own pixels, row by row (the inside is filled below).
+    for y in range(outside, height - outside):
+        row = lobes[y]
+        if y < zone or y >= height - zone or width <= 2 * zone:
+            columns = range(outside, width - outside)
+        else:
+            columns = (*range(outside, zone), *range(width - zone, width - outside))
+        for x in columns:
             depth = min(x, y, width - 1 - x, height - 1 - y) - outside
             if depth >= len(velvet):
-                pixels[x, y] = opaque
-            elif depth >= 0:
-                colour = rng.choice(velvet[depth])
-                shade, roll = lobes[y, x], pattern.random()
-                if shade > 0.6 and roll < 0.75:
-                    colour = shadowed[depth]
-                elif shade > 0.3 and roll < 0.5:
-                    colour = shadowed[depth] if roll < 0.2 else velvet[depth][-1]
-                elif shade < 0.2:
-                    if depth in (2, 3, 4) and shade < 0.08 and roll < 0.35:
-                        colour = glint
-                    elif roll < 0.55:
-                        colour = lit[depth]
-                    elif roll > 0.96:
-                        colour = pattern.choice(band_pores)
-                pixels[x, y] = colour
+                continue
+            colour = choose(velvet[depth])
+            shade, roll = row[x], roll_next()
+            if shade > 0.6 and roll < 0.75:
+                colour = shadowed[depth]
+            elif shade > 0.3 and roll < 0.5:
+                colour = shadowed[depth] if roll < 0.2 else velvet[depth][-1]
+            elif shade < 0.2:
+                if depth in (2, 3, 4) and shade < 0.08 and roll < 0.35:
+                    colour = glint
+                elif roll < 0.55:
+                    colour = lit[depth]
+                elif roll > 0.96:
+                    colour = pattern.choice(band_pores)
+            pixels[x, y] = colour
     _fill_inside(picture, zone, opaque)
     fuzz = [_rgb(colour) + (255,) for colour in _SPIDER_FUZZ]
     dark = [_rgb(colour) + (255,) for colour in _SPIDER_BRISTLE]

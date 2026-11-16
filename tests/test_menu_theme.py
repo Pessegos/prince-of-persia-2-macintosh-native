@@ -466,16 +466,88 @@ class MenuThemeTest(unittest.TestCase):
             return numpy.clip(0.65 * away ** 1.6 + 0.8 * crevice ** 1.5, 0, 1), rng.random(20)
 
         width, height = 230, 170            # wider than a lobe's reach, so the windows matter
-        for cell in (9.0, 15.0):
-            whole, after = everywhere(width, height, cell)
-            shade, rng = menu_theme._spider_shade(width, height, cell)
-            self.assertTrue(numpy.array_equal(shade, whole))
-            self.assertTrue(numpy.array_equal(rng.random(20), after))   # the specks' sequence is unchanged
-        # A frame's band: only the strip near the edges is wanted, and it is the same.
-        shade = menu_theme._spider_shade(width, height, 9.0, 18)[0]
         y, x = numpy.mgrid[0:height, 0:width]
         band = numpy.minimum(numpy.minimum(x, y), numpy.minimum(width - 1 - x, height - 1 - y)) < 18
-        self.assertTrue(numpy.array_equal(shade[band], everywhere(width, height, 9.0)[0][band]))
+        for cell in (9.0, 15.0):
+            whole, after = everywhere(width, height, cell)
+            # The usual reach, and one so short that most pixels miss their
+            # nearest lobes and are compared with every lobe instead.
+            for reach in (2.5, 0.5):
+                shade, rng = menu_theme._spider_shade(width, height, cell, reach=reach)
+                self.assertTrue(numpy.array_equal(shade, whole))
+                self.assertTrue(numpy.array_equal(rng.random(20), after))   # the specks' sequence is unchanged
+                # A frame's band: only the strip near the edges is wanted, and it is the same.
+                shade = menu_theme._spider_shade(width, height, cell, 18, reach)[0]
+                self.assertTrue(numpy.array_equal(shade[band], whole[band]))
+
+    def test_new_frames_take_no_more_of_a_panel_than_the_first_ones(self):
+        # Every page's content was laid out to clear the first five frames'
+        # bands; a later frame's band may reach no deeper into any panel.
+        from pop2.controls_page import ControlsPage
+        from pop2.game_ui import DevelopmentMenu
+        from pop2.screenshot_gallery import ScreenshotGallery
+
+        game = [(GameMenu.PANEL, True), (GameMenu.OPTIONS_PANEL, False), (GameMenu.DIALOG, False),
+                (GameMenu.ABOUT_DIALOG, False), (GameMenu.HALL_PANEL, False), (GameMenu.SCREENSHOT_PANEL, False),
+                (ControlsPage.PANEL, True), (DevelopmentMenu.PANEL, False)]
+        # The classic saves page and its dialog, the screenshots page and its folder dialog.
+        window = [(28, 16, 484, 368), (80, 121, 432, 270), ScreenshotGallery.PANEL, (48, 44, 464, 338)]
+        places = [(rect, sides, menu_theme._LIMIT) for rect, sides in game]
+        places += [(rect, True, menu_theme._SCREEN) for rect in window]
+
+        def depths(theme, rect, sides, limit):
+            """How far the band's inner edge lies inside the panel, on each side."""
+            whole = menu_theme._frame_place(rect, theme, sides, limit)[0]
+            across, top, bottom = ((theme.frame_width,) * 3 if theme.frame == 'bands'
+                                   else menu_theme._THICKNESS[theme.frame])
+            return (whole[0] + across - rect[0], whole[1] + top - rect[1],
+                    rect[2] - (whole[2] - across), rect[3] - (whole[3] - bottom))
+
+        first = (PALACE, DESERT, CAVERNS, RUINS, TEMPLE)
+        for rect, sides, limit in places:
+            deepest = [max(side) for side in zip(*(depths(theme, rect, sides, limit) for theme in first))]
+            for theme in (CHESS, SPIDER):
+                with self.subTest(theme=theme.name, rect=rect):
+                    allowed = list(deepest)
+                    if theme is CHESS and menu_theme.frame_rect(rect, theme, sides, limit)[3] == limit[3]:
+                        # The board's front face makes the chess foot a row deeper than
+                        # the temple's; where the playfield's foot stops it (Controls),
+                        # it stays one row deeper. That page's keys are well clear.
+                        allowed[3] += 1
+                    for depth, most in zip(depths(theme, rect, sides, limit), allowed):
+                        self.assertLessEqual(depth, most)
+
+    def test_spider_hairs_are_cut_at_the_playfield_edge_and_the_band_keeps_its_place(self):
+        # Controls fills the playfield: the frame would cross its top and the health strip.
+        rect = (21, 7, 491, 357)
+        whole, shown = menu_theme._frame_place(rect, SPIDER, True, menu_theme._LIMIT)
+        self.assertEqual(shown, menu_theme.frame_rect(rect, SPIDER, True))
+        self.assertLess(whole[1], shown[1])
+        self.assertGreater(whole[3], shown[3])
+        menu_theme.use(SPIDER)
+        self.addCleanup(menu_theme.use, None)
+        sentinel = (1, 2, 3, 255)
+        image = Image.new('RGBA', (512, 384), sentinel)
+        menu_theme.panel(image, rect, clear_sides=True)
+        pixels = image.load()
+        self.assertTrue(all(pixels[x, y] == sentinel for x in range(512) for y in range(365, 384)))
+        full = menu_theme._frame_picture('spider', (whole[2] - whole[0] + 1, whole[3] - whole[1] + 1)).load()
+        for x in (100, 256, 400):
+            for y in range(shown[1], shown[3] + 1):
+                colour = full[x - whole[0], y - whole[1]]
+                self.assertEqual(pixels[x, y], colour if colour[3] else sentinel)
+        # Other frames are drawn smaller instead: none of their pixels is loose.
+        self.assertEqual(*menu_theme._frame_place(rect, CAVERNS, True, menu_theme._LIMIT))
+
+    def test_sign_caches_keep_only_recent_window_sizes(self):
+        menu_theme.use(RUINS)
+        self.addCleanup(menu_theme.use, None)
+        image = Image.new('RGBA', (1200, 900), menu_theme._rgb(RUINS.colour('panel')) + (255,))
+        for step in range(40):
+            scale = 1.5 + step / 40
+            menu_theme.watermark(image, (64, 36, 448, 328), lambda x, y, s=scale: (round(x * s), round(y * s)))
+        self.assertLessEqual(len(menu_theme._marks), 25)
+        self.assertLessEqual(len(menu_theme._spots), 25)
 
     def test_save_page_keeps_the_sign_when_only_its_list_is_redrawn(self):
         from pathlib import Path
