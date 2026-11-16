@@ -62,6 +62,19 @@ it down. Measure the port's landing against the native rules (the jump's
 distance, CheckBarr and the sword's barrier, `alert_path_mode(floating=True)`),
 and find which differs. Do not tune the route to hide it.
 
+**Measured in the port 2026-11-16 (native side still open).** In
+`LEVEL_12_VIDEO`, `swordduel` leaps from room 3 (native X 684) into room
+11, runs off row 2 (SEQS 21, X 465 -> 521) and falls into room 7's top
+floor at X 538, costing one life: SEQS 20, the hurt landing (poses
+108-119, pose 109 held 21 frames), ends standing at X 552. The resting
+sword is at X 560 (SEQS 105, pose 213). It wakes on the first frame the
+Prince leaves animation mode 5 (4:14d4-14ec), rises (SEQS 106) and
+strikes 18 frames later. So the port's Prince cannot run east: he is
+still crouching when the sword wakes. A native trace of this one fall (the
+horizontal speed of SEQS 21 off the edge and SEQS 20's hold) is what
+would show whether the original lands past the sword or simply lands
+softer; no rule is changed until then.
+
 ### 4. Level 13's altar
 
 - Killing the altar birdhead makes the original unfinishable, from the
