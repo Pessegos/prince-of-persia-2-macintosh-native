@@ -61,7 +61,7 @@ revealed again by replaying its level. In the developer viewer, R shows the
 selected chapter's reveal again, sound included, without changing anything.
 The page takes the level's menu theme (docs/MENU_THEMES.md).
 
-The catalog in `pop2/cutscenes.py` includes The Young Lovers, Title and The Palace
+The catalog in `pop2/cutscenes.py` includes The Young Lovers, The Title Screen and The Palace
 Escape from the opening, voyage after level 1,
 discovery after level 3, carpet flight after level 5, The Mother's Vision in
 level 8, the horse ride after level 9, the flight after level 13, The Final
@@ -202,7 +202,7 @@ latency; simulated 240 Hz tests do not establish physical 240 Hz presentation.
 
 Opening boundaries come from the imported title operation, the following frame
 setup and the first story music before narration resumes. The Young Lovers ends before
-the title; Title includes its fade-out; The Palace Escape reconstructs the
+the title; The Title Screen includes its fade-out; The Palace Escape reconstructs the
 following frame setup silently and begins with its own music/reveal. This omits
 an empty transition wait owned by the preceding title song, without omitting
 narration. A private player reconstructs palette/animation/cue state, resumes
