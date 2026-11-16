@@ -18,11 +18,12 @@ DIRECTIONS = {'left': (-1, 0), 'right': (1, 0), 'up': (0, -1), 'down': (0, 1)}
 
 # Level six: native rooms 28 and 14 are never visited (the cliff's left cut
 # lands in room 3, S07_373E) and room 10 has no tiles at all; the cliff is
-# drawn beside room 1 instead. At the user's request the map also omits
-# level 13's room 14 and level 14's rooms 9 and 10 (all dead-end rooms, so
-# no other room loses its place); their links and gameplay are unchanged.
-HIDDEN_ROOMS = {6: (27, 13, 9, 23, 25), 8: (26, 25, 14, 6), 9: (22, 21),
-                13: (13,), 14: (8, 9)}
+# drawn beside room 1 instead.
+HIDDEN_ROOMS = {6: (27, 13, 9, 23, 25), 8: (26, 25, 14, 6), 9: (22, 21)}
+# At the user's request the map also omits level 13's room 14 and level 14's
+# rooms 9 and 10 (all dead-end rooms, so no other room loses its place). Only
+# the picture: they stay supported rooms, with their links and gameplay.
+MAP_OMITTED = {13: (13,), 14: (8, 9)}
 DETACHED_STARTS = {6: (0, (1, 0))}
 
 
@@ -43,6 +44,14 @@ def room_positions(terrain):
         x, y = positions[3]
         positions[0], positions[1] = (x, y - 2), (x, y - 1)
     return positions
+
+
+def map_positions(terrain):
+    """room_positions without the rooms the map leaves out (MAP_OMITTED)."""
+    level = getattr(terrain, 'level', None)
+    number = struct.unpack_from('>H', level, 0x218a)[0] if level is not None else None
+    omitted = MAP_OMITTED.get(number, ())
+    return {room: point for room, point in room_positions(terrain).items() if room not in omitted}
 
 
 def _linked_positions(terrain, origin, hidden=()):
@@ -293,7 +302,7 @@ def build_development_map(level, include_enemies=True):
     renderer = LevelRenderer(level, preload_room=False)
     terrain = LevelMap(level.data)
     entries = renderer.screen_entries()
-    positions = {room: point for room, point in room_positions(terrain).items()
+    positions = {room: point for room, point in map_positions(terrain).items()
                  if room in entries.values()}
     if not positions:
         raise ValueError('This level has no supported map rooms')

@@ -10,7 +10,7 @@ from unittest.mock import Mock, patch
 from PIL import Image, ImageChops
 
 from pop2.development_map import (DevelopmentMap, MAP_SIZE, build_development_map,
-                                  level_landmarks, room_positions)
+                                  level_landmarks, map_positions, room_positions)
 from pop2.game_ui import DevelopmentMenu, fit_viewport
 from pop2.paths import ASSET_DIR
 
@@ -305,7 +305,7 @@ class ImportedDevelopmentMapTests(unittest.TestCase):
         from pop2.terrain import LevelMap
 
         level = self.resources.level(14)
-        positions = room_positions(LevelMap(level.data))
+        positions = map_positions(LevelMap(level.data))
         _art, actors = map_enemies(level, positions)
         self.assertEqual({room + 1: len(items) for room, items in actors.items() if items},
                          {6: 4, 11: 1})  # Room 10 is omitted from the map.
@@ -323,7 +323,7 @@ class ImportedDevelopmentMapTests(unittest.TestCase):
 
         level = self.resources.level(14)
         terrain = LevelMap(level.data)
-        positions = room_positions(terrain)
+        positions = map_positions(terrain)
         self.assertEqual(positions[1], (positions[0][0], positions[0][1] + 1))
         self.assertEqual(positions[3], (positions[1][0], positions[1][1] + 1))
         self.assertEqual(len(set(point for room, point in positions.items() if room != 10)), 8)
@@ -343,10 +343,12 @@ class ImportedDevelopmentMapTests(unittest.TestCase):
 
         level = self.resources.level(13)
         terrain = LevelMap(level.data)
-        positions = room_positions(terrain)
+        positions = map_positions(terrain)
         self.assertNotIn(13, positions)
         self.assertIn(7, positions)
         self.assertEqual(terrain.neighbor(7, 'up'), 13)  # Native link kept.
+        # Only the picture: the room is still rendered and warped to.
+        self.assertIn(13, room_positions(terrain))
 
     def test_clicking_final_level_draws_its_developer_map(self):
         if not all((ASSET_DIR / name).is_file() for name in ('Final.rsrc', 'final_level14.json')):
