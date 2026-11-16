@@ -485,9 +485,11 @@ def loose_floor_slot_scenery(program, caverns, prince, level, base, progress=lam
               'cells': {f'{room}:{cell}': values for (room, cell), values in context['choices'].items()},
               'climb': {'source': context['source'],
                         'rects': {str(action): list(rect) for action, rect in context['rects'].items()}},
-              'scythe_units': True, 'plank_units': True,
-              # Ruins and temple loose cells end with their phase-3 shake image.
-              'shake_pairs': True, 'rooms': {}}
+              'scythe_units': True, 'plank_units': True, 'rooms': {}}
+    if struct.unpack_from('>H', level, 0x2186)[0] == 2:
+        # Temple loose cells end with their phase-3 shake image (since
+        # 2026-11-16; the ruins' have had it from the start).
+        result['shake_pairs'] = True
     if rooms is not None:
         pass
     elif workers > 1:
