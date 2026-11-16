@@ -12,7 +12,7 @@ from pop2.coordinates import NATIVE_X_ORIGIN, native_room, scene_x
 from pop2.bridge import (bridge_checked, bridge_column, bridge_engage, bridge_gate_open,
                          bridge_tension)
 from pop2.enemy_alerts import alert_path_mode
-from pop2.opponent_records import CORPSE_POSES, GuardRoomRecord, corpse_sequence, removed_on_room_save
+from pop2.opponent_records import GuardRoomRecord, corpse_sequence, is_dead_pose, removed_on_room_save
 from pop2.skeleton import exit_guarded
 from pop2.flame_sword import (
     ADVANCE_SEQUENCE as FLAME_ADVANCE, DEATH_METHOD as FLAME_DEATH_METHOD,
@@ -675,15 +675,15 @@ class CombatEncounter:
                         22, 0, 0, False, guard.row * 10 if guard.guard_record is None
                         else guard.guard_record.cell)
 
-    @staticmethod
-    def _capture_opponent_record(actor, *, restart_living, cell=None, update_height=True):
+    def _capture_opponent_record(self, actor, *, restart_living, cell=None, update_height=True):
         if actor.flame_sword is not None:
             actor.flame_sword.store_room(actor, restart_living=restart_living)
         elif actor.skeleton is not None:
             actor.skeleton.store_room(actor, restart_living=restart_living, cell=cell)
         else:
             actor.guard_record = GuardRoomRecord.capture(
-                actor, restart_living=restart_living, cell=cell, update_height=update_height)
+                actor, restart_living=restart_living, cell=cell, update_height=update_height,
+                opponent_set=self._opponent_set())
 
     def _position_room(self, guard):
         # IsCharInKidRoom 6:46ca uses the cached supporting cell, not the
@@ -2145,9 +2145,11 @@ class CombatEncounter:
         old_room = guard.room
         if not hasattr(self, "guard_physics"):
             # The flaming sword has no terrain physics (CheckFloor 4:35ca).
+            # LoadFrame 4:2b0e: Birdhead.rsrc's 108 frames reach pose 256
+            # (SEQS 190, a hurt birdhead's landing); the port stopped at 254.
             source = getattr(self.guard_art, 'default', self.guard_art).frames
             frames = {action: source[guard_frame_index(action)]
-                      for action in (*range(149, 255), *range(102, 107))
+                      for action in (*range(149, 257), *range(102, 107))
                       if guard_frame_index(action) < len(source)}
             self.guard_physics = RooftopPhysics(self.terrain, frames)
         bounds = lambda: self.guard_art.bounds(guard.state, floor_y(motion.row))
@@ -2240,7 +2242,7 @@ class CombatEncounter:
         if not candidate and dead_count:
             candidate = any(
                 other.row == target.row
-                and other.state.action in CORPSE_POSES
+                and is_dead_pose(other.state.actor_type, self._opponent_set(), other.state.action)
                 and character_column(floor_contact_x(
                     other.state.target_x, other.state.facing,
                     art.frames[guard_frame_index(other.state.action)])) == column
@@ -2449,7 +2451,11 @@ class CombatEncounter:
                 if flame is not None:
                     flame.parried(attacker)
                 else:
-                    select_sequence(attacker, 69)
+                    # 6:5a84-5a9e: in a set-7 level (the temple) a parried
+                    # Prince or birdhead first steps 13 forward (AddCharX
+                    # 4:2bae), then JumpSeq 69 and AnimChar.
+                    step = 13 if self._opponent_set() == 7 else 0
+                    select_sequence(attacker, 69, step)
                     attacker.runtime.next_frame()
                     attacker.state.current_x = attacker.state.target_x
                 defender.state.action = 161

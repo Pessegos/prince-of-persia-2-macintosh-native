@@ -6,8 +6,21 @@ from pop2.sequence_runtime import SequenceState
 from pop2.terrain import TerrainMotion, floor_y
 
 
-# IsDeadPos 4:4846-48de for the ordinary corpses, with set 7's four variants.
-CORPSE_POSES = frozenset((185, 228, 252, 253, 254, 255))
+# IsDeadPos 4:47a0-48de for the opponents: pose 185 for every actor; type 2
+# adds 228 in set 0 (4:4846-485c) and 248 and 251-256 in any other set
+# (4:4864-4896: the temple's birdhead corpses, SEQS 191-194, are 252-255);
+# type 10 213, type 4 206/207 and type 11 273.
+_TYPE_2_SET_0_DEAD = frozenset((185, 228))
+_TYPE_2_OTHER_DEAD = frozenset((185, 248, 251, 252, 253, 254, 255, 256))
+_OTHER_DEAD = {10: frozenset((185, 213)), 4: frozenset((185, 206, 207)),
+               11: frozenset((185, 273))}
+
+
+def is_dead_pose(actor_type, opponent_set, pose):
+    """IsDeadPos 4:47a0 for an opponent (the Prince's branch 4:47e2 aside)."""
+    if actor_type == 2:
+        return pose in (_TYPE_2_SET_0_DEAD if opponent_set == 0 else _TYPE_2_OTHER_DEAD)
+    return pose in _OTHER_DEAD.get(actor_type, (185,))
 
 
 def corpse_sequence(opponent_set, level_kind, slot):
@@ -50,7 +63,7 @@ class GuardRoomRecord:
     pending: bool = True
 
     @classmethod
-    def capture(cls, actor, *, restart_living, cell=None, update_height=True):
+    def capture(cls, actor, *, restart_living, cell=None, update_height=True, opponent_set=0):
         state = actor.state
         previous = actor.guard_record
         native_alive = actor.life > 0 if actor.native_alive is None else actor.native_alive
@@ -59,8 +72,15 @@ class GuardRoomRecord:
         # a living cursor. The header still controls InitOpps' height branch.
         sequence = previous.sequence if restart and previous is not None else state.sequence_id
         height = previous.height if previous is not None else 0
+        # SetSpecialOppInfo 6:33bc (update_height: UpdateOppInfo 3164 and
+        # TransferOppInfo 338e, not the Cut copy 3186): a type 2 in SEQS
+        # 100/186 (selected ID) saves its height; otherwise, in set 7, the
+        # record takes the current ID even for a restarted cursor and a zero
+        # height (33e8-3402).
         if update_height and state.source_sequence_id in (100, 186):
             height = floor_y(actor.row) + state.current_y
+        elif update_height and opponent_set == 7 and state.actor_type == 2:
+            sequence, height = state.sequence_id, 0
         return cls(sequence, 0 if restart else state.cursor, actor.life,
                    actor.sword_drawn, cell, height)
 
@@ -88,7 +108,7 @@ class GuardRoomRecord:
         actor.alert_mode = 0
         actor.recovering = actor.contact_consumed = False
         actor.runtime.next_frame()
-        dead = state.action in CORPSE_POSES
+        dead = is_dead_pose(state.actor_type, opponent_set, state.action)
         if dead:
             actor.life = 0
             corpse = corpse_sequence(opponent_set, state.level_kind, slot)

@@ -7,7 +7,7 @@ from unittest.mock import patch
 from pop2.combat import guard_frame_index, select_sequence
 from pop2.coordinates import column_left
 from pop2.loose_floors import FallingFloor, floor_hits_body, floor_hits_record
-from pop2.opponent_records import CORPSE_POSES, GuardRoomRecord, corpse_sequence
+from pop2.opponent_records import GuardRoomRecord, corpse_sequence, is_dead_pose
 from pop2.paths import ASSET_DIR
 from pop2.terrain import TerrainMotion, floor_contact_x
 from pop2.wall_spikes import WallSpikes
@@ -53,7 +53,19 @@ class CorpseSequenceTests(unittest.TestCase):
 
     def test_a_reloaded_birdhead_corpse_stays_dead(self):
         for pose in range(252, 256):
-            self.assertIn(pose, CORPSE_POSES)
+            self.assertTrue(is_dead_pose(2, 7, pose))
+
+    def test_dead_poses_of_type_two_follow_the_opponent_set(self):
+        # IsDeadPos 4:4846-4896: set 0 adds 228 to 185; any other set adds
+        # 248 and 251-256 instead. The port used one list for every set, so
+        # a temple record in pose 228 reloaded dead and one in 248, 251 or
+        # 256 reloaded alive.
+        for pose in (185, 228, 248, 251, 256):
+            with self.subTest(pose=pose):
+                self.assertEqual(is_dead_pose(2, 0, pose), pose in (185, 228))
+                self.assertEqual(is_dead_pose(2, 7, pose), pose != 228)
+        self.assertTrue(is_dead_pose(6, 0, 185))
+        self.assertFalse(is_dead_pose(6, 0, 228))
 
 
 class RecordContactTests(unittest.TestCase):
@@ -366,7 +378,7 @@ class TemplePlaytestTests(unittest.TestCase):
         # Deliberate port behavior requested by the user: keep the debris
         # lethal here even though his Macintosh recording leaves the guard alive.
         self.assertFalse(guard.alive)
-        self.assertIn(guard.state.action, CORPSE_POSES)
+        self.assertTrue(is_dead_pose(2, 7, guard.state.action))
 
     def test_an_intact_temple_ledge_keeps_its_grip(self):
         harness = self.harness(peaceful=False)

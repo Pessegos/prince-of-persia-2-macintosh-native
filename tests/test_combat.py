@@ -745,6 +745,26 @@ class GuardCombatTests(unittest.TestCase):
                 self.assertEqual(c.guard.state.action, 161)
                 self.assertEqual(c.parry_timer, 0)
 
+    def test_temple_parry_steps_the_attacker_thirteen_forward(self):
+        # TestStrike 6:5a84-5a9e: with LEVL 0x21a4 == 7 the parried attacker
+        # (Prince or birdhead) takes AddCharX(13) before JumpSeq 69. The port
+        # used to leave the temple's parried attacker where the other sets do.
+        def parried(attacker_name, opponent_set):
+            c = self.encounter()
+            attacker, defender = ((c.guard, c.player) if attacker_name == 'guard'
+                                  else (c.player, c.guard))
+            attacker.state.action, defender.state.action = 154, 150
+            with patch.object(c, '_opponent_set', return_value=opponent_set):
+                c.resolve_contacts()
+            self.assertEqual(attacker.state.sequence_id, 69)
+            return attacker.state.target_x, attacker.state.facing
+
+        for name in ('guard', 'player'):
+            with self.subTest(attacker=name):
+                ordinary, facing = parried(name, 0)
+                temple, _ = parried(name, 7)
+                self.assertEqual(temple - ordinary, 13 if facing else -13)
+
     def test_parry_contact_is_silent_for_ordinary_defenders(self):
         # TestStrike 6:5ac6-5adc skips strike sound 11 once the defender is
         # at 161, unless the defender is a type 7/8 actor. The port used to

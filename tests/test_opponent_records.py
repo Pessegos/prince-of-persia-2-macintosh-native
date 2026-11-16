@@ -81,6 +81,22 @@ class GuardRecordTests(unittest.TestCase):
                 record = GuardRoomRecord.capture(actor, restart_living=False, update_height=update)
                 self.assertEqual(record.height, 196 if update and source in (100, 186) else 99)
 
+    def test_temple_save_takes_the_current_resource_and_clears_height(self):
+        # SetSpecialOppInfo 6:33e8-3402: with LEVL 0x21a4 == 7 a type 2 outside
+        # selected SEQS 100/186 stores the current ID (+8) and height 0 (+1c),
+        # even when UpdateOppInfo restarted the cursor. Other sets keep the old
+        # header and height; the Cut copy (no update) keeps them in set 7 too.
+        cases = ((0, True, 227, (100, 0, 150)), (7, True, 227, (227, 0, 0)),
+                 (7, False, 227, (100, 0, 150)), (7, True, 100, (100, 0, 196)))
+        for opponent_set, update, selected, expected in cases:
+            with self.subTest(opponent_set=opponent_set, update=update, selected=selected):
+                actor = self.actor()
+                actor.guard_record = GuardRoomRecord(100, 8, 2, True, height=150, pending=False)
+                actor.state.selected_sequence_id, actor.state.current_y = selected, -30
+                record = GuardRoomRecord.capture(actor, restart_living=True, update_height=update,
+                                                 opponent_set=opponent_set)
+                self.assertEqual((record.sequence, record.cursor, record.height), expected)
+
     def test_negative_exact_tenth_cell_and_stale_motion_flags(self):
         actor = self.actor()
         actor.state.sequence_mode, actor.state.horizontal_velocity = 5, 27

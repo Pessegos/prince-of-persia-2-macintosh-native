@@ -71,10 +71,14 @@ LEVEL_12_VIDEO = [
     'leapcatchL5', 'descendhangL', 'drink', 'leapR5', 'crawlL', 'leapcatchR5', 'climb', 'climb', 'climb',
     'climb', 'runR11', 'hopR', 'leapcatchR11', 'leapR14', 'swordduel', 'down', 'runR20', 'leapR5', 'tapR',
     'leapL11', 'runL11', 'runR5', 'runL5', 'crawlL', 'crawlL', 'crawlL', 'crawlL', 'crawlL', 'crawlL',
-    'duel', 'down', 'runL11', 'leapcatchL14', 'leapL20', 'runL20', 'descendL', 'crawlL', 'crawlL',
-    'crawlL', 'crawlL', 'duelfar', 'down', 'stepL', 'crawlL', 'runL20', 'descendhangL', 'hopcatchR',
+    'duel', 'down', 'runL11', 'runL11', 'leapcatchL14', 'leapL20', 'runL20', 'descendL', 'crawlL',
+    'crawlL', 'crawlL', 'crawlL', 'duelfar', 'down', 'stepL', 'stepL', 'crawlL', 'runL20',
+    'descendhangL', 'hopcatchR',
     'climb', 'climb', 'climb', 'leapcatchR11', 'climb', 'leapcatchR11', 'runR8', 'runR20', 'runR20',
     'hopcatchR']
+# Since the temple's parried attacker steps 13 forward (TestStrike 6:5a84,
+# 2026-11-16) the two birdhead duels of native rooms 15 and 7 end with the
+# Prince further east, so one more run and one more step follow them.
 # The recording's life bar shows twelve flasks on arrival; a level loaded on
 # its own starts with three, too few for the flaming sword.
 LEVEL_12_VIDEO_LIFE = 12
