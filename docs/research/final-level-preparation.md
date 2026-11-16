@@ -1404,6 +1404,16 @@ followed the Prince down to row 1 bumped into pose 171 en garde, which
 9:16fe's face-and-cast (pose 15, 1-14 or 49-56) never leaves.
 `tests.test_final_path` covers both (each fails without its change).
 
+`tools.probe_bump` runs FrameAdv's bump 2:6c64-6daa with CharDistance
+4:49ee and AddCharX 4:2bae in Unicorn over LEVL 2000 and compares it with
+`choose_player_bump` called without a previous X: 8,000 cases (569 bumps:
+SEQS 46, 47 and the 246-261 shift), no difference. Supplied: SetCharFloor
+4:31fa, JumpSeq 6:0006 (its SEQS recorded) and 4:2c0c (the new SEQS's
+first frame, stubbed on both sides). Excluded: the port's one-frame sweep
+and its own gates (`controls_locked`, `targetable`, a running SEQS 46/47).
+The earlier opponent test (SEQS 110 for every type) is rejected
+(`tests.test_probe_bump`).
+
 Open: with the Prince standing still against the wall on row 1 of native
 room 7 and Jaffar just behind him, 9:16fe selects SEQS 13 at each bump's
 pose 50 and the next step bumps again, so he never casts. A player moves
