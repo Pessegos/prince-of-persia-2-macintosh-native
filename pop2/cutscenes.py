@@ -19,8 +19,8 @@ class CutsceneChapter:
 # Demo gameplay, credits and
 # the recurring tree reminders are deliberately outside the story collection.
 CHAPTERS = (
-    CutsceneChapter('opening', 'Prologue', 'intro.json', 5),
-    CutsceneChapter('opening_titles', 'The Shadow & the Flame', 'intro.json', 6),
+    CutsceneChapter('opening', 'The Young Lovers', 'intro.json', 5),
+    CutsceneChapter('opening_titles', 'Title', 'intro.json', 6),
     CutsceneChapter('opening_story', 'The Palace Escape', 'intro.json', 8),
     CutsceneChapter('voyage', 'The Voyage', 'ending.json', 5, 1),
     CutsceneChapter('discovery', 'The Sleeping Princess', 'discovery.json', 10, 3),

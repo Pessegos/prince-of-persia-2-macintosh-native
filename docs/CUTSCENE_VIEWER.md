@@ -61,7 +61,7 @@ revealed again by replaying its level. In the developer viewer, R shows the
 selected chapter's reveal again, sound included, without changing anything.
 The page takes the level's menu theme (docs/MENU_THEMES.md).
 
-The catalog in `pop2/cutscenes.py` includes Prologue, The Shadow & the Flame and The Palace
+The catalog in `pop2/cutscenes.py` includes The Young Lovers, Title and The Palace
 Escape from the opening, voyage after level 1,
 discovery after level 3, carpet flight after level 5, The Mother's Vision in
 level 8, the horse ride after level 9, the flight after level 13, The Final
