@@ -1,11 +1,14 @@
 """Export native level-three scenery drawing commands during asset import."""
 
+from collections import deque
 import json
 import struct
 from difflib import SequenceMatcher
 from itertools import product
 from functools import lru_cache, partial
 from math import prod
+import threading
+from time import monotonic, sleep
 
 from pop2.caverns import SCENERY_LEVELS, TEMPLE_TORCH_SHAPES, entry_room, scenery_name
 from pop2.slot_drawing import clip_climbing, draw_order_key
@@ -97,6 +100,67 @@ def scenery_artwork(caverns):
     return parse_resource_fork(caverns)
 
 
+# A drawer call that runs longer than this is stopped and reported as an
+# unfinished drawing. Ordinary calls take well under a millisecond. This
+# replaces Unicorn's instruction limit, whose per-instruction count made
+# every drawing slower.
+DRAW_TIME_LIMIT = 10.0
+_running = {}
+_running_lock = threading.Lock()
+_watchdog = []
+
+
+def _watch_draws():
+    while True:
+        sleep(DRAW_TIME_LIMIT / 20)
+        now = monotonic()
+        with _running_lock:
+            for machine, deadline in _running.items():
+                if now > deadline:
+                    machine.cpu.emu_stop()
+
+
+def fast_access(cpu):
+    """(reg_read, reg_write, mem_read) for `cpu`, calling the Unicorn 2.1
+    library directly. The drawers' hooks make millions of these calls, and
+    the binding's own wrappers cost more than the calls. Other bindings
+    use the public methods."""
+    import ctypes
+    from unicorn import UcError
+
+    try:
+        from unicorn.unicorn_py3.unicorn import uclib
+
+        handle, library = cpu._uch, (uclib.uc_reg_read, uclib.uc_reg_write, uclib.uc_mem_read)
+    except (ImportError, AttributeError):
+        return cpu.reg_read, cpu.reg_write, cpu.mem_read
+    uc_reg_read, uc_reg_write, uc_mem_read = library
+    # The generic (m68k) Uc reads and writes registers as 64-bit values.
+    value = ctypes.c_uint64()
+    reference = ctypes.byref(value)
+
+    def reg_read(register):
+        status = uc_reg_read(handle, register, reference)
+        if status:
+            raise UcError(status, register)
+        return value.value
+
+    def reg_write(register, number):
+        value.value = number
+        status = uc_reg_write(handle, register, reference)
+        if status:
+            raise UcError(status, register)
+
+    def mem_read(address, size):
+        data = ctypes.create_string_buffer(size)
+        status = uc_mem_read(handle, address, data, size)
+        if status:
+            raise UcError(status, address, size)
+        return data.raw
+
+    return reg_read, reg_write, mem_read
+
+
 class CavernRecovery:
     """Reuse compiled code, restoring working RAM and CPU state per draw."""
 
@@ -123,11 +187,23 @@ class CavernRecovery:
         self.closed = False
         self.handles = [self.cpu.hook_add(UC_HOOK_CODE, self.dispatch, begin=address, end=address)
                         for address in intercepts]
+        self.access = fast_access(self.cpu)
         if track_reads:
             # Level data and the a5 cell caches, for drawer dependency tracking.
+            # Unicorn checks memory hooks when it translates code, so they stay
+            # installed for the machine's life: code translated without them
+            # would never report its reads. A render that tracks nothing is
+            # much faster on a machine without them.
             from unicorn import UC_HOOK_MEM_READ
 
-            for begin, end in ((0xa0000, 0xa4000), (0x80000 - 0x4a84, 0x80000 - 0x4812)):
+            # Exactly the cells recover_room's read() attributes: the level's
+            # tile kinds and foreground/background words, the row below
+            # (a5-0x4a84, 11 cells), the left cell (a5-0x49d6) and the cell
+            # itself (a5-0x4818). Unicorn's ranges include their end.
+            for begin, end in ((0xa0000, 0xa0000 + 0x780 + 32 * 120 - 1),
+                               (0x80000 - 0x4a84, 0x80000 - 0x4a84 + 65),
+                               (0x80000 - 0x49d6, 0x80000 - 0x49d0 - 1),
+                               (0x80000 - 0x4818, 0x80000 - 0x4812 - 1)):
                 self.handles.append(self.cpu.hook_add(UC_HOOK_MEM_READ, self.dispatch_read,
                                                       begin=begin, end=end))
 
@@ -137,6 +213,19 @@ class CavernRecovery:
     def dispatch_read(self, cpu, access, address, size, value, user):
         if self.read_callback is not None:
             self.read_callback(address)
+
+    def run(self, begin, until):
+        """Emulate from `begin` to `until`, stopped after DRAW_TIME_LIMIT."""
+        with _running_lock:
+            if not _watchdog:
+                _watchdog.append(threading.Thread(target=_watch_draws, name='cavern-draw-watchdog', daemon=True))
+                _watchdog[0].start()
+            _running[self] = monotonic() + DRAW_TIME_LIMIT
+        try:
+            self.cpu.emu_start(begin, until)
+        finally:
+            with _running_lock:
+                del _running[self]
 
     def reset(self):
         if self.closed:
@@ -199,10 +288,10 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
         cpu.mem_write(address, struct.pack('>I', value))
 
     def word(address):
-        return struct.unpack('>h', cpu.mem_read(address, 2))[0]
+        return struct.unpack('>h', mem_read(address, 2))[0]
 
     def long(address):
-        return struct.unpack('>I', cpu.mem_read(address, 4))[0]
+        return struct.unpack('>I', mem_read(address, 4))[0]
 
     jump = resources['CODE'][0]['data']
 
@@ -215,11 +304,12 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
     environment = struct.unpack_from('>H', level, 0x2186)[0]
     if environment not in DRAW_KINDS:
         raise ValueError(f'Unsupported scenery environment {environment}')
+    reg_read, reg_write, mem_read = _machine.access
     table_offset = struct.unpack_from('>i', data, len(data) - 0x4aea + environment * 4)[0]
     dispatch = 0x92000
-    for kind in range(DRAW_KINDS[environment]):
-        pointer = struct.unpack_from('>i', data, len(data) + table_offset + kind * 4)[0]
-        put_long(dispatch + kind * 4, target(pointer) if pointer else 0)
+    pointers = struct.unpack_from(f'>{DRAW_KINDS[environment]}i', data, len(data) + table_offset)
+    cpu.mem_write(dispatch, struct.pack(f'>{len(pointers)}I',
+                                        *(target(pointer) if pointer else 0 for pointer in pointers)))
     put_long(a5 - 0x4aae, dispatch)
     put_long(a5 - 0x4f8c, info)
     put_long(a5 - 0x4b9e, pieces)
@@ -258,6 +348,15 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
     for offset in (0x4600, 0x4fec):
         cpu.mem_write(a5 - offset, struct.pack('>4h', 0, 0, 365, 510))
     terrain = LevelMap(level)
+    tiles = {}
+
+    def tile_at(column, row):
+        # The drawers ask for the same few cells many times per room.
+        found = tiles.get((column, row))
+        if found is None:
+            found = tiles[column, row] = terrain.tile(room_id, column, row)
+        return found
+
     commands = []
     fills = []
     command_kinds = []
@@ -265,27 +364,26 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
     command_slots = []
     current_slot = [None]
     torches = []
-    history = []
+    history = deque(maxlen=15)
     previous_items = {}
     back_items = []
     back_rect = None
 
     def reset_item(draw_pass, previous=False):
-        cpu.mem_write(info, bytes(38))
-        for index, value in ((0, 4), (1, word(a5 - 0x45f8)), (2, word(a5 - 0x45f6)),
-                             (3, 16), (5, draw_pass)):
-            put_word(info + index * 2, value)
+        # Words 0-5: library 4, the drawn column and row, 16, 0, the pass.
+        item = bytearray(38)
+        item[0:12] = struct.pack('>H4sHHH', 4, bytes(mem_read(a5 - 0x45f8, 4)), 16, 0, draw_pass & 65535)
         if previous:
             table = 'front' if draw_pass in (1, 2) else 'back'
-            cpu.mem_write(info + 14, previous_items[table][14:24])
+            item[14:24] = previous_items[table][14:24]
+        cpu.mem_write(info, bytes(item))
         put_long(a5 - 0x4f8c, info)
 
     def hook(cpu, address, size, _user):
         nonlocal back_rect
         opcode = intercepts[address]
-        history.append(hex(address))
-        del history[:-15]
-        sp = cpu.reg_read(UC_M68K_REG_A7)
+        history.append(address)
+        sp = reg_read(UC_M68K_REG_A7)
         segment = (address - 0x100000) // 0x10000
         offset = address - bases.get(segment, address)
         result = None
@@ -293,63 +391,66 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
             # 9:1a4c-1a8e: PoPFillRect(index 64, a5-0x4fec). The surrounding
             # SaveCurrentWorld/RestoreOriginalWorld only route QuickDraw's
             # destination. This is the room-1 background behind CUST art.
-            fill = [*struct.unpack('>4h', cpu.mem_read(a5 - 0x4fec, 8)), 64]
+            fill = [*struct.unpack('>4h', mem_read(a5 - 0x4fec, 8)), 64]
             if fill not in fills:
                 fills.append(fill)
-            cpu.reg_write(UC_M68K_REG_D0, 0)
-            cpu.reg_write(UC_M68K_REG_PC, long(sp))
-            cpu.reg_write(UC_M68K_REG_A7, sp + 4)
+            reg_write(UC_M68K_REG_D0, 0)
+            reg_write(UC_M68K_REG_PC, long(sp))
+            reg_write(UC_M68K_REG_A7, sp + 4)
             return
         if opcode == b'\xa8\xa6':  # EqualRect(r1, r2): Boolean
             second, first = long(sp), long(sp + 4)
-            equal = cpu.mem_read(first, 8) == cpu.mem_read(second, 8)
+            equal = mem_read(first, 8) == mem_read(second, 8)
             cpu.mem_write(sp + 8, bytes([int(equal), 0]))
-            cpu.reg_write(UC_M68K_REG_A7, sp + 8)
-            cpu.reg_write(UC_M68K_REG_PC, address + 2)
+            reg_write(UC_M68K_REG_A7, sp + 8)
+            reg_write(UC_M68K_REG_PC, address + 2)
             return
         if opcode == b'\xa8\xa8':  # OffsetRect(rect, dh, dv)
-            dy, dx, rect_pointer = word(sp), word(sp + 2), long(sp + 4)
-            top, left, bottom, right = struct.unpack('>4h', cpu.mem_read(rect_pointer, 8))
+            dy, dx, rect_pointer = struct.unpack('>hhI', mem_read(sp, 8))
+            top, left, bottom, right = struct.unpack('>4h', mem_read(rect_pointer, 8))
             cpu.mem_write(rect_pointer, struct.pack('>4h', top + dy, left + dx, bottom + dy, right + dx))
-            cpu.reg_write(UC_M68K_REG_A7, sp + 8)
-            cpu.reg_write(UC_M68K_REG_PC, address + 2)
+            reg_write(UC_M68K_REG_A7, sp + 8)
+            reg_write(UC_M68K_REG_PC, address + 2)
             return
         if opcode == b'\x4e\x90' and (segment == 8 and offset == 0x176c
                                       or segment == 7 and offset in UNION_RECT_7):
-            out, first, second = (long(sp + i) for i in (0, 4, 8))
-            r1 = struct.unpack('>4h', cpu.mem_read(first, 8))
-            r2 = struct.unpack('>4h', cpu.mem_read(second, 8))
+            out, first, second = struct.unpack('>3I', mem_read(sp, 12))
+            r1 = struct.unpack('>4h', mem_read(first, 8))
+            r2 = struct.unpack('>4h', mem_read(second, 8))
             rect = [min(r1[0], r2[0]), min(r1[1], r2[1]), max(r1[2], r2[2]), max(r1[3], r2[3])]
             cpu.mem_write(out, struct.pack('>4h', *rect))
             if out == 0x93000 + 30 and back_rect is not None:
                 back_rect[:] = rect
-            cpu.reg_write(UC_M68K_REG_A7, sp + 12)
-            cpu.reg_write(UC_M68K_REG_PC, address + 2)
+            reg_write(UC_M68K_REG_A7, sp + 12)
+            reg_write(UC_M68K_REG_PC, address + 2)
             return
         if opcode == b'\x4e\x90' and segment == 8 and offset == 0x20a6:
-            top, left, bottom, right = struct.unpack('>4h', cpu.mem_read(long(sp), 8))
+            top, left, bottom, right = struct.unpack('>4h', mem_read(long(sp), 8))
             cpu.mem_write(sp + 4, bytes([int(top >= bottom or left >= right), 0]))
-            cpu.reg_write(UC_M68K_REG_A7, sp + 4)
-            cpu.reg_write(UC_M68K_REG_PC, address + 2)
+            reg_write(UC_M68K_REG_A7, sp + 4)
+            reg_write(UC_M68K_REG_PC, address + 2)
             return
         if (opcode == b'\x4e\x90'
                 and (segment == 8 and offset in (0x1ca4, 0x1752, 0x1f86)
                      or segment == 7 and offset in SECT_RECT_7
                      or segment == 5 and offset == 0x230 or segment == 3 and offset == 0x2482)):
-            out, first, second = (long(sp + i) for i in (0, 4, 8))
-            r1 = struct.unpack('>4h', cpu.mem_read(first, 8))
-            r2 = struct.unpack('>4h', cpu.mem_read(second, 8))
+            out, first, second = struct.unpack('>3I', mem_read(sp, 12))
+            r1 = struct.unpack('>4h', mem_read(first, 8))
+            r2 = struct.unpack('>4h', mem_read(second, 8))
             rect = (max(r1[0], r2[0]), max(r1[1], r2[1]), min(r1[2], r2[2]), min(r1[3], r2[3]))
             cpu.mem_write(out, struct.pack('>4h', *rect))
             cpu.mem_write(sp + 12, bytes([int(rect[0] < rect[2] and rect[1] < rect[3]), 0]))
-            cpu.reg_write(UC_M68K_REG_A7, sp + 12)
-            cpu.reg_write(UC_M68K_REG_PC, address + 2)
+            reg_write(UC_M68K_REG_A7, sp + 12)
+            reg_write(UC_M68K_REG_PC, address + 2)
             return
+        # The caller's return address and the first stacked arguments.
+        stacked = mem_read(sp, 10)
         if segment == 3 and offset == 4 and not long(a5 - 0x4f8c):
             result = 0
         elif segment == 3 and offset == 4:
-            fields = struct.unpack('>19h', cpu.mem_read(info, 38))
-            draw_column, draw_row = word(a5 - 0x45f8), word(a5 - 0x45f6)
+            item = bytes(mem_read(info, 38))
+            fields = struct.unpack('>19h', item)
+            draw_column, draw_row = struct.unpack('>2h', mem_read(a5 - 0x45f8, 4))
             layer = 'front' if fields[5] in (1, 2) else 'back'
             library = fields[0]
             if library not in LIBRARY_BASE:
@@ -360,7 +461,7 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
                 raise ValueError(f'Missing library {library} shape {shape}')
             width, height = struct.unpack_from('>hH', source['SHAP'][shape]['data'], 4)
             x, bottom = fields[7] * 51 + fields[13], (fields[8] + 1) * 120 + 5 + fields[14]
-            clip = list(struct.unpack('>4h', cpu.mem_read(a5 - 0x4600, 8)))
+            clip = list(struct.unpack('>4h', mem_read(a5 - 0x4600, 8)))
             result = int(max(x, clip[1]) < min(x + width, clip[3])
                          and max(bottom - height, clip[0]) < min(bottom, clip[2]))
             if result:
@@ -372,7 +473,7 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
                 command_slots.append(current_slot[0])
                 if (library == 4 and (environment == 3 and 3581 <= shape <= 3589
                                      or environment == 2 and shape in TEMPLE_TORCH_SHAPES)):
-                    tile = terrain.tile(room_id, fields[7], fields[8])
+                    tile = tile_at(fields[7], fields[8])
                     record = {'room': tile.room, 'cell': tile.row * 10 + tile.column,
                               'foreground': tile.foreground, 'command': commands[-1]}
                     if environment == 2:
@@ -380,24 +481,24 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
                                       frame_count=len(TEMPLE_TORCH_SHAPES))
                     torches.append(record)
                 table = 'front' if fields[5] in (1, 2) else 'back'
-                previous_items[table] = bytes(cpu.mem_read(info, 38))
+                previous_items[table] = item
                 if table == 'back':
                     # GetBackTableImgRow 3:06c4 searches admitted BF records
                     # by shape, source column and row, not rendered coordinates.
                     back_items.append((shape, fields[1], fields[2], rect))
                 put_long(a5 - 0x4f8c, 0)
         elif segment == 3 and offset == 0x29e2:
-            reset_item(word(sp + 4))
+            reset_item(struct.unpack_from('>h', stacked, 4)[0])
             result = 0
         elif segment == 3 and offset == 0x29b6:
             if not long(a5 - 0x4f8c):
-                reset_item(word(sp + 4))
+                reset_item(struct.unpack_from('>h', stacked, 4)[0])
             result = 0
         elif segment == 3 and offset == 0x2ac4:
-            reset_item(word(sp + 4), previous=True)
+            reset_item(struct.unpack_from('>h', stacked, 4)[0], previous=True)
             result = 0
         elif segment == 3 and offset == 0x06c4:
-            shape, column, row = (word(sp + i) for i in (4, 6, 8))
+            shape, column, row = struct.unpack_from('>3h', stacked, 4)
             match = next((item for item in back_items
                           if item[:3] == (3500 + shape, column, row)), None)
             result = 0
@@ -408,20 +509,20 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
         elif segment == 3 and offset == 0x2438:
             # DrawCustomRoomImg 3:2438-2580: a CUST record of this pass, clipped
             # by a5-0x4600, becomes a back (passes 0/5/11) or front item.
-            index, draw_pass = word(sp + 4), word(sp + 6)
+            index, draw_pass = struct.unpack_from('>2h', stacked, 4)
             base = long(a5 - 0x4c9e)
             record = base + 30 + index * 32
             shape_index, bottom, x, record_pass, mode, hidden = (
                 word(record + i * 2) for i in range(6))
             if base and hidden != -1 and record_pass == draw_pass:
-                shape = struct.unpack('>H', cpu.mem_read(base + 2, 2))[0] + shape_index
+                shape = struct.unpack('>H', mem_read(base + 2, 2))[0] + shape_index
                 library, shapes = 4, artwork['SHAP']
                 if shape not in shapes and shape in artwork.get('KIDSHAP', {}):
                     library, shapes = KID_LIBRARY, artwork['KIDSHAP']
                 if shape not in shapes:
                     raise ValueError(f'Missing custom cavern shape {shape}')
                 width, height = struct.unpack_from('>hH', shapes[shape]['data'], 4)
-                clip = list(struct.unpack('>4h', cpu.mem_read(a5 - 0x4600, 8)))
+                clip = list(struct.unpack('>4h', mem_read(a5 - 0x4600, 8)))
                 rect = [max(bottom - height, clip[0]), max(x, clip[1]),
                         min(bottom, clip[2]), min(x + width, clip[3])]
                 if rect[0] < rect[2] and rect[1] < rect[3]:
@@ -436,15 +537,16 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
             result = 0
         elif segment == 5 and offset == 0x08c4:
             # PieceRightId 5:0904 advances the requested column before lookup.
-            result = terrain.tile(room_id, word(sp + 4) + 1, word(sp + 6)).kind
+            column, row = struct.unpack_from('>2h', stacked, 4)
+            result = tile_at(column + 1, row).kind
         elif segment == 3 and offset == 0x26e4:
             result = 0
         elif segment == 5 and offset == 0x1990 and (climb_action is not None or floor_redraw or cell_redraw):
             result = 0  # Dirty-buffer bookkeeping does not emit shape commands.
         if result is not None:
-            cpu.reg_write(UC_M68K_REG_D0, result)
-            cpu.reg_write(UC_M68K_REG_PC, long(sp))
-            cpu.reg_write(UC_M68K_REG_A7, sp + 4)
+            reg_write(UC_M68K_REG_D0, result)
+            reg_write(UC_M68K_REG_PC, struct.unpack_from('>I', stacked)[0])
+            reg_write(UC_M68K_REG_A7, sp + 4)
         elif opcode[0] & 0xf0 == 0xa0:
             raise ValueError(f'Unexpected Macintosh trap in cavern renderer {segment}:{offset:x}')
 
@@ -464,11 +566,11 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
         else:
             offset = address - a5
             if -0x4818 <= offset < -0x4812:
-                tile = terrain.tile(room_id, column, row)
+                tile = tile_at(column, row)
             elif -0x49d6 <= offset < -0x49d0:
-                tile = terrain.tile(room_id, column - 1, row)
+                tile = tile_at(column - 1, row)
             elif -0x4a84 <= offset < -0x4a84 + 66:
-                tile = terrain.tile(room_id, (offset + 0x4a84) // 6 - 1, row + 1)
+                tile = tile_at((offset + 0x4a84) // 6 - 1, row + 1)
             else:
                 return
             if tile.room is None:
@@ -482,18 +584,17 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
         _machine.read_callback = read
 
     def execute(segment, entry, argument=None):
-        cpu.reg_write(UC_M68K_REG_A5, a5)
-        cpu.reg_write(UC_M68K_REG_A0, 0)
-        cpu.reg_write(UC_M68K_REG_A7, stack)
-        put_long(stack, end)
-        if argument is not None:
-            put_word(stack + 4, argument)
+        reg_write(UC_M68K_REG_A5, a5)
+        reg_write(UC_M68K_REG_A0, 0)
+        reg_write(UC_M68K_REG_A7, stack)
+        cpu.mem_write(stack, struct.pack('>I', end) if argument is None
+                      else struct.pack('>IH', end, argument & 65535))
         try:
-            cpu.emu_start(bases[segment] + entry, end, count=1000000 if _native_scene else 200000)
+            _machine.run(bases[segment] + entry, end)
         except Exception as error:
-            pc = cpu.reg_read(UC_M68K_REG_PC)
-            raise ValueError(f'Cavern renderer failed at {pc:#x}: {history}') from error
-        if cpu.reg_read(UC_M68K_REG_PC) != end:
+            pc = reg_read(UC_M68K_REG_PC)
+            raise ValueError(f'Cavern renderer failed at {pc:#x}: {[hex(item) for item in history]}') from error
+        if reg_read(UC_M68K_REG_PC) != end:
             raise ValueError('Cavern drawing did not complete')
 
     passes = (('back', 0x1ff4, 0), ('back', 0x1ff4, 5), ('front', 0x2598, 1))
@@ -512,7 +613,22 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
             if climb_action is not None or floor_redraw:
                 raise ValueError('The whole-scene audit requires a full repaint')
             execute(3, 0x1c64)
-        for draw_row in (() if _native_scene else (2, 1, 0, -1)):
+        rows = () if _native_scene else (2, 1, 0, -1)
+        # Cells whose inputs a render limited to some slots (`only`) needs.
+        # The border row's native setup runs after every other row and draws
+        # nothing itself: without a border slot, it and every cell without a
+        # slot of its own are skipped (each drawn cell writes all of its
+        # inputs). With one, every cell's inputs are written as usual, so the
+        # setup finds the state of a full render.
+        needed = None
+        if only is not None and all(slot[0] != -1 for slot in only):
+            needed = {(row, column) for row, column, _pass in only}
+            rows = tuple(row for row in rows if any(cell[0] == row for cell in needed))
+        for draw_row in rows:
+            # GetCells' row below: (kind word, foreground/background long)
+            # for columns -1..9 at a5-0x4a84, the same for every column.
+            below_cells = b''.join(struct.pack('>HI', below.kind, (below.foreground << 16) | below.background)
+                                   for below in (tile_at(col - 1, draw_row + 1) for col in range(11)))
             if draw_row == -1:
                 # RedrawCellFast 3:1cb6-1cda draws the upper room's last row,
                 # with the current room below it. Missing rooms use GetCells'
@@ -526,8 +642,9 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
                 execute(5, 0x026a)
                 execute(5, 0x03bc)
             for draw_column in range(10):
-                put_word(a5 - 0x45f8, draw_column)
-                put_word(a5 - 0x45f6, draw_row)
+                if needed is not None and (draw_row, draw_column) not in needed:
+                    continue
+                cpu.mem_write(a5 - 0x45f8, struct.pack('>2H', draw_column, draw_row & 65535))
                 if draw_row == -1:
                     # Obtain the native border cell/neighbor records; dirty clips
                     # remain supplied by the export pass below.
@@ -536,10 +653,9 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
                     execute(5, 0x0a4c)
                     put_word(a5 - 0x4832, repaint)
                 else:
-                    tile, previous = (terrain.tile(room_id, draw_column, draw_row),
-                                      terrain.tile(room_id, draw_column - 1, draw_row))
-                    put_word(a5 - 0x4814, tile.kind)
-                    put_long(a5 - 0x4818, (tile.foreground << 16) | tile.background)
+                    tile, previous = tile_at(draw_column, draw_row), tile_at(draw_column - 1, draw_row)
+                    cpu.mem_write(a5 - 0x4818, struct.pack('>IH', (tile.foreground << 16) | tile.background,
+                                                           tile.kind))
                     previous_foreground = previous.foreground
                     if custom is not None and draw_column == 0:
                         # 5:0bbc-0be2: a CUST room hides the left room's last
@@ -548,19 +664,16 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
                             previous_foreground &= 0x3fff
                         else:
                             previous_foreground |= 0xc000
-                    put_word(a5 - 0x49d6, previous.kind)
-                    put_long(a5 - 0x49d4, (previous_foreground << 16) | previous.background)
-                    for col in range(11):
-                        below = terrain.tile(room_id, col - 1, draw_row + 1)
-                        put_word(a5 - 0x4a84 + col * 6, below.kind)
-                        put_long(a5 - 0x4a82 + col * 6, (below.foreground << 16) | below.background)
+                    cpu.mem_write(a5 - 0x49d6, struct.pack('>HI', previous.kind,
+                                                           (previous_foreground << 16) | previous.background))
+                    cpu.mem_write(a5 - 0x4a84, below_cells)
                 for layer, entry, draw_pass in passes:
                     if only is not None and (draw_row, draw_column, draw_pass) not in only:
                         continue
                     # GetCells 5:0abe-0ac8 copies fullclip during DoCleanCut;
                     # ComputeClipRect is only used for subsequent dirty cells.
                     # RedrawCellFast 3:1c64-1d38 visits bottom-up, then the border.
-                    cpu.mem_write(a5 - 0x4600, bytes(cpu.mem_read(a5 - 0x4fec, 8)))
+                    cpu.mem_write(a5 - 0x4600, bytes(mem_read(a5 - 0x4fec, 8)))
                     if floor_redraw or cell_redraw:
                         # GetCells/ComputeClipRect supplies the dirty cell clip;
                         # RedrawCell intersects it with QuickFloor's actor rect.
@@ -600,16 +713,18 @@ def extract_cavern_levels(program, sceneries, prince, output, progress=lambda _t
         from concurrent.futures import ProcessPoolExecutor
         from tools.workers import watch_parent
 
-        with ProcessPoolExecutor(min(workers, len(sceneries)), initializer=watch_parent) as pool:
+        # One pool for both stages: starting a second one would wait again
+        # for every worker process to start.
+        with ProcessPoolExecutor(workers, initializer=watch_parent) as pool:
             futures = {number: pool.submit(_level_scenery, program, caverns, prince, number)
                        for number, caverns in sceneries.items()}
             levels = {}
             for number, future in futures.items():
                 levels[number] = future.result()
                 progress(f'Cavern scenery: level {number}')
-        contexts = {number: slot_context(program, sceneries[number], prince, level, result)
-                    for number, (result, level, _kind, _plates) in levels.items()}
-        slots = parallel_slot_rooms(contexts, workers, progress)
+            contexts = {number: slot_context(program, sceneries[number], prince, level, result)
+                        for number, (result, level, _kind, _plates) in levels.items()}
+            slots = parallel_slot_rooms(contexts, workers, progress, pool=pool)
     else:
         levels = {number: _level_scenery(program, caverns, prince, number, progress)
                   for number, caverns in sceneries.items()}

@@ -181,6 +181,23 @@ class CavernDrawingTests(unittest.TestCase):
             result = renderer.enter_room(1)
         self.assertEqual(result.background.getpixel((1, 1)), (0, 0, 255, 255))
 
+    def test_a_drawer_that_never_returns_is_stopped_by_the_time_limit(self):
+        from time import monotonic
+        from unicorn import Uc, UC_ARCH_M68K, UC_MODE_BIG_ENDIAN
+        from unicorn.m68k_const import UC_M68K_REG_PC
+        import tools.extract_caverns as extract_caverns
+
+        cpu = Uc(UC_ARCH_M68K, UC_MODE_BIG_ENDIAN)
+        cpu.mem_map(0, 0x10000)
+        cpu.mem_write(0x1000, bytes.fromhex('60fe'))  # bra.s to itself
+        machine = Mock(cpu=cpu)
+        with patch.object(extract_caverns, 'DRAW_TIME_LIMIT', 0.2):
+            started = monotonic()
+            CavernRecovery.run(machine, 0x1000, 0x2000)
+        self.assertLess(monotonic() - started, 5)
+        self.assertNotEqual(cpu.reg_read(UC_M68K_REG_PC), 0x2000)
+        self.assertNotIn(machine, extract_caverns._running)
+
     def test_shared_recovery_restores_ram_registers_and_releases_hooks_on_failure(self):
         from unicorn.m68k_const import UC_M68K_REG_D1
 

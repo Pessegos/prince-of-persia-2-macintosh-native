@@ -373,59 +373,99 @@ _worker = {}
 
 # Combinations per worker job: small enough to share a large room's work.
 CHUNK = 48
+# Levels whose recovery machines a worker keeps.
+MACHINE_LEVELS = 2
 
 
-def _start_worker(contexts):
+def _start_worker():
     from tools.workers import watch_parent
 
     watch_parent()
-    _worker.update(contexts=contexts, machines={}, renderers={})
+
+
+def _use_contexts(source):
+    """Load the contexts file `source` once per worker process."""
+    if _worker.get('source') != source:
+        import pickle
+
+        with open(source, 'rb') as file:
+            contexts = pickle.load(file)
+        for machines in _worker.get('machines', {}).values():
+            for machine in machines:
+                machine.close()
+        _worker.update(source=source, contexts=contexts, machines={}, renderers={})
 
 
 def _worker_renderer(level, room):
-    from functools import partial
     from tools.extract_caverns import CavernRecovery, recover_room
 
     context = _worker['contexts'][level]
-    if level not in _worker['machines']:
-        _worker['machines'][level] = CavernRecovery(context['program'], context['caverns'], context['prince'],
-                                                    track_reads=True)
+    machines = _worker['machines']
+    if level in machines:
+        machines[level] = machines.pop(level)  # The most recently used last.
+    else:
+        # Each machine holds tens of megabytes: keep those of the two levels
+        # used last (a worker's jobs come mostly in level order).
+        while len(machines) >= MACHINE_LEVELS:
+            for machine in machines.pop(next(iter(machines))):
+                machine.close()
+        # One machine tracks the drawers' reads; renders limited to some
+        # slots (`only`) track nothing and run on a machine without the
+        # memory hooks, which is much faster.
+        machines[level] = tuple(
+            CavernRecovery(context['program'], context['caverns'], context['prince'], track_reads=track)
+            for track in (True, False))
     key = level, room
     if key not in _worker['renderers']:
-        _worker['renderers'] = {key: room_renderer(context, room, partial(
-            recover_room, _machine=_worker['machines'][level]))}
+        tracking, plain = _worker['machines'][level]
+
+        def recover(*args, reads=None, **options):
+            return recover_room(*args, _machine=tracking if reads is not None else plain, reads=reads, **options)
+
+        _worker['renderers'] = {key: room_renderer(context, room, recover)}
     return _worker['renderers'][key]
 
 
-def _worker_dependencies(task):
+def _worker_dependencies(source, task):
+    _use_contexts(source)
     level, room, singles = task
     _record, render, counts, unit_cells = _worker_renderer(level, room)
-    return task[:2], slot_dependencies(render, counts, unit_cells, singles)
+    return slot_dependencies(render, counts, unit_cells, singles)
 
 
-def _worker_combinations(task):
+def _worker_combinations(source, task):
+    _use_contexts(source)
     level, room, name, depends, members, combinations = task
     _record, render, counts, _cells = _worker_renderer(level, room)
-    return task[:4], render_combinations(render, counts, name, depends, members, combinations)
+    return render_combinations(render, counts, name, depends, members, combinations)
 
 
-def _worker_redraw(task):
+def _worker_redraw(source, task):
     from functools import partial
     from tools.extract_caverns import recover_room
 
+    _use_contexts(source)
     level, room, record, unit = task
     _worker_renderer(level, room)  # The level's recovery machine.
-    recover = partial(recover_room, _machine=_worker['machines'][level])
-    return task[:2], unit, crevice_redraw(_worker['contexts'][level], room, record, unit, recover)
+    recover = partial(recover_room, _machine=_worker['machines'][level][1])
+    return crevice_redraw(_worker['contexts'][level], room, record, unit, recover)
 
 
-def parallel_slot_rooms(contexts, workers, progress=lambda _text: None):
+def parallel_slot_rooms(contexts, workers, progress=lambda _text: None, *, pool=None):
     """{level: {room: record}} for several levels' contexts, by `workers` processes.
 
     The single-unit renders of every room are shared out first (dependencies),
     then the combinations of each dependency set, both in CHUNK-sized jobs.
+    A room's combinations start as soon as its own dependencies are known.
+    `pool`, an existing process pool, runs the jobs instead of a new one.
     """
     from concurrent.futures import ProcessPoolExecutor
+    from contextlib import ExitStack
+    from pathlib import Path
+    import pickle
+    from queue import Queue
+    import tempfile
+    from time import monotonic
 
     records, tasks = {}, []
     for level, context in contexts.items():
@@ -437,28 +477,87 @@ def parallel_slot_rooms(contexts, workers, progress=lambda _text: None):
                 singles = single_states(prepared[2])
                 tasks.extend((level, room, singles[start:start + CHUNK // 4])
                              for start in range(0, max(len(singles), 1), CHUNK // 4))
-    with ProcessPoolExecutor(workers, initializer=_start_worker, initargs=(contexts,)) as pool:
-        bases, parts = {}, {}
-        for done, (key, (base, dependencies)) in enumerate(pool.map(_worker_dependencies, tasks), 1):
-            progress(f'Cavern floor slots: rooms {done}/{len(tasks)}')
-            bases[key] = base
-            parts.setdefault(key, []).append(dependencies)
-        dependencies = {key: merge_dependencies(part) for key, part in parts.items()}
-        jobs = []
-        for (level, room), record in records.items():
-            for name, depends, members, combinations in combination_jobs(record['counts'],
-                                                                          dependencies[level, room]):
-                for start in range(0, len(combinations), CHUNK):
-                    jobs.append((level, room, name, depends, members, combinations[start:start + CHUNK]))
-        rendered = {}
-        for done, (key, result) in enumerate(pool.map(_worker_combinations, jobs), 1):
-            progress(f'Cavern floor slots: combinations {done}/{len(jobs)}')
-            rendered.setdefault(key[:2], {}).setdefault(key[2:], {}).update(result)
-        redraws = {}
-        for key, unit, commands in pool.map(_worker_redraw, [
-                (level, room, record, unit) for (level, room), record in records.items()
-                for unit in record.get('crevices', ())]):
-            redraws.setdefault(key, {})[str(unit)] = commands
+    with ExitStack() as stack:
+        # The contexts (several megabytes) reach each worker through a file:
+        # as pool arguments, every process start would wait for the transfer.
+        directory = Path(stack.enter_context(tempfile.TemporaryDirectory(prefix='pop2-slots-')))
+        source = str(directory / 'contexts.pickle')
+        Path(source).write_bytes(pickle.dumps(contexts, pickle.HIGHEST_PROTOCOL))
+        if pool is None:
+            pool = stack.enter_context(ProcessPoolExecutor(workers, initializer=_start_worker))
+        finished = Queue()
+        submitted = set()
+
+        shown = [0.0]
+
+        def report(text, last=False):
+            # Thousands of jobs: at most twenty messages a second.
+            now = monotonic()
+            if last or now - shown[0] >= 0.05:
+                shown[0] = now
+                progress(text)
+
+        def submit(kind, key, function, task):
+            future = pool.submit(function, source, task)
+            submitted.add(future)
+            future.add_done_callback(lambda future: finished.put((kind, key, future)))
+
+        try:
+            waiting = {}
+            for index, task in enumerate(tasks):
+                waiting[task[:2]] = waiting.get(task[:2], 0) + 1
+                submit('dependencies', (task[:2], index), _worker_dependencies, task)
+            for (level, room), record in records.items():
+                for unit in record.get('crevices', ()):
+                    submit('redraw', ((level, room), unit), _worker_redraw, (level, room, record, unit))
+            bases, parts, dependencies, rendered, redraws, jobs = {}, {}, {}, {}, {}, {}
+            rooms_done = combinations_done = 0
+            while submitted:
+                kind, key, future = finished.get()
+                submitted.discard(future)
+                if kind == 'dependencies':
+                    (room_key, index), (base, found) = key, future.result()
+                    rooms_done += 1
+                    report(f'Cavern floor slots: rooms {rooms_done}/{len(tasks)}', rooms_done == len(tasks))
+                    bases[room_key] = base
+                    parts.setdefault(room_key, {})[index] = found
+                    waiting[room_key] -= 1
+                    if waiting[room_key]:
+                        continue
+                    dependencies[room_key] = merge_dependencies(
+                        part for _index, part in sorted(parts.pop(room_key).items()))
+                    # The room's combination jobs, in the order of a serial export.
+                    level, room = room_key
+                    room_jobs = jobs[room_key] = [
+                        (level, room, name, depends, members, combinations[start:start + CHUNK])
+                        for name, depends, members, combinations in combination_jobs(
+                            records[room_key]['counts'], dependencies[room_key])
+                        for start in range(0, len(combinations), CHUNK)]
+                    rendered[room_key] = [None] * len(room_jobs)
+                    for index, job in enumerate(room_jobs):
+                        submit('combinations', (room_key, index), _worker_combinations, job)
+                elif kind == 'combinations':
+                    room_key, index = key
+                    rendered[room_key][index] = future.result()
+                    combinations_done += 1
+                    if rooms_done == len(tasks):
+                        total = sum(map(len, jobs.values()))
+                        report(f'Cavern floor slots: combinations {combinations_done}/{total}',
+                               combinations_done == total)
+                else:
+                    redraws[key] = future.result()
+        except BaseException:
+            # The executor drops the queued jobs itself: cancelling their
+            # futures here could stop a breaking pool's manager thread.
+            pool.shutdown(wait=False, cancel_futures=True)
+            raise
+    for room_key, results in rendered.items():
+        lists = {}
+        for job, result in zip(jobs[room_key], results):
+            lists.setdefault(tuple(job[2:4]), {}).update(result)
+        rendered[room_key] = lists
+    redraws = {room_key: {str(unit): redraws[room_key, unit] for unit in record['crevices']}
+               for room_key, record in records.items() if record.get('crevices')}
     rooms = {level: {} for level in contexts}
     for (level, room), record in records.items():
         rooms[level][room] = {**record, 'lists': assemble_lists(bases[level, room], dependencies[level, room],
