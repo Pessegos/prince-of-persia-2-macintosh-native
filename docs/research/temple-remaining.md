@@ -105,7 +105,8 @@ softer; no rule is changed until then.
   CheckFloor 4:35ca) reads as original. Confirm it with a native probe of
   6:26a8 and 4:35ca if that is cheap; otherwise leave it documented.
 - The route still supplies the guard's waking (the `altar` fixture). Try
-  the real step wake from item 2's replay.
+  the real step wake from item 2's replay. **Done 2026-11-16**: three steps
+  wake it and the level finishes with opponents on from there (item 2).
 
 ### 5. The loose floors' second shake pair (importer)
 

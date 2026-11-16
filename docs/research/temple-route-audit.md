@@ -95,7 +95,8 @@ Every search reported zero exceptions from the game.
 - Level 13's birdhead stands in SEQS 77 facing left and ignores a still Prince
   behind it. A step wakes it (`temple-altar.md`), so the Prince can fall to it
   without help. The `altar` fixture still supplies the waking, to keep the route
-  short.
+  short; `tests.test_temple_routes` also wakes it with three real steps and
+  finishes the level from there with opponents on (2026-11-16).
 - If the player kills that birdhead, the burn at X <= 347 is the only death
   left in the room, and mode 12 excludes it from raising the shadow. The
   user's play of the original answers it: the level cannot then be
