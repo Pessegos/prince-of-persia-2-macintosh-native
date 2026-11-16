@@ -2389,6 +2389,10 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
                     self.audio.add_song(song)
             songs.clear()
         for event in events:
+            if event.kind == "disarm":
+                # 9:177e-17bc: the final Jaffar takes the drawn sword.
+                self.sword_drawn = self.sword_sheathing = False
+                continue
             sound = (event.sound if event.sound is not None else
                      11 if event.kind == "parry" else 12 if event.actor == "player" else
                      59 if self.game.level.kind == 3 else 31)

@@ -1906,8 +1906,8 @@ class CombatEncounter:
         column = character_column(floor_contact_x(state.target_x, state.facing, record))
         return Figure(state.action, state.selected_sequence_id, 0 if state.facing else -1,
                       state.target_x + NATIVE_X_ORIGIN, column, fighter.row, fighter.room + 1,
-                      fighter.life, -1 if fighter.alive else 0, state.actor_type or 0,
-                      state.sequence_mode)
+                      fighter.life, -1 if fighter.sword_lost else 1 if fighter.sword_drawn else 0,
+                      state.actor_type or 0, state.sequence_mode)
 
     def _advance_final_path(self, figure):
         """AutoCtrl 9:16fe for the final Jaffar, then AnimChar, the Kid's
@@ -1925,10 +1925,9 @@ class CombatEncounter:
             # Out of the active list: his record keeps the move he was in.
             return
         if in_view and frames is not None and getattr(self, 'terrain', None) is not None:
-            view = self.final_prince_view()
             player = self.player
             prince = replace(self._final_view(player, frames[player.state.action]),
-                             alive=view.alive, turns=getattr(self, 'final_turns', 0))
+                             turns=getattr(self, 'final_turns', 0))
             jaffar = self._final_view(figure, frames[state.action])
             kid = _FinalKid(self, figure, frames)
             for event in Controller(jaffar, prince, figure.final_info, frames, kid).run():
@@ -1945,11 +1944,13 @@ class CombatEncounter:
                     player.runtime.next_frame()
                     self.final_events.append(CombatEvent('death', 'player', 17))
                 elif event[0] == 'dissolve':
-                    # 9:177e-17bc: SEQS 241 and AddSong 264 for the body.
+                    # 9:177e-17bc: his drawn sword is taken: SEQS 241,
+                    # AddSong 264 and armed -1.
                     player.sword_drawn = False
                     player.sword_lost = True
                     select_sequence(player, event[1])
                     self.final_songs.append(event[2])
+                    self.final_events.append(CombatEvent('disarm', 'player', sound=0))
         figure.runtime.rng = self.rng
         figure.runtime.next_frame()
         state.current_x = state.target_x

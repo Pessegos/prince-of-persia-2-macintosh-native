@@ -65,6 +65,11 @@ See the ledger's "Saves and the retry" and `tests.test_save_records`.
 
 ### 2. Jaffar's floor kills too soon (open divergence)
 
+**Done 2026-11-16.** 9:16fe reads the Prince's armed word (+0x1a), not
+ALIVE: he closes in and casts only at a Prince without a sword. See the
+ledger's "Route playthrough fixes". The gates of 0a42, 09ca, 0ba6 and 14c8
+were read again and match the port.
+
 Recorded under "Route playthrough fixes": standing in range on Jaffar's floor
 kills before four turns are possible. SEQS 242 reaches pose 282 in 11 frames;
 four standing turns take about 15. The user's run survived this. Trace the

@@ -522,11 +522,12 @@ and run-jumps like the Prince.
 - **Decision (9:16fe).** The opponent record holds +0x1c mode (1 fleeing,
   2 closing in), +0x1e target position and +0x20 last position reached;
   all three are zero in LEVL. Against the ordinary Prince (type 0): if his
-  ALIVE is 1 (just dead) and the figure is within 91 px (and not in poses
-  207-210 or 158), the body takes SEQS 241 with AddSong 264 and loses the
-  sword. Otherwise, on the figure's row while a5-0x5004 >= 4 (his turn
-  count, 4:1fb2), it flees if his life is above 2 or he is in SEQS 242.
-  Otherwise it closes in while he lives. Against the shadow (type 1) it
+  armed word (+0x1a, -0x507a; corrected 2026-11-16, it is not ALIVE) is 1,
+  a drawn sword, and the figure is within 91 px (and not in poses 207-210
+  or 158), the Kid takes SEQS 241 with AddSong 264 and armed becomes -1:
+  the sword is taken. Otherwise, on the figure's row while a5-0x5004 >= 4
+  (his turn count, 4:1fb2), it flees if his life is above 2 or he is in
+  SEQS 242. Otherwise it closes in only if armed is -1 (no sword). Against the shadow (type 1) it
   flees while his life is above 2 or he casts, and closes in otherwise.
   SEQS 230 in mode 12 (burnt) increments a5-0x4f92.
 - **Positions.** DATA a5-0x2a06 gives four 22-byte entries (global column,
@@ -611,10 +612,19 @@ with the body's fall), the chase across both views, and a cast on
 Jaffar's row that burns him (SEQS 230 to pose 185) and returns to the
 introduction.
 
-Open: standing in range on Jaffar's floor kills before four turns are
-possible (SEQS 242 reaches pose 282 in 11 frames; four standing turns take
-about 15). The video's player survived it; only a native trace can say
-which gate the port misses.
+Resolved 2026-11-16: standing in range on Jaffar's floor killed before
+four turns were possible (SEQS 242 reaches pose 282 in 11 frames; four
+standing turns take about 15). The missed gate is 9:17ec-17fc: closing in,
+and so the cast, needs the Prince's armed word at -1. The port read ALIVE
+(+0x1c) where 9:16fe reads +0x1a, so it cast at every living Prince. A
+Prince who keeps his sword, sheathed or drawn out of reach, can stand on
+his floor and turn; a drawn sword within 91 px is taken first (SEQS 241),
+and only then does he cast. This also explains the video (he stands at the
+upper right while the Prince is on his floor, then flees) and the guide's
+"the final Jaffar resists the sword". The scene now also drops the drawn
+sword when it is taken (a `disarm` combat event); before, the scene's
+sword flag re-armed the Kid on the next frame. `tests.test_final_path`
+rejects the ALIVE reading (decisions and three hidden-scene cases).
 
 ## Shadow form and magic fire (2026-11-14)
 

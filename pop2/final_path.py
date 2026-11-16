@@ -79,7 +79,10 @@ class Figure:
     row: int
     room: int
     life: int = 0
-    alive: int = -1
+    # +0x1a, the armed word (a5-0x503c for the Kid): 1 sword drawn, 0
+    # sheathed, -1 no sword (2:5eaa-5eba). 9:16fe reads it as -0x507a;
+    # ALIVE is +0x1c and plays no part here.
+    armed: int = 0
     actor_type: int = 0
     mode: int = 0
     turns: int = 0
@@ -149,15 +152,17 @@ class Controller:
         flee = info.mode == 1 and info.pos != info.prev
         close = False
         if prince.actor_type == 0:
-            if prince.alive == 1 and not (207 <= jaffar.pose <= 210) and jaffar.pose != 158:
+            if prince.armed == 1 and not (207 <= jaffar.pose <= 210) and jaffar.pose != 158:
                 if abs(distance(jaffar, prince)) < 91:
-                    # 9:177e-17bc: the Prince's body dissolves (SEQS 241,
-                    # song 264, unarmed).
+                    # 9:177e-17bc: a drawn sword within 91 pixels is taken:
+                    # the Kid's SEQS 241, song 264 and armed -1.
                     self.events.append(('dissolve', DISSOLVE_PRINCE_SEQUENCE, DISSOLVE_SONG))
             elif prince.row == jaffar.row and prince.turns >= 4:
                 flee = prince.life > 2 or prince.selected == SPELL_SEQUENCE
             else:
-                close = prince.alive == -1
+                # 9:17ec-17fc: he closes in (and casts) only on a Prince
+                # without a sword.
+                close = prince.armed == -1
         else:
             strong = prince.life > 2 or prince.selected == SPELL_SEQUENCE
             flee, close = strong, not strong

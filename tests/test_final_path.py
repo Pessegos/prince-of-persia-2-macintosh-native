@@ -30,8 +30,10 @@ def jaffar(**fields):
 
 
 def prince(**fields):
+    # Most decisions below need a Prince without a sword (armed -1): 9:16fe
+    # closes in on no one else.
     values = dict(pose=15, selected=2, facing=0, x=300, column=2, row=0, room=8,
-                  life=3, alive=-1)
+                  life=3, armed=-1)
     values.update(fields)
     return Figure(**values)
 
@@ -98,11 +100,27 @@ class DecisionTests(unittest.TestCase):
                                     prince(row=2), info)
         self.assertEqual(calls, [('select', STOP)])
 
-    def test_the_dead_prince_within_91_pixels_dissolves(self):
-        _calls, events, _info = run(jaffar(x=626), prince(alive=1, x=560, life=0))
+    def test_a_drawn_sword_within_91_pixels_is_taken(self):
+        # 9:173e-17bc reads the opponent's +0x1a (-0x507a), the armed word,
+        # not ALIVE (+0x1c): a living Prince with his sword drawn loses it.
+        _calls, events, _info = run(jaffar(x=626), prince(armed=1, x=560))
         self.assertEqual(events, [('dissolve', 241, 264)])
-        _calls, events, _info = run(jaffar(x=626), prince(alive=1, x=500, life=0))
+        _calls, events, _info = run(jaffar(x=626), prince(armed=1, x=500))
         self.assertEqual(events, [])
+        _calls, events, _info = run(jaffar(x=626, pose=158), prince(armed=1, x=560))
+        self.assertEqual(events, [])
+
+    def test_he_waits_while_the_prince_keeps_his_sword(self):
+        # 9:17ec-17fc: closing in needs armed -1. A sheathed sword (0), or a
+        # drawn one out of reach, leaves him standing; an earlier port
+        # read ALIVE there and cast at any living Prince.
+        for armed, x in ((0, 300), (0, 600), (1, 300)):
+            with self.subTest(armed=armed, x=x):
+                calls, events, info = run(jaffar(), prince(armed=armed, x=x))
+                self.assertEqual((calls, events, info.mode), ([], [], 0))
+        # Four rapid turns still make him flee from an armed Prince.
+        _calls, _events, info = run(jaffar(), prince(armed=0, turns=4, column=8))
+        self.assertEqual(info.mode, 1)
 
 
 INSTALLED = all((ASSET_DIR / name).is_file() for name in (
@@ -123,6 +141,11 @@ class PalaceSceneTests(unittest.TestCase):
         self.ticks(30)
         self.jaffar = self.combat.room_encounters[7][0][0]
 
+    def lose_sword(self):
+        # The state 9:177e leaves: no sword (armed -1).
+        self.scene.sword_drawn = self.combat.player.sword_drawn = False
+        self.combat.player.sword_lost = True
+
     def tearDown(self):
         self.harness.close()
 
@@ -130,12 +153,53 @@ class PalaceSceneTests(unittest.TestCase):
         for _ in range(count):
             self.harness.tick()
 
-    def test_standing_on_his_floor_is_fatal(self):
+    def test_standing_on_his_floor_without_a_sword_is_fatal(self):
         self.scene.jump_to_room(7, row=0, x=200, facing=1, reset_guards=False, redraw=False)
+        self.lose_sword()
         self.ticks(14)
         self.assertEqual(self.jaffar.state.selected_sequence_id, KILL_SEQUENCE)
         self.assertFalse(self.combat.player.alive)
         self.assertEqual(self.scene.death.method, 17)
+
+    def test_a_prince_keeping_his_sword_has_time_for_the_turns(self):
+        # The video's player stood on his floor while he waited, then he
+        # fled. With the sword sheathed he never casts.
+        from tests.test_final_magic import ShadowSceneTests
+
+        self.scene.jump_to_room(7, row=0, x=200, facing=1, reset_guards=False, redraw=False)
+        self.combat.player.life = self.combat.player.max_life = 12
+        self.ticks(40)
+        self.assertTrue(self.combat.player.alive)
+        self.assertNotIn(self.jaffar.state.selected_sequence_id, (SPELL_SEQUENCE, KILL_SEQUENCE))
+        ShadowSceneTests.turn(self, 4)
+        self.ticks(1)
+        self.assertEqual(self.jaffar.final_info.mode, 1)
+        self.assertTrue(self.combat.player.alive)
+
+    def test_his_reach_takes_a_drawn_sword_and_then_he_casts(self):
+        scene = self.scene
+        scene.jump_to_room(7, row=0, x=400, facing=1, reset_guards=False, redraw=False)
+        self.ticks(1)
+        scene.sword_drawn = self.combat.player.sword_drawn = True
+        for _ in range(30):
+            self.ticks(1)
+            if self.combat.player.sword_lost:
+                break
+        self.assertTrue(self.combat.player.sword_lost)
+        self.assertFalse(scene.sword_drawn)
+        self.assertEqual(scene.sequence_state.selected_sequence_id, 241)
+        # During SEQS 241 the Prince is out of his range (9:0bd8); after
+        # it, unarmed, he casts.
+        spell = None
+        for tick in range(40):
+            self.ticks(1)
+            selected = scene.sequence_state.selected_sequence_id
+            if self.jaffar.state.selected_sequence_id == SPELL_SEQUENCE and spell is None:
+                spell = tick
+                self.assertNotEqual(selected, 241)
+        self.assertIsNotNone(spell)
+        self.assertFalse(self.combat.player.alive)
+        self.assertEqual(scene.death.method, 17)
 
     def test_in_the_left_view_he_waits_at_the_upper_right(self):
         self.scene.jump_to_room(6, row=0, x=100, facing=1, reset_guards=False, redraw=False)
@@ -145,6 +209,7 @@ class PalaceSceneTests(unittest.TestCase):
 
     def test_a_prince_below_sees_him_run_to_the_left_view_and_climb_down(self):
         self.scene.jump_to_room(7, row=2, x=100, facing=1, reset_guards=False, redraw=False)
+        self.lose_sword()
         for _ in range(60):
             self.harness.tick()
             if self.jaffar.room == 6:
