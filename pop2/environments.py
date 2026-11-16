@@ -1503,6 +1503,9 @@ class Caverns(Environment):
         self.advance_ambience()
         if getattr(scene, "audio", None) is not None:
             scene.audio.drain(state, gate_events=self.gate_audio())
+            # The tick's audio phase does not run while the song plays; the
+            # drained cues (a gate shutting, spikes, lava) must still sound.
+            scene.audio.flush()
         else:
             state.sound_events.clear()
 

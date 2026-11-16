@@ -255,6 +255,34 @@ class TempleExitSceneTests(unittest.TestCase):
                 self.assertIsNone(scene.intro)
                 self.assertEqual(scene.room_id, scene.game.level.start_room)
 
+    def test_a_gate_shutting_during_the_exit_song_is_heard(self):
+        # FrameAdv keeps running while the end song plays (2:6100-6168).
+        # The port moved the gate but only drained its cue: nothing flushed
+        # it until the next level, so the gate shut silently.
+        from pop2.audio import AudioEngine
+        from tests.test_audio import TimedPlayback
+
+        scene = self.scene
+        audio = scene.audio = AudioEngine(playback=object())
+        backend = audio.playback = TimedPlayback(audio.cues)
+        played, play = [], backend.play
+        backend.play = lambda bus, cue, **_options: (played.append((bus, cue)), play(bus, cue))
+        number, room, cell = DOORS[0]
+        self.open_exit(number, room, cell)
+        self.complete_stairs()
+        gate = next((key, tile) for key in ((r, c) for r in range(32) for c in range(30))
+                    if (tile := scene.level_map.tile(key[0], key[1] % 10, key[1] // 10)).kind == 4)
+        key, tile = gate
+        plates = scene.game.caverns.plates
+        plates.foreground[key] = (tile.foreground & 0xff00) | 120
+        plates.add(key, 4)
+        played.clear()
+        for _ in range(20):
+            backend.advance(.101)
+            self.harness.tick()
+        self.assertTrue(scene.level_complete)
+        self.assertTrue(any(bus in ('mechanism', 'closing') for bus, _cue in played), played)
+
     def test_silent_transitions_use_duration_fallback_and_keep_the_tree_handoff(self):
         scene = self.scene
         scene.audio = None
