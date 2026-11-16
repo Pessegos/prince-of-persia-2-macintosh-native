@@ -20,9 +20,11 @@ I'm trying to stay as close to the original as possible, while still making some
 - [Gameplay Status](#gameplay-status)
 - [Features & Improvements](#features--improvements)
   - [Game Menu (F1)](#game-menu-f1)
+  - [Menu Themes](#menu-themes)
   - [Save & Load](#save--load)
   - [Controls & Controllers](#controls--controllers)
   - [Screenshot Gallery (F2)](#screenshot-gallery-f2)
+  - [Cutscene Viewer (Alt+C)](#cutscene-viewer-altc)
   - [Developer Tools (F3)](#developer-tools-f3)
   - [Cutscene Pausing](#cutscene-pausing)
   - [Overlapping Sound Effects](#overlapping-sound-effects)
@@ -52,9 +54,9 @@ Levels 10-13 are now in the game too. They can already be explored, with some of
 
 ## Game Menu (F1)
 
-The original Macintosh version uses the system menu bar for its File and Game options. Since that isn't available in the Windows port, I added a small F1 menu to provide similar functionality.
+The original Macintosh version uses the system menu bar for its File and Game options. Since that isn't available in the Windows port, I added an in-game F1 menu to provide similar functionality.
 
-The idea isn't to turn it into a full settings menu, but simply to keep things close to how they worked on the original Macintosh.
+It brings together the game commands, saves, controls, Cutscene Viewer and Hall of Fame. Settings have their own Options page, so everything in the main menu fits without scrolling.
 
 ### Original Macintosh
 
@@ -65,7 +67,25 @@ The idea isn't to turn it into a full settings menu, but simply to keep things c
 
 ### Windows Port (F1)
 
-<img src="docs/github readme/game-menu-v3.png" alt="Windows port F1 game menu" width="700">
+<img src="docs/github readme/menus/f1-palace.png" alt="Reworked F1 game menu with the palace theme" width="700">
+
+### Options (Alt+P)
+
+Sound, display and game settings now have their own page. This includes separate switches for game sounds, menu sounds and ambient music, along with fullscreen, cave ambience and copy protection.
+
+The menus also have soft sounds for navigation and selection, with a little musical cue when a new cutscene is revealed. Menu sounds can be switched off independently of the game's audio.
+
+<img src="docs/github readme/menus/options.png" alt="Options page with Sound, Display and Game settings" width="700">
+
+<br/>
+
+## Menu Themes
+
+I reworked the menus to make them feel more at home in the game. Their colours and frames now follow the environment: palace stonework, sand, rough cavern rock, crumbling ruins and the temple's red columns. The final level also has its own chessboard and spider themes, which change with the room.
+
+The same look carries through the game menu, controls, saves, Screenshot Gallery and Cutscene Viewer, including their smaller dialogs. Everything keeps the game's pixel art style, from the lettering to the frames and animations.
+
+<img src="docs/github readme/menus/menu-themes.gif" alt="The F1 menu in its palace, desert, cavern, ruins, temple, chessboard and spider themes" width="700">
 
 <br/>
 
@@ -75,7 +95,9 @@ The F1 menu includes a Save & Load system with named saves, previews, and option
 
 Saving follows the original game's checkpoint system. Loading a save takes you back to the beginning of the level or the last activated checkpoint, and the preview shows exactly where you'll resume.
 
-<img src="docs/github readme/save-load-preview-v8.gif" alt="Save & Load menu" width="700">
+In widescreen windows, the page makes room for a larger preview, with the save's name and details beside it.
+
+<img src="docs/github readme/menus/save-load-wide.png" alt="Saved Games in a widescreen window, with the ruins theme and a larger preview" width="850">
 
 <br/>
 
@@ -89,30 +111,44 @@ I tried to make the controller designs fit the game's pixel art style, taking in
 
 ### Keyboard
 
-<img src="docs/github readme/controls-keyboard.png" alt="Controls page - Keyboard" width="700">
+<img src="docs/github readme/menus/controls-keyboard.png" alt="Controls page - Keyboard" width="700">
 
 ### Controller
 
-<img src="docs/github readme/controls-xbox.png" alt="Controls page - Xbox controller" width="700">
-<img src="docs/github readme/controls-dualsense.png" alt="Controls page - PlayStation controller" width="700">
+<img src="docs/github readme/menus/controls-xbox.png" alt="Controls page - Xbox controller" width="700">
+<img src="docs/github readme/menus/controls-playstation.png" alt="Controls page - PlayStation controller" width="700">
 
 
 ### Changing Keys and Buttons
 
 <p>
-  <img src="docs/github readme/controls-remap-keys.png" alt="Changing keyboard keys" width="350">
-  <img src="docs/github readme/controls-remap-buttons.png" alt="Changing controller buttons" width="350">
+  <img src="docs/github readme/menus/controls-remap-keys.png" alt="Changing keyboard keys" width="350">
+  <img src="docs/github readme/menus/controls-remap-buttons.png" alt="Changing controller buttons" width="350">
 </p>
 
 <br/>
 
 ## Screenshot Gallery (F2)
 
-The F2 menu lets you browse and manage your screenshots directly in-game, with previews, resolution and folder options. You can even delete screenshots by tossing them into the lava.
+The F2 menu lets you browse and manage your screenshots directly in-game, with previews, resolution and folder options. In widescreen windows, it shows four columns of thumbnails and a larger preview.
+
+You can even delete screenshots by tossing them into the lava. The picture now falls into the pool and burns away as it sinks, with a fire sound to go with it.
 
 Pressing F8 takes a clean PNG screenshot without menus or overlays, while Shift+F8 captures the screen as it appears, including menus and paused scenes. A small notification also appears whenever a screenshot is saved.
 
-<img src="docs/github readme/screenshots-preview-v3.gif" alt="Screenshot Gallery (F2)" width="700">
+<img src="docs/github readme/menus/screenshots-burn.gif" alt="Widescreen Screenshot Gallery with a picture falling into the lava and burning away" width="850">
+
+<br/>
+
+## Cutscene Viewer (Alt+C)
+
+The Cutscene Viewer lets you revisit the story through a gallery of illustrated chapter covers. The opening chapters are available from the start, and the rest unlock as you reach them in the game. The collection is kept with each save.
+
+New chapters reveal their covers and titles in a pixelated animation, with a brief glint across the picture. I picked the scene and crop for each cover to give every chapter its own little illustration.
+
+Click a chapter to watch it, or browse with the keyboard or controller. Replaying a cutscene leaves your current game where it was.
+
+<img src="docs/github readme/menus/cutscene-reveal.gif" alt="Cutscene Viewer revealing The Magic Carpet chapter cover and title" width="850">
 
 <br/>
 
@@ -123,17 +159,17 @@ The F3 Developer Tools menu was originally made to help me with playtesting duri
 But I think it turned out so well that I might just include it in the final release as an optional feature.
 The idea would be to add it to the cheat mode, like the original Macintosh has. Where you hold down the 1, 2 and 3 keys at the same time when starting the game and get the message "You are worthy of the powers of Jaffar!".
 
+<img src="docs/github readme/menus/developer-tools.png" alt="Developer Tools with the cavern theme, map and Cutscene Viewer entries" width="700">
+
 ### Game Map
 
 An interactive map that allows browsing through levels and teleporting directly to individual rooms, without having to play through the entire level.
 
-<img src="docs/github readme/developer-map-preview-v9.gif" alt="Developer Tools - Game Map" width="700">
+<img src="docs/github readme/menus/developer-map.png" alt="Developer Tools - Game Map showing Level 3" width="700">
 
-### Playback
+### Cutscene Viewer
 
-The Playback tab provides quick access to cutscenes, making it easier to test individual sequences.
-
-<img src="docs/github readme/developer-playback-preview-v3.gif" alt="Developer Tools - Playback" width="700">
+The developer version of the Cutscene Viewer makes every chapter available for testing, without changing the collection in the current game.
 
 <br/>
 
@@ -208,7 +244,7 @@ The Prince also kicks up dust when running or landing, along with gates, doors a
   <img src="docs/github readme/cave-ambience-action.gif" alt="Cave ambience off and on as the Level 4 entrance closes and the Prince runs a short distance to the left" width="700">
 </p>
 
-The effects are off by default, but can be enabled through the F1 menu or with Alt+A. The setting is saved between sessions.
+The effects are off by default, but can be enabled through F1 > Options or with Alt+A. The setting is saved between sessions.
 
 <br/>
 
@@ -330,7 +366,9 @@ The original Macintosh disk image is still required for the first launch.
 | Space             | Y                 | Show the time left / skip supported cutscenes    |
 | Esc               | View              | Pause the game                                   |
 | F1                | Menu              | Game Menu                                        |
+| Alt + P           |                   | Options                                          |
 | Alt + K           |                   | Controls                                         |
+| Alt + C           |                   | Cutscene Viewer                                  |
 | Alt + Enter       |                   | Toggle fullscreen                                |
 | F2                |                   | Screenshot Gallery                               |
 | F3                |                   | Developer Tools                                  |
@@ -339,7 +377,7 @@ The original Macintosh disk image is still required for the first launch.
 
 These are the defaults. Keys and controller buttons can be changed in F1 > Controls. PlayStation and Nintendo controllers use the same positions (for example, A is Cross on PlayStation).
 
-The F1 menu also includes the rest of the shortcuts for starting or restarting a game, saving and loading, audio controls, the Hall of Fame, version info, and fullscreen.
+The F1 menu also includes the rest of the shortcuts for starting or restarting a game, saving and loading, the Hall of Fame and version info. Audio, fullscreen and the other settings are in F1 > Options.
 
 <br/>
 
