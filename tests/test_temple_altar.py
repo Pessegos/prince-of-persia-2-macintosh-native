@@ -409,6 +409,39 @@ class AltarSceneTests(unittest.TestCase):
                               scene.frames[scene.sequence_state.action])
         self.assertIn(17, cues)
 
+    def test_with_the_birdhead_killed_only_a_restart_brings_it_back(self):
+        # The user's report of the original: killing the altar birdhead
+        # leaves the burn as the only death, which raises no shadow (mode
+        # 12), so the level cannot be finished; a restart is the way back.
+        from pop2.coordinates import scene_x
+
+        scene = self.scene
+        scene.load_level(13)
+        scene.peaceful = False
+        scene.jump_to_room(3, row=1, x=scene_x(600), facing=0)
+        self.tick(2)
+        combat = scene.combat
+        (guard,) = combat.active_guards()
+        combat._hurt('guard', guard, combat.player)
+        self.tick(60)
+        self.assertFalse(guard.alive)
+        for _ in range(80):
+            if not combat.player.alive:
+                break
+            scene.sequence_state.target_x = scene.sequence_state.current_x = scene_x(346)
+            scene.player_x = scene.sequence_state.target_x
+            self.tick()
+        self.tick(200)
+        self.assertFalse(combat.player.alive)
+        self.assertEqual(scene.sequence_state.sequence_mode, 12)
+        self.assertIsNone(scene.game.caverns.shadow)
+        self.assertTrue(scene.restart_after_death())
+        scene.jump_to_room(3, row=1, x=scene_x(600), facing=0)
+        self.tick(2)
+        self.assertEqual([(guard.alive, guard.row) for guard in scene.combat.active_guards()],
+                         [(True, 1)])
+        self.assertEqual(scene.game.caverns.altar, 0)
+
     def test_restarting_clears_the_altar(self):
         scene = self.scene
         scene.load_level(13)

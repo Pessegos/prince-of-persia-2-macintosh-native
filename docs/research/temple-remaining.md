@@ -68,7 +68,9 @@ and find which differs. Do not tune the route to hide it.
   user's own play. The player resets at the checkpoint. Check that the port
   behaves the same way, and that its checkpoint restart (or level restart)
   is a way back. Then replace "unknown" in the route audit's open questions
-  with this.
+  with this. **Checked 2026-11-16**: it does (no shadow from the burn, mode
+  12; the restart brings the birdhead back), `tests.test_temple_altar`;
+  the route audit is updated.
 - The birdhead that turns into the chasm (SEQS 60 with no floor test,
   CheckFloor 4:35ca) reads as original. Confirm it with a native probe of
   6:26a8 and 4:35ca if that is cheap; otherwise leave it documented.

@@ -97,8 +97,11 @@ Every search reported zero exceptions from the game.
   without help. The `altar` fixture still supplies the waking, to keep the route
   short.
 - If the player kills that birdhead, the burn at X <= 347 is the only death
-  left in the room, and mode 12 excludes it from raising the shadow. Whether
-  the level can then still be finished is unknown.
+  left in the room, and mode 12 excludes it from raising the shadow. The
+  user's play of the original answers it: the level cannot then be
+  finished, and the player restarts at the checkpoint. The port behaves the
+  same way: no shadow rises from the burn, and a restart brings the
+  birdhead back alive (`tests.test_temple_altar`, 2026-11-16).
 
 ## Level 12
 
