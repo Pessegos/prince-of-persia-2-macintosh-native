@@ -23,14 +23,14 @@ CHAPTERS = (
     CutsceneChapter('opening_titles', 'Title', 'intro.json', 6),
     CutsceneChapter('opening_story', 'The Palace Escape', 'intro.json', 8),
     CutsceneChapter('voyage', 'The Voyage', 'ending.json', 5, 1),
-    CutsceneChapter('discovery', 'The Impostor', 'discovery.json', 10, 3),
+    CutsceneChapter('discovery', 'Behind the Mask', 'discovery.json', 10, 3),
     CutsceneChapter('carpet', 'The Flying Carpet', 'carpet.json', 5, 5),
     CutsceneChapter('vision', "The Mother's Vision", 'throne.json', 20, 8),
-    CutsceneChapter('horse', 'The Ride to the Temple', 'temple.json', 5, 9),
-    CutsceneChapter('tower', 'The Flight to the Tower', 'tower.json', 6, 13),
+    CutsceneChapter('horse', 'The Statue Awakens', 'temple.json', 5, 9),
+    CutsceneChapter('tower', 'The Flight Home', 'tower.json', 6, 13),
     # Level 14: Jaffar's spell in the palace (NIS 5) and NIS 11 after his fall.
     CutsceneChapter('spell', 'The Mental Battle', 'final_spell.json', 5),
-    CutsceneChapter('happy', 'The Happy Ending?', 'happy.json', 38),  # the epilogue's cliffhanger
+    CutsceneChapter('happy', 'Happily Ever After?', 'happy.json', 38),  # the epilogue's cliffhanger
 )
 OPENING_KEYS = frozenset(('opening', 'opening_titles', 'opening_story'))
 CHAPTER_KEYS = frozenset(chapter.key for chapter in CHAPTERS)
