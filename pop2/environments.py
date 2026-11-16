@@ -2423,7 +2423,23 @@ class Temple(Caverns):
                                scene.level_map, level_number=scene.game.level.number,
                                art=scene.level_renderer.room(scene.room_id, scene.game.caverns))
         return draw_slide_rocks(frame, scene.room_id, scene.game.caverns.rocks, scene.level_map,
-                                level_number=scene.game.level.number)
+                                level_number=scene.game.level.number, front=False)
+
+    def after_actors(self, frame, player_bounds):
+        """The rock's front block and middle strip: lower fore priorities than
+        the characters' 127 (3:3e24), so DrawObjs draws them over the Prince
+        and the guards. The room's foreground still covers them."""
+        from PIL import Image
+
+        from pop2.caverns import draw_slide_rocks
+
+        scene = self.scene
+        caverns = scene.game.caverns
+        if caverns is None or not caverns.rocks.bank:
+            return frame
+        layer = draw_slide_rocks(Image.new('RGBA', frame.size), scene.room_id, caverns.rocks,
+                                 scene.level_map, level_number=scene.game.level.number, front=True)
+        return scene.composite_actor(frame, layer) if layer.getbbox() else frame
 
     def finish_exit(self):
         scene = self.scene

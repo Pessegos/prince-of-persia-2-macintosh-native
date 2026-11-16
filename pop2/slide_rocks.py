@@ -23,6 +23,19 @@ WIDTHS = (87, 0, 5, 91, 45, 33, 82, 82, 36, 36, 69, 57, 17, 0)
 # The three decoration strips (types 8, 8, 9): offsets from the rock.
 DECORATIONS = ((8, 79, -68), (8, 76, -37), (9, 66, -57))
 MOVING_CUE, STOP_CUE, WALL_CUE = 192, 192, 18
+# GetObjForePriority 3:3e24: DATA a5-0x44c2 by MOB type (object type | 0x80)
+# against 127 for the Kid and ordinary characters (a5-0x44e0). SortObjTable
+# 3:3b62 draws the higher priority first: the trailing body (6) and the
+# upper strips (8) behind the characters, the rock's front block (7) and
+# its middle strip (9) over them.
+OBJECT_PRIORITY = {6: 225, 7: 50, 8: 200, 9: 80}
+CHARACTER_PRIORITY = 127
+
+
+def in_front_of_characters(kind):
+    return OBJECT_PRIORITY[kind] < CHARACTER_PRIORITY
+
+
 # 10:1d5c moves a travelling rock two pixels each frame.
 ROCK_STEP = 2
 

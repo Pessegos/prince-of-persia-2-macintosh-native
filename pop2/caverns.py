@@ -451,13 +451,17 @@ def room_palette(level_number, palette_id=3500):
             decode_ctbl(resources['CTBL'][palette_id]['data']).items()}
 
 
-def draw_slide_rocks(frame, room_id, rocks, terrain, *, level_number=10):
+def draw_slide_rocks(frame, room_id, rocks, terrain, *, level_number=10, front=None):
     """The temple's sliding rocks in the room (DrawMob 10:1788 pieces,
-    clipped to ComputeMobRect's rectangle)."""
-    objects = rocks.objects(terrain, room_id + 1)
+    clipped to ComputeMobRect's rectangle). ``front`` selects the pieces
+    DrawObjs puts behind (False) or over (True) the characters; None draws
+    them all."""
+    from pop2.slide_rocks import in_front_of_characters, object_shape
+
+    objects = [item for item in rocks.objects(terrain, room_id + 1)
+               if front is None or in_front_of_characters(item[0]) == front]
     if not objects:
         return frame
-    from pop2.slide_rocks import object_shape
 
     _program, resources, palette, shapes = room_assets(level_number, room_id)
     frame = frame.copy()

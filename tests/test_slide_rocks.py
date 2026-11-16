@@ -268,5 +268,57 @@ class RockCollisionTests(unittest.TestCase):
         self.assertGreater(contacts, 50)
 
 
+class SlideRockDrawOrderTests(unittest.TestCase):
+    def test_fore_priorities_put_the_front_block_and_middle_strip_over_characters(self):
+        # a5-0x44c2 by MOB type against the characters' 127 (a5-0x44e0);
+        # SortObjTable 3:3b62 draws the higher priority first.
+        from pop2.slide_rocks import in_front_of_characters
+        self.assertEqual({kind: in_front_of_characters(kind) for kind in (6, 7, 8, 9)},
+                         {6: False, 7: True, 8: False, 9: True})
+
+    @unittest.skipUnless(__import__('pop2.paths', fromlist=['ASSET_DIR']).ASSET_DIR.joinpath(
+        'temple_level11.json').is_file(), 'Imported temple artwork required')
+    def test_a_prince_pressed_against_the_rock_is_hidden_by_its_front_block(self):
+        # The port drew every rock piece behind the actors, so a Prince
+        # pinned by the rock was drawn over its face.
+        from tools.audit_temple_routes import Harness, settle
+
+        harness = Harness(11, draw=True)
+        self.addCleanup(harness.close)
+        harness.number = 11
+        settle(harness, 300)
+        scene = harness.scene
+        scene.jump_to_room(2, 1, 250, 1, redraw=True)
+        settle(harness, 30)
+        rocks = scene.game.caverns.rocks
+        rocks.trigger(3, 18, 6)
+        overlap = None
+        for _ in range(140):
+            harness.tick()
+            if not scene.combat.player.alive:
+                break
+            left, top, right, bottom = scene.player_bounds()
+            front = [clip for kind, _x, _y, _phase, clip in rocks.objects(scene.level_map, 3)
+                     if kind == 7]
+            for clip_top, clip_left, clip_bottom, clip_right in front:
+                box = (max(left, clip_left), max(top, clip_top),
+                       min(right + 1, clip_right), min(bottom + 1, clip_bottom))
+                if box[0] + 4 < box[2] and box[1] < box[3]:
+                    overlap = box
+            if overlap is not None:
+                break
+        self.assertIsNotNone(overlap, 'The rock never reached the Prince')
+        scene.render()
+        shown = scene.screenshot_viewport.copy()
+        mode = scene.sequence_state.sequence_mode
+        scene.sequence_state.sequence_mode = 4  # ClipChar skips a hidden actor
+        scene.render()
+        scene.sequence_state.sequence_mode = mode
+        hidden = scene.screenshot_viewport
+        from pop2.render_opening import ROOM_ORIGIN_X
+        box = (overlap[0] + ROOM_ORIGIN_X, overlap[1], overlap[2] + ROOM_ORIGIN_X, overlap[3])
+        self.assertEqual(shown.crop(box).tobytes(), hidden.crop(box).tobytes())
+
+
 if __name__ == '__main__':
     unittest.main()
