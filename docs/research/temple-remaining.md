@@ -141,6 +141,11 @@ macros rely on the sword resting.
 - The birdhead that turns into the chasm (SEQS 60 with no floor test,
   CheckFloor 4:35ca) reads as original. Confirm it with a native probe of
   6:26a8 and 4:35ca if that is cheap; otherwise leave it documented.
+  **Read again 2026-11-16, left documented**: 26a8 is the end of DoStrike
+  6:2638, which selects SEQS 60 straight through JumpSeq for every
+  opponent except actors 7/8 (their own strike SEQS 156), 0/1 (6:26b8)
+  and actor 10 in poses 213-217; nothing there reads the floor, so a probe
+  would only repeat the reading.
 - The route still supplies the guard's waking (the `altar` fixture). Try
   the real step wake from item 2's replay. **Done 2026-11-16**: three steps
   wake it and the level finishes with opponents on from there (item 2).
