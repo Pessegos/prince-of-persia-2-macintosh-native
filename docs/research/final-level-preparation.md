@@ -1117,3 +1117,17 @@ Prince's distance, so a drawn sword at 0 life could still be taken.
 models (CharDistance without the life gate; a range test that ignores the
 floors' columns). Not covered: the Kid routines' own effects, AnimChar,
 the caller 9:08e8 and its scheduling.
+
+## Native probe of room 6's controller 9:1526 (2026-11-16)
+
+`python -m tools.probe_final_copies` runs the original 9:1526 and
+CharDistance 4:49ee over LEVL 2013, rewriting room 6's bank count per
+case. Supplied: SetSeq 6:0006, AddSound 5:4d84 and AddCharX 4:2bae (X + 15
+along the facing). The FRAM flags are synthetic and shared. The port reads
+one Prince view for the opponent record and the saved Prince, so the probe
+writes both from it; a frame in which they differ is excluded. 6,000 cases
+(40% strike candidates) compare the calls, the facing word (the turn) and
+the armed word: no differences. The shimmer (240), the strike (75, 15 px),
+the sheathe (92), the laugh (197 with 261), the rise (49) and the turn are
+all reached. `tests.test_probe_final_path` also rejects a distance measured
+in the port's facing instead of the native word.

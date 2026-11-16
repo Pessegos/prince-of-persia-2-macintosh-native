@@ -48,6 +48,27 @@ class NativePathControllerTests(unittest.TestCase):
                 with self.assertRaises(AssertionError):
                     run_probe(RECOVERY, count=1500)
 
+    def test_the_original_copy_controller_agrees_with_the_port(self):
+        from pop2 import final_tower
+        from tools.probe_final_copies import run_probe
+
+        compared, kinds = run_probe(RECOVERY, count=1500)
+        self.assertEqual(compared, 1500)
+        for kind in ('select 75', 'select 240', 'select 92', 'select 197', 'select 49', 'turn'):
+            self.assertGreater(kinds.get(kind, 0), 0, kind)
+
+        def distance_in_port_facing(copy, prince):
+            # Mistaking the port's facing (1 right) for the native word
+            # (0 right) measures every distance the wrong way round.
+            if copy.room != prince.room or copy.row != prince.row:
+                return 999
+            distance = prince.x - copy.state.target_x
+            return -distance if copy.state.facing else distance
+
+        with patch.object(final_tower, 'copy_distance', distance_in_port_facing):
+            with self.assertRaises(AssertionError):
+                run_probe(RECOVERY, count=1500)
+
 
 if __name__ == '__main__':
     unittest.main()

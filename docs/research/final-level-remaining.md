@@ -87,7 +87,8 @@ rejects a wrong model:
    routes): decision tables from recorded Kid calls. **Done 2026-11-16**
    (`tools.probe_final_path`, 6,000 cases; CharDistance's life gate fixed).
 2. 9:1526 (room-6 strikes, dissolves, SEQS 240 for the last copy, and the
-   9:090e/19fa hand-off).
+   9:090e/19fa hand-off). **9:1526 done 2026-11-16** (`tools.probe_final_copies`,
+   6,000 cases, no difference); 9:090e and 9:19fa are not probed.
 3. The magic rules: 4:1fb2 (turns), 4:2046 (the eighth-turn test), 4:2174
    (flashes), 4:2206 LeaveBody, 4:1f1e and 4:24b2 (lying down and rejoining),
    4:25ce and 4:2338.
