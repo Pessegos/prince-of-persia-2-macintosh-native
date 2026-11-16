@@ -167,6 +167,25 @@ The map picture is built on neutral grey and kept on disk, so it cannot hold a
 theme's colour. Under a theme, `DevelopmentMenu.map_layer` copies the rooms
 onto the theme's backdrop colour instead.
 
+## Pixel-perfect text
+
+Menu text keeps the font's own pixels: every font pixel covers the same
+whole number of screen pixels, so no letter has columns of different widths.
+
+- Pages drawn at the game's resolution (512 x 384) never squeeze a label to
+  fit with `max_width`: a NEAREST squeeze drops a column in every few (two of
+  the three dots in "Change buttons..." lost one). Make the control wide
+  enough or the text shorter instead. `ControlsPageFontTests` guards the
+  Controls page with the real font.
+- Pages drawn at the window's resolution (saved games, screenshots, the
+  Cutscene Viewer) pass each label's scale through `bitmap_labels.crisp`,
+  which snaps it to a whole number of window pixels when one is near and the
+  text still fits (small text: 2.1x -> 2x in a 3x window).
+  `WindowPageTextTests` checks the three pages in a 3x window.
+- Text shrunk to fit a long value (a folder path) is the only exception.
+- Artwork follows the same rule: drawn pixel by pixel and enlarged by whole
+  numbers, like the About page's peach.
+
 ## Forcing a theme
 
 `POP2_MENU_THEME=neutral` turns the level themes off; a theme's name
