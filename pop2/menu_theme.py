@@ -46,7 +46,7 @@ class MenuTheme:
     name: str
     roles: dict = field(default_factory=dict)
     dim: int = 100            # black veil over the room behind the F1 menu, 0-255
-    # 'rock', 'bands', 'sand', 'studs', 'columns' or None for a plain outline
+    # 'rock', 'bands', 'sand', 'studs', 'columns', 'chess' or None for a plain outline
     frame: str | None = None
     grow: tuple = (0, 0, 0)   # how far the frame reaches beyond a panel: sides, top, bottom
     # 'bands': the moulding's rows from the outside inwards; a row of several
@@ -162,7 +162,29 @@ TEMPLE = MenuTheme('temple', {
     'danger': '#6b1808', 'danger_soft': '#450a0a',
 }, dim=140, frame='columns', grow=(2, 5, 7))
 
-THEMES = {theme.name: theme for theme in (NEUTRAL, PALACE, DESERT, CAVERNS, RUINS, TEMPLE)}
+# Level 14, native rooms 4-5: the chessboard's violet and pearl squares, the
+# bronze pieces' gold.
+CHESS = MenuTheme('chess', {
+    'accent': '#f2b86b', 'text': '#f5f4f1', 'muted': '#928a8e', 'muted_light': '#b6b5b6',
+    'dim_text': '#6c516e', 'faint': '#553c59',
+    'panel': '#120814', 'panel_edge': '#aba4a7', 'backdrop': '#0a040c', 'rule': '#341f39',
+    'row': '#221127', 'row_dark': '#1a0c1e', 'row_edge': '#442643', 'row_edge_soft': '#341f39',
+    'row_edge_dark': '#300838', 'row_edge_lit': '#6c516e',
+    'selected': '#501858', 'hover': '#341f39', 'listening': '#5a3a28',
+    'well': '#120814', 'well_dark': '#0a040c',
+    'active': '#99c8c2', 'active_map': '#99c8c2', 'active_fill': '#2e3a44',
+    'active_field': '#242030', 'text_selection': '#553c59',
+    'danger': '#5a1830', 'danger_soft': '#3a1028',
+}, dim=130, frame='chess', grow=(2, 5, 7))
+
+THEMES = {theme.name: theme for theme in (NEUTRAL, PALACE, DESERT, CAVERNS, RUINS, TEMPLE, CHESS)}
+
+# Level 14 (environment 6) changes look from room to room, so its menus take
+# the theme of the room the Prince is in. Port (zero-based) rooms: 0-1 the
+# tower over the city, which brings back the palace; 3-4 the chessboard;
+# 10 the princess's room, seen only in the ending, is the palace as well.
+# The other rooms keep the neutral look until their own themes are drawn.
+_FINAL_ROOM_THEMES = {0: PALACE, 1: PALACE, 3: CHESS, 4: CHESS, 10: PALACE}
 
 _current = NEUTRAL
 
@@ -199,6 +221,8 @@ def theme_for(game):
         return NEUTRAL
     if getattr(game, 'caverns', None) is not None:
         # Ruins, temple and the last level (kind 6) share the cavern state object.
+        if getattr(game.level, 'kind', None) == 6:
+            return _FINAL_ROOM_THEMES.get(getattr(game, 'room_id', None), NEUTRAL)
         return {3: CAVERNS, 4: RUINS, 2: TEMPLE}.get(getattr(game.level, 'kind', None), NEUTRAL)
     if getattr(game, 'desert', None) is not None:
         return DESERT
@@ -427,7 +451,8 @@ def _rock_frame(theme, size, fill):
 
 
 # --- Shared helpers for the drawn frames.
-_THICKNESS = {'rock': (9, 9, 9), 'sand': (11, 11, 11), 'studs': (9, 9, 9), 'columns': (13, 12, 12)}
+_THICKNESS = {'rock': (9, 9, 9), 'sand': (11, 11, 11), 'studs': (9, 9, 9), 'columns': (13, 12, 12),
+              'chess': (10, 10, 13)}
 
 
 def _stepped(length, rng, values, runs=(5, 14)):
@@ -921,5 +946,58 @@ def _columns_frame(theme, size, fill):
     return picture
 
 
+# --- Level 14's chessboard: one row of the board's squares, violet and pearl
+# in turn, each lit on its upper edge and shaded on its lower and right edges
+# like the room's tiles; under the lower row, the board's dark front face.
+_CHESS_SQUARES = (
+    # (upper edge, face, lower and right edges) for the violet and the pearl squares
+    ('#553c59', '#300838', '#221127'),
+    ('#f5f4f1', '#cfcfd0', '#aba4a7'),
+)
+_CHESS_FACE = ('#341f39', '#221127', '#1a0c1e')
+
+
+def _chess_runs(length, size):
+    """Split ``length`` into an odd number of near-square runs, so that the
+    squares alternate from one violet corner to the next."""
+    count = max(1, round(length / size))
+    if count % 2 == 0:
+        count += 1 if length / size > count else -1
+    edges = [round(index * length / count) for index in range(count + 1)]
+    return list(zip(edges, edges[1:]))
+
+
+def _chess_frame(theme, size, fill):
+    width, height = size
+    band, _, bottom = _THICKNESS['chess']
+    face_rows = bottom - band
+    picture = Image.new('RGBA', size, fill + (255,))
+    pixels = picture.load()
+    squares = [[_rgb(colour) + (255,) for colour in shades] for shades in _CHESS_SQUARES]
+    board = height - face_rows      # the squares end here and the front face follows
+
+    def square(left, top, right, low, kind):
+        upper, face, lower = squares[kind]
+        for y in range(top, low):
+            colour = upper if y == top else lower if y == low - 1 else face
+            for x in range(left, right):
+                pixels[x, y] = colour
+        for y in range(top + 1, low - 1):
+            pixels[right - 1, y] = lower
+
+    for top in (0, board - band):
+        square(0, top, band, top + band, 0)
+        square(width - band, top, width, top + band, 0)
+        for index, (start, end) in enumerate(_chess_runs(width - 2 * band, band)):
+            square(band + start, top, band + end, top + band, 1 - index % 2)
+    for left in (0, width - band):
+        for index, (start, end) in enumerate(_chess_runs(board - 2 * band, band)):
+            square(left, band + start, left + band, band + end, 1 - index % 2)
+    for row, colour in enumerate(_CHESS_FACE[:face_rows]):
+        for x in range(width):
+            pixels[x, board + row] = _rgb(colour) + (255,)
+    return picture
+
+
 _PAINTERS = {'rock': _rock_frame, 'bands': _band_frame, 'sand': _sand_frame,
-             'studs': _studs_frame, 'columns': _columns_frame}
+             'studs': _studs_frame, 'columns': _columns_frame, 'chess': _chess_frame}

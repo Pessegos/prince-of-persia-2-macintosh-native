@@ -29,14 +29,21 @@ stay neutral.
 
 | Theme | Levels | Look |
 | --- | --- | --- |
-| neutral | the last level and cutscenes | grey panel, gold accent |
+| neutral | cutscenes, and the rooms of the last level that have no theme yet | grey panel, gold accent |
 | palace | 1 | dark blue panel, cream cornice frame with turquoise and orange trim, red selection |
 | desert | 2 | dark sea panel, frame of sand with a wet inner edge, sun-yellow accent |
 | caverns | 3-5 | dark brown panel, rough rock frame, bone text, flame accent, darker room behind |
 | ruins | 6-9 | indigo panel, violet band of square sockets falling apart, the serpent sign as a watermark, sand-gold accent |
 | temple | 10-13 | dark red panel, two red columns under a carved frieze, flame accent |
+| chess | 14, native rooms 4-5 | violet-black panel, a row of violet and pearl chessboard squares, pearl text, the bronze pieces' gold accent |
 
-The last level (kind 6) has no theme and uses neutral.
+The last level (kind 6) changes look from room to room, so its menus follow
+the Prince's room, not the level (`_FINAL_ROOM_THEMES`). The tower over the
+city (native rooms 1-2) takes the palace theme: the Prince is back at the
+palace. The princess's room (native room 11), seen only in the ending, is the
+palace too. The chessboard (native rooms 4-5) has the chess theme. The
+spider (3, 9), crystals (6) and Escher maze (7, 8, 10) keep neutral until
+their own themes are drawn.
 
 ## Frames
 
@@ -57,6 +64,7 @@ for another. The theme names its kind in `frame`:
 | `rock` | caverns | speckled stone with a worn edge; the theme gives its `grain` and the extra `shades` for lit and shadowed edges |
 | `studs` | ruins | the palace wall's band of sunk square sockets with a carved ring at each corner; straight edges, damaged in a different way at each place (a piece broken out, a flake, a nick, a crack, a bite out of the inner edge, a crumbled socket, one lost corner), never deeper than five of its nine rows |
 | `columns` | temple | two columns with leaf capitals and plinths between the same carved band above and below: a frieze of rosettes between leaves, laid out in whole motifs for any width, with a rosette block at each corner |
+| `chess` | chess | one row of the board's squares, violet and pearl in turn, lit on the upper edge and shaded on the lower and right edges like the room's tiles; an odd number of near-square runs on each side keeps a violet square at every corner, and the board's dark front face runs under the lower row |
 
 `_THICKNESS` gives each kind's thickness at the sides, top and bottom. The
 temple's bands and columns are thicker than the others, so its frame reaches a
@@ -189,7 +197,7 @@ whole number of screen pixels, so no letter has columns of different widths.
 ## Forcing a theme
 
 `POP2_MENU_THEME=neutral` turns the level themes off; a theme's name
-(`palace`, `desert`, `caverns`, `ruins`, `temple`) uses it on every level.
+(`palace`, `desert`, `caverns`, `ruins`, `temple`, `chess`) uses it on every level.
 The test package sets it to `neutral` so that layout tests check the same
 look whatever level their scene loads;
 `tests/test_menu_theme.py` covers the themes themselves.

@@ -9,7 +9,7 @@ from PIL import Image
 
 from pop2 import menu_theme
 from pop2.game_menu import GameMenu
-from pop2.menu_theme import CAVERNS, DESERT, NEUTRAL, NEUTRAL_ROLES, PALACE, RUINS, TEMPLE, THEMES, c
+from pop2.menu_theme import CAVERNS, CHESS, DESERT, NEUTRAL, NEUTRAL_ROLES, PALACE, RUINS, TEMPLE, THEMES, c
 
 
 class FakeFont:
@@ -152,13 +152,39 @@ class MenuThemeTest(unittest.TestCase):
         self.assertIs(menu_theme.theme_for(game(4, caverns=object())), RUINS)
         self.assertIs(menu_theme.theme_for(game(2, caverns=object())), TEMPLE)
         # The last level (kind 6) shares the cavern state but is not a cavern:
-        # the first version gave it the cavern rock.
+        # the first version gave it the cavern rock. Its theme follows the room.
         self.assertIs(menu_theme.theme_for(game(6, caverns=object())), NEUTRAL)
+        for room, theme in ((0, PALACE), (1, PALACE), (2, NEUTRAL), (3, CHESS), (4, CHESS),
+                            (5, NEUTRAL), (10, PALACE)):
+            with self.subTest(room=room):
+                self.assertIs(menu_theme.theme_for(game(6, caverns=object(), room_id=room)), theme)
         # One theme can be forced everywhere; "neutral" turns the level themes off.
         os.environ['POP2_MENU_THEME'] = 'neutral'
         self.assertIs(menu_theme.theme_for(game(3, caverns=object())), NEUTRAL)
         os.environ['POP2_MENU_THEME'] = 'Caverns'
         self.assertIs(menu_theme.theme_for(game(5, harbor=object())), CAVERNS)
+
+    def test_chess_frame_alternates_between_violet_corners(self):
+        rgb = menu_theme._rgb
+        violet, pearl = (rgb(shades[1]) + (255,) for shades in menu_theme._CHESS_SQUARES)
+        for size in ((120, 90), (391, 305), (417, 340)):
+            with self.subTest(size=size):
+                width, height = size
+                picture = menu_theme._frame_picture('chess', size).load()
+                board = height - 3
+                for x, y in ((5, 5), (width - 5, 5), (5, board - 5), (width - 5, board - 5)):
+                    self.assertEqual(picture[x, y], violet)
+                # Along each side the squares change at every run, so no two
+                # neighbours share a colour and both corners end violet.
+                for spans, point in (
+                        (menu_theme._chess_runs(width - 20, 10), lambda along: (10 + along, 5)),
+                        (menu_theme._chess_runs(board - 20, 10), lambda along: (5, 10 + along))):
+                    self.assertEqual(len(spans) % 2, 1)
+                    faces = [picture[point((start + end) // 2)] for start, end in spans]
+                    self.assertEqual(faces, [pearl if index % 2 == 0 else violet for index in range(len(spans))])
+                # Under the lower row: the board's front face, never black.
+                for row, colour in enumerate(menu_theme._CHESS_FACE):
+                    self.assertEqual(picture[width // 2, board + row], rgb(colour) + (255,))
 
     def test_frame_stays_inside_the_playfield(self):
         # The F1 list no longer scrolls, so its panel is shorter than the playfield.
@@ -227,8 +253,9 @@ class MenuThemeTest(unittest.TestCase):
                     self.assertEqual(picture[60, 1], menu_theme._rgb(theme.bands[1][0]) + (255,))
                     self.assertEqual(picture[60, 45], menu_theme._rgb(theme.colour('panel')) + (255,))
                 elif theme.frame is not None:
-                    # Drawn frames: sand, the ruins' band of sockets, the temple's columns.
-                    self.assertIn(theme.frame_width, (9, 11, 13))
+                    # Drawn frames: sand, the ruins' band of sockets, the temple's columns,
+                    # level 14's row of chessboard squares.
+                    self.assertIn(theme.frame_width, (9, 10, 11, 13))
                     picture = menu_theme._frame_picture(theme.name, (120, 90)).load()
                     self.assertEqual(picture[60, 45], menu_theme._rgb(theme.colour('panel')) + (255,))
                     for point in ((60, 3), (60, 86), (3, 45), (116, 45)):  # inside any worn edge
