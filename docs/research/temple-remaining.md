@@ -114,9 +114,9 @@ Each probe states its supplied endpoints and rejects a wrong model:
   (3c32), so two lethal neighbours would both be bloodied and the impale
   5:3cee would run twice. No LEVL of the spike environments has two
   horizontally adjacent spike cells (levels 3-5: 3, 8 and 7 spikes; 10-13:
-  5, 3, 7 and 1; level 2's three adjacent kind-2 cells in native room 14
-  are not wall spikes, as environment 1 has none), so it cannot be seen
-  and the port keeps its early return.
+  5, 3, 7 and 1). Only environments 3 and 2 call it (2:63ca-63f0), so
+  level 2's three adjacent kind-2 cells in native room 14 are never
+  tested. It cannot be seen, and the port keeps its early return.
 
 ### 7. Needs the user's material or decision
 
