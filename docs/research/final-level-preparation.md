@@ -1233,3 +1233,20 @@ width's source (the probe gives 9:25e4 the port's width; at the throw the
 original reads the previous fire's last width) and the hit 9:24ee.
 `tests.test_probe_final_path` rejects the old state 0 and a wall hit
 without the 265 reset.
+
+## Native probe of the lie-down (2026-11-16)
+
+`python -m tools.probe_final_body` runs 4:1f1e (the shadow's Down near
+the body) with IsShadowBlinkOn 4:24b2 over LEVL 2013: 6,000 cases of
+shadow and body X, facings, rows and the shadow's pose. GetKidIdxAsOpp
+4:2442, the record load/restore 4:3286/3312 (the probe writes the body
+into a5-0x5094) and AddCharX are supplied. The return, the shadow's X and
+facing are compared with `Final.crouch_sequence`; the native Y - 1, the
+copy into the saved Prince record and a5-0x503e are excluded.
+
+One difference was fixed: when the shadow turns to face the body
+(4:1f50-1f60, AddCharX(6)), the original keeps the distance measured
+before the turn. The port measured again, which is the same except in
+pose 185, where 4:24b2 drops its 6-pixel facing term: a lying shadow
+facing away moved 6 pixels too far. `tests.test_final_magic` checks that
+case.

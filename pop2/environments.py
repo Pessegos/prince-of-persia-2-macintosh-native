@@ -330,9 +330,10 @@ class Final(Environment):
         if abs(distance) >= BODY_REACH:
             return None
         if state.facing != body.state.facing:
+            # 4:1f50-1f60: turn and AddCharX(6); the distance measured
+            # before the turn is kept (it differs in pose 185).
             state.facing = body.state.facing
             state.target_x += 6 if state.facing else -6
-            distance = body_distance(state, body.state, body.row, scene.terrain_motion.row)
         # X -= distance - sign * 7, sign from a5-0x4b94 (right -1, left +1).
         # The native Y - 1 is left out: the port keeps the Kid on his floor.
         state.target_x -= distance - (-1 if state.facing else 1) * 7

@@ -93,7 +93,9 @@ rejects a wrong model:
    (flashes), 4:2206 LeaveBody, 4:1f1e and 4:24b2 (lying down and rejoining),
    4:25ce and 4:2338. **4:1fb2, 4:2046, 4:2174, 4:250a and 4:2590 done
    2026-11-16** (`tools.probe_final_magic`; the fatal eighth turn fixed).
-   LeaveBody, lying down, rejoining and 4:2338 are not probed.
+   Lying down (4:1f1e with 4:24b2) done 2026-11-16 (`tools.probe_final_body`;
+   the distance before turning fixed). LeaveBody, rejoining and 4:2338 are
+   not probed.
 4. The fire: 9:2674 (cast), 9:27a0 and 9:25e4 (flight), 9:24ee (hit).
    **Traced 2026-11-16**: the cast and hit already matched; the fire now
    starts in state 2, tests its cell when thrown, restarts on a second cast

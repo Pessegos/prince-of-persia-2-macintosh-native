@@ -24,6 +24,18 @@ class RuleTests(unittest.TestCase):
         self.assertEqual([turn_flash(action, 7) for action in range(46, 52)],
                          [True, True, False, True, True, False])
 
+    def test_lying_down_keeps_the_distance_measured_before_turning(self):
+        # 4:1f1e: a shadow in pose 185 facing away from the body turns,
+        # steps 6 and moves by the distance taken before the turn
+        # (17 + 7), not by one measured again (23 + 7).
+        from tools.probe_final_body import port_crouch
+
+        shadow = SimpleNamespace(target_x=121, facing=0, action=DEAD_POSE)
+        body = SimpleNamespace(target_x=104, facing=1, action=DEAD_POSE)
+        self.assertEqual(port_crouch(shadow, body, 0, 0), (COLLAPSE_SEQUENCE, 103, 1))
+        shadow.action = 15
+        self.assertEqual(port_crouch(shadow, body, 0, 0), (COLLAPSE_SEQUENCE, 103, 1))
+
     def test_a_fatal_eighth_turn_still_clears_the_count(self):
         # 4:1fb2: after a fatal DecLifePts(1), 4:203e still tests the eighth
         # turn; its low-life branch kills again and clears a5-0x5004.

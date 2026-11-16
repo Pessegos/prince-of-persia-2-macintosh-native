@@ -103,6 +103,14 @@ class NativePathControllerTests(unittest.TestCase):
                 probe_final_defeat.run_probe(RECOVERY)
         self.assertIs(probe_final_defeat.fresh_sequence, opponent_records.fresh_sequence)
 
+    def test_the_original_lie_down_agrees_with_the_port(self):
+        from tools.probe_final_body import run_probe
+
+        compared, outcomes = run_probe(RECOVERY, count=2000)
+        self.assertEqual(compared, 2000)
+        for kind in ('lie down', 'turned', 'too far'):
+            self.assertGreater(outcomes.get(kind, 0), 0, kind)
+
     def test_the_original_fire_agrees_with_the_port(self):
         from pop2 import final_magic
         from tools import probe_final_fire
