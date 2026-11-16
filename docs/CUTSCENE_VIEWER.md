@@ -201,7 +201,7 @@ FPS guarantee. Hidden-window timing omits physical painting/compositor/input
 latency; simulated 240 Hz tests do not establish physical 240 Hz presentation.
 
 Opening boundaries come from the imported title operation, the following frame
-setup and the first story music before narration resumes. Prologue ends before
+setup and the first story music before narration resumes. The Young Lovers ends before
 the title; Title includes its fade-out; The Palace Escape reconstructs the
 following frame setup silently and begins with its own music/reveal. This omits
 an empty transition wait owned by the preceding title song, without omitting
