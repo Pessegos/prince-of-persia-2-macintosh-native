@@ -58,9 +58,46 @@ above 2 loads CTBL 2001. Mode 13 plays no part there. The port had no such
 call, so a flask drunk after a miss left the weak colours (while the flame
 came back), and a shadow drained to 2 kept the glow. `Final.change_meters`
 applies `final_magic.meter_palette` once a tick to the life the previous tick
-left. Hypothesis, not probed: during the body's drain (6:0bcc), which record
-the saved slot holds when ChangeMeters runs; the port treats the drain like
-any other loss of the shadow's life.
+left. The body's drain goes the same way: 6:0b5a sends a body (type 0,
+index other than the Kid's 10) in a pose that is not lying (4:47a0) to
+6:0bcc, which saves it to its active slot (SaveChar 4:4a46, slots of 0x3e
+bytes at a5-0x5208), reloads the shadow from the saved record (4:4b02),
+takes DecLifePts(1) from it (capacity -1 when that returns 0), saves the
+shadow back to a5-0x50d2 and only then reloads the body (LoadShad 4:4ac0)
+for its own DecLifePts(1). The saved record is the shadow's when
+ChangeMeters runs, so a drain across 2 loads CTBL 2000 too.
+
+### LeaveBody, rejoining and CutToKidRoom, read against the port (2026-11-16)
+
+- LeaveBody 4:2206: AddCharX(25) when the cell behind is empty (4:3a48 ->
+  3:4eb2), else AddCharX(-25) when the cell in front is (GetCellsInFront
+  4:39fc); the Kid is copied to the saved record; a new opp-info record
+  (GetOppInfoIdx 6:3642, at the room bank's count, which goes up by one)
+  takes the cell, X, facing, life (+0x12), capacity (+0x1a) and 10 at
+  +0x18; the Char becomes that index, type 0, draw mode 0x10, SEQS 71, one
+  AnimChar, SaveChar, then the Kid is reloaded; 4:2052 makes him type 1,
+  draw mode 0x30, SEQS 2 (sound 260, song 290). The port keeps the body as
+  `FinalMagic.body` rather than in the room bank (an exception noted under
+  the relocation's call sites); the shift and the shadow's record match.
+- Rejoining 4:25ce (from 6:0b5a: a lying body, the shadow type 1 with +0x18
+  clear, |4:24b2| <= 2): only when the opponent slot's type is 0 (the
+  body); the body is loaded and removed (RemoveChar 4:48f8), the shadow
+  reloaded and made type 0, draw mode 0, +0x18 = 1, SEQS 231. The Prince
+  keeps the shadow's own life and X, as `Final.rejoin_body` does; the
+  body's drained life is never read.
+- CutToKidRoom 4:2338 (a dead shadow): the body's record becomes the Kid
+  (index 10, draw mode 0) with the dead shadow's life, capacity and delta
+  (a5-0x50b4/-50b2/-50b0), as `Final.shadow_died` copies the body's state
+  and keeps the player's life.
+- AllOtherJaffarsShimmerAway 9:090e: for each slot of the opponent's room
+  bank, LoadShad; type 6, index other than the opponent's, pose 15 ->
+  SEQS 240, SaveChar; the Kid record is restored. `final_tower.shimmer_others`.
+- 9:19fa: column 17, X 1132, row -3 (Y -254), the facing of path position
+  0 (a5-0x2a02), +0x22 of its opp-info record cleared, SEQS 2, one AnimChar,
+  UpdateOppInfo 6:30b0. `Combat._transfer_final_jaffar`.
+
+These are short straight-line routines read against the port, not CPU
+probes.
 
 ## CODE 9, by the symbols
 

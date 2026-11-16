@@ -88,14 +88,16 @@ rejects a wrong model:
    (`tools.probe_final_path`, 6,000 cases; CharDistance's life gate fixed).
 2. 9:1526 (room-6 strikes, dissolves, SEQS 240 for the last copy, and the
    9:090e/19fa hand-off). **9:1526 done 2026-11-16** (`tools.probe_final_copies`,
-   6,000 cases, no difference); 9:090e and 9:19fa are not probed.
+   6,000 cases, no difference); 9:090e and 9:19fa read against the port
+   (straight-line, they match; ledger), not CPU-probed.
 3. The magic rules: 4:1fb2 (turns), 4:2046 (the eighth-turn test), 4:2174
    (flashes), 4:2206 LeaveBody, 4:1f1e and 4:24b2 (lying down and rejoining),
    4:25ce and 4:2338. **4:1fb2, 4:2046, 4:2174, 4:250a and 4:2590 done
    2026-11-16** (`tools.probe_final_magic`; the fatal eighth turn fixed).
    Lying down (4:1f1e with 4:24b2) done 2026-11-16 (`tools.probe_final_body`;
-   the distance before turning fixed). LeaveBody, rejoining and 4:2338 are
-   not probed.
+   the distance before turning fixed). LeaveBody, rejoining and 4:2338 read
+   against the port on 2026-11-16 (they match, apart from the body kept
+   outside the room bank); not CPU-probed.
 4. The fire: 9:2674 (cast), 9:27a0 and 9:25e4 (flight), 9:24ee (hit).
    **Traced 2026-11-16**: the cast and hit already matched; the fire now
    starts in state 2, tests its cell when thrown, restarts on a second cast
