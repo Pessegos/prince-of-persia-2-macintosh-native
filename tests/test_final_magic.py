@@ -308,7 +308,38 @@ class ShadowSceneTests(unittest.TestCase):
         self.assertTrue(self.environment().player_flame())
 
     def test_the_cast_keeps_the_glow_until_its_fire_ends(self):
-        from pop2.final_magic import CAST_SEQUENCE, GLOW_PALETTE, meter_palette
+        from pop2.final_magic import (
+            CAST_SEQUENCE, GLOW_PALETTE, SHADOW_PALETTE, meter_palette)
+        from tools.audit_temple_routes import press
+
+        scene = self.scene
+        player = self.combat.player
+        scene.jump_to_room(6, row=0, x=100, facing=1, reset_guards=False, redraw=False)
+        player.life = player.max_life = 12
+        self.harness.tick(1)
+        self.environment().leave_body()
+        self.harness.tick(20)
+        player.life = player.max_life = 4
+        press(self.harness, 'ctrl', True)
+        self.harness.tick(2)
+        press(self.harness, 'ctrl', False)
+        magic = self.magic()
+        # The cast takes him to 2 (no flame: IsShadowImbued) but the glow
+        # stays while the fire flies (4:210a skips SEQS 242); its end in a
+        # wall loads CTBL 2000 (9:2838-2850).
+        flying = []
+        for _ in range(150):
+            self.harness.tick(1)
+            if magic.fireball is None and flying:
+                break
+            if magic.fireball is not None:
+                flying.append(magic.palette)
+        self.assertEqual(player.life, 2)
+        self.assertTrue(flying)
+        self.assertEqual(set(flying), {GLOW_PALETTE})
+        self.assertEqual(magic.palette, SHADOW_PALETTE)
+        self.assertFalse(self.environment().player_flame())
+
 
         self.assertIsNone(meter_palette(4, 2, CAST_SEQUENCE))
         self.assertEqual(meter_palette(2, 3, CAST_SEQUENCE), GLOW_PALETTE)

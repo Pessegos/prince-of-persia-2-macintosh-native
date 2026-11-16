@@ -157,10 +157,19 @@ rejects a wrong model:
 - The variants: a room-3 detour that drinks a life-enhancement flask; a
   Prince too weak for the eighth turn (collapse, method 17); 2 life or less
   (no cast); a missed fireball, then a healing flask restores the flame;
-  death and retry at the room-4 checkpoint.
+  death and retry at the room-4 checkpoint. **Covered 2026-11-16** by
+  hidden-scene tests (`tests.test_final_copies`, `tests.test_final_magic`).
+  The miss and the flask found two faults, both fixed: the flame ignored
+  mode 13 (4:2590), and the colours did not follow the shadow's life
+  across 2 (ChangeMeters 2:54fa -> 4:210a).
 - The strategy guide's leads (a careless copy kills in one strike, the
   final Jaffar resists the sword, the pursuit reverses after a miss): check
-  each against the code, not the guide.
+  each against the code, not the guide. **Checked 2026-11-16**: CheckStab
+  6:52b8-52ca deals 100 points when either side is type 6 (one strike);
+  9:17ec-17fc takes a drawn sword in reach (SEQS 241) before he casts; and
+  9:16fe flees only from a Prince with more than 2 life (or casting), so
+  after a miss at 2 he closes in until a flask lifts the Prince above 2.
+  All three were already ported.
 
 ### 7. Needs the user's material, not done overnight
 
