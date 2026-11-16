@@ -49,6 +49,19 @@ use `final_magic.shadow_imbued` (`tests.test_final_magic`). The cast's own
 gate (9:2674, life above 2) and the weak palette at the fire's end
 (9:2838-2850) test life only, and stay as they were.
 
+The shadow's colours also follow its life. Every life change goes through the
+delta at Kid +0x22 (DecLifePts 4:34f2), which ChangeMeters 2:54d6 applies;
+for a saved type-1 record in environment 6 it first calls 4:210a: life above
+2 falling to 2 or less loads CTBL 2000, unless the saved SEQS is the cast
+(242, whose fire's end 9:2838 and 4:20b0 set it); life of 2 or less rising
+above 2 loads CTBL 2001. Mode 13 plays no part there. The port had no such
+call, so a flask drunk after a miss left the weak colours (while the flame
+came back), and a shadow drained to 2 kept the glow. `Final.change_meters`
+applies `final_magic.meter_palette` once a tick to the life the previous tick
+left. Hypothesis, not probed: during the body's drain (6:0bcc), which record
+the saved slot holds when ChangeMeters runs; the port treats the drain like
+any other loss of the shadow's life.
+
 ## CODE 9, by the symbols
 
 | Group | Routines | Lines |

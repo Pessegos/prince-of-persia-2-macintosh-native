@@ -284,6 +284,36 @@ class ShadowSceneTests(unittest.TestCase):
         self.assertFalse(jaffar.alive)
         self.assertIsNotNone(scene.intro)
 
+    def test_a_flask_after_a_miss_brings_back_the_glow_and_the_flame(self):
+        # ChangeMeters 2:54fa -> 4:210a: the shadow's life crossing 2 sets
+        # CTBL 2000 or 2001; SetupShadowFlame follows IsShadowImbued.
+        from pop2.final_magic import GLOW_PALETTE, SHADOW_PALETTE
+
+        scene = self.scene
+        scene.jump_to_room(6, row=2, x=4 * 51 + 55, facing=0, reset_guards=False)
+        player = self.combat.player
+        player.life = player.max_life = 5
+        self.harness.tick(1)
+        self.environment().leave_body()
+        self.harness.tick(8)
+        # The falling body takes him from 5 to 2: the weak colours, no flame.
+        magic = self.magic()
+        self.assertEqual((player.life, magic.palette), (2, SHADOW_PALETTE))
+        self.assertFalse(self.environment().player_flame())
+        player.max_life = 4
+        scene.shift_held = True
+        self.harness.tick(40)
+        self.assertEqual(scene.level_map.tile(6, 4, 2).kind, 1)
+        self.assertEqual((player.life, magic.palette), (3, GLOW_PALETTE))
+        self.assertTrue(self.environment().player_flame())
+
+    def test_the_cast_keeps_the_glow_until_its_fire_ends(self):
+        from pop2.final_magic import CAST_SEQUENCE, GLOW_PALETTE, meter_palette
+
+        self.assertIsNone(meter_palette(4, 2, CAST_SEQUENCE))
+        self.assertEqual(meter_palette(2, 3, CAST_SEQUENCE), GLOW_PALETTE)
+        self.assertIsNone(meter_palette(5, 3, 2))
+
     def test_without_life_to_spare_the_shadow_cannot_cast(self):
         from tools.audit_temple_routes import press
 

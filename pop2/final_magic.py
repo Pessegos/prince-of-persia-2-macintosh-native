@@ -91,6 +91,18 @@ def shadow_imbued(life, mode=0):
     return mode == IMBUED_MODE or life > CAST_LIFE
 
 
+def meter_palette(old_life, life, selected):
+    """4:210a, from ChangeMeters 2:54fa for the shadow (type 1) in
+    environment 6: life falling to 2 or less gives CTBL 2000, except during
+    the cast (SEQS 242, whose fire sets it at its end); rising above 2 gives
+    CTBL 2001. None leaves the palette."""
+    if old_life > CAST_LIFE >= life and selected != CAST_SEQUENCE:
+        return SHADOW_PALETTE
+    if old_life <= CAST_LIFE < life:
+        return GLOW_PALETTE
+    return None
+
+
 def glow_palette(life, imbued=False):
     """4:1fdc-1ff6: PoPSetPalette(2000 + IsShadowImbued) on the eighth turn."""
     return GLOW_PALETTE if imbued or shadow_imbued(life) else SHADOW_PALETTE
@@ -144,6 +156,8 @@ class FinalMagic:
     palette: int = GLOW_PALETTE
     # A turn chosen at pose 15 this frame: GenCtrl's 4:2174 ran before it.
     fresh_turn: bool = False
+    # The life ChangeMeters last saw (the saved record's life, a5-0x50b4).
+    meter_life: int | None = None
 
 
 # 9:2880-28d8 starts the fire in state 2 (frame 2, not bursting).

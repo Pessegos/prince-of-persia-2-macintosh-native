@@ -206,7 +206,26 @@ class Final(Environment):
             if scene.start_story_scene('final_spell.json', self.finish_spell, "Jaffar's spell"):
                 scene.intro.code_hooks[9] = self.enter_chess_room
             return
+        self.change_meters()
         self.advance_fireball()
+
+    def change_meters(self):
+        """ChangeMeters 2:54d6-54fa -> 4:210a: the shadow's colours follow
+        its life across 2 (a flask after a miss brings the glow back)."""
+        from pop2.final_magic import meter_palette
+
+        scene = self.scene
+        caverns = getattr(scene.game, 'caverns', None)
+        magic = getattr(caverns, 'final_magic', None)
+        combat = getattr(scene, 'combat', None)
+        if magic is None or combat is None:
+            return
+        life, old = combat.player.life, magic.meter_life
+        magic.meter_life = life
+        if magic.shadow and old is not None and old != life:
+            palette = meter_palette(old, life, scene.sequence_state.selected_sequence_id)
+            if palette is not None:
+                magic.palette = palette
 
     # The Prince's magic (pop2.final_magic): turns, shadow, body and fire.
     # The state lives on the level's environment record, since an
