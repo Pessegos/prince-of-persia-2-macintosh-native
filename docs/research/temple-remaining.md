@@ -93,6 +93,14 @@ supplied life. Each defect found gets its own trace, fix and regression.
   `altar` left the scene peaceful, so a hostile replay through it ran its
   second half without opponents; it now restores the mode.
   `tests.test_temple_routes`.
+- Level 11 with opponents on (2026-11-16, not finished): the peaceful
+  route meets several birdheads in native room 23 (row 1) while running;
+  a new `engage` macro (run until on guard, then `duel`) gets past them
+  (life 11 -> 3). A one-hour search from there reached 18 of the route's
+  20 room waypoints. In native room 26 (row 1) a birdhead stands between
+  the Prince and the closed right gate (26:19) and takes three more points;
+  he then dies at room 28's blades with one left. The user suspects a
+  room-26 fault there; to be looked at before searching again.
 
 ### 3. Level 12: the landing beside the flaming sword
 

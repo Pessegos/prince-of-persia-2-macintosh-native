@@ -307,6 +307,19 @@ def guard_duel(reach, every, limit=600):
     return duel
 
 
+def engage(side, reach=70, every=6, limit=60):
+    """Run towards a guard until the Prince is on guard, then ``guard_duel``:
+    for a fight met while running (level 11's room 23 sends several)."""
+    def macro(harness):
+        press(harness, side, True)
+        for _ in range(limit):
+            harness.tick()
+            if 150 <= harness.player()['action'] < 180:
+                break
+        press(harness, side, False)
+        guard_duel(reach, every)(harness)
+    return macro
+
 def play(harness, script):
     """Runs (keys down, keys up, ticks) steps, or a scripted event."""
     if callable(script):
@@ -389,6 +402,7 @@ def macros():
     result['swordduel'] = sword_duel
     result['swordpass'] = sword_pass
     result['duel'] = guard_duel(60, 6)
+    result['engageL'], result['engageR'] = engage('L'), engage('R')
     result['duelfar'] = guard_duel(70, 8)
     result['drink'] = [(('shift',), (), 26), ((), ('shift',), 1)]
     # Level 11's plate 12:4 gives about a hundred frames to reach gate 6:19,
@@ -403,7 +417,7 @@ def macros():
 MACROS = macros()
 # Fewer run lengths for the search; a replay can name any of MACROS.
 SEARCHED = {name: script for name, script in MACROS.items()
-            if not name.startswith(('rush', 'hopshort', 'strike', 'sword', 'duel', 'wake'))
+            if not name.startswith(('rush', 'hopshort', 'strike', 'sword', 'duel', 'wake', 'engage'))
             and not any(name.endswith(suffix) for suffix in ('R7', 'L7', 'R9', 'L9', 'R13', 'L13',
                                                              'R15', 'L15', 'R16', 'L16', 'R28', 'L28'))}
 
