@@ -18,8 +18,11 @@ DIRECTIONS = {'left': (-1, 0), 'right': (1, 0), 'up': (0, -1), 'down': (0, 1)}
 
 # Level six: native rooms 28 and 14 are never visited (the cliff's left cut
 # lands in room 3, S07_373E) and room 10 has no tiles at all; the cliff is
-# drawn beside room 1 instead.
-HIDDEN_ROOMS = {6: (27, 13, 9, 23, 25), 8: (26, 25, 14, 6), 9: (22, 21)}
+# drawn beside room 1 instead. At the user's request the map also omits
+# level 13's room 14 and level 14's rooms 9 and 10 (all dead-end rooms, so
+# no other room loses its place); their links and gameplay are unchanged.
+HIDDEN_ROOMS = {6: (27, 13, 9, 23, 25), 8: (26, 25, 14, 6), 9: (22, 21),
+                13: (13,), 14: (8, 9)}
 DETACHED_STARTS = {6: (0, (1, 0))}
 
 

@@ -308,13 +308,13 @@ class ImportedDevelopmentMapTests(unittest.TestCase):
         positions = room_positions(LevelMap(level.data))
         _art, actors = map_enemies(level, positions)
         self.assertEqual({room + 1: len(items) for room, items in actors.items() if items},
-                         {6: 4, 10: 1, 11: 1})
+                         {6: 4, 11: 1})  # Room 10 is omitted from the map.
         self.assertEqual({(actor.state.sequence_id, actor.state.action)
                           for items in actors.values() for actor in items},
-                         {(2, 15), (77, 166), (197, 297)})
+                         {(2, 15), (197, 297)})
         atlas = build_development_map(level)
-        self.assertEqual(len(atlas.rooms), 10)
-        self.assertEqual(atlas.enemy_rooms, {'Room 6', 'Room 10'})
+        self.assertEqual(len(atlas.rooms), 8)
+        self.assertEqual(atlas.enemy_rooms, {'Room 6'})
 
     def test_final_overview_places_tower_descent_above_first_mental_room(self):
         if not all((ASSET_DIR / name).is_file() for name in ('Final.rsrc', 'final_level14.json')):
@@ -326,14 +326,27 @@ class ImportedDevelopmentMapTests(unittest.TestCase):
         positions = room_positions(terrain)
         self.assertEqual(positions[1], (positions[0][0], positions[0][1] + 1))
         self.assertEqual(positions[3], (positions[1][0], positions[1][1] + 1))
-        self.assertEqual(len(set(point for room, point in positions.items() if room != 10)), 10)
+        self.assertEqual(len(set(point for room, point in positions.items() if room != 10)), 8)
+        self.assertNotIn(8, positions)  # The user omitted rooms 9 and 10
+        self.assertNotIn(9, positions)  # from the overview.
         self.assertEqual((terrain.neighbor(0, 'down'), terrain.neighbor(1, 'up')),
                          (1, 0))  # The overview does not modify native links.
         atlas = build_development_map(level)
-        self.assertEqual(set(atlas.rooms), {f'Room {number}' for number in range(1, 11)})
+        self.assertEqual(set(atlas.rooms), {f'Room {number}' for number in range(1, 9)})
+        self.assertEqual((terrain.neighbor(2, 'right'), terrain.neighbor(7, 'up')), (8, 9))
         from pop2.level_rendering import LevelRenderer
 
         self.assertNotIn('Room 11', LevelRenderer(level).screen_entries())
+
+    def test_level13_map_omits_room14(self):
+        from pop2.terrain import LevelMap
+
+        level = self.resources.level(13)
+        terrain = LevelMap(level.data)
+        positions = room_positions(terrain)
+        self.assertNotIn(13, positions)
+        self.assertIn(7, positions)
+        self.assertEqual(terrain.neighbor(7, 'up'), 13)  # Native link kept.
 
     def test_clicking_final_level_draws_its_developer_map(self):
         if not all((ASSET_DIR / name).is_file() for name in ('Final.rsrc', 'final_level14.json')):
@@ -356,7 +369,7 @@ class ImportedDevelopmentMapTests(unittest.TestCase):
                                           bottom + (level - menu.popup_start) * menu.OPTION_HEIGHT + 5))
         self.assertEqual(menu.level_number, 14)
         self.assertTrue(menu.map_enabled)
-        self.assertEqual(len(menu.map_preview.rooms), 10)
+        self.assertEqual(len(menu.map_preview.rooms), 8)
         self.assertEqual(scene.game.level.number, 13)
 
     def test_warmed_maps_open_from_the_cache_without_rebuilding(self):
