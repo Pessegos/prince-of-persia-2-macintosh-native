@@ -2502,7 +2502,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         environment.queue_songs(audio)
         if audio is None:
             return
-        if self.sequence_state.action == 167:
+        if self.parry_clash_sounds():
             self.sequence_state.sound_events.append(10)
         elif self.sequence_state.action == 154:
             # TestStrike 6:5876-588a / 5b00-5b1c also sounds an empty swing.
@@ -2519,9 +2519,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
                         # including one queued on this very impact frame.
                         audio.stop_sound(30)
                         motion.scream_played = False
-                    if guard.state.action == 167:
-                        guard.state.sound_events.append(10)
-                    elif guard.state.action == 154 and contact_allowed(guard, self.combat.player):
+                    if guard.state.action == 154 and contact_allowed(guard, self.combat.player):
                         # NPCs use 6:5ab4-5af8, after the valid-target gate.
                         guard.state.sound_events.append(11)
                     audio.drain(guard.state, not self.peaceful and guard.room == self.room_id)
@@ -2531,6 +2529,18 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         if motion is not None:
             environment.ambient_audio(audio, motion)
         audio.flush()
+
+    def parry_clash_sounds(self):
+        """AddSFX 5:4cee-4d40: one sound 10 a frame, for the Prince at the
+        parried-strike pose 167, else for his target (a5-0x5098) at 167
+        unless it is a type 7/8 actor. No room test: a target fighting
+        across a room edge still clashes."""
+        if self.sequence_state.action == 167:
+            return True
+        combat = self.combat
+        target = getattr(combat, 'target_cache', None) if combat is not None else None
+        return (target is not None and target.state.action == 167
+                and target.state.actor_type not in (7, 8))
 
     def restart_after_death(self, *, preserve_controls=False):
         if not self.death.can_restart:

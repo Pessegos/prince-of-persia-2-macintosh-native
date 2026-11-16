@@ -2458,8 +2458,13 @@ class CombatEncounter:
                 else:
                     # TestStrike 6:5a48: a blocked Prince targets the blocker.
                     self.target_cache = defender
-                events.append(CombatEvent("parry", target_name,
-                                          sound=FLAME_PARRY_CUE if flame is not None else None))
+                # TestStrike 6:5ac6-5adc: with the defender now at 161 the
+                # strike sound 11 is skipped unless the defender is a type
+                # 7/8 actor. The clash itself is AddSFX's sound 10 for the
+                # attacker's pose 167 (scene advance_audio).
+                sound = (FLAME_PARRY_CUE if flame is not None
+                         else 11 if defender.state.actor_type in (7, 8) else 0)
+                events.append(CombatEvent("parry", target_name, sound=sound))
             elif attacker.state.action == 154:
                 attacker.contact_consumed = True
                 low, high = strike_range(attacker, defender)

@@ -745,6 +745,39 @@ class GuardCombatTests(unittest.TestCase):
                 self.assertEqual(c.guard.state.action, 161)
                 self.assertEqual(c.parry_timer, 0)
 
+    def test_parry_contact_is_silent_for_ordinary_defenders(self):
+        # TestStrike 6:5ac6-5adc skips strike sound 11 once the defender is
+        # at 161, unless the defender is a type 7/8 actor. The port used to
+        # sound 11 on every parry.
+        for defender_type, sound in ((0, 0), (2, 0), (7, 11), (8, 11)):
+            with self.subTest(defender_type=defender_type):
+                c = self.encounter()
+                c.guard.state.action = 154
+                c.player.state.action = 150
+                c.player.state.actor_type = defender_type
+                events = c.resolve_contacts()
+                self.assertEqual([(e.kind, e.sound) for e in events], [('parry', sound)])
+
+    def test_parry_clash_follows_the_prince_or_his_target_in_any_room(self):
+        # AddSFX 5:4cee-4d40: sound 10 for the Prince at 167, else for his
+        # target (a5-0x5098) at 167 unless it is type 7/8; no room test.
+        # The port used to drain a guard's 10 only in the Prince's room.
+        scene = self.scene()
+        guard = scene.combat.guard
+        scene.combat.target_cache = guard
+        guard.room = scene.room_id + 1
+        scene.sequence_state.action = 158
+        guard.state.action = 167
+        self.assertTrue(scene.parry_clash_sounds())
+        guard.state.actor_type = 7
+        self.assertFalse(scene.parry_clash_sounds())
+        scene.sequence_state.action = 167
+        self.assertTrue(scene.parry_clash_sounds())
+        scene.sequence_state.action = 158
+        guard.state.actor_type = 2
+        scene.combat.target_cache = None
+        self.assertFalse(scene.parry_clash_sounds())
+
     def test_guard_death_uses_original_offsets_and_terminal_corpse(self):
         c = self.encounter()
         c.player.state.action = 154
