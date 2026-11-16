@@ -251,6 +251,23 @@ def sword_duel(harness, limit=400):
     press(harness, 'R', False)
 
 
+def sword_pass(harness, limit=200):
+    """Level 12, as the Macintosh video plays it (02:33-02:36): the same leap
+    as ``swordduel``, then, as soon as the resting sword starts to rise, the
+    Prince draws and advances east over it, so that it ends behind him,
+    and puts his sword away."""
+    play(harness, [(('R',), (), 1), (('up',), (), 3), ((), ('up',), 14), ((), ('R',), 1)])
+    scene = harness.scene
+    for _ in range(limit):
+        swords = [guard for guards, _points in scene.combat.room_encounters.values() for guard in guards
+                  if guard.flame_sword is not None and guard.room == scene.terrain_motion.room]
+        if swords and swords[0].state.selected_sequence_id != 105:
+            break  # SEQS 106: it rises.
+        harness.tick()
+    play(harness, [((), (), 3), (('ctrl',), (), 2), ((), ('ctrl',), 6)]
+         + [(('R',), (), 2), ((), ('R',), 6)] * 7 + [(('down',), (), 10), ((), ('down',), 1)])
+
+
 def guard_duel(reach, every, limit=600):
     """A sword fight on the Prince's floor until his opponent there falls:
     up while the guard winds up a strike (pose 152), otherwise a stab every
@@ -357,6 +374,7 @@ def macros():
     result['hopshortR'] = [(('up', 'R'), (), 3), ((), ('up',), 6), ((), ('R',), 1)]
     result['strike'] = [((), (), 3)] + [(('ctrl',), (), 2), ((), ('ctrl',), 4)] * 10 + [((), (), 40)]
     result['swordduel'] = sword_duel
+    result['swordpass'] = sword_pass
     result['duel'] = guard_duel(60, 6)
     result['duelfar'] = guard_duel(70, 8)
     result['drink'] = [(('shift',), (), 26), ((), ('shift',), 1)]
@@ -372,7 +390,7 @@ def macros():
 MACROS = macros()
 # Fewer run lengths for the search; a replay can name any of MACROS.
 SEARCHED = {name: script for name, script in MACROS.items()
-            if not name.startswith(('rush', 'hopshort', 'strike', 'swordduel', 'duel'))
+            if not name.startswith(('rush', 'hopshort', 'strike', 'sword', 'duel'))
             and not any(name.endswith(suffix) for suffix in ('R7', 'L7', 'R9', 'L9', 'R13', 'L13',
                                                              'R15', 'L15', 'R16', 'L16', 'R28', 'L28'))}
 

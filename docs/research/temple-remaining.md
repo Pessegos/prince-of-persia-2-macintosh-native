@@ -100,6 +100,20 @@ horizontal speed of SEQS 21 off the edge and SEQS 20's hold) is what
 would show whether the original lands past the sword or simply lands
 softer; no rule is changed until then.
 
+**Answered 2026-11-16 from the user's video** (`Macintosh Level 12.mp4`,
+152.6-158.6 s, frames scaled to 512x384 beside the port's frames). The
+original lands in the same place: crouched just left of the resting sword,
+the sword's picture and the Prince's crouch within two or three pixels of
+the port's. The crouch lasts about as long, and the sword starts to rise
+about a second after he stands, as in the port. The difference is the
+keys: the player draws and advances east over the sword while it rises, so
+its flames come up behind him (west) and he turns, backs east and runs on
+to room 12. The port's replay waited, so the sword rose between him and the
+east. A new `swordpass` macro does what the video does, and the port lets
+him pass and reach room 12 alive (`tests.test_temple_routes`). No rule
+differs; parrying it down stays the full route's choice, as its later
+macros rely on the sword resting.
+
 ### 4. Level 13's altar
 
 - Killing the altar birdhead makes the original unfinishable, from the

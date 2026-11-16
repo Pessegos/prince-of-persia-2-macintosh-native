@@ -185,6 +185,21 @@ class TempleRouteTests(unittest.TestCase):
         self.assertEqual(trace[-1][1:4], (18, 1, 9))
         self.assertTrue(trace[-1][-1], trace[-3:])
 
+    def test_level_12s_flaming_sword_can_be_passed_as_in_the_video(self):
+        # The video (02:33-02:36) lands where the port lands, crouched just
+        # left of the resting sword, and the sword wakes about as late. The
+        # player draws and advances east over it while it rises, so it ends
+        # behind him and he runs on to room 12. Parrying it down is only the
+        # port route's choice.
+        route = LEVEL_12_VIDEO[:LEVEL_12_VIDEO.index('swordduel')] + ['swordpass', 'runR20']
+        _reached, trace, harness = replay(12, route, draw=False, peaceful=False, life=LEVEL_12_VIDEO_LIFE)
+        self.addCleanup(harness.close)
+        self.assertEqual(trace[-1][1:3], (12, 0), trace[-3:])
+        self.assertTrue(trace[-1][-1])
+        sword = next(guard for guards, _points in harness.scene.combat.room_encounters.values()
+                     for guard in guards if guard.flame_sword is not None)
+        self.assertEqual(sword.room + 1, 7)
+
     def test_level_12_is_finished_along_the_macintosh_video_route(self):
         corpse = []
 

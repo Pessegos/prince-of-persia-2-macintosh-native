@@ -187,7 +187,10 @@ These differences come from the keys, not from a known rule difference:
 - In the video the Prince runs east with the sword behind him. In the port he
   lands eight pixels to its left, it pushes him back towards the edge, and
   fleeing failed in every tried timing. Parrying it down is the port route.
-  Where the port's landing differs from the native one is not measured.
+  Measured on 2026-11-16 against the video's frames: the landing does not
+  differ. The video's player draws and advances over the sword while it
+  rises, so it ends behind him; the port allows the same (`swordpass`,
+  [temple queue](temple-remaining.md) item 3).
 - Gate 5:1 is passed while open, from plate 4:27; the slab of 4:17 is not
   kept on it.
 - No exact native timings, audio or hidden state are compared. This is a
@@ -195,9 +198,9 @@ These differences come from the keys, not from a known rule difference:
 
 ## Next bounded work for Claude
 
-*Done on 2026-11-14 for the port (above). Still open: where the native
-Prince lands beside the flaming sword, and the native timing of the three
-fights. The original task text follows.*
+*Done on 2026-11-14 for the port (above). The landing beside the flaming sword
+was compared with the video on 2026-11-16 (it matches). Still open: the
+native timing of the three fights. The original task text follows.*
 
 Reproduce the early room-8 ceiling escape and the northern guard/slab puzzle
 from a fresh level load with opponents enabled throughout. Record actual
