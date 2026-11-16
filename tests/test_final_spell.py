@@ -86,5 +86,26 @@ class SoundAfterTests(unittest.TestCase):
         self.assertAlmostEqual(player.time, started[0][0] + 3.0, delta=0.2)
 
 
+    def test_a_code_hook_runs_as_its_tagged_step_starts(self):
+        # Room 4's enter hook (CODE 9:1ab4-1afe) adds ChessRm before its
+        # WaitSndId(30500, 1), so the song plays during the black hold.
+        from unittest.mock import Mock
+
+        audio = {scene_sound_key(30500, 1): {'duration': 3.0, 'markers': {}}}
+        operations = [{'op': 'sound', 'args': [30500, 1]}, {'op': 'wait', 'args': [30]},
+                      {'op': 'wait_sound', 'args': [30500, 1], 'code': 9}]
+        assets = Mock(program={'operations': operations, 'audio': audio}, shapes={}, palettes={})
+        player = IntroPlayer(assets)
+        calls = []
+        player.code_hooks[9] = lambda: calls.append(round(player.time, 1))
+        player.advance(0.2)
+        self.assertEqual(calls, [])
+        player.advance(1)
+        self.assertEqual(calls, [0.5])
+        self.assertFalse(player.done)
+        player.advance(5)
+        self.assertTrue(player.done)
+        self.assertEqual(calls, [0.5])
+
 if __name__ == '__main__':
     unittest.main()

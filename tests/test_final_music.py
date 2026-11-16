@@ -81,6 +81,30 @@ class LevelFourteenMusicTests(unittest.TestCase):
         self.environment.ambient_audio(self.audio, self.scene.terrain_motion)
         self.audio.add_song.assert_not_called()
 
+    def test_chessrm_starts_before_the_spell_scenes_last_wait(self):
+        # 9:1ab4-1afe: room 4's hook adds ChessRm, then WaitSndId(30500).
+        # The port runs it inside the scene (`code_hooks[9]`) and keeps the
+        # song through the return to room 4 without asking for it again.
+        scene, audio = self.scene, self.audio
+        scene.audio = audio
+        self.environment.enter_chess_room()
+        audio.add_song.assert_called_once_with(CHESS, ambient=True)
+        audio.flush.assert_called_once()
+        audio.song_playing.side_effect = lambda cue: cue == CHESS
+        audio.music_busy = True
+        audio.reset.reset_mock()
+        audio.add_song.reset_mock()
+        self.environment.finish_spell()
+        self.assertEqual(scene.room_id, 3)
+        audio.reset.assert_called_once_with(keep_music=True)
+        self.environment.ambient_audio(audio, scene.terrain_motion)
+        audio.add_song.assert_not_called()
+        # With the music off nothing is added and the room's reset is full.
+        audio.music_enabled = False
+        audio.add_song.reset_mock()
+        self.environment.enter_chess_room()
+        audio.add_song.assert_not_called()
+
     def test_the_themes_are_imported(self):
         from pop2.audio import AudioEngine
         from pop2.music_cues import FINAL_SONGS

@@ -134,7 +134,8 @@ rejects a wrong model:
 - KeepTime's trobs for crystal and gargoyle cells on the neighbouring rooms'
   edges, with their Rnd draws.
 - The ChessRm song starts about two seconds later than on the Macintosh
-  (the room-4 wait).
+  (the room-4 wait). **Done 2026-11-16**: it starts as the scene's last
+  wait begins (`IntroPlayer.code_hooks`, `Final.enter_chess_room`).
 
 ### 6. Whole-route regressions
 

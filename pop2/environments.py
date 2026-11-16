@@ -203,7 +203,8 @@ class Final(Environment):
         room, right_edge, animation = getattr(scene, 'final_saved_prince', (-1, 0, 4))
         if not (room != 1 or right_edge > 486 or animation == 4
                 or not scene.combat.player.alive):
-            scene.start_story_scene('final_spell.json', self.finish_spell, "Jaffar's spell")
+            if scene.start_story_scene('final_spell.json', self.finish_spell, "Jaffar's spell"):
+                scene.intro.code_hooks[9] = self.enter_chess_room
             return
         self.advance_fireball()
 
@@ -770,15 +771,36 @@ class Final(Environment):
         frame.paste(sprite, (ball.x - sprite.width // 2, ball.y - sprite.height // 2), sprite)
         return frame
 
+    def enter_chess_room(self):
+        """Room 4's enter hook 9:1ab4-1afe inside the spell scene: ChessRm
+        is added before WaitSndId(30500, 1) holds the black screen, so it
+        plays during the wait."""
+        from pop2.final_music import CHESS
+
+        scene = self.scene
+        audio = getattr(scene, 'audio', None)
+        if audio is None or not audio.music_enabled:
+            return
+        audio.add_song(CHESS, ambient=True)
+        audio.flush()
+        # The room's entry request has been made (Final.ambient_audio).
+        scene.final_music_room = 3
+
     def finish_spell(self):
+        from pop2.final_music import CHESS
+
         scene = self.scene
         # CODE 9:071a-075e calls PlayNIS(5), then 9:05d2 selects SEQS 55
         # in native room 4, row 1, column 5, native X 484 (port X 277),
         # facing word 0 (9:05de): right, the port's facing 1.
         life, capacity = scene.combat.player.life, scene.combat.player.max_life
         mode = scene.sequence_state.sequence_mode
+        audio = getattr(scene, 'audio', None)
+        chess = audio is not None and audio.song_playing(CHESS)
         scene.jump_to_room(3, row=1, x=scene_x(484), facing=1,
-                           reset_guards=False, redraw=False)
+                           reset_guards=False, redraw=False, keep_music=chess)
+        if chess:
+            scene.final_music_room = 3
         scene.combat.player.life, scene.combat.player.max_life = life, capacity
         scene.sequence_state.sequence_mode = mode
         scene.start_sequence(55)

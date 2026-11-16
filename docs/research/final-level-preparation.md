@@ -1066,9 +1066,15 @@ expanded DATA gives kinds 25-27 (rooms 3-5) the 9:1a90 entry, kinds 28-30
 CTBL 3503 hook). Rooms 9 and 10 have no CUST resource, so no hook runs there
 and room 10 gets no Crystal.
 
-Exclusion: ChessRm starts after the room-4
-wait below, about two seconds later than the Macintosh, whose hook adds it
-before waiting.
+ChessRm and the room-4 wait (corrected 2026-11-16): the hook adds ChessRm
+before WaitSndId(30500, 1), so it plays during the black hold. The port's
+scene step for that wait carries `code: 9`; `IntroPlayer.code_hooks[9]`
+runs `Final.enter_chess_room` as the step starts (add the song and flush
+it), and `finish_spell` keeps the playing song through the jump to port
+room 3 without asking for it again. Earlier the song started after the
+wait, about two seconds later than on the Macintosh.
+`tests.test_final_spell` and `tests.test_final_music` check the hook,
+the kept song and the music switch.
 
 ### The spell's last sound and room 4's wait (2026-11-15)
 

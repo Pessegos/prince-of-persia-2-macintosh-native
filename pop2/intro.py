@@ -400,6 +400,9 @@ class IntroPlayer:
         self.timers, self.playing = {}, {}
         self.sound_after_done = False
         self.carried_music = {}
+        # Game code that runs inside a scene step (an operation's 'code'
+        # tag, e.g. CODE 9's room-4 enter hook before its closing wait).
+        self.code_hooks = getattr(self, 'code_hooks', {})
         if music is not None:
             cue, played, metadata = music
             self.sounds = {**self.sounds, str(cue): metadata}
@@ -934,6 +937,9 @@ class IntroPlayer:
                 self.wait_until = self.transition[1] + self.transition[2]
                 continue
             self.position += 1
+            hook = self.code_hooks.get(item.get("code"))
+            if hook is not None:
+                hook()
             self.execute(item["op"], self.followed(item))
 
     def next_update_delay(self):
