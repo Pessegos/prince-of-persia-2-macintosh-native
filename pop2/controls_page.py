@@ -228,7 +228,7 @@ LINE = (132, 130, 128)  # over the panel; over a light shell the finish's ink
 # Where each side's brackets stand, from the pad's left edge, and how wide
 # a label may be beside its icon.
 BRACKET_X = {'left': -6, 'right': PAD_WIDTH + 5}
-LABEL_WIDTH = 76
+LABEL_WIDTH = 80  # "Time left", the longest, at its own width
 
 
 def line_pixels(points):
@@ -259,7 +259,8 @@ def draw_callout(image, points, art, origin):
 class ControlsPage:
     PANEL = centered_panel(470, 350)
     TABS = ((150, 38, 252, 60), (260, 38, 362, 60))
-    BUTTONS = ((100, 318, 250, 344), (262, 318, 412, 344))
+    # Wide enough for "Change buttons..." at its own width: a squeezed label loses columns.
+    BUTTONS = ((74, 318, 250, 344), (262, 318, 438, 344))
     # Its label is centred under the status line; the check box stands to the left of it.
     TOGGLE = (169, 286, 325, 304)
     ROW_TOP = 52
@@ -682,7 +683,7 @@ class ControlsPage:
                 token = bindings.slots[action][slot]
                 cx = (rect[0] + rect[2]) // 2
                 if listening:
-                    text('Press a key...' if keyboard else 'Press a button...', cx, rect[1] + 5, c(GOLD),
+                    text('Press a key' if keyboard else 'Press...', cx, rect[1] + 5, c(GOLD),
                          'center', rect[2] - rect[0] - 8)
                 elif token is None:
                     text('-', cx, rect[1] + 9, c('#5a5a5a'), 'center')

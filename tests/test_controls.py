@@ -1042,6 +1042,41 @@ class CopyProtectionKeyTests(unittest.TestCase):
         self.assertEqual(host.copy_challenge.focus, 0)
 
 
+class ControlsPageFontTests(unittest.TestCase):
+    """Labels in the game's own font, at its own width."""
+
+    def setUp(self):
+        from tests.test_terrain import RooftopSceneTests
+        RooftopSceneTests.setUp(self)
+
+    def test_no_label_is_squeezed_to_fit(self):
+        # A label squeezed with NEAREST loses a column in every few: in "Change
+        # buttons..." two of the three dots lost one and the first kept its own.
+        resize = Image.Image.resize
+        squeezed = []
+
+        def watch(image, size, *args, **kwargs):
+            if size[1] == image.height and size[0] < image.width:
+                squeezed.append((image.width, size[0]))
+            return resize(image, size, *args, **kwargs)
+
+        font, viewport = self.scene.ui_font, self.scene.native_viewport
+        for style in ('xbox', 'playstation', 'nintendo'):
+            page = ControlsPage(Bindings('keyboard'), Bindings('controller'),
+                                pads=(PadState(1, 'Pad', style),))
+            for device in ('keyboard', 'controller'):
+                page.device = device
+                for view in ('overview', 'remap'):
+                    page.view = view
+                    for listening in (None, (page.bindings.actions[0], 0)):
+                        page.listening = listening
+                        squeezed.clear()
+                        with self.subTest(style=style, device=device, view=view, listening=bool(listening)):
+                            with patch.object(Image.Image, 'resize', watch):
+                                page.draw(viewport, font)
+                            self.assertEqual(squeezed, [])
+
+
 class SceneTests(unittest.TestCase):
     """The real game: chosen keys and a controller act exactly like the keyboard."""
 
