@@ -26,7 +26,7 @@ class CoverCompositionTests(unittest.TestCase):
 @unittest.skipUnless(all((ASSET_DIR / c.program).is_file() for c in CHAPTERS),
                      'Imported story programs required')
 class ImportedSelectedCoverTests(unittest.TestCase):
-    def test_covers_match_the_users_nine_supplied_crops(self):
+    def test_covers_match_the_users_eleven_supplied_crops(self):
         # RGB hashes of the independently supplied PNGs fitted into 1024x576,
         # without an additional crop. No game artwork is stored in tests.
         expected = {
@@ -39,9 +39,8 @@ class ImportedSelectedCoverTests(unittest.TestCase):
             'vision': '1e9d3b5622f8ab3ef2e6cef761bee08f3aa38fe5cefd607c257d9f2595762c13',
             'horse': '819555f6e2869d00d8e056c8561de5d499d47695d7d14f08999cb3f5fd9190b0',
             'tower': 'f367390ae6137ab0551769108e4f15146cbd07581789af9eb7fae9fd2bb24748',
-            # Provisional level-14 covers, not yet chosen by the user.
-            'spell': '3d51c2ee4b8ff0f09eba2981bd5202f84cce921721ea5c4a65e110de832d491b',
-            'happy': '394948e5a5ad1d6b81fc8b2fd1831d448591e970264079b5147a82f0bba212f6',
+            'spell': 'e385a0476ffa1fae58770c53f245585f07ff7d16848d6722bcc4b28b15d864ea',
+            'happy': '0526bdcfd3a3fc12c8db28256896f90378d23bae6dcb6a1d0fb108605c8d3c68',
         }
         self.assertEqual(set(COVER_SHOTS), {c.key for c in CHAPTERS})
         provider = ChapterPreviews(None, (), None, 'unused')

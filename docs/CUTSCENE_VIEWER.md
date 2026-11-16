@@ -66,8 +66,8 @@ Escape from the opening, voyage after level 1,
 discovery after level 3, carpet flight after level 5, The Mother's Vision in
 level 8, the horse ride after level 9, the flight after level 13, The Mental
 Battle (Jaffar's spell, NIS 5, in level 14) and The Happy Ending? (NIS 11 after
-Jaffar falls). These are port chapter labels. The two level-14 covers are
-provisional frames until the user chooses them. The vision is the mother's; its persistent collection key
+Jaffar falls). These are port chapter labels. All eleven covers are the
+user's chosen crops (`pop2/cutscene_covers.py`). The vision is the mother's; its persistent collection key
 remains `vision`. Recurring tree scenes, the gameplay demo and attract
 credits are not part of the collection. Adding an implemented story program
 to the catalog gives it a card and a replay automatically; scenes started

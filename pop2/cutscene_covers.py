@@ -18,10 +18,8 @@ COVER_SHOTS = {
     'vision': (23, (0, 625, 4080, 2920)),
     'horse': (2, (0, 0, 4080, 2295)),
     'tower': (5, (0, 0, 4080, 2295)),
-    # Provisional, awaiting the user's choice: the guards by the bed, and
-    # the ride above the clouds.
-    'spell': (5, (0, 768, 4096, 3072)),
-    'happy': (38, (0, 0, 4096, 2304)),
+    'spell': (6.5, (0, 777, 4080, 3072)),
+    'happy': (39, (0, 284, 4080, 2579)),
 }
 
 
