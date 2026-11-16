@@ -137,12 +137,16 @@ class Harness:
             scene.guard_art, scene.resources, scene.sequences, scene.frames)}
 
     def save(self):
-        return copy.deepcopy(self.scene.game, self.shared()), self.controls()
+        # The clock too: the opponents' step (Combat.step) compares it with
+        # the saved last_guard_at, so a copy restored at a later time would
+        # skip or repeat their frames and no fresh replay could follow it.
+        return copy.deepcopy(self.scene.game, self.shared()), self.controls(), self.clock.now
 
     def restore(self, saved):
         scene = self.scene
         game = copy.deepcopy(saved[0], self.shared())
         vars(scene).update(copy.deepcopy(saved[1]))
+        self.clock.now = saved[2]
         scene.game = game
         scene.level_map, scene.physics = game.level_map, game.physics
         scene.sequence_runtime, scene.sequence_state = game.runtime, game.runtime.state

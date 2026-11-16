@@ -91,6 +91,31 @@ class TempleRouteTests(unittest.TestCase):
                 harness.close()
                 self.assertTrue(reached, trace[-3:])
 
+    def test_a_restored_search_copy_plays_on_as_a_fresh_load_does(self):
+        # With opponents on, Combat.step reads the clock against the saved
+        # last_guard_at: a copy restored later must bring its clock back.
+        route = ['leapcatchL8', 'hopR', 'leapR14', 'leapR11']
+
+        def run(detour):
+            harness = Harness(10, peaceful=False)
+            try:
+                harness.number = 10
+                settle(harness, 300)
+                for name in route:
+                    if detour:
+                        saved = harness.save()
+                        play(harness, MACROS['runR20'])
+                        harness.restore(saved)
+                    play(harness, MACROS[name])
+                    settle(harness)
+                guards = harness.scene.combat.active_guards()
+                return harness.player(), [(guard.state.target_x, guard.state.action)
+                                          for guard in guards]
+            finally:
+                harness.close()
+
+        self.assertEqual(run(True), run(False))
+
     def test_level_12s_loose_floors_hold_their_gates_open(self):
         _reached, trace, harness = replay(12, LEVEL_12_GATES, draw=False)
         self.addCleanup(harness.close)
