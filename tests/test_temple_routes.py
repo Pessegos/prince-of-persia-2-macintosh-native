@@ -79,6 +79,12 @@ LEVEL_12_VIDEO = [
 # its own starts with three, too few for the flaming sword.
 LEVEL_12_VIDEO_LIFE = 12
 
+# Searched with opponents on (2026-11-16, life 12 supplied as for level 12):
+# past the room-11 birdhead, which follows him into room 8, then the route's
+# second half. It costs six life points; with three he dies in room 11.
+LEVEL_10_HOSTILE = ['leapL5', 'runR20', 'leapR20', 'leapR5', 'crawlL', 'crawlR', 'crawlR', 'crawlL',
+                    'hopL', 'leapcatchR5', 'leapcatchR5', 'leapR5', 'hopcatchR', 'leapR5', 'hopcatchL']
+
 INSTALLED = all(blades_exported(number) for number in (10, 11, 12, 13))
 
 
@@ -147,6 +153,13 @@ class TempleRouteTests(unittest.TestCase):
                 break
         self.assertTrue(harness.goal(), harness.player())
         self.assertEqual(set(modes), {13})
+
+    def test_level_10_is_finished_with_opponents_on(self):
+        reached, trace, harness = replay(10, LEVEL_10_HOSTILE, draw=False, peaceful=False,
+                                         life=LEVEL_12_VIDEO_LIFE)
+        self.addCleanup(harness.close)
+        self.assertTrue(reached, trace[-3:])
+        self.assertEqual(trace[-1][1:3], (19, 1))
 
     def test_level_12s_loose_floors_hold_their_gates_open(self):
         _reached, trace, harness = replay(12, LEVEL_12_GATES, draw=False)

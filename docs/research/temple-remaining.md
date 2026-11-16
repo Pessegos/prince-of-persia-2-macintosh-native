@@ -70,6 +70,14 @@ supplied life. Each defect found gets its own trace, fix and regression.
   hang and climb sequences (SEQS 15, 10, 80, 11-20) has a `-21`. The catch
   now keeps the mode (mode 11's immediate release is still not ported).
   `tests.test_temple_routes` (fails on the old code).
+- Level 10 with opponents on: the search (with `duel` among its macros,
+  life 12 supplied) found a 15-macro route from a fresh load that slips past
+  the room-11 birdhead, which follows into room 8; it costs six life points,
+  and with the three of a level loaded alone he dies in room 11.
+  `LEVEL_10_HOSTILE` in `tests.test_temple_routes`. Open: the route's leap
+  from X 395 lands at 622, past the birdhead (570-624); whether the
+  original lets a running jump pass a turning opponent (pose 193) is not
+  traced.
 
 ### 3. Level 12: the landing beside the flaming sword
 
