@@ -119,7 +119,9 @@ rejects a wrong model:
 
 - The shadow's fall off the bottom of the screen (4:3780).
 - The lie-down's native Y - 1, left out to keep the Kid on his floor: find
-  why it would leave the floor.
+  why it would leave the floor. **Answered 2026-11-16**: it has no effect;
+  SEQS 71 opens with SetCharFloor (-19, 4:2f72 -> 4:31fa), which sets Y to
+  row * 120 + 106 before the frame is drawn.
 - In room 11 after a defeat, the 9:16fe flee branch (four or more turns on
   the same row).
 - KeepTime's trobs for crystal and gargoyle cells on the neighbouring rooms'

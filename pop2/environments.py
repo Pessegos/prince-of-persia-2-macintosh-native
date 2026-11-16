@@ -335,7 +335,8 @@ class Final(Environment):
             state.facing = body.state.facing
             state.target_x += 6 if state.facing else -6
         # X -= distance - sign * 7, sign from a5-0x4b94 (right -1, left +1).
-        # The native Y - 1 is left out: the port keeps the Kid on his floor.
+        # The native Y - 1 (4:1f80) has no effect: SEQS 71 opens with
+        # SetCharFloor (-19, 4:31fa), which sets Y from the row again.
         state.target_x -= distance - (-1 if state.facing else 1) * 7
         scene.player_x = state.current_x = state.target_x
         scene.step_cautious = False

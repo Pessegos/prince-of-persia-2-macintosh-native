@@ -702,7 +702,9 @@ Port choices:
   read directly by `Final.level_events`.
 - The victory plays NIS 11 and the Hall of Fame, then the introduction
   (see the next section).
-- The lie-down's native Y - 1 is left out to keep the Kid on his floor.
+- The lie-down's native Y - 1 (4:1f80) is left out. It has no visible
+  effect: SEQS 71 (-7, 1, -19, 179) opens with SetCharFloor 4:31fa, which
+  sets Y to row * 120 + 106 again on the next AnimChar.
 - The shadow's fall off the bottom of the screen (4:3780) is not
   separately ported.
 - The flame behind the shadow reuses the temple's SetupShadowFlame
