@@ -91,7 +91,9 @@ rejects a wrong model:
    6,000 cases, no difference); 9:090e and 9:19fa are not probed.
 3. The magic rules: 4:1fb2 (turns), 4:2046 (the eighth-turn test), 4:2174
    (flashes), 4:2206 LeaveBody, 4:1f1e and 4:24b2 (lying down and rejoining),
-   4:25ce and 4:2338.
+   4:25ce and 4:2338. **4:1fb2, 4:2046, 4:2174, 4:250a and 4:2590 done
+   2026-11-16** (`tools.probe_final_magic`; the fatal eighth turn fixed).
+   LeaveBody, lying down, rejoining and 4:2338 are not probed.
 4. The fire: 9:2674 (cast), 9:27a0 and 9:25e4 (flight), 9:24ee (hit).
 5. 9:0062 (the defeat) and InitOpps' room-11 laugh.
 

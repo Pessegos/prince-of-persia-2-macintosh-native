@@ -256,8 +256,11 @@ class Final(Environment):
         life = player.life
         if not getattr(scene, 'god_mode', False):
             if life <= 1:
-                # DecLifePts(1) is fatal.
+                # DecLifePts(1) is fatal; 4:203e still tests the eighth
+                # turn, whose low-life branch kills again and clears it.
                 self.kill_prince()
+                if magic.turns == TRANSFORM_TURNS:
+                    magic.turns = 0
                 return True
             # The point is pending damage; capacity is lost at once.
             player.life -= 1
@@ -441,9 +444,8 @@ class Final(Environment):
         and its flashes), the cast's throw (6:0732-0742), the rejoining
         (6:0b5a) and the body's own frame."""
         from pop2.final_magic import (
-            CAST_POSES, DEAD_POSE, FIREBALL_SOUND, REJOIN_REACH, STANDING_POSE, THROW_POSE,
-            TURN_FIRST_POSE, TURN_LAST_POSE, TURN_SEQUENCE, body_distance, throw_fireball,
-            turn_flash)
+            CAST_POSES, DEAD_POSE, FIREBALL_SOUND, REJOIN_REACH, THROW_POSE, body_distance,
+            count_turn_frame, throw_fireball)
 
         scene = self.scene
         if getattr(scene.game, 'caverns', None) is None or scene.terrain_motion is None:
@@ -452,15 +454,8 @@ class Final(Environment):
         state, motion = scene.sequence_state, scene.terrain_motion
         pose = state.action
         fresh, magic.fresh_turn = magic.fresh_turn, False
-        if fresh:
-            pass
-        elif pose == STANDING_POSE:
-            magic.turns, magic.flash = 0, False
-        elif TURN_FIRST_POSE <= pose <= TURN_LAST_POSE and scene.room_id not in (0, 1):
-            if magic.turns >= 4:
-                magic.flash = turn_flash(pose, magic.turns)
-        elif state.selected_sequence_id != TURN_SEQUENCE and magic.turns:
-            magic.turns, magic.flash = 0, False
+        if not fresh:
+            count_turn_frame(magic, pose, state.selected_sequence_id, scene.room_id)
         if not magic.shadow and not scene.combat.player.alive:
             self.defeat()
         if magic.shadow:

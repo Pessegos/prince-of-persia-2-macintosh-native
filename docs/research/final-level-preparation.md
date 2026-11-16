@@ -1131,3 +1131,32 @@ the armed word: no differences. The shimmer (240), the strike (75, 15 px),
 the sheathe (92), the laugh (197 with 261), the rise (49) and the turn are
 all reached. `tests.test_probe_final_path` also rejects a distance measured
 in the port's facing instead of the native word.
+
+## Native probe of the turn rules (2026-11-16)
+
+`python -m tools.probe_final_magic` runs three original routines over LEVL
+2013 (environment 6, level 14):
+
+- 4:250a, the turn flash (with the division helper 19:4bd0): every pose
+  0-399 and count 0-15, 6,400 cases, against `turn_flash`.
+- 4:2174, GenCtrl's per-frame count, now `final_magic.count_turn_frame`
+  (moved out of `Final.controls`): 2,400 cases of pose, selected SEQS,
+  count and native room. The palette restore 3:5f1c is supplied and
+  recorded; it runs exactly where the port clears its flash outside
+  standing. Where 4:2174 leaves the draw mode alone (pose 15) the port
+  also clears its flash flag; that presentation is not compared.
+- 4:1fb2, the standing turn, with DecLifePts 4:34f2 and IsShadowImbued
+  4:2590 run natively, against `Final.standing_turn` on a minimal scene:
+  1,152 cases of life 1-8, capacity 8/12, shadow, SEQS 5 or not, mode 13
+  and count 0-8. Supplied and recorded: PoPSetPalette 3:508a, SetSeq,
+  4:3196, LeaveBody 4:2206, AddSound and AddSong; the port's kill and
+  body-leaving are recorded too. The room gate 6:116c and the port's
+  same-frame order (`fresh_turn`) are outside the routine.
+
+One difference was fixed: a fatal DecLifePts(1) on the eighth turn. The
+original still runs 4:203e, whose low-life branch kills again and clears
+the count; the port returned with the count at 8. Life plus pending damage
+and capacity agree in every case, as do the palette (2000 + imbued at the
+fourth turn), sound 288 and the shadow's SEQS 2, sound 260 and song 290.
+`tests.test_final_magic` and `tests.test_probe_final_path` reject the old
+return and a transform threshold of 3.

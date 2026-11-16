@@ -24,6 +24,16 @@ class RuleTests(unittest.TestCase):
         self.assertEqual([turn_flash(action, 7) for action in range(46, 52)],
                          [True, True, False, True, True, False])
 
+    def test_a_fatal_eighth_turn_still_clears_the_count(self):
+        # 4:1fb2: after a fatal DecLifePts(1), 4:203e still tests the eighth
+        # turn; its low-life branch kills again and clears a5-0x5004.
+        from tools.probe_final_magic import port_turn
+
+        turn = port_turn(life=1, capacity=8, shadow=False, selected=5, mode=0, turns=7)
+        self.assertEqual((turn.outcome[0], turn.turns, turn.life), ('kill', 0, 0))
+        turn = port_turn(life=1, capacity=8, shadow=False, selected=5, mode=0, turns=5)
+        self.assertEqual((turn.outcome, turn.turns), (['kill'], 6))
+
     def test_body_distance_counts_six_more_facing_the_same_way(self):
         body = pose(185, facing=1, x=300)
         self.assertEqual(body_distance(pose(15, 1, 320), body, 1, 1), 14)

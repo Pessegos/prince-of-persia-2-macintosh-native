@@ -69,6 +69,18 @@ class NativePathControllerTests(unittest.TestCase):
             with self.assertRaises(AssertionError):
                 run_probe(RECOVERY, count=1500)
 
+    def test_the_original_turn_rules_agree_with_the_port(self):
+        from pop2 import final_magic
+        from tools.probe_final_magic import run_probe
+
+        totals = run_probe(RECOVERY)
+        self.assertEqual((totals['4:250a'], totals['4:2174']), (6400, 2400))
+        self.assertEqual(set(totals['outcomes']), {'count', 'kill', 'flash', 'leave'})
+        # 4:2046 leaves the body above 4 life; a threshold of 3 is rejected.
+        with patch.object(final_magic, 'TRANSFORM_LIFE', 3):
+            with self.assertRaises(AssertionError):
+                run_probe(RECOVERY)
+
 
 if __name__ == '__main__':
     unittest.main()

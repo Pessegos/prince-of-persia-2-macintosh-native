@@ -63,6 +63,20 @@ def turn_flash(pose, turns):
     return (phase + 1) % 3 != 0
 
 
+def count_turn_frame(magic, pose, selected, room):
+    """4:2174, GenCtrl's turn count for the Kid each frame (port room).
+    Standing (pose 15) clears the count; a turn pose (45-52) outside native
+    rooms 1/2 flashes once it reaches four (4:250a, draw mode 0x30); any
+    other pose outside SEQS 5 clears it and restores the palette (3:5f1c)."""
+    if pose == STANDING_POSE:
+        magic.turns, magic.flash = 0, False
+    elif TURN_FIRST_POSE <= pose <= TURN_LAST_POSE and room not in (0, 1):
+        if magic.turns >= GLOW_TURNS:
+            magic.flash = turn_flash(pose, magic.turns)
+    elif selected != TURN_SEQUENCE and magic.turns:
+        magic.turns, magic.flash = 0, False
+
+
 def glow_palette(life, imbued=False):
     """IsShadowImbued 4:2590 in environment 6: life above 2 (or mode 13)."""
     return GLOW_PALETTE if imbued or life > CAST_LIFE else SHADOW_PALETTE
