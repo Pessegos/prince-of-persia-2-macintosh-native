@@ -2373,6 +2373,12 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
             combat.last_guard_at = time.perf_counter()
             return
         if combat.choose_player_bump(old_x):
+            motion = getattr(self, 'terrain_motion', None)
+            if motion is not None:
+                # The bump sets him on the floor (SEQS 46/47 open with -7 5,
+                # animation state 5): a slow fall into the opponent ends
+                # here, or the Prince stays frozen "falling" at Y 0.
+                motion.falling = motion.hit_fall = False
             self.run_active = self.run_stop_requested = False
             self.run_cycle_boundary_pending = False
             self.jump_repeat_armed = False

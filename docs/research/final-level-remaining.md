@@ -149,7 +149,11 @@ rejects a wrong model:
 ### 6. Whole-route regressions
 
 - One hidden run from the level-13 exit to the introduction's return, with
-  a real AudioEngine on SDL's dummy device.
+  a real AudioEngine on SDL's dummy device. **Partly done 2026-11-16**:
+  `tests.test_final_whole_route` runs level 14's first room to NIS 11 with
+  real keys (one false Prince supplied); it found and fixed a frozen Prince
+  after a fall onto an opponent's bump. The level-13 exit, audio and the
+  Hall of Fame stay with their own tests.
 - The variants: a room-3 detour that drinks a life-enhancement flask; a
   Prince too weak for the eighth turn (collapse, method 17); 2 life or less
   (no cast); a missed fireball, then a healing flask restores the flame;

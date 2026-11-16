@@ -1290,3 +1290,27 @@ before the turn. The port measured again, which is the same except in
 pose 185, where 4:24b2 drops its 6-pixel facing term: a lying shadow
 facing away moved 6 pixels too far. `tests.test_final_magic` checks that
 case.
+
+## Whole-route regression (2026-11-16)
+
+`tests.test_final_whole_route` plays level 14 in one hidden scene with the
+opponents on and real keys: the roof and window to the spell scene (NIS 5),
+native room 4 en garde and the sheathe, native rooms 5 and 6, two false
+Princes struck with the sword, the climb into the palace, eight standing
+turns into the shadow, the cast and NIS 11 starting. The third false
+Prince is supplied (the port's own `combat._hurt`): its platform leaves no
+room to draw the sword in front of it. The fourth then shimmers away and
+becomes the palace's Jaffar on row 0 of native room 8. The route's room
+moves were found with `tools.audit_temple_routes.Search` on level 14,
+with its settle extended to wait out the spell scene and sheathe.
+
+The route found a port fault: a slow fall onto an engaged opponent's row
+(FrameAdv's bump, `Combat.choose_player_bump`) set the Prince on the floor
+in SEQS 46 but left `TerrainMotion.falling` set, so he stood frozen in
+pose 15 and every key was ignored. SEQS 46/47 open with -7 5 (animation
+state 5); the scene now ends the fall there. Without the change the test
+fails at the second false Prince.
+
+Not covered: the level-13 exit and NIS 3 before it, a real AudioEngine,
+the Hall of Fame page and the return to the introduction (they have their
+own tests), and the variants listed in the queue.
