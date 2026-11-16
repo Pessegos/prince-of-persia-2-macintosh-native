@@ -40,6 +40,15 @@ environment 6 with life above 2. SetupOpponent draws through 3:0852 there, and t
 Kid's colours are CTBL 2001 at palette base 48, not 2000
 ([altar notes](temple-altar.md)).
 
+The shadow's flame (3:0884 for type 1 in environment 6, then SetupShadowFlame
+4:2630) asks the same IsShadowImbued. No SEQS the shadow runs resets mode 13
+(the port's run keeps it through LeaveBody, SEQS 2 and running), so a Prince
+who brought the temple's flame keeps a burning shadow at 2 life or less.
+`Final.player_flame` followed the life test alone until 2026-11-16; both now
+use `final_magic.shadow_imbued` (`tests.test_final_magic`). The cast's own
+gate (9:2674, life above 2) and the weak palette at the fire's end
+(9:2838-2850) test life only, and stay as they were.
+
 ## CODE 9, by the symbols
 
 | Group | Routines | Lines |

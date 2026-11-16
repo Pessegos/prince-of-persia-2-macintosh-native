@@ -46,6 +46,27 @@ class RuleTests(unittest.TestCase):
         turn = port_turn(life=1, capacity=8, shadow=False, selected=5, mode=0, turns=5)
         self.assertEqual((turn.outcome, turn.turns), (['kill'], 6))
 
+    def test_the_temples_flame_keeps_the_shadow_burning_at_low_life(self):
+        # 3:0884 -> SetupShadowFlame 4:2630 draws the flame while
+        # IsShadowImbued 4:2590: mode 13 at any life, else life above 2.
+        from pop2.environments import Final
+        from pop2.final_magic import FinalMagic
+
+        magic = FinalMagic()
+        magic.shadow = True
+        scene = SimpleNamespace(game=SimpleNamespace(caverns=SimpleNamespace(final_magic=magic)),
+                                combat=SimpleNamespace(player=SimpleNamespace(life=2)),
+                                sequence_state=SimpleNamespace(sequence_mode=0))
+        final = Final(scene)
+        self.assertFalse(final.player_flame())
+        scene.sequence_state.sequence_mode = 13
+        self.assertTrue(final.player_flame())
+        scene.combat.player.life = 3
+        scene.sequence_state.sequence_mode = 0
+        self.assertTrue(final.player_flame())
+        magic.shadow = False
+        self.assertFalse(final.player_flame())
+
     def test_body_distance_counts_six_more_facing_the_same_way(self):
         body = pose(185, facing=1, x=300)
         self.assertEqual(body_distance(pose(15, 1, 320), body, 1, 1), 14)

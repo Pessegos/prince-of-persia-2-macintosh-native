@@ -17,6 +17,7 @@ Port facing 1 is the native facing word 0 (right).
 from dataclasses import dataclass
 
 from pop2.sequence_runtime import SequenceState
+from pop2.temple_shadow import IMBUED_MODE
 
 TURN_SEQUENCE = 5
 TURN_POSES = range(46, 52)     # 4:250a: 0x2d < pose < 0x34
@@ -84,9 +85,15 @@ def count_turn_frame(magic, pose, selected, room):
         magic.turns, magic.flash = 0, False
 
 
+def shadow_imbued(life, mode=0):
+    """IsShadowImbued 4:2590 in environment 6: mode 13 (the temple's flame,
+    which survives the level-13 exit), or life above 2."""
+    return mode == IMBUED_MODE or life > CAST_LIFE
+
+
 def glow_palette(life, imbued=False):
-    """IsShadowImbued 4:2590 in environment 6: life above 2 (or mode 13)."""
-    return GLOW_PALETTE if imbued or life > CAST_LIFE else SHADOW_PALETTE
+    """4:1fdc-1ff6: PoPSetPalette(2000 + IsShadowImbued) on the eighth turn."""
+    return GLOW_PALETTE if imbued or shadow_imbued(life) else SHADOW_PALETTE
 
 
 def body_distance(shadow, body, body_row, shadow_row):

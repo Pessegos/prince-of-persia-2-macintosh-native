@@ -723,11 +723,15 @@ class Final(Environment):
         return None
 
     def player_flame(self):
-        """SetupShadowFlame 4:2630 behind the imbued shadow (life above 2)."""
+        """SetupShadowFlame 4:2630 behind the shadow (type 1, 3:0884) while
+        IsShadowImbued 4:2590: life above 2, or mode 13 at any life."""
+        from pop2.final_magic import shadow_imbued
+
         caverns = getattr(self.scene.game, 'caverns', None)
         magic = getattr(caverns, 'final_magic', None)
         return (magic is not None and magic.shadow
-                and self.scene.combat.player.life > 2)
+                and shadow_imbued(self.scene.combat.player.life,
+                                  self.scene.sequence_state.sequence_mode))
 
     def extra_actors(self, size):
         """The body lying where the Prince left it, in his own colours."""
