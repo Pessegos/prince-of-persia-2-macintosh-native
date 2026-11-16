@@ -132,7 +132,10 @@ rejects a wrong model:
   CharDistance's life gate blocks the dissolve, so 9:16fe never moves the
   figure there (`tests.test_final_path`, the probe's life 0 cases).
 - KeepTime's trobs for crystal and gargoyle cells on the neighbouring rooms'
-  edges, with their Rnd draws.
+  edges, with their Rnd draws. **Traced 2026-11-16**: two cells qualify
+  (native room 6's crystal cell 9 below room 7, room 4's face cell 1 below
+  room 11); they draw nothing visible and only shift room 7's glint timing,
+  so they stay out (ledger, moving scenery exclusions).
 - The ChessRm song starts about two seconds later than on the Macintosh
   (the room-4 wait). **Done 2026-11-16**: it starts as the scene's last
   wait begins (`IntroPlayer.code_hooks`, `Final.enter_chess_room`).

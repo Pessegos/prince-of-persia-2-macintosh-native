@@ -1015,7 +1015,16 @@ Exclusions:
   is not needed with full-room drawing.
 - KeepTime also scans the neighbouring rooms' edge cells; a crystal or
   gargoyle cell there would get a trob (and Rnd draws) in the original.
-  The port sets up only the room on screen.
+  The port sets up only the room on screen. Traced 2026-11-16 (2:4fd0-51e4):
+  cells 30-32 are column 9 of the left room (a5-0x4fc0), rows 0-2, and
+  cells 33-42 the top row of the room below (a5-0x4fba); the kind and
+  0x1000 tests use the scanned room's number. In level 14 two such cells
+  exist: native room 6's cell 9 (foreground 0x11c0, a crystal) below
+  native room 7, and native room 4's cell 1 (kind 31, the face) below
+  native room 11. Their trobs animate in a room that is not drawn; the
+  only effect is the Rnd draws, which shift the random glint timing of
+  room 7's gargoyles and nothing in play (9:16fe and the fire draw no Rnd).
+  Left out deliberately.
 - 9:1d84 also asks for songs (269 in room 6; 262 in rooms 7 and 8 under
   conditions); see the room themes section below.
 - No Macintosh capture of these rooms is available to compare pixels.
