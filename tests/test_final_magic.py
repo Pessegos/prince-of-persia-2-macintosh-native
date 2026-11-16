@@ -211,6 +211,28 @@ class ShadowSceneTests(unittest.TestCase):
         self.assertEqual((scene.sequence_state.action, scene.sequence_state.target_x),
                          (DEAD_POSE, 278))
 
+    def test_a_shadow_falling_off_the_level_returns_to_the_body(self):
+        # 4:36a2 -> 4:374a: below Y 730 with no room beneath, DecLifePts(100)
+        # and, for the shadow (type 1), CutToKidRoom 4:2338. Port room 7's
+        # row-2 gap at column 0 has no room below.
+        scene = self.scene
+        scene.jump_to_room(6, row=2, x=100, facing=1, redraw=False)
+        player = scene.combat.player
+        player.life = player.max_life = 12
+        self.environment().leave_body()
+        self.harness.tick(8)
+        body = self.magic().body
+        self.assertEqual((body.room, body.row), (6, 2))
+        scene.jump_to_room(7, row=2, x=20, facing=0, reset_guards=False, redraw=False)
+        for _ in range(40):
+            self.harness.tick(1)
+            if not self.magic().shadow:
+                break
+        self.assertFalse(self.magic().shadow)
+        self.assertFalse(player.alive)
+        self.assertEqual((scene.room_id, scene.terrain_motion.row), (6, 2))
+        self.assertEqual(scene.sequence_state.actor_type, 0)
+
     def test_the_fire_burns_jaffar_and_ends_the_game(self):
         from tools.audit_temple_routes import press
 

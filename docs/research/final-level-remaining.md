@@ -117,7 +117,11 @@ rejects a wrong model:
 
 ### 5. Small rules not yet ported
 
-- The shadow's fall off the bottom of the screen (4:3780).
+- The shadow's fall off the bottom of the screen (4:3780). **Checked
+  2026-11-16**: 4:374a (below Y 730 with no room beneath) costs 100 life,
+  and for type 1 calls CutToKidRoom 4:2338. The port's void death and
+  `Final.shadow_died` already do this; port room 7's row-2 gap at column 0
+  is such a fall, now a regression.
 - The lie-down's native Y - 1, left out to keep the Kid on his floor: find
   why it would leave the floor. **Answered 2026-11-16**: it has no effect;
   SEQS 71 opens with SetCharFloor (-19, 4:2f72 -> 4:31fa), which sets Y to

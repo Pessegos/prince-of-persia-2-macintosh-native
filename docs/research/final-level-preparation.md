@@ -705,8 +705,11 @@ Port choices:
 - The lie-down's native Y - 1 (4:1f80) is left out. It has no visible
   effect: SEQS 71 (-7, 1, -19, 179) opens with SetCharFloor 4:31fa, which
   sets Y to row * 120 + 106 again on the next AnimChar.
-- The shadow's fall off the bottom of the screen (4:3780) is not
-  separately ported.
+- The shadow's fall off the bottom of the screen (4:374a-3780: 100 life,
+  pose 185, Y 730, then CutToKidRoom 4:2338 for type 1) needs no separate
+  code: the port's void death kills the shadow and `Final.shadow_died`
+  returns him to the body. `tests.test_final_magic` falls through port
+  room 7's row-2 gap at column 0, which has no room below.
 - The flame behind the shadow reuses the temple's SetupShadowFlame
   drawing (4:2630) while his life is above 2.
 
