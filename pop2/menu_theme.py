@@ -46,7 +46,7 @@ class MenuTheme:
     name: str
     roles: dict = field(default_factory=dict)
     dim: int = 100            # black veil over the room behind the F1 menu, 0-255
-    # 'rock', 'bands', 'sand', 'studs', 'columns', 'chess' or None for a plain outline
+    # 'rock', 'bands', 'sand', 'studs', 'columns', 'chess', 'spider' or None for a plain outline
     frame: str | None = None
     grow: tuple = (0, 0, 0)   # how far the frame reaches beyond a panel: sides, top, bottom
     # 'bands': the moulding's rows from the outside inwards; a row of several
@@ -177,14 +177,30 @@ CHESS = MenuTheme('chess', {
     'danger': '#5a1830', 'danger_soft': '#3a1028',
 }, dim=130, frame='chess', grow=(2, 5, 7))
 
-THEMES = {theme.name: theme for theme in (NEUTRAL, PALACE, DESERT, CAVERNS, RUINS, TEMPLE, CHESS)}
+# Level 14, native rooms 3 and 9: the giant spider's hairy browns over the
+# void, its lit orange, and the mauve of the rocks round it.
+SPIDER = MenuTheme('spider', {
+    'accent': '#d48e54', 'text': '#f2e2d4', 'muted': '#a67a70', 'muted_light': '#c79487',
+    'dim_text': '#8a5c51', 'faint': '#6a3434',
+    'panel': '#120604', 'panel_edge': '#8c5230', 'backdrop': '#0a0302', 'rule': '#322114',
+    'row': '#22100a', 'row_dark': '#1a0a06', 'row_edge': '#502f25', 'row_edge_soft': '#3a1c12',
+    'row_edge_dark': '#2b0f06', 'row_edge_lit': '#8a5c51',
+    'selected': '#5b1f2d', 'hover': '#3a1a14', 'listening': '#5a3a18',
+    'well': '#120604', 'well_dark': '#0a0302',
+    'active': '#c9a8c0', 'active_map': '#c9a8c0', 'active_fill': '#2e1e24',
+    'active_field': '#24141a', 'text_selection': '#642f42',
+    'danger': '#5a1810', 'danger_soft': '#3a100c',
+}, dim=135, frame='spider', grow=(2, 8, 10), mark='#030100')
+
+THEMES = {theme.name: theme for theme in (NEUTRAL, PALACE, DESERT, CAVERNS, RUINS, TEMPLE, CHESS, SPIDER)}
 
 # Level 14 (environment 6) changes look from room to room, so its menus take
 # the theme of the room the Prince is in. Port (zero-based) rooms: 0-1 the
-# tower over the city, which brings back the palace; 3-4 the chessboard;
-# 10 the princess's room, seen only in the ending, is the palace as well.
-# The other rooms keep the neutral look until their own themes are drawn.
-_FINAL_ROOM_THEMES = {0: PALACE, 1: PALACE, 3: CHESS, 4: CHESS, 10: PALACE}
+# tower over the city, which brings back the palace; 2 and 8 the spider;
+# 3-4 the chessboard; 10 the princess's room, seen only in the ending, is
+# the palace as well. The other rooms keep the neutral look until their own
+# themes are drawn.
+_FINAL_ROOM_THEMES = {0: PALACE, 1: PALACE, 2: SPIDER, 3: CHESS, 4: CHESS, 8: SPIDER, 10: PALACE}
 
 _current = NEUTRAL
 
@@ -452,7 +468,7 @@ def _rock_frame(theme, size, fill):
 
 # --- Shared helpers for the drawn frames.
 _THICKNESS = {'rock': (9, 9, 9), 'sand': (11, 11, 11), 'studs': (9, 9, 9), 'columns': (13, 12, 12),
-              'chess': (10, 10, 13)}
+              'chess': (10, 10, 13), 'spider': (18, 18, 18)}
 
 
 def _stepped(length, rng, values, runs=(5, 14)):
@@ -779,6 +795,73 @@ def _serpent_mask(height):
     return image
 
 
+# How far a theme's sign takes the background toward its mark colour.
+_MARK_STRENGTH = {'spider': 0.3}
+
+
+def _spider_pattern(width, height):
+    """The spider's fur, for the panel: its texture, not its shape.
+
+    The shadowed side of each lobe and the crevice under it are a scatter
+    of specks, thick in the crevice and thinning out across the lobe, as the
+    room's art dithers them, with a few pores on the lit parts. Drawn once
+    per panel size, always the same.
+    """
+    shade, rng = _spider_shade(width, height)
+    marks = rng.random((height, width)) < 0.012 + 0.42 * shade
+    return Image.fromarray(numpy.where(marks, 255, 0).astype(numpy.uint8))
+
+
+def _spider_shade(width, height, cell=15.0, margin=None):
+    """How shadowed each pixel is among the spider's lobes, 0 to 1, and the
+    random sequence that drew them (the panel's specks follow from it).
+
+    Rounded lobes packed together, a little stretched and bent, each lit
+    from the upper left: the shadowed side of each lobe and the crevice
+    under it are dark. Each lobe is only looked for near its centre: some
+    forty others lie closer to any pixel than that reach, so its nearest two
+    are always among them and the field is the same as looking everywhere.
+    With ``margin``, only the strip that far in from each edge is wanted (a
+    frame's band); lobes that cannot reach it are skipped, and the shade
+    inside the strip means nothing.
+    """
+    rng = numpy.random.default_rng(0x7A2C)
+    count = int(width * height / (cell * cell)) + 1
+    points = numpy.column_stack((rng.uniform(-cell, width + cell, count), rng.uniform(-cell, height + cell, count)))
+    stretch = rng.uniform(0.7, 1.35, count)
+    y, x = numpy.mgrid[0:height, 0:width].astype(float)
+    wx = x + 2.5 * numpy.sin(y / 9.0 + 0.7) + 1.8 * numpy.sin((x + y) / 13.0)
+    wy = y + 2.5 * numpy.sin(x / 10.0 + 1.9) + 1.8 * numpy.sin((x - y) / 15.0)
+    first = numpy.full((height, width), numpy.inf)
+    second = numpy.full((height, width), numpy.inf)
+    near_x = numpy.zeros((height, width))
+    near_y = numpy.zeros((height, width))
+    reach, bend = 3.5 * cell, 4.3       # how far a lobe is looked for; the most the bending moves a pixel
+    for (px, py), squash in zip(points, stretch):
+        across, down = reach / squash + bend, reach * squash + bend
+        left, right = max(0, int(px - across)), min(width, int(px + across) + 2)
+        top, bottom = max(0, int(py - down)), min(height, int(py + down) + 2)
+        if left >= right or top >= bottom:
+            continue
+        if margin is not None and margin <= left and right <= width - margin                 and margin <= top and bottom <= height - margin:
+            continue                    # wholly inside the strip: it cannot reach it
+        window = slice(top, bottom), slice(left, right)
+        dx, dy = (wx[window] - px) * squash, (wy[window] - py) / squash
+        distance = numpy.hypot(dx, dy)
+        nearest = first[window]
+        closer = distance < nearest
+        second[window] = numpy.where(closer, nearest, numpy.minimum(second[window], distance))
+        near_x[window] = numpy.where(closer, dx, near_x[window])
+        near_y[window] = numpy.where(closer, dy, near_y[window])
+        first[window] = numpy.where(closer, distance, nearest)
+    with numpy.errstate(invalid='ignore'):      # unreached pixels inside a strip
+        radius = numpy.maximum(1.0, (first + second) / 2)
+        away = numpy.clip((near_x + near_y) / (1.41 * radius), 0, 1)
+        crevice = numpy.clip(1 - (second - first) / 4.0, 0, 1)
+        shade = numpy.clip(0.65 * away ** 1.6 + 0.8 * crevice ** 1.5, 0, 1)
+    return shade, rng
+
+
 _marks = {}
 
 
@@ -795,15 +878,25 @@ def watermark(image, rect, point=None, avoid=()):
     theme = _current
     if theme.mark is None:
         return
-    height = (rect[3] - rect[1]) * 3 // 5
-    if height < 60:
-        return
-    if height not in _marks:
-        _marks[height] = _serpent_mask(height)
-    mask = _marks[height]
-    left = (rect[0] + rect[2] + 1 - mask.width) // 2
-    top = (rect[1] + rect[3] + 1 - mask.height) // 2 + 6
-    box = (left, top, left + mask.width, top + mask.height)
+    if theme.frame == 'spider':
+        # The spider's fur over the whole panel rather than one sign.
+        size = (rect[2] - rect[0] + 1, rect[3] - rect[1] + 1)
+        key = 'spider', size
+        if key not in _marks:
+            _marks[key] = _spider_pattern(*size)
+        mask = _marks[key]
+        box = (rect[0], rect[1], rect[0] + mask.width, rect[1] + mask.height)
+        height = key
+    else:
+        height = (rect[3] - rect[1]) * 3 // 5
+        if height < 60:
+            return
+        if height not in _marks:
+            _marks[height] = _serpent_mask(height)
+        mask = _marks[height]
+        left = (rect[0] + rect[2] + 1 - mask.width) // 2
+        top = (rect[1] + rect[3] + 1 - mask.height) // 2 + 6
+        box = (left, top, left + mask.width, top + mask.height)
     if point is not None:
         box = (*point(box[0], box[1]), *point(box[2], box[3]))
         key = height, box[2] - box[0], box[3] - box[1]
@@ -821,7 +914,8 @@ def watermark(image, rect, point=None, avoid=()):
     changed = numpy.zeros(inside.shape, dtype=bool)
     for colour in {_rgb(theme.colour(role)) for role in ('panel', 'row', 'row_dark', 'selected', 'hover')}:
         same = inside & (packed == (colour[0] << 16 | colour[1] << 8 | colour[2]))
-        pixels[same] = tuple(round(a + (b - a) * 0.4) for a, b in zip(colour, toward))
+        pixels[same] = tuple(round(a + (b - a) * _MARK_STRENGTH.get(theme.name, 0.4))
+                             for a, b in zip(colour, toward))
         changed |= same
     image.paste(Image.fromarray(pixels), box, Image.fromarray(changed))
 
@@ -999,5 +1093,150 @@ def _chess_frame(theme, size, fill):
     return picture
 
 
+# --- Level 14's spider: a tarantula's coat round the panel. A velvet band
+# of dark browns carries the same lobes as the panel's fur, smaller, like the
+# ribs of its legs (deep crevices, shaded sides, lit tops with a glint, a few
+# pores); fuzz in two layers stands out of it, long bristles in tufts at
+# their own angles (now and then two or three from one root, splaying apart,
+# a third of them catching the light), and here and there, where the coat is
+# thin, one long guard hair on its own. Nothing is combed one way.
+_SPIDER_VELVET = (
+    ('#2b0f06', '#322114'), ('#502f25', '#322114', '#502f25'), ('#6f3723', '#502f25', '#6f3723', '#734a2b'),
+    ('#8c5230', '#6f3723', '#9d542e', '#6f3723'), ('#6f3723', '#502f25', '#734a2b'), ('#502f25', '#322114'),
+    ('#2b0f06',),
+)
+# Each band row one tone darker in the lobes' crevices, one lighter on them.
+_SPIDER_VELVET_SHADOW = ('#1a0a06', '#2b0f06', '#322114', '#502f25', '#322114', '#2b0f06', '#2b0f06')
+_SPIDER_VELVET_LIT = ('#322114', '#6f3723', '#8c5230', '#ab6436', '#8c5230', '#502f25', '#2b0f06')
+_SPIDER_GLINT = '#bf713c'
+_SPIDER_PORES = ('#1a0a06', '#2b0f06', '#47172a')
+_SPIDER_FUZZ = ('#6f3723', '#502f25', '#734a2b', '#8c5230')
+_SPIDER_BRISTLE = ('#9d542e', '#8c5230', '#6f3723', '#502f25', '#3a2218')
+_SPIDER_PALE = ('#d48e54', '#bf713c', '#ab6436', '#8c5230', '#502f25')
+_SPIDER_FUR_LOBE = 9.0      # the band's lobes, across; the panel's are 15
+
+
+def _spider_frame(theme, size, fill):
+    width, height = size
+    picture = Image.new('RGBA', size, (0, 0, 0, 0))
+    pixels = picture.load()
+    # Three random sequences of their own, so that each layer stays as it is
+    # whatever the others do: the coat, the band's lobes and the guard hairs.
+    rng = random.Random(0x7A2A)
+    pattern = random.Random(0x10BE)
+    zone = _THICKNESS['spider'][0]
+    velvet = [[_rgb(colour) + (255,) for colour in row] for row in _SPIDER_VELVET]
+    shadowed = [_rgb(colour) + (255,) for colour in _SPIDER_VELVET_SHADOW]
+    lit = [_rgb(colour) + (255,) for colour in _SPIDER_VELVET_LIT]
+    glint = _rgb(_SPIDER_GLINT) + (255,)
+    band_pores = [_rgb(colour) + (255,) for colour in _SPIDER_PORES]
+    outside = zone - len(velvet)    # the outer pixels, where only hairs reach
+    opaque = fill + (255,)
+    lobes = _spider_shade(width, height, _SPIDER_FUR_LOBE, zone)[0]
+    for y in range(height):
+        for x in _edge_columns(width, height, y, zone + 1):
+            depth = min(x, y, width - 1 - x, height - 1 - y) - outside
+            if depth >= len(velvet):
+                pixels[x, y] = opaque
+            elif depth >= 0:
+                colour = rng.choice(velvet[depth])
+                shade, roll = lobes[y, x], pattern.random()
+                if shade > 0.6 and roll < 0.75:
+                    colour = shadowed[depth]
+                elif shade > 0.3 and roll < 0.5:
+                    colour = shadowed[depth] if roll < 0.2 else velvet[depth][-1]
+                elif shade < 0.2:
+                    if depth in (2, 3, 4) and shade < 0.08 and roll < 0.35:
+                        colour = glint
+                    elif roll < 0.55:
+                        colour = lit[depth]
+                    elif roll > 0.96:
+                        colour = pattern.choice(band_pores)
+                pixels[x, y] = colour
+    _fill_inside(picture, zone, opaque)
+    fuzz = [_rgb(colour) + (255,) for colour in _SPIDER_FUZZ]
+    dark = [_rgb(colour) + (255,) for colour in _SPIDER_BRISTLE]
+    pale = [_rgb(colour) + (255,) for colour in _SPIDER_PALE]
+    pores = [_rgb(colour) + (255,) for colour in ('#2b0f06', '#1a0a06', '#47172a')]
+
+    def put(x, y, colour):
+        if 0 <= x < width and 0 <= y < height:
+            depth = min(x, y, width - 1 - x, height - 1 - y) - outside
+            if depth < len(velvet) - 2:        # the inner edge stays clean
+                pixels[x, y] = colour
+
+    def bristle(x, y, out, lean, length, slope, bend, shades):
+        """A fine hair: outward, drifting sideways by `slope` a step and
+        curving a little more by `bend` as it goes, darkening to its tip."""
+        drift = 0.0
+        for step in range(length):
+            drift += slope + bend * step
+            colour = shades[min(len(shades) - 1, step * len(shades) // length)]
+            put(x + out[0] * step + lean[0] * round(drift), y + out[1] * step + lean[1] * round(drift), colour)
+
+    # Each side: the positions along it, where a point at a depth into the
+    # band lies, which way is out, and which way is along.
+    sides = (
+        (range(outside, width - outside), lambda a, d: (a, outside + d), (0, -1), (1, 0)),
+        (range(outside, height - outside), lambda a, d: (width - 1 - outside - d, a), (1, 0), (0, 1)),
+        (range(outside, width - outside), lambda a, d: (a, height - 1 - outside - d), (0, 1), (-1, 0)),
+        (range(outside, height - outside), lambda a, d: (outside + d, a), (-1, 0), (0, -1)),
+    )
+    for span, place, out, lean in sides:
+        tuft = 0.6                    # how thick the coat is here; it wanders along the side
+        for along in span:
+            tuft = min(1.0, max(0.2, tuft + rng.uniform(-0.15, 0.15)))
+            # Fuzz: the inner layer short and dense, the outer one patchier.
+            x, y = place(along, 0)
+            for step in range(1, rng.choice((1, 2, 2, 3)) + 1):
+                put(x + out[0] * step, y + out[1] * step, rng.choice(fuzz))
+            if rng.random() < 0.55 * tuft:
+                drift = rng.choice((-1, 0, 1))
+                for step in range(2, rng.choice((3, 4, 4, 5)) + 1):
+                    put(x + out[0] * step + lean[0] * drift * (step // 3),
+                        y + out[1] * step + lean[1] * drift * (step // 3), rng.choice(dark[1:]))
+            # Fur on the band: short strokes in every direction, and pores.
+            for _stroke in range(2):
+                if rng.random() < 0.45:
+                    x, y = place(along, rng.choice((1, 2, 3, 4)))
+                    bristle(x, y, out, lean, rng.choice((2, 2, 3)), rng.choice((-1, -0.5, 0, 0.5, 1)), 0,
+                            (rng.choice(fuzz), rng.choice(dark)))
+            if rng.random() < 0.06:
+                put(*place(along, rng.choice((2, 3, 4))), rng.choice(pores))
+            # The long bristles, in tufts.
+            if rng.random() < 0.55 * tuft + 0.06:
+                x, y = place(along, rng.choice((0, 1, 2, 3)))
+                shades = pale if rng.random() < 0.3 else dark
+                length = rng.choice((5, 6, 6, 7, 8, 8, 9, 10, 11))
+                slope = rng.gauss(0, 0.36)
+                for _hair in range(rng.choice((1, 1, 1, 2, 2, 3))):
+                    bristle(x, y, out, lean, length, slope, rng.uniform(-0.03, 0.03), shades)
+                    slope += rng.choice((-1, 1)) * rng.uniform(0.15, 0.35)
+                    length = max(4, length + rng.choice((-2, -1, 0, 1)))
+    # The guard hairs: now and then, only where the coat is thin round about,
+    # one hair out to the frame's edge, standing on its own.
+    guard = random.Random(0x6A2D)
+    for span, place, out, lean in sides:
+        last = -99
+        for along in span:
+            if along - last < 9 or guard.random() > 0.08:
+                continue
+            x, y = place(along, 0)
+            hairs = 0
+            for side_step in range(-3, 4):
+                for step in range(4, 9):
+                    px = x + out[0] * step + lean[0] * side_step
+                    py = y + out[1] * step + lean[1] * side_step
+                    if 0 <= px < width and 0 <= py < height and pixels[px, py][3]:
+                        hairs += 1
+            if hairs > 3:
+                continue
+            last = along
+            bristle(x, y, out, lean, outside + guard.choice((0, 1, 1)), guard.gauss(0, 0.22),
+                    guard.uniform(-0.02, 0.02), pale if guard.random() < 0.5 else dark)
+    return picture
+
+
 _PAINTERS = {'rock': _rock_frame, 'bands': _band_frame, 'sand': _sand_frame,
-             'studs': _studs_frame, 'columns': _columns_frame, 'chess': _chess_frame}
+             'studs': _studs_frame, 'columns': _columns_frame, 'chess': _chess_frame,
+             'spider': _spider_frame}

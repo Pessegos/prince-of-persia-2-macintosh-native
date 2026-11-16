@@ -5,11 +5,12 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+import numpy
 from PIL import Image
 
 from pop2 import menu_theme
 from pop2.game_menu import GameMenu
-from pop2.menu_theme import CAVERNS, CHESS, DESERT, NEUTRAL, NEUTRAL_ROLES, PALACE, RUINS, TEMPLE, THEMES, c
+from pop2.menu_theme import CAVERNS, CHESS, DESERT, NEUTRAL, NEUTRAL_ROLES, PALACE, RUINS, SPIDER, TEMPLE, THEMES, c
 
 
 class FakeFont:
@@ -154,7 +155,7 @@ class MenuThemeTest(unittest.TestCase):
         # The last level (kind 6) shares the cavern state but is not a cavern:
         # the first version gave it the cavern rock. Its theme follows the room.
         self.assertIs(menu_theme.theme_for(game(6, caverns=object())), NEUTRAL)
-        for room, theme in ((0, PALACE), (1, PALACE), (2, NEUTRAL), (3, CHESS), (4, CHESS),
+        for room, theme in ((0, PALACE), (1, PALACE), (2, SPIDER), (3, CHESS), (4, CHESS), (8, SPIDER),
                             (5, NEUTRAL), (10, PALACE)):
             with self.subTest(room=room):
                 self.assertIs(menu_theme.theme_for(game(6, caverns=object(), room_id=room)), theme)
@@ -252,6 +253,14 @@ class MenuThemeTest(unittest.TestCase):
                     picture = menu_theme._frame_picture(theme.name, (120, 90)).load()
                     self.assertEqual(picture[60, 1], menu_theme._rgb(theme.bands[1][0]) + (255,))
                     self.assertEqual(picture[60, 45], menu_theme._rgb(theme.colour('panel')) + (255,))
+                elif theme.frame == 'spider':
+                    # A coat of hair: the band is solid, the hairs beyond it leave the room showing.
+                    self.assertEqual(theme.frame_width, 18)
+                    picture = menu_theme._frame_picture(theme.name, (120, 90)).load()
+                    self.assertEqual(picture[60, 45], menu_theme._rgb(theme.colour('panel')) + (255,))
+                    for point in ((60, 14), (60, 75), (14, 45), (105, 45)):    # in the velvet band
+                        self.assertEqual(picture[point][3], 255)
+                        self.assertGreater(sum(picture[point][:3]), 20)
                 elif theme.frame is not None:
                     # Drawn frames: sand, the ruins' band of sockets, the temple's columns,
                     # level 14's row of chessboard squares.
@@ -374,6 +383,99 @@ class MenuThemeTest(unittest.TestCase):
         plain = Image.new('RGBA', (512, 384), panel)
         menu_theme.watermark(plain, (64, 7, 448, 357))
         self.assertEqual(len(plain.getcolors()), 1)           # only the ruins carry a sign
+
+    def test_spider_coat_stands_out_of_the_band_and_never_into_the_panel(self):
+        size = (200, 150)
+        picture = menu_theme._frame_picture('spider', size)
+        pixels = picture.load()
+        width, height = size
+        zone = menu_theme._THICKNESS['spider'][0]
+        outside = zone - len(menu_theme._SPIDER_VELVET)
+        panel = menu_theme._rgb(SPIDER.colour('panel')) + (255,)
+        hairs = bare = 0
+        for y in range(height):
+            for x in range(width):
+                depth = min(x, y, width - 1 - x, height - 1 - y)
+                alpha = pixels[x, y][3]
+                if depth >= zone:
+                    self.assertEqual(pixels[x, y], panel)           # the panel stays plain under its text
+                elif depth >= outside:
+                    self.assertEqual(alpha, 255)                    # the band is whole
+                elif alpha:
+                    hairs += 1
+                else:
+                    bare += 1
+                if alpha:
+                    self.assertGreater(sum(pixels[x, y][:3]), 0)    # browns, never black
+        # Hairs reach out of the band, but leave gaps: a coat, not a solid rim.
+        self.assertGreater(hairs, 0.25 * (hairs + bare))
+        self.assertGreater(bare, 0.25 * (hairs + bare))
+        self.assertEqual(menu_theme._spider_frame(SPIDER, size, panel[:3]).tobytes(), picture.tobytes())
+
+    def test_spider_fur_covers_the_panel_and_darkens_only_its_backgrounds(self):
+        menu_theme.use(SPIDER)
+        self.addCleanup(menu_theme.use, None)
+        panel, row, text = (menu_theme._rgb(SPIDER.colour(role)) + (255,) for role in ('panel', 'row', 'text'))
+        image = Image.new('RGBA', (512, 384), panel)
+        image.paste(row, (80, 150, 440, 170))
+        image.paste(text, (200, 155, 300, 165))
+        rect = (64, 7, 448, 357)
+        menu_theme.watermark(image, rect)
+        colours = {colour for _count, colour in image.getcolors()}
+        self.assertEqual(len(colours), 5)                       # two backgrounds, each also darkened, and the text
+        self.assertIn(text, colours)
+        for colour in colours - {panel, row, text}:
+            self.assertLess(sum(colour[:3]), sum(row[:3]))
+        # The fur is over the whole panel (unlike the ruins' one sign), and
+        # only the panel: the first time, everywhere in it; never outside it.
+        pixels = image.load()
+        for left, top in ((64, 7), (256, 7), (64, 182), (256, 182)):
+            self.assertTrue(any(pixels[x, y] not in (panel, row, text)
+                                for x in range(left, left + 192) for y in range(top, top + 175)))
+        self.assertTrue(all(pixels[x, y] == panel for x in range(0, 64) for y in range(0, 384)))
+        once = image.tobytes()
+        menu_theme.watermark(image, rect)
+        self.assertEqual(image.tobytes(), once)                 # drawing it again changes nothing
+
+    def test_spider_lobes_looked_for_near_their_centres_are_the_whole_field(self):
+        # Every lobe against every pixel, as the lobes were first drawn.
+        def everywhere(width, height, cell):
+            rng = numpy.random.default_rng(0x7A2C)
+            count = int(width * height / (cell * cell)) + 1
+            points = numpy.column_stack((rng.uniform(-cell, width + cell, count),
+                                         rng.uniform(-cell, height + cell, count)))
+            stretch = rng.uniform(0.7, 1.35, count)
+            y, x = numpy.mgrid[0:height, 0:width].astype(float)
+            wx = x + 2.5 * numpy.sin(y / 9.0 + 0.7) + 1.8 * numpy.sin((x + y) / 13.0)
+            wy = y + 2.5 * numpy.sin(x / 10.0 + 1.9) + 1.8 * numpy.sin((x - y) / 15.0)
+            first = numpy.full((height, width), numpy.inf)
+            second = numpy.full((height, width), numpy.inf)
+            near_x = numpy.zeros((height, width))
+            near_y = numpy.zeros((height, width))
+            for (px, py), squash in zip(points, stretch):
+                dx, dy = (wx - px) * squash, (wy - py) / squash
+                distance = numpy.hypot(dx, dy)
+                closer = distance < first
+                second = numpy.where(closer, first, numpy.minimum(second, distance))
+                near_x = numpy.where(closer, dx, near_x)
+                near_y = numpy.where(closer, dy, near_y)
+                first = numpy.where(closer, distance, first)
+            radius = numpy.maximum(1.0, (first + second) / 2)
+            away = numpy.clip((near_x + near_y) / (1.41 * radius), 0, 1)
+            crevice = numpy.clip(1 - (second - first) / 4.0, 0, 1)
+            return numpy.clip(0.65 * away ** 1.6 + 0.8 * crevice ** 1.5, 0, 1), rng.random(20)
+
+        width, height = 230, 170            # wider than a lobe's reach, so the windows matter
+        for cell in (9.0, 15.0):
+            whole, after = everywhere(width, height, cell)
+            shade, rng = menu_theme._spider_shade(width, height, cell)
+            self.assertTrue(numpy.array_equal(shade, whole))
+            self.assertTrue(numpy.array_equal(rng.random(20), after))   # the specks' sequence is unchanged
+        # A frame's band: only the strip near the edges is wanted, and it is the same.
+        shade = menu_theme._spider_shade(width, height, 9.0, 18)[0]
+        y, x = numpy.mgrid[0:height, 0:width]
+        band = numpy.minimum(numpy.minimum(x, y), numpy.minimum(width - 1 - x, height - 1 - y)) < 18
+        self.assertTrue(numpy.array_equal(shade[band], everywhere(width, height, 9.0)[0][band]))
 
     def test_save_page_keeps_the_sign_when_only_its_list_is_redrawn(self):
         from pathlib import Path

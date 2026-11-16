@@ -36,14 +36,15 @@ stay neutral.
 | ruins | 6-9 | indigo panel, violet band of square sockets falling apart, the serpent sign as a watermark, sand-gold accent |
 | temple | 10-13 | dark red panel, two red columns under a carved frieze, flame accent |
 | chess | 14, native rooms 4-5 | violet-black panel, a row of violet and pearl chessboard squares, pearl text, the bronze pieces' gold accent |
+| spider | 14, native rooms 3 and 9 | near-black red-brown panel, a tarantula's coat of hair round it, the spider's fur faintly over the whole panel, cream text, tawny accent, wine selection |
 
 The last level (kind 6) changes look from room to room, so its menus follow
 the Prince's room, not the level (`_FINAL_ROOM_THEMES`). The tower over the
 city (native rooms 1-2) takes the palace theme: the Prince is back at the
 palace. The princess's room (native room 11), seen only in the ending, is the
-palace too. The chessboard (native rooms 4-5) has the chess theme. The
-spider (3, 9), crystals (6) and Escher maze (7, 8, 10) keep neutral until
-their own themes are drawn.
+palace too. The chessboard (native rooms 4-5) has the chess theme and the
+spider's rooms (native rooms 3 and 9) the spider theme. The crystals (6) and
+the Escher maze (7, 8, 10) keep neutral until their own themes are drawn.
 
 ## Frames
 
@@ -65,6 +66,7 @@ for another. The theme names its kind in `frame`:
 | `studs` | ruins | the palace wall's band of sunk square sockets with a carved ring at each corner; straight edges, damaged in a different way at each place (a piece broken out, a flake, a nick, a crack, a bite out of the inner edge, a crumbled socket, one lost corner), never deeper than five of its nine rows |
 | `columns` | temple | two columns with leaf capitals and plinths between the same carved band above and below: a frieze of rosettes between leaves, laid out in whole motifs for any width, with a rosette block at each corner |
 | `chess` | chess | one row of the board's squares, violet and pearl in turn, lit on the upper edge and shaded on the lower and right edges like the room's tiles; an odd number of near-square runs on each side keeps a violet square at every corner, and the board's dark front face runs under the lower row |
+| `spider` | spider | a tarantula's coat: a velvet band of dark browns carrying the same lobes as the panel's fur, smaller (deep crevices, shaded sides, lit tops with a glint, a few pores); short fuzz in two layers standing out of it; long bristles in tufts that thicken and thin along each side, each at its own angle, now and then two or three from one root splaying apart, a third of them catching the light; and, only where the coat is thin, a few long guard hairs on their own. Nothing is combed one way. The coat, the band's lobes and the guard hairs have random sequences of their own, so changing one leaves the others as they are |
 
 `_THICKNESS` gives each kind's thickness at the sides, top and bottom. The
 temple's bands and columns are thicker than the others, so its frame reaches a
@@ -77,7 +79,11 @@ no black: its worn edge lets the room show through, and only its shadow on the
 panel is black. A frame is drawn once for each size and kept; the rock frame is painted
 with whole arrays, pixel for pixel as its first painter drew it. The painters
 visit only the band of pixels near the edge; visiting the whole panel made a
-menu hesitate the first time it opened.
+menu hesitate the first time it opened. For the same reason the spider's lobes
+(`_spider_shade`) are looked for only near each lobe's centre, and the frame
+skips the lobes that cannot reach its band. The result is the same, pixel for
+pixel, as comparing every lobe with every pixel, and the F1 menu's spider frame
+is drawn in a tenth of a second instead of more than three.
 
 Saves and screenshots are drawn at the window's resolution. They call
 `menu_theme.panel_scaled(image, rect, point)`, which draws the same frame at
@@ -138,7 +144,8 @@ caverns' lava. The pool sits in a rim of rock made from the page's own
 background lit by the lava (`rim_shades`): the rim's top takes some of the
 lava's orange and its front face falls away a little darker than the page;
 four hard shades and a lumpy edge, no outline. A dropped picture falls until
-its foot meets the middle of the pool, then sinks into it, in front of the far\nhalf of the lava and under the near half, while it burns from the foot up
+its foot meets the middle of the pool, then sinks into it, in front of the far
+half of the lava and under the near half, while it burns from the foot up
 (`burn`, one second in all): a ragged bright edge just above the lava, an
 orange row, char above, a few sparks. It moves in the game's steps, twelve a
 second, and nothing is blended or faded.
@@ -146,14 +153,22 @@ second, and nothing is blended or faded.
 ## The sign on the page
 
 A theme may leave a sign on its pages like a watermark (`mark`, the colour the
-sign leans towards). Only the ruins have one: the invaders' serpent, large and
-darker than the menu, as it is daubed on the palace walls. Its shape is a list
-of points with the line's thickness at each (`_SERPENT`), joined by a smooth
+sign leans towards). The ruins have the invaders' serpent, large and darker
+than the menu, as it is daubed on the palace walls. Its shape is a list of
+points with the line's thickness at each (`_SERPENT`), joined by a smooth
 curve and drawn a little unevenly, like a brush.
+
+The spider's sign is its fur, not its shape, over the whole panel
+(`_spider_pattern`): rounded lobes packed together, a little stretched and
+bent, lit from the upper left. The shadowed side of each lobe and the crevice
+under it are a scatter of specks, thick in the crevice and thinning out across
+the lobe, as the room's art dithers them, with a few pores on the lit parts.
+It is fainter than the serpent (`_MARK_STRENGTH`: 0.3 of the way to the mark
+colour instead of 0.4).
 
 A page calls `menu_theme.watermark(image, rect)` after drawing everything
 else. Only pixels that still have one of the page's background colours
-(panel, row, selected, hover) change, each to a darker shade, so text,
+(panel, row, row_dark, selected, hover) change, each to a darker shade, so text,
 outlines and pictures are untouched and drawing the sign twice changes
 nothing. Three things a page must take care of:
 
@@ -197,7 +212,7 @@ whole number of screen pixels, so no letter has columns of different widths.
 ## Forcing a theme
 
 `POP2_MENU_THEME=neutral` turns the level themes off; a theme's name
-(`palace`, `desert`, `caverns`, `ruins`, `temple`, `chess`) uses it on every level.
+(`palace`, `desert`, `caverns`, `ruins`, `temple`, `chess`, `spider`) uses it on every level.
 The test package sets it to `neutral` so that layout tests check the same
 look whatever level their scene loads;
 `tests/test_menu_theme.py` covers the themes themselves.
