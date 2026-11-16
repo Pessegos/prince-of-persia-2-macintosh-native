@@ -383,12 +383,13 @@ class Final(Environment):
         view follows it (a5-0x4fc4), and SEQS 71 runs five frames. Entering
         the room restores its scripted Jaffar, who laughs (6:2d7e)."""
         from pop2.final_magic import (
-            COLLAPSE_SEQUENCE, DEFEAT_COLUMN, DEFEAT_FRAMES, DEFEAT_ROOM, DEFEAT_ROW)
+            COLLAPSE_SEQUENCE, DEFEAT_COLUMN, DEFEAT_FRAMES, DEFEAT_ROOM, DEFEAT_ROW,
+            defeat_moves)
 
         scene = self.scene
         motion = scene.terrain_motion
-        if (scene.death.counter <= 6 or scene.checkpoint is None
-                or motion.room == DEFEAT_ROOM or scene.level_complete):
+        if (not defeat_moves(scene.death.counter, scene.checkpoint is not None, motion.room)
+                or scene.level_complete):
             return
         state = scene.sequence_state
         x = DEFEAT_COLUMN * TILE_WIDTH

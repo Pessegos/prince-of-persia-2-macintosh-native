@@ -99,7 +99,8 @@ rejects a wrong model:
    starts in state 2, tests its cell when thrown, restarts on a second cast
    and resets songs 265/258 as 9:2880, 9:25e4 and 9:27a0 do. Traced by
    reading, not yet run natively.
-5. 9:0062 (the defeat) and InitOpps' room-11 laugh.
+5. 9:0062 (the defeat) and InitOpps' room-11 laugh. **Done 2026-11-16**
+   (`tools.probe_final_defeat`, 364 + 2,560 cases, no difference).
 
 ### 4. Behaviour that was assumed, not traced
 

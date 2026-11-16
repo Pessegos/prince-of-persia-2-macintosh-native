@@ -1186,3 +1186,26 @@ Read from CODE 9 (not yet run natively):
 
 `tests.test_final_magic` checks the initial state 2, the throw-time wall
 (column 2, X 124, sound 259, reset 265) and the off-screen reset 258.
+
+## Native probe of the defeat and the room-11 laugh (2026-11-16)
+
+`python -m tools.probe_final_defeat` runs two original pieces over LEVL
+2013:
+
+- GenCtrl 6:0780-07a2 and 9:0062 for a dead type-0 Kid: ALIVE 0-12,
+  native rooms 1-14 and a rebirth bank (a5-0x5018) present or not, 364
+  cases. SetSeq 6:0006 and AnimChar 4:2c0c are supplied and recorded. In
+  the 78 cases that move him, the view room and his room become 11, column
+  6, row 2, X 513, Y 352, SEQS 71 and five AnimChar calls; in the others
+  nothing is written. The port's gate is now `final_magic.defeat_moves`
+  (ALIVE above `DEFEAT_DELAY` 6, a rebirth point, not already in the room).
+  The shadow's 6:07a2 branch and other levels are outside the probe.
+- InitOpps 6:2d64-2d9e for a record at zero cursor: actor types 0-9 and
+  SEQS 0-255, 2,560 cases, AddSound 5:4d84 supplied. Only a type-6 record
+  in SEQS 197 keeps it and laughs (261); other type-6 records take SEQS 2,
+  other types keep 22 or take 77. The port's rule is now
+  `opponent_records.fresh_sequence`. Type 10 (handled before 6:2d64) and the
+  record's other fields are excluded.
+
+No difference was found. `tests.test_probe_final_path` rejects an ALIVE
+bound of 5 and a laugh for every type.

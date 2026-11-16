@@ -81,6 +81,28 @@ class NativePathControllerTests(unittest.TestCase):
             with self.assertRaises(AssertionError):
                 run_probe(RECOVERY)
 
+    def test_the_original_defeat_and_laugh_agree_with_the_port(self):
+        from pop2 import final_magic, opponent_records
+        from tools import probe_final_defeat
+
+        totals = probe_final_defeat.run_probe(RECOVERY)
+        self.assertEqual(totals, {'6:0780/9:0062': 364, 'moved': 78, '6:2d64': 2560,
+                                  'laughs': 1})
+        # ALIVE above 6, not 5; and only type 6 keeps SEQS 197.
+        with patch.object(final_magic, 'DEFEAT_DELAY', 5):
+            with self.assertRaises(AssertionError):
+                probe_final_defeat.run_probe(RECOVERY)
+
+        def every_type_laughs(actor_type, sequence):
+            if sequence == 197:
+                return sequence, 261
+            return (2, None) if actor_type == 6 else ((sequence if sequence == 22 else 77), None)
+
+        with patch.object(probe_final_defeat, 'fresh_sequence', every_type_laughs):
+            with self.assertRaises(AssertionError):
+                probe_final_defeat.run_probe(RECOVERY)
+        self.assertIs(probe_final_defeat.fresh_sequence, opponent_records.fresh_sequence)
+
 
 if __name__ == '__main__':
     unittest.main()

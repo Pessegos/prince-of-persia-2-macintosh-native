@@ -50,6 +50,13 @@ ROOM_WIDTH = 510
 # (a5-0x4b88[6] = 513, scene X 306), row 2 (Y 2 * 120 + 112 = 352).
 DEFEAT_ROOM, DEFEAT_COLUMN, DEFEAT_ROW = 10, 6, 2
 DEFEAT_FRAMES = 5              # 9:00b2-00be: AnimChar five times
+DEFEAT_DELAY = 6               # 6:0794: ALIVE above 6
+
+
+def defeat_moves(counter, has_rebirth_point, room):
+    """GenCtrl 6:0780-079c with 9:0066-0074 for a dead type-0 Kid in level
+    14: whether 9:0062 moves him to the defeat room this frame."""
+    return counter > DEFEAT_DELAY and has_rebirth_point and room != DEFEAT_ROOM
 
 
 def turn_flash(pose, turns):

@@ -24,6 +24,21 @@ def corpse_sequence(opponent_set, level_kind, slot):
     return first + offset - 1 if offset else None
 
 
+LAUGH_SEQUENCE, LAUGH_SOUND = 197, 261
+
+
+def fresh_sequence(actor_type, sequence):
+    """InitOpps 6:2d64-2d9e for a record at zero cursor (type 10 aside):
+    a type-6 figure starts in SEQS 2, except the room-11 Jaffar, who keeps
+    SEQS 197 and laughs (AddSound(0x105)); other types keep SEQS 22 or take
+    77. Returns (sequence, sound or None)."""
+    if actor_type == 6:
+        if sequence == LAUGH_SEQUENCE:
+            return sequence, LAUGH_SOUND
+        return 2, None
+    return (sequence if sequence == 22 else 77), None
+
+
 @dataclass
 class GuardRoomRecord:
     sequence: int
@@ -60,14 +75,11 @@ class GuardRoomRecord:
                               current_y=initial_y, facing=state.facing, actor_type=state.actor_type,
                               level_kind=state.level_kind, callback_counter=state.callback_counter)
         state.__dict__.update(fresh.__dict__)
+        laugh = None
         if self.cursor:
             sequence = self.sequence
-        elif state.actor_type == 6:
-            # InitOpps 6:2d64-2d88: copies start in SEQS 2; the room-11
-            # scripted actor retains SEQS 197.
-            sequence = 197 if self.sequence == 197 else 2
         else:
-            sequence = self.sequence if self.sequence == 22 else 77
+            sequence, laugh = fresh_sequence(state.actor_type, self.sequence)
         state.select(sequence)
         state.cursor = self.cursor
         actor.selected_sequence = sequence
@@ -88,10 +100,9 @@ class GuardRoomRecord:
         actor.death_registered = dead
         # Imported room records clear the pending-cue word (6:2e20).
         actor.death_song_frames, actor.death_song_pending = -1, False
-        if not self.cursor and state.actor_type == 6 and sequence == 197:
-            # 6:2d7e: the room-11 Jaffar laughs as the room is entered
-            # (AddSound(0x105)).
-            state.sound_events.append(261)
+        if laugh is not None:
+            # 6:2d7e: the room-11 Jaffar laughs as the room is entered.
+            state.sound_events.append(laugh)
         actor.targetable = actor.life > 0
         state.animation_state = 1
         state.horizontal_velocity = state.vertical_velocity = 0
