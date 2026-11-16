@@ -1833,9 +1833,14 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
             return
         self.update_airborne_controls()
         if not self.resume_combat_turn():
-            if not self.resume_sword_attack_after_block():
-                self.resume_sword_parry_recoil()
-            self.resume_sword_controls()
+            # OnAlert runs once a frame: the counter (66 at 150/161) and the
+            # forced recoil are its selections. After either, the bank is not
+            # sampled again this frame, or a key still held when DoStrike's
+            # ClearControls ran would latch as a fresh request one frame early
+            # and survive its release (an extra block after a counter).
+            if not (self.resume_sword_attack_after_block()
+                    or self.resume_sword_parry_recoil()):
+                self.resume_sword_controls()
         if self.waiting_controls_available():
             self.update_waiting_controls()
         self.update_native_ledge()

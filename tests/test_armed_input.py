@@ -190,6 +190,30 @@ class ArmedBufferSceneTests(unittest.TestCase):
         scene.set_key_state('ctrl', False)
         self.assertEqual(scene.armed_pending().kind, 'sword_block')
 
+    def test_up_released_after_a_counter_starts_blocks_only_once(self):
+        # OnAlert runs once a frame (6:24bc): the counter's ClearControls
+        # (DoStrike 6:280c) is followed by the NEXT frame's sample. The port
+        # used to sample again in the same frame, so an Up held for the
+        # block and released just after the counter started latched as a
+        # fresh tap (-1) and blocked a second time after the strike.
+        for facing in (0, 1):
+            with self.subTest(facing=facing):
+                scene = self.fixture.guarded_sword_scene(facing)
+                scene.in_animation_tick = True
+                scene.set_key_state('up', True)
+                scene.set_key_state('ctrl', True)
+                sequences = []
+                for tick in range(24):
+                    if tick == 3:
+                        scene.set_key_state('up', False)
+                    scene.advance_animation()
+                    if scene.action == 151:
+                        scene.set_key_state('ctrl', False)
+                    if not sequences or sequences[-1] != scene.sequence_state.sequence_id:
+                        sequences.append(scene.sequence_state.sequence_id)
+                self.assertIn(66, sequences)
+                self.assertEqual(sequences.count(62), 1, sequences)
+
     def test_a_released_ctrl_tap_before_the_gate_is_cancelled(self):
         # 4:3f38: no modifier held writes 0, even over a pending -2. The
         # port used to keep the strike (host extension, removed 2026-10-31).
