@@ -21,6 +21,12 @@ def worker_command(module, *arguments):
     return [sys.executable, *unbuffered, '-m', module, *map(str, arguments)]
 
 
+# NumPy's OpenBLAS commits about half a gigabyte per process for its thread
+# buffers; the asset import runs some twenty processes and none does linear
+# algebra.
+SINGLE_THREAD_BLAS = {'OPENBLAS_NUM_THREADS': '1'}
+
+
 def worker_environment():
     environment = os.environ.copy()
     if BUNDLED or getattr(sys, 'frozen', False):

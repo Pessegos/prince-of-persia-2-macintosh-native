@@ -10,7 +10,7 @@ from threading import Event
 
 from pop2.paths import PROJECT_DIR
 from pop2.process_job import terminate_tree
-from pop2.child_process import worker_command, worker_environment
+from pop2.child_process import SINGLE_THREAD_BLAS, worker_command, worker_environment
 
 
 class ImportCancelled(Exception):
@@ -56,7 +56,8 @@ class AssetImport:
                 output.flush()
                 with subprocess.Popen(command, cwd=PROJECT_DIR, stdout=subprocess.PIPE,
                                       stderr=subprocess.STDOUT, text=True, encoding='utf-8',
-                                      errors='replace', env=worker_environment(), **options) as process:
+                                      errors='replace', env={**SINGLE_THREAD_BLAS, **worker_environment()},
+                                      **options) as process:
                     self.process = process
                     errors = deque(maxlen=12)
                     try:
