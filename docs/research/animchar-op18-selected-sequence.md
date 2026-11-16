@@ -144,7 +144,9 @@ Following `-1` links from every `-21` with a non-zero operand:
 So no link chain carries a non-zero `+0x34` into a `-18`. Only a later
 JumpSeq could do so, which needs 11 to survive the hang. That happens only
 when the climb is taken in the two frames after `-21 11`, and the port
-already resets `sequence_mode` when a hang starts. The port's extra clear of
+already resets `sequence_mode` when a hang starts (since 2026-11-16 only
+for mode 11: clearing every mode there took the temple flame's mode 13 away
+at each catch, see temple-remaining.md item 2). The port's extra clear of
 `sequence_mode` at `-18` is therefore inert in ordinary play [I]. Removing it
 is optional.
 

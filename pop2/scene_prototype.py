@@ -1571,7 +1571,11 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         self.ledge_grip_delay = 12 if sequence_id == 15 else 0
         self.player_x += offset
         self.sequence_state.horizontal_velocity = self.sequence_state.vertical_velocity = 0
-        self.sequence_state.sequence_mode = 0
+        # The hang control 6:18e0 clears +0x34 only when it lets go (6:1916),
+        # so a catch keeps the temple flame's mode 13. Mode 11 (SEQS 210)
+        # still clears here: its immediate release (6:190c) is not ported.
+        if self.sequence_state.sequence_mode == 11:
+            self.sequence_state.sequence_mode = 0
         self.begin_ledge_controls(sequence_id)
         self.start_sequence(sequence_id)
         if sequence_id == 15:

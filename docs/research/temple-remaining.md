@@ -54,6 +54,23 @@ way to find the bugs that remain in the birdhead fights, alerts, falls,
 scythes and blades, gates held by corpses and debris on guards. State any
 supplied life. Each defect found gets its own trace, fix and regression.
 
+**Progress 2026-11-16.**
+
+- The route audit's search could not be replayed with opponents on: a
+  restored copy kept the later clock, which `Combat.step` compares with the
+  saved `last_guard_at`, so the guards skipped or repeated frames. The
+  harness now saves the clock (`tests.test_temple_routes`).
+- Level 13 with a real wake: after the peaceful route to the altar room,
+  three steps behind the birdhead wake it, it kills the Prince, the shadow
+  brings the flame and the rest of the route runs with opponents on to the
+  exit. This found a fault: the port cleared mode 13 whenever the Prince
+  caught a ledge (`_begin_native_ledge`), so the armed opponent of native
+  room 13 no longer bowed and killed him with one stroke. The hang control
+  6:18e0 clears +0x34 only when it lets go (6:1906-1916), and none of the
+  hang and climb sequences (SEQS 15, 10, 80, 11-20) has a `-21`. The catch
+  now keeps the mode (mode 11's immediate release is still not ported).
+  `tests.test_temple_routes` (fails on the old code).
+
 ### 3. Level 12: the landing beside the flaming sword
 
 In the video the Prince runs east past the sword. In the port he lands

@@ -116,6 +116,38 @@ class TempleRouteTests(unittest.TestCase):
 
         self.assertEqual(run(True), run(False))
 
+    def test_level_13s_birdhead_wakes_to_steps_and_the_flame_survives_the_climb(self):
+        # The peaceful route to the altar room, then opponents on: three
+        # steps behind the birdhead wake it (no supplied waking), it kills
+        # the Prince, the shadow brings the flame, and the armed opponent of
+        # native room 13 bows. A catch used to clear mode 13 (the hang
+        # control 6:18e0 clears it only when letting go, 6:1916), and that
+        # opponent then killed the Prince with one stroke.
+        route = ROUTES[13]
+        index = route.index('altar')
+        _reached, _trace, harness = replay(13, route[:index], draw=False)
+        self.addCleanup(harness.close)
+        scene = harness.scene
+        scene.peaceful = False
+        for name in ('stepL', 'stepL', 'stepL'):
+            play(harness, MACROS[name])
+        for _ in range(600):
+            harness.tick()
+            if scene.combat.player.alive and scene.game.caverns.altar == -1:
+                break
+        settle(harness)
+        self.assertEqual(scene.game.caverns.altar, -1)
+        self.assertEqual(scene.sequence_state.sequence_mode, 13)
+        modes = []
+        for name in route[index + 1:]:
+            play(harness, MACROS[name])
+            settle(harness)
+            modes.append(scene.sequence_state.sequence_mode)
+            if harness.goal() or not scene.combat.player.alive:
+                break
+        self.assertTrue(harness.goal(), harness.player())
+        self.assertEqual(set(modes), {13})
+
     def test_level_12s_loose_floors_hold_their_gates_open(self):
         _reached, trace, harness = replay(12, LEVEL_12_GATES, draw=False)
         self.addCleanup(harness.close)
