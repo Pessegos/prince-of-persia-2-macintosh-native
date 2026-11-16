@@ -3,7 +3,7 @@ import unittest
 
 from PIL import Image, ImageDraw
 
-from pop2.bitmap_labels import label_text
+from pop2.bitmap_labels import crisp, label_text
 
 
 class BitmapLabelTests(unittest.TestCase):
@@ -46,6 +46,61 @@ class BitmapLabelTests(unittest.TestCase):
         self.assertIsNotNone(rendered.getbbox())
         self.assertGreater(rendered.width, 2)
         self.assertEqual(font.glyphs, dict.fromkeys(range(128)))
+
+
+class CrispScaleTests(unittest.TestCase):
+    def test_near_whole_window_pixels_snap_and_others_stay(self):
+        self.assertEqual(crisp(0.7, 3) * 3, 2)            # small text in a 3x window: 2.1 -> 2
+        self.assertEqual(crisp(1, 3), 1)
+        self.assertEqual(crisp(0.7, 2), 0.7)              # 1.4 is not near a whole number
+        self.assertEqual(crisp(0.61, 3, limit=0.61), 0.61)   # rounding up to 2 would not fit
+        self.assertEqual(crisp(0.1, 3), 0.1)              # below one window pixel
+
+
+class WindowPageTextTests(unittest.TestCase):
+    """The pages drawn at the window's resolution, in a 3x window."""
+
+    def setUp(self):
+        from tests.test_terrain import RooftopSceneTests
+        RooftopSceneTests.setUp(self)
+
+    def test_labels_take_whole_window_pixels_per_font_pixel(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from unittest.mock import Mock, patch
+
+        from pop2.cutscene_gallery import CutsceneGallery
+        from pop2.cutscenes import CHAPTERS, CutsceneCollection
+        from pop2.save_slots import SaveBrowser, SaveSlot
+        from pop2.screenshot_gallery import ScreenshotGallery
+
+        resize, uneven = Image.Image.resize, []
+
+        def watch(image, size, *args, **kwargs):
+            # Labels are short; at 2.1 window pixels per font pixel their columns
+            # came out two or three pixels wide. Text shrunk to fit stays as it is.
+            factor = size[0] / image.width
+            if image.height <= 40 and factor >= 1.85 and abs(factor - round(factor)) > 0.02:
+                uneven.append((image.size, size))
+            return resize(image, size, *args, **kwargs)
+
+        font = self.scene.ui_font
+        frame = Image.new('RGBA', (1530, 1152), (0, 0, 0, 255))
+        slots = tuple(SaveSlot(Path(f'none-{i}'), f'A rather long saved game {i}', True, level=i + 1,
+                               date=f'16/11/2026 10:3{i}') for i in range(5))
+        folder = TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        pages = {
+            'saves': lambda: SaveBrowser(slots, 'load', selected=1),
+            'screenshots': lambda: ScreenshotGallery(folder.name),
+            'cutscenes': lambda: CutsceneGallery(CutsceneCollection(seen={c.key for c in CHAPTERS}),
+                                                 Mock(return_value=Image.new('RGB', (510, 384), '#773311'))),
+        }
+        for name, page in pages.items():
+            uneven.clear()
+            with self.subTest(page=name), patch.object(Image.Image, 'resize', watch):
+                page().draw(frame, font, visible=True)
+                self.assertEqual(uneven, [])
 
 
 if __name__ == '__main__':

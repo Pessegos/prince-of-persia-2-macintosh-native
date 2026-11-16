@@ -9,6 +9,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
+from pop2.bitmap_labels import crisp
 from pop2.save_game import SAVE_DIRECTORY, decode_preview, read_document, save_name
 from pop2 import menu_theme
 from pop2.menu_theme import c
@@ -518,14 +519,18 @@ class SaveBrowser:
                 ink = glyph.getbbox()
                 if ink:
                     glyph = glyph.crop((0, ink[1], glyph.width, ink[3]))
-                scale = min(0.7 if small else 1, width / max(1, glyph.width))
-                size = (max(1, round(glyph.width * scale * sx)),
-                        max(1, round(glyph.height * scale * sy)))
+                fit = width / max(1, glyph.width)
+                scale = min(0.7 if small else 1, fit)
+                # Whole window pixels per font pixel where that is near (crisp).
+                scale_x = crisp(scale, sx, fit)
+                scale_y = crisp(scale, sy) if scale_x != scale else scale
+                size = (max(1, round(glyph.width * scale_x * sx)),
+                        max(1, round(glyph.height * scale_y * sy)))
                 if glyph.size != size:
                     glyph = glyph.resize(size, Image.Resampling.NEAREST)
                 # y is where capitals start: a taller letter (l, ?) or a lower first ink
                 # (only small letters) must not move the line's baseline.
-                drop = ((ink[1] if ink else 0) - cap_top()) * scale
+                drop = ((ink[1] if ink else 0) - cap_top()) * scale_y
                 remember(self.text_cache, key, (glyph, drop))
             x, y = point(x, y + drop)
             x -= glyph.width if align == 'right' else glyph.width // 2 if align == 'center' else 0
@@ -653,7 +658,7 @@ class SaveBrowser:
                 y = top + 6 + index * 11
                 text(value, name_x, y, name_color, name_width, True)
                 if highlighted:
-                    width = min(name_width, glyphs(value, name_color).width * 0.7)
+                    width = min(name_width, glyphs(value, name_color).width * crisp(0.7, sx))
                     line(((name_x, y + 10), (name_x + width, y + 10)), cyan)
             if can_rename and self.hovered == 25 and not modal:
                 # Wide page: under the name, in the room kept above the details (DETAIL_GAP).

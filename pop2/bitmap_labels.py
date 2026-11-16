@@ -20,6 +20,25 @@ def fallback_font(height, east_asian=False, emoji=False):
     return ImageFont.load_default()
 
 
+def crisp(scale, window, limit=None):
+    """A label's scale, in game units, snapped so that each pixel of the font
+    covers a whole number of window pixels when that is a near neighbour.
+
+    Text drawn at window resolution is enlarged without smoothing: at 2.1
+    window pixels per font pixel, some columns came out two pixels wide and
+    others three (three dots of 6, 6 and 7). Within a quarter of a whole
+    number the label takes that whole number instead; ``limit`` is the largest
+    scale that still fits, and a rounding up past it keeps the scale as it was.
+    """
+    factor = scale * window
+    whole = round(factor)
+    if whole < 1 or abs(factor - whole) > 0.25:
+        return scale
+    if limit is not None and whole > limit * window + 1e-9:
+        return scale
+    return whole / window
+
+
 def native_character(font, char):
     try:
         encoded = char.encode('mac_roman')

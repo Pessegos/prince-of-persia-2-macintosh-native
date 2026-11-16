@@ -8,6 +8,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageOps
 
 from pop2 import menu_theme
+from pop2.bitmap_labels import crisp
 from pop2.cutscenes import CHAPTERS, chapter_available
 from pop2.menu_theme import c
 from pop2.menu_animation import spring_step
@@ -385,15 +386,21 @@ class CutsceneGallery:
         if not lines:
             return
         raw = [glyph(line) for line in lines]
-        scale = min(scale, (rect[2] - rect[0] - 4) / max(g.width for g in raw),
-                    (rect[3] - rect[1] - 2) / (len(raw) * font.height))
-        height = font.height * scale
+        fit_x = (rect[2] - rect[0] - 4) / max(g.width for g in raw)
+        fit_y = (rect[3] - rect[1] - 2) / (len(raw) * font.height)
+        scale = min(scale, fit_x, fit_y)
+        # Whole window pixels per font pixel where that is near and still fits (crisp).
+        scale_x = crisp(scale, sx, fit_x)
+        scale_y = crisp(scale, sy, fit_y) if scale_x != scale else scale
+        if scale_y == scale:
+            scale_x = scale
+        height = font.height * scale_y
         y = (rect[1] + rect[3] - len(raw) * height) / 2
         for line, g in zip(lines, raw):
-            key = id(font), line, color, round(scale * sx, 4), round(scale * sy, 4)
+            key = id(font), line, color, round(scale_x * sx, 4), round(scale_y * sy, 4)
             if key not in self.text_cache:
-                self.text_cache[key] = g.resize((max(1, round(g.width * scale * sx)),
-                    max(1, round(g.height * scale * sy))), Image.Resampling.NEAREST)
+                self.text_cache[key] = g.resize((max(1, round(g.width * scale_x * sx)),
+                    max(1, round(g.height * scale_y * sy))), Image.Resampling.NEAREST)
             g = self.text_cache[key]
             x = round((rect[0] + rect[2]) / 2 * sx - g.width / 2)
             image.alpha_composite(g, (x, round(y * sy)))

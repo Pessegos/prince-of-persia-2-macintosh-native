@@ -15,7 +15,7 @@ import sys
 import numpy
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageOps
 
-from pop2.bitmap_labels import label_text
+from pop2.bitmap_labels import crisp, label_text
 from pop2 import menu_theme
 from pop2.menu_theme import c
 from pop2.save_slots import remember
@@ -949,17 +949,20 @@ class ScreenshotGallery:
                 value = value[-low:] if tail and low else value[:low]
                 value = suffix + value if tail else value + suffix
             raw = glyph(value, color)
+            # Whole window pixels per font pixel where that is near (crisp).
+            scale_x = crisp(scale, sx, width / max(1, raw.width))
+            scale_y = crisp(scale, sy) if scale_x != scale else scale
             ink = raw.getbbox()
             if ink:
                 # flush: the first letter's ink, not its side bearing, starts at x.
                 raw = raw.crop((ink[0] if flush else 0, ink[1], raw.width, ink[3]))
                 # y is where capitals start: a taller letter (l, ?) or only small letters
                 # must not move the line's baseline.
-                y += (ink[1] - cap_top()) * scale
+                y += (ink[1] - cap_top()) * scale_y
             key = ('fit', id(font), value, color, scale, sx, sy, flush)
             if key not in self.text_cache:
-                remember(self.text_cache, key, raw.resize((max(1, round(raw.width * scale * sx)),
-                    max(1, round(raw.height * scale * sy))), Image.Resampling.NEAREST))
+                remember(self.text_cache, key, raw.resize((max(1, round(raw.width * scale_x * sx)),
+                    max(1, round(raw.height * scale_y * sy))), Image.Resampling.NEAREST))
             raw = self.text_cache[key]
             x, y = point(x, y)
             image.paste(raw, (x - raw.width if right else x, y), raw)
@@ -1207,19 +1210,20 @@ class ScreenshotGallery:
             box(self.PATH, c('#0c0c0c'), cyan if self.focus == 40 else c('#626262'))
             display_path = self.draft.replace('\\', '/')
             raw = glyph(display_path)
-            offset = max(0, glyph(display_path[:self.caret]).width * 0.7 - 364)
+            path_x, path_y = crisp(0.7, sx), crisp(0.7, sy)
+            offset = max(0, glyph(display_path[:self.caret]).width * path_x - 364)
             start, end = sorted((self.caret, self.anchor))
             if start != end:
-                a = max(70, 70 + glyph(display_path[:start]).width * 0.7 - offset)
-                b = min(442, 70 + glyph(display_path[:end]).width * 0.7 - offset)
+                a = max(70, 70 + glyph(display_path[:start]).width * path_x - offset)
+                b = min(442, 70 + glyph(display_path[:end]).width * path_x - offset)
                 if b > a:
                     box((a, 95, b, 109), c('#385462'), None)
-            raw = raw.resize((max(1, round(raw.width * 0.7 * sx)), max(1, round(raw.height * 0.7 * sy))),
+            raw = raw.resize((max(1, round(raw.width * path_x * sx)), max(1, round(raw.height * path_y * sy))),
                              Image.Resampling.NEAREST)
             raw = raw.crop((round(offset * sx), 0, min(raw.width, round((offset + 372) * sx)), raw.height))
             image.paste(raw, point(70, 95), raw)
             if self.focus == 40:
-                x = 70 + glyph(display_path[:self.caret]).width * 0.7 - offset
+                x = 70 + glyph(display_path[:self.caret]).width * path_x - offset
                 draw.line([point(x, 94), point(x, 109)], fill=cyan, width=max(1, round(sx)))
             for i, (rect, label) in enumerate(zip(self.FOLDER_TOOLS, ('Default', 'Home', 'Up', 'Drives'))):
                 button(rect, label, 41 + i, centered=True)
