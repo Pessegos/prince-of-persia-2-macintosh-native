@@ -568,7 +568,24 @@ the active list, so out of view the figure keeps the move it was in and
 resumes when the Prince comes (6:42fc-430a). The port lets only a burning
 figure (SEQS 230) finish out of view, so the victory still arrives. The
 video supports the view rule: the Prince crosses room 7's upper floor
-unharmed while the figure stands in room 8. The relocation's call site is assumed, not traced.
+unharmed while the figure stands in room 8.
+
+The relocation's call sites, traced 2026-11-16: JaffarUpdateOppInfo 9:185a
+is reached only through SetSpecialOppInfo 6:33bc (type 6), which runs when
+a record is stored in a room bank: UpdateOppInfo 6:30b0 at 6:3164 and
+TransferOppInfo 6:3304 at 6:338e. Their callers are CutOpponent 6:424c
+(6:42fc, 6:433a), the room change's opponent pass (6:45fe, 6:4606) and the
+copies' hand-off 9:1a44. 9:185a does nothing while the view room
+(a5-0x4fc4) is native 7 or 8, or when the target equals the last position;
+otherwise it sets the last position, the row, column and X1 + 10 of the
+target, then SetCharFloor, SEQS 2 and AnimChar, and writes the record.
+It keeps the record in its own room's bank: in native room 8 it subtracts
+510 and 10 columns, so a target in room 7 is stored in room 8's
+coordinates, left of its edge, and HoneIn's +510 counts it as arrived.
+The port moves such a figure into the target room instead (port
+exception: the native one would not be seen in room 7 until it walked
+back). The port's per-frame check while the Prince is outside the palace
+is equivalent to the store, which happens once as he leaves.
 The turn count (a5-0x5004) and the shadow are now ported (next section),
 so the figure flees from a strong shadow.
 

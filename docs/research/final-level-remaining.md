@@ -107,6 +107,8 @@ rejects a wrong model:
 ### 4. Behaviour that was assumed, not traced
 
 - The relocation's call site: CutOpponent 6:424c -> UpdateOppInfo 6:30b0.
+  **Traced 2026-11-16**: SetSpecialOppInfo 6:33bc from UpdateOppInfo and
+  TransferOppInfo; the record stays in its own bank (port exception noted).
 - The port choice that only a burning figure (SEQS 230) finishes out of
   view: establish what the original does out of view, and keep the victory
   reachable. **Answered 2026-11-16**: 9:25d0 moves the view room
