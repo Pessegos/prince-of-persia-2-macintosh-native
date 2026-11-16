@@ -1257,12 +1257,12 @@ class GameMenuSceneTests(unittest.TestCase):
         self.assertEqual({a for *_rgb, a in mark.getdata()}, {0, 128})
         credit = self.scene.ui_font.text("by Pessegos", "#999999")
         top = menu.ABOUT_DIALOG[1] + 155
-        self.assertLess(396 + mark.width, menu.ABOUT_DIALOG[2] - 4)
-        self.assertGreater(391 - credit.width, menu.ABOUT_DIALOG[0])
+        self.assertLess(400 + mark.width, menu.ABOUT_DIALOG[2] - 4)
+        self.assertGreater(395 - credit.width, menu.ABOUT_DIALOG[0])
         # The front lobe's centre: the light peach blended halfway into the panel
         # (the pixel above the lobe, in the mark's empty top row, is bare panel).
-        panel = image.getpixel((396 + 9, top))
-        lobe = image.getpixel((396 + 9, top + 8))
+        panel = image.getpixel((400 + 9, top))
+        lobe = image.getpixel((400 + 9, top + 8))
         expected = tuple(round((p + q) / 2) for p, q in zip((255, 158, 129), panel[:3]))
         for got, want in zip(lobe[:3], expected):
             self.assertLessEqual(abs(got - want), 1)

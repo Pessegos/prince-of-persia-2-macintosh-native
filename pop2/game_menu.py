@@ -466,7 +466,7 @@ class GameMenu:
             button(self.ABOUT_BUTTON, "Back" if self.return_to_menu else "Close", True)
             # Clear of the frame's inner edge (the frame stands a few units inside the panel).
             # The peach takes the credit's old right edge; the name moves left of it.
-            text("by Pessegos", 391, panel_top + 159, muted, "right")
+            text("by Pessegos", 395, panel_top + 159, muted, "right")
         elif self.page == "options":
             text("Options", 256, panel_top + 14, gold, "center")
             items = self.option_items
@@ -494,7 +494,7 @@ class GameMenu:
         menu_theme.watermark(image, panel)
         if self.page == "about":
             # After the theme's sign, which only recolours bare panel pixels.
-            image.alpha_composite(peach_mark(), (396, panel_top + 155))
+            image.alpha_composite(peach_mark(), (400, panel_top + 155))
         return image
 
     def draw_hall(self, image, draw, text, button, font, gold, white, muted):
