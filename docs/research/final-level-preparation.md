@@ -1275,7 +1275,16 @@ Read from CODE 9, then run natively (below):
   now return those resets, and `Final.reset_sounds` stops them (a song with
   `stop_song`, a sound with `stop_sound`).
 - 9:24ee, the hit on Jaffar, already matched; its room offset is a plain
-  +/-510 with no adjacency check.
+  +/-510 with no adjacency check (0 in his room, -510 when he is in native
+  room 8, else +510). Read again on 2026-11-16: the gates (type 6, ALIVE
+  negative, not SEQS 230; each type-12 object on his row, not bursting),
+  the span against GetCharEdges' working edges (left a5-0x3564, exclusive
+  right -0x3566) and the burst X (left - 199 flying right, right - 215
+  flying left, i.e. drawing left + 8 and right - 7) agree with
+  `fireball_hits` and `Final.advance_fireball`. One port exception: the
+  original writes that burst X in his room's coordinates without moving
+  the fire's room word, so a hit across the palace's middle bursts 510 px
+  away (off screen); the port subtracts the offset and bursts it at him.
 - 9:25d0 moves the view room (a5-0x4fc4) to the burning Jaffar's room. The
   original therefore never lets him burn out of view; the port has no
   separate view room and keeps its exception that a burning figure
