@@ -94,6 +94,28 @@ format. CODE 2:132c-1386 chooses the rebirth bank or initial save header;
 See [REBIRTH_RECOVERY.md](REBIRTH_RECOVERY.md) for bank and checkpoint limits.
 The currently supported gameplay levels are 1-3; later levels are not claimed.
 
+### What a checkpoint keeps (2026-11-16)
+
+A checkpoint keeps every room's actors and the level's mechanisms, so every
+record they can hold must be savable. Two were not: level 12's genie
+(`Jinnee`, kept by a checkpoint reached while he runs or stands frozen in
+room 23) and level 14's palace figure's path record (`PathInfo`, opponent
++0x1c..+0x20). Either made every later save fail. Both are saved records now.
+
+Level 14's magic (turns, shadow, body, fire) belongs to the Kid, not the
+world: SetKidDefaults 2:5cf4 clears the turn count a5-0x5004 at 2:5e56 at
+every level start and rebirth. A checkpoint no longer copies it, so a retry
+and a loaded save both start with no turns. Before, a retry restored the
+turns made before the checkpoint.
+
+A record without a field added after its first saves takes that field's
+default. Every new field must have one. `CavernState.jinnee` (43f1fe5), and
+the temple's `rocks`, `trapdoors` and `flame` before it, had been required,
+which refused every earlier cavern save of levels 3-14.
+`tests/test_save_records.py` walks every record type a save can reach,
+lists the fields typed `object` with the record each holds, and freezes the
+fields without a default.
+
 ## Compatibility And Safety
 
 Version-one native-port snapshot files remain readable. They are validated

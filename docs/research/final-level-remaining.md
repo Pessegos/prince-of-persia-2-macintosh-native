@@ -34,6 +34,13 @@ still waiting for the user's review, which must not reach main with this work.
 
 ### 1. Saving during the battle (a confirmed fault)
 
+**Done 2026-11-16.** A save keeps only the checkpoint, so the faults were in
+the rebirth snapshot: `PathInfo` is a saved record now, and the checkpoint
+no longer copies `final_magic` (SetKidDefaults clears the turns, 2:5e56).
+`final_drops`, `final_events`/`final_songs`, `final_saved_prince` and
+`final_music_room` are frame or presentation state that a save never kept.
+See the ledger's "Saves and the retry" and `tests.test_save_records`.
+
 - `Fighter.final_info` holds a `PathInfo` (`pop2/combat.py:211`), which is
   not in `save_game.CLASSES`. `_pack(PathInfo())` raises
   `SaveGameError('Unsupported save value: PathInfo')`. Once the final Jaffar

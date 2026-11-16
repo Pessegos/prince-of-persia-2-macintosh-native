@@ -1,6 +1,6 @@
 """Versioned, resource-free native-port saves; never deserialize executable objects."""
 
-from dataclasses import fields, is_dataclass
+from dataclasses import MISSING, fields, is_dataclass
 from datetime import datetime, timezone
 import base64
 import hashlib
@@ -36,7 +36,9 @@ from pop2.ruins_ai import RuinsMind
 from pop2.story_progress import FRAMES_PER_MINUTE, MAX_STORY_MINUTES, StoryProgress
 from pop2.sequence_runtime import SequenceRuntime, SequenceState
 from pop2.skeleton import Skeleton, SkeletonRoomRecord
+from pop2.final_path import PathInfo
 from pop2.flame_sword import FlameSword
+from pop2.jinnee import Jinnee
 from pop2.temple_shadow import TempleShadow
 from pop2.terrain import TerrainMotion
 from pop2.scythes import SCYTHE_STATES, Scythes
@@ -58,6 +60,8 @@ CLASSES = {cls.__name__: cls for cls in (
     Potions, PressurePlates, Checkpoint, DeathState, RebirthSnapshot, SequenceState,
     Skeleton, SkeletonRoomRecord, FlameSword, GuardRoomRecord, TerrainMotion, WallSpikes, Scythes,
     RuinsMind, SlideRocks, TrapDoors, TempleShadow,
+    # Level 14's palace figure (opponent +0x1c..+0x20) and level 12's genie.
+    PathInfo, Jinnee,
 )}
 OMIT = {Lava: {'tables'}, LavaPool: {'tables'}, GateCrush: {'last_updated_at'},
         CavernState: {'entry_pending'},
@@ -203,6 +207,11 @@ def _unpack(value, resources, lava_tables, depth=0):
                          'final_scenery_drawn', 'final_scenery_room', 'final_escher'))
     if cls is Bridge:
         optional.update(('tension_level', 'tension', 'marks', 'wobble'))
+    # A field added after a record's first saves has a default; an older
+    # record without it takes that default (CavernState.jinnee, rocks,
+    # trapdoors and flame once refused every earlier cavern save).
+    optional.update(field.name for field in fields(cls)
+                    if field.default is not MISSING or field.default_factory is not MISSING)
     if (not isinstance(record, dict) or set(record) - allowed
             or allowed - set(record) - optional):
         raise SaveGameError(f'Invalid {cls.__name__} fields')

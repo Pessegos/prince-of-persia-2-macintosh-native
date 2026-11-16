@@ -1068,3 +1068,18 @@ timeline 30500 starts at 8.6 s and ends at 11.5 s, after the scene's 9.5 s.
 Evidence: static reading; `tests.test_final_spell` rejects the old
 operation and checks the follow sound plays once and holds the end. A
 re-import writes the corrected scene and its 30500 entry.
+
+## Saves and the retry (2026-11-16)
+
+A save keeps the rebirth snapshot only (`docs/SAVE_GAME.md`), never the
+battle's live state. Two faults sat in that snapshot:
+
+- The palace figure's `PathInfo` was not a saved record. A checkpoint first
+  reached after the figure ran (the Prince can leave room 4 right of cell
+  14 and come back) made every later save fail. It is saved now.
+- The checkpoint copied `final_magic` with the world, so a retry kept the
+  turns made before it. SetKidDefaults 2:5cf4 clears a5-0x5004 at 2:5e56 at
+  every level start and rebirth; the checkpoint no longer keeps the magic.
+
+`tests.test_save_records` rejects both, with the temple's genie and the
+older cavern saves fixed in the same change.

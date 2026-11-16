@@ -60,9 +60,14 @@ class RebirthSnapshot:
         world = deepcopy(combat.room_encounters, memo)
         ruins = getattr(combat, 'ruins', None)
         rooms = deepcopy(ruins.rooms, memo) if ruins is not None else None
-        caverns = getattr(getattr(combat, 'terrain', None), 'caverns', None)
+        caverns = deepcopy(getattr(getattr(combat, 'terrain', None), 'caverns', None))
+        if caverns is not None:
+            # Level 14's magic (turns, shadow, body, fire) is the Kid's, not
+            # the world's: SetKidDefaults clears the turn count at every
+            # level start and rebirth (2:5e56), so a checkpoint never keeps it.
+            vars(caverns).pop('final_magic', None)
         return cls(checkpoint, combat.player.state.facing, combat.player.max_life, world,
-                   ruins_rooms=rooms, caverns=deepcopy(caverns))
+                   ruins_rooms=rooms, caverns=caverns)
 
     def restore_world(self, combat):
         combat.reset()
@@ -77,6 +82,9 @@ class RebirthSnapshot:
         current = getattr(getattr(combat, 'terrain', None), 'caverns', None)
         if current is not None and self.caverns is not None:
             restored = deepcopy(self.caverns)
+            vars(restored).pop('final_magic', None)
+            if 'final_magic' in vars(current):
+                current.final_magic = None
             # These globals deliberately survive native rebirth; mechanisms do not.
             restored.bridge.tension_level, restored.bridge.tension = current.bridge.tension_level, current.bridge.tension
             restored.potions.flip_timer = current.potions.flip_timer

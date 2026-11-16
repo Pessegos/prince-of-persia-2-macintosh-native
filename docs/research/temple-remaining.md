@@ -20,6 +20,11 @@ fixed, and so are the 2026-11-14 slab, raster and guard-contact reports.
 
 ### 1. Saves (two confirmed faults)
 
+**Done 2026-11-16**, together with level 14's: `Jinnee` is a saved record,
+and a missing field with a default now takes the default (also `rocks`,
+`trapdoors` and `flame`, which refused earlier cavern saves too).
+`tests.test_save_records` walks every saved type.
+
 Checked on 2026-11-16 with `save_game._pack` and `_unpack`:
 
 - **Older saves of levels 3-14 no longer load.** `CavernState.jinnee` (added

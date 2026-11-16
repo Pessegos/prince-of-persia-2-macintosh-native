@@ -41,8 +41,10 @@ the real SEQS through `SequenceRuntime`, then the same `loose.press`,
   the picture. `tools/extract_assets.py` now copies the file.
 - `RUNNING_FLAGS` repeats FRAM 750's flags so that the plate does not depend on
   the artwork; a test and the probe check them against the resource.
-- He is not saved. A game saved in the 70 frames between drinking and the plate
-  has spent the flask without pressing it.
+- A save resumes at the level's start or a checkpoint. A checkpoint reached
+  while he runs (or stands frozen after the Prince left room 23) keeps him,
+  and he goes on when the Prince returns. Before 2026-11-16 such a checkpoint
+  made every save fail, as `Jinnee` was not a saved record.
 
 Not ported, because nothing reaches it in this room: his fall at an empty cell
 (4:35ba then 4:4c1e), wall barriers, the spike calls, and the shadow-like draw in
