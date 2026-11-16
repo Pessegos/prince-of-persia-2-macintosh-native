@@ -23,7 +23,7 @@ CHAPTERS = (
     CutsceneChapter('opening_titles', 'Title', 'intro.json', 6),
     CutsceneChapter('opening_story', 'The Palace Escape', 'intro.json', 8),
     CutsceneChapter('voyage', 'The Voyage', 'ending.json', 5, 1),
-    CutsceneChapter('discovery', 'Behind the Mask', 'discovery.json', 10, 3),
+    CutsceneChapter('discovery', 'The Sleeping Princess', 'discovery.json', 10, 3),
     CutsceneChapter('carpet', 'The Magic Carpet', 'carpet.json', 5, 5),
     CutsceneChapter('vision', "The Mother's Vision", 'throne.json', 20, 8),
     CutsceneChapter('horse', 'The Statue Awakens', 'temple.json', 5, 9),
