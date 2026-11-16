@@ -39,14 +39,17 @@ an oversight.
 | temple | 10-13 | dark red panel, two red columns under a carved frieze, flame accent |
 | chess | 14, native rooms 4-5 | violet-black panel, a row of violet and pearl chessboard squares, pearl text, the bronze pieces' gold accent |
 | spider | 14, native rooms 3 and 9 | near-black red-brown panel, a tarantula's coat of hair round it, the spider's fur faintly over the whole panel, cream text, tawny accent, wine selection |
+| crystal | 14, native room 6 | slate panel, long crystal prisms end to end round it, a few faces washed with pale iridescence, white text, peach accent |
+| escher | 14, native rooms 7, 8 and 10 | dark brown panel, four sandstone beams round it lying over one another in an impossible loop, cream text, sand accent, the glyphs' blue for the selection |
 
 The last level (kind 6) changes look from room to room, so its menus follow
 the Prince's room, not the level (`_FINAL_ROOM_THEMES`). The tower over the
 city (native rooms 1-2) takes the palace theme: the Prince is back at the
 palace. The princess's room (native room 11), seen only in the ending, is the
 palace too. The chessboard (native rooms 4-5) has the chess theme and the
-spider's rooms (native rooms 3 and 9) the spider theme. The crystals (6) and
-the Escher maze (7, 8, 10) keep neutral until their own themes are drawn.
+spider's rooms (native rooms 3 and 9) the spider theme, the crystals (native
+room 6) the crystal theme and the impossible maze (native rooms 7, 8 and 10)
+the escher theme.
 
 ## Frames
 
@@ -77,6 +80,8 @@ for another. The theme names its kind in `frame`:
 | `columns` | temple | two columns with leaf capitals and plinths between the same carved band above and below: a frieze of rosettes between leaves, laid out in whole motifs for any width, with a rosette block at each corner |
 | `chess` | chess | one row of the board's squares, violet and pearl in turn, lit on the upper edge and shaded on the lower and right edges like the room's tiles; an odd number of near-square runs on each side keeps a violet square at every corner, and the board's dark front face runs under the lower row |
 | `spider` | spider | a tarantula's coat: a velvet band of dark browns carrying the same lobes as the panel's fur, smaller (deep crevices, shaded sides, lit tops with a glint, a few pores); short fuzz in two layers standing out of it; long bristles in tufts that thicken and thin along each side, each at its own angle, now and then two or three from one root splaying apart, a third of them catching the light; and, only where the coat is thin, a few long guard hairs on their own. Nothing is combed one way. The coat, the band's lobes and the guard hairs have random sequences of their own, so changing one leaves the others as they are |
+| `crystal` | crystal | long prisms lying end to end, each with three faces along its length lit from the upper left (the outer face brightest on the top and left sides), ending in a point of two facets set into the next one's flat end with a little shadow round it; the top and left edges catch the light, a dark seam lies where the band meets the panel, and nearly half the prisms have one lit face washed with two of the room's pale iridescent colours |
+| `escher` | escher | four sandstone beams, each running its side's whole length and lying over the next one clockwise at the corner where it ends, reaching two pixels past it: a loop no real frame could make. All four are seen from one side and lit from the upper left, like the room's beams: lumpy cobbles on top, a lit lip, then the horizontal beams' front face below and the upright beams' shaded side to the right. Shadows fall down and to the right: on the panel under the top and right of the left beam, and across a beam where it passes under the top or left one |
 
 `_THICKNESS` gives each kind's thickness at the sides, top and bottom. The
 temple's bands and columns are thicker than the others, so its frame reaches a
@@ -248,7 +253,8 @@ whole number of screen pixels, so no letter has columns of different widths.
 ## Forcing a theme
 
 `POP2_MENU_THEME=neutral` turns the level themes off; a theme's name
-(`palace`, `desert`, `caverns`, `ruins`, `temple`, `chess`, `spider`) uses it on every level.
+(`palace`, `desert`, `caverns`, `ruins`, `temple`, `chess`, `spider`, `crystal`,
+`escher`) uses it on every level.
 The test package sets it to `neutral` so that layout tests check the same
 look whatever level their scene loads;
 `tests/test_menu_theme.py` covers the themes themselves.

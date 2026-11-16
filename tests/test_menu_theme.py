@@ -10,7 +10,7 @@ from PIL import Image
 
 from pop2 import menu_theme
 from pop2.game_menu import GameMenu
-from pop2.menu_theme import CAVERNS, CHESS, DESERT, NEUTRAL, NEUTRAL_ROLES, PALACE, RUINS, SPIDER, TEMPLE, THEMES, c
+from pop2.menu_theme import CAVERNS, CHESS, CRYSTAL, DESERT, ESCHER, NEUTRAL, NEUTRAL_ROLES, PALACE, RUINS, SPIDER, TEMPLE, THEMES, c
 
 
 class FakeFont:
@@ -156,7 +156,7 @@ class MenuThemeTest(unittest.TestCase):
         # the first version gave it the cavern rock. Its theme follows the room.
         self.assertIs(menu_theme.theme_for(game(6, caverns=object())), NEUTRAL)
         for room, theme in ((0, PALACE), (1, PALACE), (2, SPIDER), (3, CHESS), (4, CHESS), (8, SPIDER),
-                            (5, NEUTRAL), (10, PALACE)):
+                            (5, CRYSTAL), (6, ESCHER), (7, ESCHER), (9, ESCHER), (10, PALACE), (11, NEUTRAL)):
             with self.subTest(room=room):
                 self.assertIs(menu_theme.theme_for(game(6, caverns=object(), room_id=room)), theme)
         # One theme can be forced everywhere; "neutral" turns the level themes off.
@@ -207,6 +207,46 @@ class MenuThemeTest(unittest.TestCase):
                 # Under the lower row: the board's front face, never black.
                 for row, colour in enumerate(menu_theme._CHESS_FACE):
                     self.assertEqual(picture[width // 2, board + row], rgb(colour) + (255,))
+
+    def test_crystal_band_is_solid_prisms_with_a_seam_on_the_panel(self):
+        rgb = menu_theme._rgb
+        for size in ((120, 90), (460, 360), (31, 40)):
+            with self.subTest(size=size):
+                width, height = size
+                picture = menu_theme._frame_picture('crystal', size).load()
+                band = menu_theme._THICKNESS['crystal'][0]
+                seam = rgb(menu_theme._CRYSTAL_SEAM) + (255,)
+                panel = rgb(CRYSTAL.colour('panel')) + (255,)
+                for x in range(width):
+                    for y in range(height):
+                        depth = min(x, y, width - 1 - x, height - 1 - y)
+                        if depth < band:
+                            self.assertEqual(picture[x, y][3], 255)
+                            self.assertNotEqual(picture[x, y], panel)
+                        if depth == band - 1:
+                            self.assertEqual(picture[x, y], seam)
+                # The top's outer edge catches the light; the bottom's does not.
+                self.assertEqual(picture[width // 2, 0], rgb(menu_theme._CRYSTAL_EDGE) + (255,))
+                self.assertNotEqual(picture[width // 2, height - 1], rgb(menu_theme._CRYSTAL_EDGE) + (255,))
+
+    def test_maze_beams_lie_over_one_another_in_a_loop(self):
+        # Each beam lies over the next one clockwise: it alone reaches the
+        # picture's edge at the corner where it ends, beyond the beam under it.
+        width, height = 120, 90
+        picture = menu_theme._frame_picture('escher', (width, height)).load()
+        reach, beam = menu_theme._ESCHER_REACH, menu_theme._ESCHER_BEAM
+        middle = reach + beam // 2
+        self.assertEqual(picture[width - 1, middle][3], 255)          # the top beam's end, over the right one
+        self.assertEqual(picture[width - 1 - middle, height - 1][3], 255)   # the right beam's, over the bottom
+        self.assertEqual(picture[0, height - 1 - middle][3], 255)     # the bottom beam's, over the left
+        self.assertEqual(picture[middle, 0][3], 255)                  # the left beam's, over the top
+        for point in ((width - 1, height // 2), (width // 2, height - 1), (0, height // 2), (width // 2, 0)):
+            self.assertEqual(picture[point][3], 0)                    # elsewhere the room shows past the beams
+        # Where a beam passes under another, up or left of it, that one's shadow falls across it.
+        shadow = menu_theme._rgb(menu_theme._ESCHER_SHADOW) + (255,)
+        self.assertEqual(picture[reach + beam, middle], shadow)      # the top beam, under the left one
+        self.assertEqual(picture[width - 1 - middle, reach + beam], shadow)   # the right beam, under the top one
+        self.assertEqual(picture[width // 2, height // 2], menu_theme._rgb(ESCHER.colour('panel')) + (255,))
 
     def test_frame_stays_inside_the_playfield(self):
         # The F1 list no longer scrolls, so its panel is shorter than the playfield.
@@ -286,8 +326,8 @@ class MenuThemeTest(unittest.TestCase):
                         self.assertGreater(sum(picture[point][:3]), 20)
                 elif theme.frame is not None:
                     # Drawn frames: sand, the ruins' band of sockets, the temple's columns,
-                    # level 14's row of chessboard squares.
-                    self.assertIn(theme.frame_width, (9, 10, 11, 13))
+                    # level 14's chessboard squares, crystal prisms and maze beams.
+                    self.assertIn(theme.frame_width, (9, 10, 11, 12, 13))
                     picture = menu_theme._frame_picture(theme.name, (120, 90)).load()
                     self.assertEqual(picture[60, 45], menu_theme._rgb(theme.colour('panel')) + (255,))
                     for point in ((60, 3), (60, 86), (3, 45), (116, 45)):  # inside any worn edge
@@ -595,7 +635,7 @@ class MenuThemeTest(unittest.TestCase):
         first = (PALACE, DESERT, CAVERNS, RUINS, TEMPLE)
         for rect, sides, limit in places:
             deepest = [max(side) for side in zip(*(depths(theme, rect, sides, limit) for theme in first))]
-            for theme in (CHESS, SPIDER):
+            for theme in (CHESS, SPIDER, CRYSTAL, ESCHER):
                 with self.subTest(theme=theme.name, rect=rect):
                     allowed = list(deepest)
                     if theme is CHESS and menu_theme.frame_rect(rect, theme, sides, limit)[3] == limit[3]:

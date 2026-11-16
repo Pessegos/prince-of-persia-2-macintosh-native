@@ -220,15 +220,46 @@ SPIDER = MenuTheme('spider', {
     'danger': '#5a1810', 'danger_soft': '#3a100c',
 }, dim=135, frame='spider', grow=(7, 11, 13), mark='#030100')
 
-THEMES = {theme.name: theme for theme in (NEUTRAL, PALACE, DESERT, CAVERNS, RUINS, TEMPLE, CHESS, SPIDER)}
+# Level 14, native room 6: the crystals' cool greys over a slate panel, with
+# the peach and the pale cyan of their iridescent faces.
+CRYSTAL = MenuTheme('crystal', {
+    'accent': '#f0d0b0', 'text': '#f4f6f2', 'muted': '#8c98a0', 'muted_light': '#b4c0c4',
+    'dim_text': '#68747c', 'faint': '#505860',
+    'panel': '#14181e', 'panel_edge': '#c8c0c0', 'backdrop': '#0c0f14', 'rule': '#303840',
+    'row': '#1e242c', 'row_dark': '#181d24', 'row_edge': '#3c4650', 'row_edge_soft': '#2c343e',
+    'row_edge_dark': '#262c36', 'row_edge_lit': '#788890',
+    'selected': '#384850', 'hover': '#2c3640', 'listening': '#5a4a30',
+    'well': '#14181e', 'well_dark': '#0c0f14',
+    'active': '#b8f0e8', 'active_map': '#b8f0e8', 'active_fill': '#283c40',
+    'active_field': '#202a30', 'text_selection': '#506068',
+    'danger': '#5a1830', 'danger_soft': '#3a1424',
+}, dim=130, frame='crystal', grow=(2, 5, 7))
+
+# Level 14, native rooms 7, 8 and 10: the impossible maze's sandstone beams
+# over their deep shadows, with the blue of the glyphs on their faces.
+ESCHER = MenuTheme('escher', {
+    'accent': '#f0b880', 'text': '#fff0dc', 'muted': '#a08060', 'muted_light': '#c8a880',
+    'dim_text': '#806040', 'faint': '#604028',
+    'panel': '#1a0e04', 'panel_edge': '#d0a069', 'backdrop': '#100802', 'rule': '#402008',
+    'row': '#281808', 'row_dark': '#22140a', 'row_edge': '#503008', 'row_edge_soft': '#3a2210',
+    'row_edge_dark': '#311c0a', 'row_edge_lit': '#906840',
+    'selected': '#204058', 'hover': '#3a2614', 'listening': '#5a3a18',
+    'well': '#1a0e04', 'well_dark': '#100802',
+    'active': '#58a8e0', 'active_map': '#58a8e0', 'active_fill': '#183040',
+    'active_field': '#201c1c', 'text_selection': '#305060',
+    'danger': '#5a1808', 'danger_soft': '#3a1006',
+}, dim=130, frame='escher', grow=(2, 5, 7))
+
+THEMES = {theme.name: theme for theme in (NEUTRAL, PALACE, DESERT, CAVERNS, RUINS, TEMPLE, CHESS, SPIDER, CRYSTAL,
+                                          ESCHER)}
 
 # Level 14 (environment 6) changes look from room to room, so its menus take
 # the theme of the room the Prince is in. Port (zero-based) rooms: 0-1 the
 # tower over the city, which brings back the palace; 2 and 8 the spider;
-# 3-4 the chessboard; 10 the princess's room, seen only in the ending, is
-# the palace as well. The other rooms keep the neutral look until their own
-# themes are drawn.
-_FINAL_ROOM_THEMES = {0: PALACE, 1: PALACE, 2: SPIDER, 3: CHESS, 4: CHESS, 8: SPIDER, 10: PALACE}
+# 3-4 the chessboard; 5 the crystals; 6, 7 and 9 the impossible maze; 10
+# the princess's room, seen only in the ending, is the palace as well.
+_FINAL_ROOM_THEMES = {0: PALACE, 1: PALACE, 2: SPIDER, 3: CHESS, 4: CHESS, 5: CRYSTAL, 6: ESCHER, 7: ESCHER,
+                      8: SPIDER, 9: ESCHER, 10: PALACE}
 
 _current = NEUTRAL
 
@@ -619,7 +650,8 @@ def _rock_frame(theme, size, fill):
 
 # --- Shared helpers for the drawn frames.
 _THICKNESS = {'rock': (9, 9, 9), 'sand': (11, 11, 11), 'studs': (9, 9, 9), 'columns': (13, 12, 12),
-              'chess': (10, 10, 13), 'spider': (18, 18, 18)}
+              'chess': (10, 10, 13), 'spider': (18, 18, 18), 'crystal': (12, 12, 12),
+              'escher': (12, 12, 12)}
 
 
 def _stepped(length, rng, values, runs=(5, 14)):
@@ -1449,6 +1481,193 @@ def _spider_frame(theme, size, fill):
     return picture
 
 
+# --- Level 14's crystals: long prisms lying end to end round the panel. Each
+# shows three faces along its length, lit from the upper left, and ends in
+# a point of two facets set against the next one's flat end; the edge
+# nearest the light is bright, and now and then a lit face carries the pale
+# iridescence of the room's crystals.
+_CRYSTAL_GREYS = ('#3c4448', '#505858', '#707070', '#919090', '#b8c0c0', '#d8d8d8', '#e4e6e0')
+_CRYSTAL_PASTELS = ('#f0d0b0', '#b8f0e8', '#f0f0b0', '#b4d0dc', '#f0d0b0', '#b8f0e8')
+_CRYSTAL_EDGE = '#f4f6f2'
+_CRYSTAL_SEAM = '#303830'
+# How brightly the outer, middle and inner faces are lit on the top, right,
+# bottom and left sides (indices into the greys).
+_CRYSTAL_LIGHT = ((5, 3, 2), (2, 3, 4), (1, 2, 4), (4, 3, 2))
+
+
+def _crystal_frame(theme, size, fill):
+    width, height = size
+    band = _THICKNESS['crystal'][0]
+    picture = Image.new('RGBA', size, fill + (255,))
+    pixels = picture.load()
+    rng = random.Random(0xC857)
+    greys = [_rgb(colour) + (255,) for colour in _CRYSTAL_GREYS]
+    pastels = [_rgb(colour) + (255,) for colour in _CRYSTAL_PASTELS]
+    edge, seam = _rgb(_CRYSTAL_EDGE) + (255,), _rgb(_CRYSTAL_SEAM) + (255,)
+    sides = []
+    for length in (width, height, width, height):
+        prisms, along = [], -band - rng.randint(0, 20)
+        while along < length + band:
+            along += rng.randint(28, 56)
+            prisms.append({
+                'end': along, 'tip': rng.choice((4, 5, 5, 6)), 'slope': rng.choice((0.7, 0.9, 1.1)),
+                'split': (rng.choice((3, 4)), rng.choice((7, 8))), 'shift': rng.choice((-1, 0, 0, 1)),
+                'shimmer': (rng.choice(pastels), rng.choice(pastels), rng.uniform(0.3, 0.7))
+                if rng.random() < 0.45 else None})
+        sides.append(prisms)
+
+    def boundary(prism, depth):
+        return prism['end'] - abs(depth - prism['tip']) * prism['slope']
+
+    # Each side is drawn along its own rows, from its start; a corner pixel
+    # belongs to the nearest side (the first of two equally near, clockwise
+    # from the top), so the sides meet on the diagonals.
+    places = (lambda along, depth: (along, depth), lambda along, depth: (width - 1 - depth, along),
+              lambda along, depth: (width - 1 - along, height - 1 - depth), lambda along, depth: (depth, height - 1 - along))
+
+    def owned(side, along, depth):
+        x, y = places[side](along, depth)
+        distances = (y, width - 1 - x, height - 1 - y, x)
+        return min(distances) == depth and distances.index(depth) == side
+
+    for side, prisms in enumerate(sides):
+        length = (width, height)[side % 2]
+        place, lights = places[side], _CRYSTAL_LIGHT[side]
+        for depth in range(band):
+            # The side's pixels at this depth are one run, cut by the diagonals.
+            first, last = 0, length - 1
+            while first <= last and not owned(side, first, depth):
+                first += 1
+            while last >= first and not owned(side, last, depth):
+                last -= 1
+            if depth == band - 1:
+                for along in range(first, last + 1):
+                    pixels[place(along, depth)] = seam      # where the band meets the panel
+                continue
+            index = 0
+            for along in range(first, last + 1):
+                while boundary(prisms[index], depth) <= along:
+                    index += 1
+                pixels[place(along, depth)] = _crystal_pixel(prisms, index, along, depth, lights, greys, edge, seam,
+                                                             boundary, band)
+    return picture
+
+
+def _crystal_pixel(prisms, index, along, depth, lights, greys, edge, seam, boundary, band):
+    """One pixel of a crystal frame's band: ``index`` is the prism it lies on."""
+    prism = prisms[index]
+    start = prisms[index - 1]['end'] if index else -2 * band - 20
+    end = boundary(prism, depth)
+    if along - start < 0:
+        return greys[1]                     # the shadow round the previous point
+    if along - start < 1:
+        return seam                         # the flat end the previous point rests against
+    if depth == 0:
+        return edge if lights[0] >= 4 else greys[1]
+    if end - along < 4 + abs(depth - prism['tip']) * 0.3:
+        # The point: two facets meeting at the tip's depth.
+        light = lights[0] + 1 if depth < prism['tip'] else lights[2] - 2
+        if end - along < 1 and depth < prism['tip'] and lights[0] >= 4:
+            return edge
+    else:
+        face = 0 if depth < prism['split'][0] else 1 if depth < prism['split'][1] else 2
+        light = lights[face]
+    light = max(0, min(6, light + prism['shift']))
+    shimmer = prism['shimmer']
+    if shimmer is not None and light >= 4:
+        part = (along - start) / max(1, prism['end'] - start)
+        return shimmer[0] if part < shimmer[2] else shimmer[1]
+    return greys[light]
+
+
+# --- Level 14's maze: four sandstone beams round the panel, each lying over
+# the next at one corner and under the previous one at the other, a loop no
+# real frame could make. All four are seen from the same side and lit from
+# the upper left, as the room's beams are: the horizontal ones show their
+# cobbled top above a smooth front face, the upright ones their cobbled top
+# left of a shaded side, and their shadows fall down and to the right. A
+# beam on top reaches a little past the one under it.
+_ESCHER_COBBLES = ('#f0c090', '#e4a46c', '#f0b880', '#d0a069', '#e4a46c')
+_ESCHER_COBBLE_LIT = ('#f0d0b0', '#efdfd1', '#f0c090')
+_ESCHER_JOINT = ('#a07a50', '#906840')
+_ESCHER_LIP = ('#f0d0b0', '#efdfd1', '#f0d0b0', '#f0c090')
+_ESCHER_FRONT = ('#a07038', '#805028', '#683818')
+_ESCHER_SIDE = ('#906030', '#704820', '#603008')
+_ESCHER_END_LIT, _ESCHER_END_DARK = '#f0d0b0', '#683818'
+_ESCHER_SHADOW = '#281808'
+_ESCHER_BEAM, _ESCHER_REACH = 9, 2      # a beam's width; how far one on top reaches past the one below
+
+
+def _escher_profile(rng, length, face):
+    """A beam lying along x, as rows across it from its upper (or left)
+    edge: the cobbled top's lit edge, two courses of lumpy cobbles, the lit
+    lip, then ``face``."""
+    cobbles = [_rgb(colour) + (255,) for colour in _ESCHER_COBBLES]
+    lit = [_rgb(colour) + (255,) for colour in _ESCHER_COBBLE_LIT]
+    joints = [_rgb(colour) + (255,) for colour in _ESCHER_JOINT]
+    rows = [[rng.choice(lit) if rng.random() < 0.7 else rng.choice(cobbles) for _along in range(length)]]
+    offset = 0
+    for _course in range(2):
+        course = [[], []]
+        along = -offset
+        while len(course[0]) < length + offset:
+            size, colour = rng.randint(3, 6), rng.choice(cobbles)
+            for step in range(size):
+                last = step == size - 1
+                course[0].append(rng.choice(joints) if last and rng.random() < 0.6
+                                 else rng.choice(lit) if step and rng.random() < 0.5 else colour)
+                course[1].append(rng.choice(joints) if last or rng.random() < 0.35 else colour)
+            along += size
+        rows += [row[offset:offset + length] for row in course]
+        offset = rng.randint(1, 3)
+    rows.append([_rgb(rng.choice(_ESCHER_LIP)) + (255,) for _along in range(length)])
+    rows += [[_rgb(colour) + (255,)] * length for colour in face]
+    return rows
+
+
+def _escher_frame(theme, size, fill):
+    width, height = size
+    beam, reach = _ESCHER_BEAM, _ESCHER_REACH
+    band = _THICKNESS['escher'][0]       # reach + beam + the shadow row
+    picture = Image.new('RGBA', size, (0, 0, 0, 0))
+    pixels = picture.load()
+    _fill_inside(picture, band - 1, fill + (255,))
+    rng = random.Random(0xE5C4)
+    shadow = _rgb(_ESCHER_SHADOW) + (255,)
+    end_lit, end_dark = _rgb(_ESCHER_END_LIT) + (255,), _rgb(_ESCHER_END_DARK) + (255,)
+    inner_right, inner_bottom = width - reach - beam, height - reach - beam
+    # (horizontal, the beam's first row or column, where it runs from and to,
+    # its lit or dark ends, rows darkened by the beam over it at its start)
+    # Top: under the left beam, over the right one, out to the picture's edge.
+    beams = ((True, reach, reach + beam, width, (None, end_dark), True),
+             (False, inner_right, reach + beam, height, (None, end_dark), True),     # right, over the bottom
+             (True, inner_bottom, 0, inner_right, (end_lit, None), False),           # bottom, over the left
+             (False, reach, 0, inner_bottom, (end_lit, None), False))                # left, over the top
+    for horizontal, first, start, stop, ends, shaded in beams:
+        rows = _escher_profile(rng, stop - start, _ESCHER_FRONT if horizontal else _ESCHER_SIDE)
+        for across, row in enumerate(rows):
+            for index, colour in enumerate(row):
+                if shaded and index < 2:
+                    # The beam over it, up or left of it, casts its shadow here.
+                    colour = shadow if index == 0 else _darker(colour)
+                elif index == 0 and ends[0] is not None:
+                    colour = ends[0]
+                elif index == len(row) - 1 and ends[1] is not None:
+                    colour = ends[1]
+                along = start + index
+                pixels[(along, first + across) if horizontal else (first + across, along)] = colour
+    # The top and left beams' shadows on the panel.
+    for x in range(reach + beam, inner_right):
+        pixels[x, reach + beam] = shadow
+    for y in range(reach + beam + 1, inner_bottom):
+        pixels[reach + beam, y] = shadow
+    return picture
+
+
+def _darker(colour):
+    return tuple(value * 3 // 5 for value in colour[:3]) + (255,)
+
+
 _PAINTERS = {'rock': _rock_frame, 'bands': _band_frame, 'sand': _sand_frame,
              'studs': _studs_frame, 'columns': _columns_frame, 'chess': _chess_frame,
-             'spider': _spider_frame}
+             'spider': _spider_frame, 'crystal': _crystal_frame, 'escher': _escher_frame}
