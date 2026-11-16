@@ -189,9 +189,31 @@ class PalaceSceneTests(unittest.TestCase):
         self.assertEqual(self.jaffar.final_info.mode, 1)
         self.assertTrue(self.combat.player.alive)
 
-    def test_his_reach_takes_a_drawn_sword_and_then_he_casts(self):
+    def test_he_passes_through_and_bumps_walls_unarmed(self):
+        # FrameAdv 2:6cb4: the Kid-like actor 6 never stops the Prince, so
+        # SEQS 241's stagger from x 400 carries him through and off the
+        # floor. Jaffar follows him down; HitFloor 6:036a-0374 does not arm
+        # actor 6, so his wall bump is the unarmed one (Collide 4:5910),
+        # not an armed SEQS 64 that left him en garde for good.
         scene = self.scene
         scene.jump_to_room(7, row=0, x=400, facing=1, reset_guards=False, redraw=False)
+        self.ticks(1)
+        scene.sword_drawn = self.combat.player.sword_drawn = True
+        sequences, rows = set(), set()
+        for _ in range(60):
+            self.ticks(1)
+            sequences.add(self.jaffar.state.selected_sequence_id)
+            rows.add(self.combat.player.row)
+        self.assertIn(1, rows)
+        self.assertIn(47, sequences)
+        self.assertFalse(sequences & {64, 65})
+
+    def test_his_reach_takes_a_drawn_sword_and_then_he_casts(self):
+        scene = self.scene
+        # From x 400, SEQS 241's stagger carries the Prince through him (the
+        # Kid-like actor 6 never stops him, FrameAdv 2:6cb4) and off the
+        # floor; from 380 it ends on his side.
+        scene.jump_to_room(7, row=0, x=380, facing=1, reset_guards=False, redraw=False)
         self.ticks(1)
         scene.sword_drawn = self.combat.player.sword_drawn = True
         for _ in range(30):

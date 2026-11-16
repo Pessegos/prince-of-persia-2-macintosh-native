@@ -1382,3 +1382,29 @@ fails at the second false Prince.
 Not covered: the level-13 exit and NIS 3 before it, a real AudioEngine,
 the Hall of Fame page and the return to the introduction (they have their
 own tests), and the variants listed in the queue.
+
+## The bump's opponent types (2026-11-16)
+
+FrameAdv's bump 2:6c64-6daa reads the opponent copy a5-0x5094: its type
+(+8, -0x508c) must not be 6, 11, 7 or 8; type 12 is excluded in poses
+179-235, type 4 in pose 206 and type 2 in SEQS 110 (2:6cb4-6d0a). The
+port only had the SEQS-110 test, for every type, so the Prince bumped into
+the false Princes and the palace's Jaffar (actor 6). Now he passes through
+them, as in the original (`combat.bump_opponent`,
+`tests.test_combat`). The whole-route test relied on the old bump to stop
+on the second false Prince's floor; it now climbs down (`descendR`) instead
+of leaping, and passes.
+
+The same pass found a second difference: the port's Collide counted every
+opponent as armed (SEQS 64/65 bumps), standing in for HitFloor arming them
+on landing (6:038c). HitFloor 6:036a-0374 leaves actors 1 and 6 unarmed,
+and Collide 4:58a6/5910 reads the armed word, so the palace's Jaffar now
+bumps a wall unarmed (SEQS 46/47). With the old rule, a Jaffar that
+followed the Prince down to row 1 bumped into pose 171 en garde, which
+9:16fe's face-and-cast (pose 15, 1-14 or 49-56) never leaves.
+`tests.test_final_path` covers both (each fails without its change).
+
+Open: with the Prince standing still against the wall on row 1 of native
+room 7 and Jaffar just behind him, 9:16fe selects SEQS 13 at each bump's
+pose 50 and the next step bumps again, so he never casts. A player moves
+on; whether the original repeats it there is not traced.

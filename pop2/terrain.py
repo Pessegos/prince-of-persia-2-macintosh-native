@@ -1609,7 +1609,10 @@ class RooftopPhysics:
                 # stays on that floor. GroundBump (45) is the empty/high case.
                 # Opponents bump as armed characters: HitFloor arms them on
                 # landing (6:038c) and their FRAM has no Prince bump poses 50-52.
-                armed = sword_drawn or state.actor_type not in (0, None)
+                # Collide 4:58a6/5910 reads the armed word, and HitFloor
+                # 6:036a-0374 leaves the Kid-like actors 1 and 6 (the final
+                # level's Jaffar and copies) unarmed.
+                armed = sword_drawn or state.actor_type not in (0, None, 1, 6)
                 direction = 1 if state.facing else -1
                 if supported and (armed or state.current_y > -30) and state.vertical_velocity >= 50:
                     # Collide 4:58e4-58fe: SetCharFloor, then a fast body backs

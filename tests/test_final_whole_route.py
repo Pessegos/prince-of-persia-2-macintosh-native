@@ -17,7 +17,7 @@ INSTALLED = all((ASSET_DIR / name).is_file() for name in ('Final.rsrc', 'final_l
 
 COPY_ROOM, LEFT_PALACE, RIGHT_PALACE = 5, 6, 7
 ROUTE = ('crawlL', 'descendL', 'stepL', 'leapR5', 'runL5', 'leapcatchR20', 'tapR',
-         'stab', 'sheathe', 'leapR8', 'drawstab', 'sheathe', 'thirdcopy',
+         'stab', 'sheathe', 'descendR', 'drawstab', 'sheathe', 'thirdcopy',
          'stepL', 'climb', 'climb', 'hopR', 'hopcatchL', 'hopcatchR', 'stepL', 'stepL', 'hopL')
 
 
@@ -89,7 +89,9 @@ class WholeRouteTests(unittest.TestCase):
         self.assertTrue(all(step[-1] for step in trace), trace)
         scene, combat = harness.scene, harness.scene.combat
         # The spell scene returned to native room 4; the stabs took one
-        # false Prince each (the bump on landing no longer freezes him).
+        # false Prince each. He climbs down to the second: a false Prince
+        # (actor 6) never stops a jump (FrameAdv 2:6cb4), so a leap onto
+        # its floor carries him past it and over the next edge.
         self.assertEqual(seen[ROUTE.index('stepL')][0], 3)
         self.assertEqual(seen[ROUTE.index('stab')], (COPY_ROOM, 3))
         self.assertEqual(seen[ROUTE.index('drawstab')], (COPY_ROOM, 2))

@@ -75,9 +75,16 @@ supplied life. Each defect found gets its own trace, fix and regression.
   the room-11 birdhead, which follows into room 8; it costs six life points,
   and with the three of a level loaded alone he dies in room 11.
   `LEVEL_10_HOSTILE` in `tests.test_temple_routes`. Open: the route's leap
-  from X 395 lands at 622, past the birdhead (570-624); whether the
-  original lets a running jump pass a turning opponent (pose 193) is not
-  traced.
+  from X 395 lands at 622, past the birdhead (570-624). **Traced 2026-11-16**: the
+  birdhead (actor 2, SEQS 58) is in a pose with animation state 5 on the
+  frame the running jump comes in reach, and FrameAdv 2:6caa skips the
+  bump while the opponent's +0x10 is 2 or more; on the next frame the bump
+  comes (SEQS 46, 10 forward) with the Prince already beside him, so he
+  ends past. The rule is native; the port's sweep only moves the bump
+  point back to where the reach began. The same reading found the bump's
+  missing opponent types (actors 6, 7, 8 and 11 never stop him;
+  [final-level ledger](final-level-preparation.md), "The bump's opponent
+  types").
 
 ### 3. Level 12: the landing beside the flaming sword
 

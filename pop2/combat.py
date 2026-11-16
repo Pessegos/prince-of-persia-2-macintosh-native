@@ -100,6 +100,19 @@ def temple_actor(raw_kind):
     return {1: 10, 3: 6, 7: 2, 9: 12, 10: 0}[kind]
 
 
+def bump_opponent(actor_type, pose, sequence):
+    """FrameAdv 2:6cb4-6d0a: the opponents a Prince can bump into. Actors
+    6, 7, 8 and 11 never stop him; 12 not in poses 179-235, 4 not in pose
+    206 and 2 not in SEQS 110 (the others do in that SEQS too)."""
+    if actor_type in (6, 7, 8, 11):
+        return False
+    if actor_type == 12 and 179 <= pose <= 235:
+        return False
+    if actor_type == 4 and pose == 206:
+        return False
+    return not (actor_type == 2 and sequence == 110)
+
+
 @dataclass(frozen=True)
 class GuardSpawn:
     room: int
@@ -1166,8 +1179,9 @@ class CombatEncounter:
                 or guard.alert_mode < 2 or guard.state.animation_state >= 2
                 or player.room != guard.room or player.row != guard.row
                 or state.facing == guard.state.facing or state.vertical_velocity >= 59
-                or guard.selected_sequence == 110 or player.controls_locked
-                or state.sequence_id in (46, 47)):
+                or not bump_opponent(guard.state.actor_type, guard.state.action,
+                                     guard.selected_sequence)
+                or player.controls_locked or state.sequence_id in (46, 47)):
             return False
         distance = abs(opponent_distance(player, guard))
         if distance > 24 and (state.sequence_id != 4 or distance >= 63):

@@ -141,6 +141,24 @@ class GuardCombatTests(unittest.TestCase):
                 self.assertFalse(c.choose_player_bump())
                 self.assertEqual(c.player.state.sequence_id, 4)
 
+    def test_only_the_native_opponent_types_stop_a_running_jump(self):
+        # FrameAdv 2:6cb4-6d0a: actors 6, 7, 8 and 11 never; 12 outside
+        # poses 179-235; 4 outside pose 206; SEQS 110 only for actor 2.
+        cases = ((2, 40, 0, True), (2, 40, 110, False), (4, 40, 110, True), (6, 40, 0, False),
+                 (7, 40, 0, False), (8, 40, 0, False), (11, 40, 0, False), (10, 40, 0, True),
+                 (12, 178, 0, True), (12, 179, 0, False), (12, 235, 0, False), (12, 236, 0, True),
+                 (4, 206, 0, False), (4, 205, 0, True), (6, 206, 0, False))
+        for actor, pose, sequence, expected in cases:
+            with self.subTest(actor=actor, pose=pose, sequence=sequence):
+                c = self.encounter(player_x=200, guard_x=221, player_facing=1)
+                c.guard.state.facing = 0
+                c.player.sword_drawn = False
+                c.player.state.animation_state = 0
+                c.player.state.sequence_id, c.player.state.action = 4, 40
+                c.guard.state.actor_type, c.guard.state.action = actor, pose
+                c.guard.selected_sequence = sequence
+                self.assertEqual(c.choose_player_bump(), expected)
+
     def test_standing_jump_cannot_skip_contact_interval_in_one_frame(self):
         for facing in (0, 1):
             with self.subTest(facing=facing):
