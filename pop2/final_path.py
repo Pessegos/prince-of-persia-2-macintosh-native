@@ -93,8 +93,11 @@ def global_column(figure):
 
 
 def distance(jaffar, prince):
-    """CharDistance 4:49ee (the same room and row only)."""
-    if jaffar.room != prince.room or jaffar.row != prince.row:
+    """CharDistance 4:49ee: 999 unless the opponent has life (4:49f0, life
+    exactly 0 fails) and shares the room and row; 4:4a0a also gives 999 for
+    an opponent facing word of 0x56."""
+    if (prince.life == 0 or jaffar.room != prince.room or jaffar.row != prince.row
+            or prince.facing == 0x56):
         return 999
     value = prince.x - jaffar.x
     if jaffar.facing:

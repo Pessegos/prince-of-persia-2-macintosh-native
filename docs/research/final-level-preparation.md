@@ -1093,3 +1093,27 @@ battle's live state. Two faults sat in that snapshot:
 
 `tests.test_save_records` rejects both, with the temple's genie and the
 older cavern saves fixed in the same change.
+
+## Native probe of the palace controller 9:16fe (2026-11-16)
+
+`python -m tools.probe_final_path` runs the original 9:16fe with all of its
+own CODE 9 callees (0a42, 0b28, 09ca, 0ba6, 0cac/0cec, the routes 0d28,
+0ed2, 107c, 11fe, 136e, HoneIn 0dac, the kill 14c8, ShadowInRange 1954)
+and CharDistance 4:49ee, over the original DATA tables. Supplied, each
+recording its arguments: the record lookup 6:3642, SetSeq 6:0006, AddSound,
+AddSong, the record swaps 4:4a46/4b02/4ac0/335a, DecLifePts 4:34f2, the
+death method 4:3196, the Kid routines 6:11a0, 15ea, 1600, 1998, 1a84, 1c14,
+0e8e, 1276 and AddCharX 4:2bae. The FRAM flag table is synthetic and shared
+by both sides. 6,000 seeded cases (40% closing in on a Prince without a
+sword, 15% at the spell's poses 281/282, 15% fleeing) compare the calls in
+order, the record's +0x1c/+0x1e/+0x20 and a5-0x4f92: no differences after
+one fix. Every route call kind is reached.
+
+The fix: CharDistance returns 999 when the opponent's life is exactly 0
+(4:49f0) or his facing word is 0x56 (4:4a0a). The port measured a dead
+Prince's distance, so a drawn sword at 0 life could still be taken.
+
+`tests.test_probe_final_path` runs 1,500 cases and rejects two wrong
+models (CharDistance without the life gate; a range test that ignores the
+floors' columns). Not covered: the Kid routines' own effects, AnimChar,
+the caller 9:08e8 and its scheduling.

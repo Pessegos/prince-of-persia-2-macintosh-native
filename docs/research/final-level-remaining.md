@@ -84,7 +84,8 @@ Each probe states its supplied endpoints and includes a regression that
 rejects a wrong model:
 
 1. 9:16fe and its callees (flee or close in, dissolve, kill, position
-   routes): decision tables from recorded Kid calls.
+   routes): decision tables from recorded Kid calls. **Done 2026-11-16**
+   (`tools.probe_final_path`, 6,000 cases; CharDistance's life gate fixed).
 2. 9:1526 (room-6 strikes, dissolves, SEQS 240 for the last copy, and the
    9:090e/19fa hand-off).
 3. The magic rules: 4:1fb2 (turns), 4:2046 (the eighth-turn test), 4:2174
