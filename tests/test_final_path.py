@@ -202,24 +202,30 @@ class PalaceSceneTests(unittest.TestCase):
         self.assertEqual(self.jaffar.final_info.mode, 1)
         self.assertTrue(self.combat.player.alive)
 
-    def test_he_passes_through_and_bumps_walls_unarmed(self):
+    def test_he_passes_through_and_meets_no_wall_unarmed(self):
         # FrameAdv 2:6cb4: the Kid-like actor 6 never stops the Prince, so
         # SEQS 241's stagger from x 400 carries him through and off the
-        # floor. Jaffar follows him down; HitFloor 6:036a-0374 does not arm
-        # actor 6, so his wall bump is the unarmed one (Collide 4:5910),
-        # not an armed SEQS 64 that left him en garde for good.
+        # floor. Jaffar follows him off the edge. FrameAdv's opponent pass
+        # (2:65da-6602) has no Collide, and EnemyCollide 4:62b0 exits for an
+        # unarmed actor (4:6310), so he bumps no wall (SEQS 46/47/64/65): he
+        # lands softly (HitFloor 6:0394, SEQS 17) in row 1's right-hand wall
+        # column and stays crouched, where 9:136e (prev 0) has no rise and
+        # 9:0ba6 no spell. The port's Kid-like bump instead made him repeat
+        # SEQS 47 and SEQS 13 against that wall without end.
         scene = self.scene
         scene.jump_to_room(7, row=0, x=400, facing=1, reset_guards=False, redraw=False)
         self.ticks(1)
         scene.sword_drawn = self.combat.player.sword_drawn = True
         sequences, rows = set(), set()
-        for _ in range(60):
+        for _ in range(120):
             self.ticks(1)
             sequences.add(self.jaffar.state.selected_sequence_id)
             rows.add(self.combat.player.row)
         self.assertIn(1, rows)
-        self.assertIn(47, sequences)
-        self.assertFalse(sequences & {64, 65})
+        self.assertFalse(sequences & {46, 47, 64, 65})
+        self.assertEqual((self.jaffar.room, self.jaffar.row), (7, 1))
+        self.assertEqual((self.jaffar.state.selected_sequence_id, self.jaffar.state.action), (17, 109))
+        self.assertTrue(self.combat.player.alive)
 
     def test_his_reach_takes_a_drawn_sword_and_then_he_casts(self):
         scene = self.scene

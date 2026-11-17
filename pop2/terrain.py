@@ -1414,7 +1414,7 @@ class RooftopPhysics:
     def advance(self, motion, runtime, old_x, bounds, sword_drawn=False, protected=False,
                 frame_flags=0x40, frame_record=None, bounds_for_state=None, cut_enabled=True,
                 alive=True, old_bounds=None, catch_ledge=None, collision_bounds_for_state=None,
-                invulnerable=False, native_alive=None):
+                invulnerable=False, native_alive=None, barriers=True):
         state = runtime.state
         if motion.dead:
             motion.gate_passages = ()
@@ -1572,7 +1572,11 @@ class RooftopPhysics:
                                     collision_bounds[2] + push, collision_bounds[3])
         # Collide 4:5740-5746 returns before displacement or bump selection
         # for a dead actor. A death pose must never become a live wall bump.
-        corrected = (state.target_x if enemy or motion.void_fall or not alive or state.animation_state == 7
+        # barriers=False: an opponent whose only native wall contact is
+        # EnemyCollide, while that routine exits for him (unarmed), meets no
+        # wall at all; the port's swept correction is not applied to him.
+        corrected = (state.target_x if not barriers or enemy or motion.void_fall or not alive
+                     or state.animation_state == 7
                      or state.source_sequence_id in (70, 78) else
                      self.map.wall_correction(motion.room, old_x, state.target_x,
                                               collision_bounds, wall_old_bounds, collision_facing,
@@ -1609,9 +1613,10 @@ class RooftopPhysics:
                 # stays on that floor. GroundBump (45) is the empty/high case.
                 # Opponents bump as armed characters: HitFloor arms them on
                 # landing (6:038c) and their FRAM has no Prince bump poses 50-52.
-                # Collide 4:58a6/5910 reads the armed word, and HitFloor
-                # 6:036a-0374 leaves the Kid-like actors 1 and 6 (the final
-                # level's Jaffar and copies) unarmed.
+                # (Natively Collide is the Kid's alone, FrameAdv 2:639a; this
+                # opponent bump is the port's safeguard.) HitFloor 6:036a-0374
+                # leaves the Kid-like actors 1 and 6 unarmed. The final level's
+                # Jaffar skips this correction (barriers=False).
                 armed = sword_drawn or state.actor_type not in (0, None, 1, 6)
                 direction = 1 if state.facing else -1
                 if supported and (armed or state.current_y > -30) and state.vertical_velocity >= 50:

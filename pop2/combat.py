@@ -1997,7 +1997,11 @@ class CombatEncounter:
         self.final_physics.advance(
             motion, figure.runtime, old_x, bounds(), frame_record=frames[state.action],
             bounds_for_state=bounds, cut_enabled=False,
-            protected=state.sequence_id in LEDGE_SEQUENCES)
+            protected=state.sequence_id in LEDGE_SEQUENCES,
+            # FrameAdv's opponent pass (2:65da-6602) gives him no Collide:
+            # its only wall contact, EnemyCollide 4:62b0, exits at 4:6310
+            # unless armed (a5-0x503c == 1), and 9:16fe never arms him.
+            barriers=False)
         state.current_x = state.target_x
         figure.row = motion.row
         # UpdateOppInfo 6:30b0: a cell outside the room (IndexCell 4:29d8
