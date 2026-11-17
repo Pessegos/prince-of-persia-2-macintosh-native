@@ -246,7 +246,7 @@ def describe_missing(missing):
         elif name.startswith('audio/'):
             add('the audio')
         elif name in _SCENES or re.fullmatch(r'tree-\d+\.json', name):
-            add('the story scenes')
+            add('the cutscenes')
         elif name == 'attract.json':
             add('the demo and credits')
         elif name == 'enemy_profiles.json':

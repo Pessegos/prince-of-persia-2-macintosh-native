@@ -29,9 +29,9 @@ from pop2.preferences import load_preferences, remember
 STAGES = (
     ('image', 'Reading the game image', 3),
     ('scenery', 'Drawing the level scenery', 70),
-    ('music', 'Preparing the music', 8),
-    ('scenes', 'Preparing the story scenes', 12),
-    ('demo', 'Recovering the demo and credits', 3),
+    ('music', 'Preparing the music and sounds', 8),
+    ('scenes', 'Preparing the cutscenes', 12),
+    ('demo', 'Preparing the demo and credits', 3),
     ('install', 'Installing the files', 4),
 )
 IMAGE_TYPES = ("Game images", "*.iso *.hfs *.hfv *.dsk *.img *.dmg")

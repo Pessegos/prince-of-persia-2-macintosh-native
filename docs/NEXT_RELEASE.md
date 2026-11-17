@@ -32,8 +32,8 @@ packaging it.
   preferences (`game_image`, beside the saves), so a new installation folder
   or a refresh offers "Use this image" without the file picker. The picker
   opens in that image's folder.
-- The import lists its stages (game image, level scenery, music, story
-  scenes, demo and credits, installation) with a determinate progress bar,
+- The import lists its stages (game image, level scenery, music and sounds,
+  cutscenes, demo and credits, installation) with a determinate progress bar,
   the elapsed time and an estimate of the time left. The stages come from
   structured `step` events of `tools.extract_assets --progress-json`; the
   scenery's share follows the cavern export's own messages, now named

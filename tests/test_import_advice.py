@@ -129,7 +129,7 @@ class MissingFilesTests(unittest.TestCase):
                               'temple_level13.json', 'audio/cue-40.wav', 'audio/manifest.json (needs reimport)',
                               'intro.json (needs reimport)', 'tree-3.json', 'Kid.rsrc', 'attract.json',
                               'enemy_profiles.json', 'final_level14.json (needs reimport)']),
-            "the level scenery (levels 3, 4 and 10\u201314), the audio, the story scenes, the game's "
+            "the level scenery (levels 3, 4 and 10\u201314), the audio, the cutscenes, the game's "
             "resource files, the demo and credits and the opponents' data")
         self.assertEqual(describe_missing(['unknown.dat']), 'unknown.dat')
         self.assertEqual(describe_missing([]), '')
