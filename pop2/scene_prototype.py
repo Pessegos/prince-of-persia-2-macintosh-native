@@ -2807,7 +2807,6 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         2:45c2 clears the next level). Port choice: that game keeps the
         finished campaign's cutscenes, and a scene not yet revealed in the
         viewer is revealed the next time it opens. Alt+N or a load leaves it."""
-        self.finish_cutscene_watch()   # the happy ending has just played
         collection = self.cutscene_collection
         fresh = set(getattr(self, 'cutscene_fresh', ()))
         self.new_game()

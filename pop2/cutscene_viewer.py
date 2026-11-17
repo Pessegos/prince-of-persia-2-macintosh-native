@@ -165,11 +165,17 @@ class CutsceneControls:
         self.cutscene_fresh |= fresh - collection.revealed
 
     def watch_cutscene(self, key):
-        """A chapter starts playing in the campaign. It counts as seen, and the
-        viewer reveals it, once it has played to its end or been skipped: the
-        first version unlocked it as it began, so opening the viewer during the
-        opening's first chapter already revealed all three."""
+        """A chapter begins in the campaign: it is unlocked at once, and the
+        viewer reveals it the next time it opens. The opening is one program in
+        three chapters, so each of them is unlocked as it begins: the first
+        version unlocked all three as the introduction began. Unlocking a scene
+        only once it had ended was tried and rejected by the user: the happy
+        ending, last of all, would then appear only in the game that follows."""
         self.update_cutscene_watch()
+        self.cutscene_watch = None
+        if key not in OPENING_ORDER:
+            self.mark_cutscene_seen(key)
+            return
         self.cutscene_watch = key, getattr(self, 'intro', None)
         self.update_cutscene_watch()
 
@@ -179,39 +185,32 @@ class CutsceneControls:
             self.watch_cutscene(chapter.key)
 
     def forget_cutscene_watch(self):
-        """A load or a new game: the scene that was playing belongs to the old campaign."""
+        """A load or a new game: the introduction playing belongs to the old campaign."""
         self.cutscene_watch = None
 
-    def finish_cutscene_watch(self):
-        """The scene playing has ended, whatever the player object still says."""
-        self.update_cutscene_watch(ended=True)
-
-    def update_cutscene_watch(self, ended=False):
+    def update_cutscene_watch(self):
+        """Unlock each of the opening's chapters that has begun; the ones a skip
+        passes over count as well, as a loaded save always has all three."""
         watch = getattr(self, 'cutscene_watch', None)
         if watch is None:
             return
         key, player = watch
-        playing = (not ended and player is not None and getattr(self, 'intro', None) is player
+        order = OPENING_ORDER[OPENING_ORDER.index(key):]
+        playing = (player is not None and getattr(self, 'intro', None) is player
                    and not getattr(player, 'done', False))
-        if key in OPENING_ORDER:
-            # The opening is one program in three chapters: each counts once the next begins.
-            order = OPENING_ORDER[OPENING_ORDER.index(key):]
-            if playing:
-                program = {'operations': player.operations}
-                passed = [chapter for chapter in order[1:]
-                          if player.position > chapter_range(CHAPTER_BY_KEY[chapter], program)[0]]
-                for done in order[:len(passed)]:
-                    self.mark_cutscene_seen(done)
-                self.cutscene_watch = order[len(passed)], player
-                return
+        if not playing:
             self.cutscene_watch = None
-            for done in order:   # skipping the opening skips its later chapters too
-                self.mark_cutscene_seen(done)
+            for chapter in order:
+                self.mark_cutscene_seen(chapter)
             return
-        if playing:
-            return
+        program = {'operations': player.operations}
+        for chapter in order:
+            start = chapter_range(CHAPTER_BY_KEY[chapter], program)[0]
+            if start and player.position <= start:   # not begun yet
+                self.cutscene_watch = chapter, player
+                return
+            self.mark_cutscene_seen(chapter)
         self.cutscene_watch = None
-        self.mark_cutscene_seen(key)
 
     def open_cutscene_viewer(self, *, developer=False):
         from pop2.cutscene_gallery import CutsceneGallery

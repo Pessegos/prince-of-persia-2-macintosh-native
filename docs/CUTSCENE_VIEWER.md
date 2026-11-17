@@ -44,17 +44,16 @@ second looked choppy; stages dissolving into each other at the display's
 rate, and then twenty whole frames a second, looked too smooth to belong to
 this game.
 
-A chapter counts as played, and is unlocked, only once it has ended or been
-skipped, never as it begins: the first version unlocked each scene as it
-started, so opening the viewer during the first moments of the introduction
-already revealed its three chapters. A new game starts with every chapter
-locked, the opening's three too (at first they were open from the start).
-Each of the opening's chapters unlocks, and is revealed the next time the
-viewer is opened, once it has played: the first once the title screen begins,
-the title screen once the palace escape begins, the escape at the
-introduction's end. A loaded save always has them, since a campaign is saved
-after its introduction. Skipping the
-introduction counts its remaining chapters as played. Chapters revealed
+A chapter is unlocked as it begins, and revealed the next time the viewer
+opens. A new game starts with every chapter locked, the opening's three too
+(at first they were open from the start). The opening is one program in three
+chapters, and each of them unlocks as it begins: the first with the
+introduction, the title screen when it appears, the palace escape when it
+starts (the first version unlocked all three as the introduction began).
+Skipping the introduction unlocks the chapters it passes over, as a loaded save
+always has all three: a campaign is saved after its introduction. Unlocking
+each scene only once it had ended was tried and rejected: the happy ending,
+the last scene, would then appear only in the game that follows it. Chapters revealed
 together, one after another, share one sound.
 
 Only the revealing card is redrawn, and only when it reaches its next frame:
