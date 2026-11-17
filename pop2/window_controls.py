@@ -632,7 +632,9 @@ class WindowControls(InputRouting):
         return path
 
     def show_screenshot_toast(self, filename, *, error=False):
-        self.screenshot_toast = filename if error else f"Saved screenshot as {filename}"
+        # The interface font has no underscore: the file's name is shown as the
+        # Screenshots page shows it, with spaces ("PoP2 2026-11-17 18.15.37.png").
+        self.screenshot_toast = filename if error else f"Saved screenshot as {filename.replace('_', ' ')}"
         after_id = getattr(self, "screenshot_toast_after_id", None)
         if after_id is not None:
             try:

@@ -317,6 +317,17 @@ class GameMenuSceneTests(unittest.TestCase):
                 self.assertIsNone(scene.game_menu)
                 self.assertEqual(scene.paused, paused)
 
+    def test_f8_notice_names_the_file_with_spaces_as_the_screenshots_page_does(self):
+        # The font has no underscore: "PoP2_2026-11-17_18.15.37.png" read "PoP22026-11-1718.15.37.png".
+        scene = self.scene
+        with TemporaryDirectory() as directory:
+            scene.screenshot_settings = ScreenshotSettings(Path(directory), 1)
+            path = scene.capture_screenshot()
+            self.assertIn('_', path.name)
+            self.assertEqual(scene.screenshot_toast, f"Saved screenshot as {path.name.replace('_', ' ')}")
+            self.assertNotIn('_', scene.screenshot_toast)
+            scene.clear_screenshot_toast()
+
     def test_shift_f8_preserves_visible_pause_menus_and_cutscene_overlay(self):
         scene = self.scene
         with TemporaryDirectory() as directory:
