@@ -175,6 +175,14 @@ rejects a wrong model:
   after a miss at 2 he closes in until a flask lifts the Prince above 2.
   All three were already ported.
 
+- A whole-level exploration with the opponents on, varied lives and a lost
+  sword, saves and retries. **Done 2026-11-17** (`tools.explore_final_level`,
+  about 120,000 moves): a Jaffar falling through a floor gap now moves to the
+  room below, and the unarmed Jaffar no longer bumps walls (which had made
+  him repeat SEQS 47/13 on row 1). The turning cycle with the Prince between
+  his two turned positions is native. See the ledger's "Whole-level
+  exploration".
+
 ### 7. Needs the user's material, not done overnight
 
 - Room 3's fight timing and the pixels of SEQS 238/239: the winning video
