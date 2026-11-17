@@ -106,7 +106,7 @@ Saving follows the original game's checkpoint system. Loading a save takes you b
 
 In widescreen windows, the page makes room for a larger preview, with the save's name and details beside it.
 
-<img src="docs/github readme/menus/save-load-wide.png" alt="Saved Games in a widescreen window, with the ruins theme and a larger preview" width="850">
+<img src="docs/github readme/menus/save-load-preview.gif" alt="Creating and renaming a save, loading the level start and returning to a saved checkpoint in the reworked Save & Load menu" width="850">
 
 <br/>
 
