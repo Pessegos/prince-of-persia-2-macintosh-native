@@ -9,11 +9,8 @@ coarse description measured from that recording (none of its samples):
 - the level of thirteen frequency bands, every 10 ms in the treble and every
   60 ms in the deep rumble that carries most of it (about 93% of its energy is
   below 200 Hz), before the user's fade: ``LEVELS``;
-- the 25 crackles heard over it, each a bright click of a few milliseconds
-  with a soft low pop, at its time and its loudness above 3 kHz: ``CRACKLES``;
-- the grain of its hiss: between those crackles the treble is many tiny
-  crackles, not even static (``HISS_*``); a first version made of static was
-  heard as thinner and colder than the recording;
+- the 25 crackles heard over it, each a bright click of a few milliseconds,
+  with its time and its loudness above 3 kHz: ``CRACKLES``;
 - the user's own fade-out, constant power from 0.65 s to the end.
 
 The noise is seeded, so the sound is the same on every run. The seed is the
@@ -75,42 +72,41 @@ LEVELS = (
         -81.4, -68.5, -68.5, -71.6, -75.7, -64.6, -66.1, -71.3, -74, -64.2, -84, -71.1, -76.9,
         -79.1, -66, -75.4, -74.9, -74.6, -79.6, -77.2, -77.2, -77.2, -77.2),
     (
-        -96.7, -90.9, -94.3, -77.7, -74.8, -89, -79.5, -97.2, -80.4, -83, -78.4, -81.1, -88.1,
-        -75.6, -86.5, -68.3, -84.1, -82.2, -76, -75.1, -80, -76.3, -70.8, -72.8, -71.2, -73.8,
-        -74.4, -77.1, -75.1, -71.5, -70, -67.8, -69.8, -74.6, -69.4, -77.3, -67.9, -64.6, -67.5,
-        -68.8, -72, -61.9, -73.1, -65.3, -66.6, -72.2, -67, -75.2, -57.3, -66, -62.8, -69.4, -58.5,
-        -72.2, -70, -66, -70.5, -66.8, -69.3, -62.7, -77, -67.9, -68.2, -78, -56.4, -65.9, -63.5,
-        -68.1, -71.4, -58.3, -75.4, -70.3, -64.5, -62.6, -69.7, -62, -67.6, -70.7, -68.9, -70.7,
-        -70.3, -69.9, -68.2, -61.9, -70, -64.9, -70.5, -66.2, -71.2, -79.7, -72.9, -84.7, -65.1,
-        -71.3, -68.4, -80.8, -73.2, -76.3, -76.3, -76.3, -76.3),
+        -92.8, -90.9, -92.7, -79.3, -73.5, -86.8, -82.2, -95.1, -80.6, -84.5, -78.6, -81.5, -83.3,
+        -79.4, -84.2, -68.8, -80.7, -85.4, -76.1, -75.6, -77.6, -79.7, -73.6, -74.4, -72.3, -72.7,
+        -75.9, -76.2, -76.8, -74.2, -68.9, -69.2, -68.5, -76.7, -69.8, -78.9, -67.9, -64.6, -70.8,
+        -69.1, -74.5, -62.4, -70.7, -70.5, -65.3, -72.4, -67.6, -75.1, -58.4, -67.6, -63.2, -69.3,
+        -57.9, -71.4, -71.8, -67.2, -65.9, -68.1, -67.8, -64.9, -72.4, -66.9, -69.2, -78.8, -55.5,
+        -61.7, -66.1, -67, -70.1, -60.9, -70.9, -74.1, -65.4, -62.8, -73.9, -64.4, -67, -69.6,
+        -73.3, -67.8, -69.9, -70.7, -68.2, -64.3, -73.5, -62.9, -72.2, -67.5, -68.1, -83, -74.8,
+        -84.7, -66.4, -65.3, -68.2, -79.9, -75.6, -76.3, -76.3, -76.3, -76.3),
     (
-        -100, -91.7, -100, -73.6, -70.8, -76.7, -84.1, -78.1, -75.1, -74.7, -72.9, -77.9, -76.9,
-        -72.3, -88, -63.8, -63.3, -73.5, -71.6, -71.9, -72.2, -84.8, -65.2, -65.7, -66.2, -69.7,
-        -66.7, -72.4, -63.5, -70.5, -66.6, -65.9, -65.2, -59.2, -68.3, -61.6, -65.8, -63.9, -74.7,
-        -67.6, -65.4, -64.1, -67.2, -61.6, -63.5, -66.3, -65, -65.8, -58.8, -45.1, -68.8, -60.4,
-        -60.6, -63.6, -64.6, -72.3, -67, -61.2, -68.9, -63.2, -70.2, -48.4, -61.6, -73.4, -54.5,
-        -62, -61.3, -65, -66.4, -55.9, -75.5, -68.1, -64.3, -57, -67.6, -58.9, -76.6, -63.5, -64.3,
-        -64.8, -63.4, -78.2, -61.9, -66.1, -63.4, -69.7, -63.8, -67.2, -59, -54.7, -61.8, -75.1,
-        -61.2, -65.7, -58.9, -77.2, -70.8, -73, -73, -73, -73),
+        -91.4, -91.7, -100, -75.4, -70.1, -78.5, -82.5, -81, -77, -79.4, -74.2, -81.1, -77.9, -71.7,
+        -88, -66.1, -62.9, -74.8, -71.1, -77, -74, -78.9, -69.4, -68.5, -68, -70, -72.6, -74.5,
+        -66.3, -69.5, -68.1, -68.6, -62.9, -65.1, -71, -66.1, -65.5, -70.6, -73.5, -71, -69.1,
+        -63.7, -65.1, -64.8, -62.6, -66.5, -65.8, -67.1, -58, -48.3, -64, -61.1, -62.3, -67, -67,
+        -64.8, -67, -62.2, -66.1, -65.2, -66.3, -52.3, -60.5, -73.7, -56.8, -62.4, -61.2, -65.6,
+        -68.1, -58.8, -70.7, -68.9, -67.8, -55.1, -63.1, -61.9, -70.7, -63.4, -67.7, -66.1, -66.4,
+        -75.9, -62, -67.8, -66.2, -69.1, -62.9, -64.5, -61.1, -58.8, -60.8, -75.3, -67.6, -60.3,
+        -60.1, -72.3, -75.4, -73, -73, -73, -73),
     (
-        -100, -91.7, -83.9, -72.8, -63.5, -73, -70, -70.1, -70, -69.2, -67.1, -69.5, -72.5, -65.7,
-        -72.6, -59.5, -56.4, -67.2, -66.4, -60.8, -68.1, -72.2, -60.1, -63.8, -55.8, -59.9, -61.5,
-        -67.8, -62.3, -58, -59.6, -70, -53.8, -54.6, -58.1, -59.9, -54.1, -71.7, -56.2, -62.5,
-        -55.5, -60.3, -55.8, -56.2, -52.7, -59.5, -57.7, -62.8, -50.9, -52.5, -50.1, -54.1, -51.3,
-        -58.2, -60.9, -50.2, -64.3, -53.3, -59.5, -49.5, -67.5, -44.5, -50.2, -63.9, -45.3, -58.7,
-        -56.9, -55.4, -56.3, -48.8, -62.8, -53.5, -55.8, -56.1, -58.4, -55.4, -56.5, -59.3, -59.9,
-        -61.2, -57.1, -59, -57, -55.1, -54.7, -65.2, -56.3, -51.5, -56.6, -51, -60, -65.1, -50.1,
-        -61.7, -50.9, -69.1, -61.8, -67.5, -67.5, -67.5, -67.5),
+        -92.8, -91.7, -87, -73.5, -65, -73.8, -74.1, -73.4, -69.1, -74.1, -66.4, -73.3, -74.3,
+        -66.8, -77.2, -60.8, -59.2, -69.6, -63.6, -63.8, -69.1, -73.7, -64.7, -62.8, -58.4, -64.4,
+        -64.3, -69.8, -62.6, -61.8, -63.9, -67.6, -54.3, -59, -56.3, -65.6, -55.5, -65.8, -60.1,
+        -58.5, -59.5, -58.1, -55.9, -60.1, -54.9, -61.2, -59.5, -64.7, -52.4, -52.8, -52.7, -55.7,
+        -50.8, -61.1, -61.7, -51.5, -62.3, -56.2, -59.3, -54.3, -62.5, -45.8, -55, -61.5, -48.1,
+        -57.7, -56.6, -55.6, -56.7, -53.5, -60.9, -58, -57.8, -54, -60.2, -58, -59.6, -56.7, -67.7,
+        -58.4, -61.6, -58.8, -59.8, -59.2, -58.7, -61.4, -57.5, -56.1, -55.4, -55.6, -64.1, -64.5,
+        -51.5, -55.7, -51.8, -62.2, -68.9, -67.5, -67.5, -67.5, -67.5),
     (
-        -91.1, -84.4, -85.7, -69.9, -64.2, -77.3, -77.1, -81.8, -67.6, -80.8, -67.6, -73.3, -72.9,
-        -72.2, -72.5, -59.6, -62.5, -73, -63.3, -66.7, -70.6, -71.1, -64.8, -63.7, -62.9, -57.6,
-        -62.2, -64.4, -66.1, -65.2, -62.5, -76.8, -52.5, -55.5, -58.1, -58.2, -59.8, -61.3, -62.5,
-        -57.5, -60.3, -54.5, -60.4, -61.8, -54.4, -62.2, -59.9, -65.1, -54.4, -55, -52.9, -55,
-        -54.9, -63.4, -66.2, -56.2, -58.2, -58.8, -58.4, -54.6, -64.9, -43.6, -57.5, -65.1, -50.8,
-        -56.5, -63.2, -60.1, -59.6, -52.6, -66.8, -56.3, -72.2, -52.8, -63.9, -63.5, -60.6, -56.8,
-        -65.2, -60.9, -59.8, -73.7, -55, -55.6, -58.9, -65.7, -58, -52.3, -54, -54.9, -60.7, -75.4,
-        -52.1, -53.1, -55.6, -65, -65, -66.1, -66.1, -66.1, -66.1),
-)
+        -88.5, -86.5, -85.5, -70.8, -65.1, -74, -79.1, -79.3, -70.1, -76.5, -66.5, -73.2, -72.7,
+        -72.9, -74.7, -59.9, -63.6, -71.1, -63.2, -68.7, -71.6, -71, -65.5, -64.8, -65.2, -58.2,
+        -63.6, -66.1, -67.7, -64.3, -64.8, -70.3, -52.7, -57, -56.9, -58.8, -59.7, -63.6, -61.9,
+        -59.1, -60.9, -54.3, -61.5, -62.5, -56.1, -60.7, -61.5, -63, -55.8, -54.1, -54.7, -53.3,
+        -56, -64.9, -67.5, -56.4, -57.4, -59.9, -58.7, -53.4, -63.4, -44, -57.4, -64.8, -50.1,
+        -57.3, -65.1, -59.5, -61.4, -53.8, -67.2, -57.7, -69.4, -52.3, -63.6, -63.8, -62.1, -55.8,
+        -69.3, -60.2, -59.9, -72.3, -55.3, -57.2, -60.9, -64.3, -57.7, -54.1, -53.6, -56.3, -60.6,
+        -73.6, -54.6, -50.1, -57, -63.9, -67, -66.1, -66.1, -66.1, -66.1),)
 # (seconds, peak above 3 kHz as a fraction of full scale)
 CRACKLES = (
     (0.0349, 0.0068), (0.0951, 0.0045), (0.1309, 0.0098), (0.151, 0.029), (0.176, 0.0097), (0.2342,
@@ -119,21 +115,12 @@ CRACKLES = (
     (0.6424, 0.0349), (0.7153, 0.0594), (0.7281, 0.0502), (0.7926, 0.0216), (0.8137, 0.0206),
     (0.8538, 0.0224), (0.875, 0.031), (0.9226, 0.0923), (0.9368, 0.0063),
 )
-# A crackle: noise rising over 0.1 ms, dying away over 1 ms with a tail
-# half as loud lasting 2 ms, coloured by these gains (dB at these
-# frequencies, Hz, between them in log frequency): brightest around 10 kHz,
-# with a soft low pop (300-700 Hz), like the recording's crackles.
-CRACKLE_SHAPE = ((458, -8.5), (1025, -28.4), (2121, -10.3), (3873, -10.0), (6325, -8.3),
-                 (9381, 0.0), (12410, -1.6), (15875, -7.0), (20785, -13.8))
-CRACKLE_ATTACK, CRACKLE_DECAY, CRACKLE_TAIL, CRACKLE_TAIL_TIME = 0.0001, 0.001, 0.5, 0.002
-CRACKLE_LENGTH = 960   # samples (20 ms)
-# Between the crackles, the recording's treble is not even static but many tiny
-# crackles of its own: about 1200 a second, of varied sizes (log-normal, spread
-# HISS_SPREAD), mixed with smooth noise in each treble band in these shares.
-HISS_CLICKS = 1200
-HISS_SPREAD = 0.8
-HISS_LARGEST = 3.0   # times the median tiny crackle
-HISS_MIX = (0, 0, 0, 0, 0, 0, 0, 0, 0, 0.66, 0.74, 0.81, 0.55)
+# A crackle: a 0.3 ms spike of noise with a faint tail (a tenth, 1.5 ms), shaped
+# by these gains (dB at these frequencies, Hz, between them in log frequency):
+# brightest around 10 kHz, like the recording's.
+CRACKLE_SHAPE = ((2000, -23.1), (4500, -17.0), (7500, -19.0), (10500, -3.3), (14000, -18.7), (19000, -17.5))
+CRACKLE_SPIKE, CRACKLE_TAIL, CRACKLE_TAIL_TIME = 0.0003, 0.1, 0.0015
+CRACKLE_LENGTH = 480   # samples (10 ms)
 
 
 def band_step(index):
@@ -164,34 +151,16 @@ def fade_curve(count, rate=RATE):
     return curve
 
 
-def _click_train(count):
-    rng = numpy.random.RandomState(SEED + 2000)
-    number = rng.poisson(HISS_CLICKS * count / RATE)
-    where = rng.randint(0, count, number)
-    # The largest are held to the size of the smaller crackles heard over it.
-    size = numpy.minimum(rng.lognormal(0, HISS_SPREAD, number), HISS_LARGEST) * rng.choice((-1, 1), number)
-    out = numpy.zeros(count)
-    numpy.add.at(out, where, size)
-    return out
-
-
-def _background(count, levels=None):
-    levels = LEVELS if levels is None else levels
+def _background(count):
     noise = numpy.fft.rfft(numpy.random.RandomState(SEED).standard_normal(count))
-    clicks = numpy.fft.rfft(_click_train(count))
     freqs = numpy.fft.rfftfreq(count, 1 / RATE)
     t = numpy.arange(count) / RATE
     out = numpy.zeros(count)
-    for index, band in enumerate(levels):
-        weights = band_weights(freqs, index)
-        part = numpy.fft.irfft(noise * weights, count)
+    for index, levels in enumerate(LEVELS):
+        part = numpy.fft.irfft(noise * band_weights(freqs, index), count)
         part /= part.std() + 1e-12
-        share = HISS_MIX[index]
-        if share:
-            tiny = numpy.fft.irfft(clicks * weights, count)
-            part = share * tiny / (tiny.std() + 1e-12) + numpy.sqrt(1 - share * share) * part
-        times = numpy.arange(len(band)) * band_step(index)
-        out += part * numpy.interp(t, times, 10 ** (numpy.array(band) / 20))
+        times = numpy.arange(len(levels)) * band_step(index)
+        out += part * numpy.interp(t, times, 10 ** (numpy.array(levels) / 20))
     return out
 
 
@@ -199,23 +168,16 @@ def _crackles(count):
     rng = numpy.random.RandomState(SEED + 1000)
     n = CRACKLE_LENGTH
     t = numpy.arange(n) / RATE
-    envelope = numpy.where(t < CRACKLE_ATTACK, 0.5 - 0.5 * numpy.cos(numpy.pi * t / CRACKLE_ATTACK), 1.0)
-    after = numpy.maximum(0, t - CRACKLE_ATTACK)
-    envelope *= numpy.exp(-after / CRACKLE_DECAY) + CRACKLE_TAIL * numpy.exp(-after / CRACKLE_TAIL_TIME)
-    # The colour is given to a longer run of noise, and the crackle cut from its
-    # middle: it starts cleanly, with no ringing before it.
-    long = 4096
-    freqs = numpy.fft.rfftfreq(long, 1 / RATE)
+    freqs = numpy.fft.rfftfreq(n, 1 / RATE)
     centres, gains = zip(*CRACKLE_SHAPE)
-    colour = 10 ** (numpy.interp(numpy.log(numpy.maximum(freqs, 1)), numpy.log(centres), gains) / 20)
-    colour *= numpy.clip((freqs - 150) / 150, 0, 1)
-    pad = numpy.fft.rfftfreq(2 * n, 1 / RATE) > 3000
+    shape = 10 ** (numpy.interp(numpy.log(numpy.maximum(freqs, 1)), numpy.log(centres), gains) / 20) * (freqs > 1500)
     out = numpy.zeros(count)
     for when, peak in CRACKLES:
-        coloured = numpy.fft.irfft(numpy.fft.rfft(rng.standard_normal(long)) * colour, long)
-        burst = coloured[1024:1024 + n] * envelope
-        bright = numpy.fft.irfft(numpy.fft.rfft(numpy.concatenate([burst, numpy.zeros(n)])) * pad, 2 * n)[:n]
-        top = int(numpy.argmax(abs(bright[:round((CRACKLE_ATTACK + 0.001) * RATE)])))
+        burst = rng.standard_normal(n) * (numpy.exp(-t / CRACKLE_SPIKE)
+                                          + CRACKLE_TAIL * numpy.exp(-t / CRACKLE_TAIL_TIME))
+        burst = numpy.fft.irfft(numpy.fft.rfft(burst) * shape, n)
+        bright = numpy.fft.irfft(numpy.fft.rfft(burst) * (freqs > 3000), n)
+        top = int(numpy.argmax(abs(bright[:48])))
         burst *= peak / (abs(bright[top]) + 1e-12)
         first = round(when * RATE) - top
         piece = burst[:count - first]
