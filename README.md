@@ -81,11 +81,20 @@ The menus also have soft sounds for navigation and selection, with a little musi
 
 ## Menu Themes
 
-I reworked the menus to make them feel more at home in the game. Their colours and frames now follow the environment: palace stonework, sand, rough cavern rock, crumbling ruins and the temple's red columns. The final level also has its own chessboard and spider themes, which change with the room.
+I reworked the menus to make them feel more at home in the game. Their colours and frames now follow the environment: palace stonework, sand, rough cavern rock, crumbling ruins and the temple's red columns.
 
 The same look carries through the game menu, controls, saves, Screenshot Gallery and Cutscene Viewer, including their smaller dialogs. Everything keeps the game's pixel art style, from the lettering to the frames and animations.
 
-<img src="docs/github readme/menus/menu-themes.gif" alt="The F1 menu in its palace, desert, cavern, ruins, temple, chessboard and spider themes" width="700">
+<img src="docs/github readme/menus/menu-themes.gif" alt="The F1 menu in its palace, desert, cavern, ruins and temple themes" width="700">
+
+<details>
+<summary>Show final-level menu themes — spoilers</summary>
+
+The final level has its own chessboard and spider themes, which change with the room.
+
+<img src="docs/github readme/menus/menu-themes-final.gif" alt="The F1 menu in the final level's chessboard and spider themes" width="700">
+
+</details>
 
 <br/>
 
