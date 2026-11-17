@@ -3738,7 +3738,8 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
                                (0, ROOM_HEIGHT))
             self.screenshot_viewport = viewport.copy()
             if self.dev_menu is not None or self.game_menu is not None:
-                menu_theme.use(menu_theme.NEUTRAL)  # cutscenes keep the neutral menu
+                # A story scene plays after the level that leads to it: the menu takes that level's look.
+                menu_theme.use(menu_theme.theme_for(self.game))
             if self.dev_menu is not None:
                 viewport = self.dev_menu.draw(viewport, self.ui_font)
             elif self.game_menu is not None:

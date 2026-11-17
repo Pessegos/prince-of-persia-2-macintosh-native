@@ -23,13 +23,15 @@ is drawn as written.
 
 The scene selects the theme before drawing a menu
 (`menu_theme.use(menu_theme.theme_for(game))`). Menus opened over a cutscene
-stay neutral.
+take the theme of the level it follows (the ride to the temple after level 9
+has the ruins' look); they were neutral at first, which the user noticed as
+an oversight.
 
 ## Themes
 
 | Theme | Levels | Look |
 | --- | --- | --- |
-| neutral | cutscenes, and the rooms of the last level that have no theme yet | grey panel, gold accent |
+| neutral | the rooms of the last level that have no theme yet | grey panel, gold accent |
 | palace | 1 | dark blue panel, the first room's cream cornice with its pearls and the wall's dotted turquoise and orange trim, a soft mauve-grey outline, red selection |
 | desert | 2 | dark sea panel, frame of sand with a wet inner edge, sun-yellow accent |
 | caverns | 3-5 | dark brown panel, rough rock frame, bone text, flame accent, darker room behind |
