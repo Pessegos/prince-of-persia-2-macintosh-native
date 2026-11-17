@@ -145,7 +145,7 @@ You can even delete screenshots by tossing them into the lava. The picture now f
 
 Pressing F8 takes a clean PNG screenshot without menus or overlays, while Shift+F8 captures the screen as it appears, including menus and paused scenes. A small notification also appears whenever a screenshot is saved.
 
-<img src="docs/github readme/menus/screenshots-burn.gif" alt="Widescreen Screenshot Gallery with a picture falling into the lava and burning away" width="850">
+<img src="docs/github readme/menus/screenshots-burn.gif" alt="Taking a screenshot with F8, browsing the widescreen Screenshot Gallery, capturing it with its menus and tossing that picture into the lava, where it burns away" width="850">
 
 <br/>
 
@@ -174,7 +174,7 @@ The idea would be to add it to the cheat mode, like the original Macintosh has. 
 
 An interactive map that allows browsing through levels and teleporting directly to individual rooms, without having to play through the entire level.
 
-<img src="docs/github readme/menus/developer-map.png" alt="Developer Tools - Game Map showing Level 3" width="700">
+<img src="docs/github readme/menus/developer-map.gif" alt="Developer Tools - Game Map: browsing rooms and teleporting through the caverns, the ruins and the palace, with the menus in each level's theme" width="700">
 
 ### Cutscene Viewer
 
