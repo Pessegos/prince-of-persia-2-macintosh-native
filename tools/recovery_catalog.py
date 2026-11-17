@@ -5,11 +5,13 @@ from collections import Counter
 import csv
 import io
 from pathlib import Path
+import re
 
 from pop2.paths import PROJECT_DIR
 
 
 CATALOG = PROJECT_DIR / "docs" / "RECOVERY_CATALOG.csv"
+LEDGER = PROJECT_DIR / "docs" / "RECOVERY_INDEX.md"
 
 # These reviews cover specific ordinary branches, never an entire routine.
 REVIEWS = {
@@ -198,17 +200,93 @@ REVIEWS = {
     (23, "RoofHangingFromShip"): ("partial", "pop2/harbor.py;pop2/scene_prototype.py", "native room, X, mode and pose predicate"),
 }
 
-FIELDS = ("segment", "segment_name", "name", "body_offset", "body_method",
+FIELDS = ("segment", "segment_name", "name", "body_offset", "marker_offset", "body_method",
           "review_status", "prototype_owner", "review_scope",
           "known_direct_callers", "outgoing_named_calls")
+
+# A citation in the branch ledger: CODE segment and offset, e.g. "9:16fe",
+# then further offsets of the same segment ("9:16fe, 09ca, 0a42-0a9c").
+_CITATION = re.compile(r"(?<![0-9])(\d{1,2}):\s?([0-9a-fA-F]{3,4})(?:-([0-9a-fA-F]{3,4}))?")
+_FURTHER = re.compile(r"\s*(?:[,/]|and|or)\s*([0-9a-fA-F]{3,4})(?:-([0-9a-fA-F]{3,4}))?(?![0-9A-Za-z])")
+
+
+def ledger_citations(text):
+    """(segment, first, last) offsets cited in one ledger cell."""
+    found = []
+    for match in _CITATION.finditer(text):
+        segment = int(match.group(1))
+        first = int(match.group(2), 16)
+        found.append((segment, first, int(match.group(3), 16) if match.group(3) else first))
+        position = match.end()
+        while True:
+            further = _FURTHER.match(text, position)
+            # A word of hex letters only ("face", "add") is prose, not an offset.
+            if further is None or not re.search(r"\d", further.group(1)):
+                break
+            first = int(further.group(1), 16)
+            found.append((segment, first, int(further.group(2), 16) if further.group(2) else first))
+            position = further.end()
+    return found
+
+
+def _ledger_owner(text):
+    owners = []
+    for word in re.findall(r"[A-Za-z_][A-Za-z0-9_.]*", text.split("[")[0]):
+        stem = word.split(".")[0]
+        for directory in ("pop2", "tools", "tests"):
+            path = f"{directory}/{stem}.py"
+            if (PROJECT_DIR / path).is_file() and path not in owners:
+                owners.append(path)
+                break
+    return owners
+
+
+def ledger_rows(text=None):
+    """The branch ledger's rows with a tested (T) status: title, citations, owners."""
+    if text is None:
+        text = LEDGER.read_text(encoding="utf-8")
+    section = text.split("## Branch Ledger", 1)[1].split("\n## ", 1)[0]
+    rows = []
+    for line in section.splitlines():
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if not line.startswith("| ") or len(cells) < 4 or cells[0].startswith(("Rule", "---")):
+            continue
+        status = cells[2].split(":", 1)[0]
+        if "T" not in status:
+            continue
+        rows.append((cells[0], ledger_citations(cells[1]), _ledger_owner(cells[3])))
+    return rows
+
+
+def ledger_reviews(rows, ledger=None):
+    """Routines outside REVIEWS whose marker region a tested ledger row cites.
+
+    The region runs from the probable body offset to the routine's name
+    marker (MacsBug names follow the code); it may also hold unnamed static
+    helpers, so a citation is evidence of reviewed code there, not of the
+    whole routine."""
+    if ledger is None:
+        ledger = ledger_rows()
+    found = {}
+    for row in rows:
+        key = (int(row["segment"]), row["name"])
+        if key in REVIEWS or not row["body_offset"] or not row["marker_offset"]:
+            continue
+        first, end = int(row["body_offset"], 16), int(row["marker_offset"], 16)
+        for title, citations, owners in ledger:
+            if any(segment == key[0] and low < end and high >= first
+                   for segment, low, high in citations):
+                titles, paths = found.setdefault(key, ([], []))
+                titles.append(title)
+                paths.extend(path for path in owners if path not in paths)
+    return found
 
 
 def catalog_rows(recovery=None):
     if recovery is None:
         with CATALOG.open(newline="", encoding="utf-8") as source:
             rows = list(csv.DictReader(source))
-        for row in rows:
-            _set_review(row)
+        _set_reviews(rows)
         return rows
     recovery = Path(recovery)
     with (recovery / "symbols.csv").open(newline="", encoding="utf-8-sig") as source:
@@ -222,19 +300,31 @@ def catalog_rows(recovery=None):
             outgoing[origin] = outgoing.get(origin, 0) + 1
     rows = []
     for symbol in symbols:
-        row = {key: symbol[key] for key in FIELDS[:5]}
-        _set_review(row)
+        row = {key: symbol[key] for key in ("segment", "segment_name", "name", "body_offset",
+                                            "marker_offset", "body_method")}
         segment = int(symbol["segment"])
         row.update(known_direct_callers=callers.get((segment, symbol["body_offset"].lower()), 0),
                    outgoing_named_calls=outgoing.get((segment, symbol["name"]), 0))
         rows.append(row)
+    _set_reviews(rows)
     return rows
 
 
-def _set_review(row):
-    status, owner, scope = REVIEWS.get((int(row["segment"]), row["name"]), (
-        "indexed-only", "", "No semantic review recorded in this prototype catalog"))
-    row.update(review_status=status, prototype_owner=owner, review_scope=scope)
+def _set_reviews(rows):
+    ledger = ledger_reviews(rows)
+    for row in rows:
+        key = (int(row["segment"]), row["name"])
+        if key in REVIEWS:
+            status, owner, scope = REVIEWS[key]
+        elif key in ledger:
+            titles, owners = ledger[key]
+            status, owner = "partial", ";".join(owners)
+            scope = ("Branch ledger rows with tested (T) scope citing CODE in this marker region: "
+                     + "; ".join(titles))
+        else:
+            status, owner, scope = ("indexed-only", "",
+                                    "No semantic review recorded in this prototype catalog")
+        row.update(review_status=status, prototype_owner=owner, review_scope=scope)
 
 
 def catalog_text(rows):

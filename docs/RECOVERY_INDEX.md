@@ -22,6 +22,18 @@ without modifying the catalog. These counts include all subsystems, not just AI.
 - `partial`: specific ordinary branches are used by the prototype. The rest
   of the routine is not certified, even if the listed regression tests pass.
 
+A routine gets `partial` in one of two ways. Either it has its own review
+entry in `tools/recovery_catalog.py`, or a branch-ledger row below with a
+tested (`T`) status cites CODE in its marker region. The marker region runs
+from the probable body offset to the name marker (`marker_offset`; MacsBug
+names follow the code). Such a row's scope names the ledger rows, and its
+owners are the modules and tests those rows list. A region may also hold
+unnamed static helpers (CODE 9:09ca-0cd6, for example, holds five of the
+palace controller's). The citation shows reviewed code in that region. It
+does not certify the named routine. Editing the ledger's sources or statuses
+therefore changes the catalog: run `python -m tools.recovery_catalog` after
+such an edit.
+
 These are routine markers, not 1,198 gameplay rules. Some routines are library
 code; some gameplay routines/helpers have no recovered name. The branch list
 below includes relevant unnamed helpers. Neither list is an exhaustive count
