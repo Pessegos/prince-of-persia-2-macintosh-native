@@ -33,6 +33,20 @@ class FireSoundTests(unittest.TestCase):
         freqs = numpy.fft.rfftfreq(len(self.sound), 1 / fire_sound.RATE)
         self.assertGreater(power[freqs < 200].sum() / power.sum(), 0.85)
 
+    def test_its_hiss_is_many_tiny_crackles_not_static(self):
+        # Between the crackles, the 6-12 kHz hiss is spiky like the recording's
+        # (kurtosis about 7); the first version's static was 3, heard as thin and cold.
+        freqs = numpy.fft.rfftfreq(len(self.sound), 1 / fire_sound.RATE)
+        treble = numpy.fft.irfft(numpy.fft.rfft(self.sound) * ((freqs >= 6000) & (freqs < 12000)), len(self.sound))
+        crackles = [round(when * fire_sound.RATE) for when, _peak in fire_sound.CRACKLES]
+        kurtosis = []
+        for start in range(2400, 45000, 960):
+            if any(start - 240 <= crackle < start + 1200 for crackle in crackles):
+                continue
+            piece = treble[start:start + 960] - treble[start:start + 960].mean()
+            kurtosis.append((piece ** 4).mean() / (piece ** 2).mean() ** 2)
+        self.assertGreater(numpy.median(kurtosis), 5)
+
     def test_it_follows_the_users_recording_when_it_is_installed(self):
         recording = Path(__file__).resolve().parents[1] / 'assets' / 'audio' / 'menu-burn.wav'
         if not recording.is_file():
