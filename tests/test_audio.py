@@ -651,7 +651,7 @@ class PolyphonicCueTests(unittest.TestCase):
         self.assertEqual(self.playback.sounds[69].get_volume(), 1)
         rate, _bits, channels = mixer.get_init()
         self.assertEqual(burn.get_raw(), fire_pcm(rate, channels))
-        self.assertAlmostEqual(burn.get_volume(), 0.8, places=2)
+        self.assertAlmostEqual(burn.get_volume(), 0.88, delta=1 / 128)   # SDL keeps 128 steps
         self.playback.play_ui('burn')
         self.assertIs(self.playback.ui_channels['click'].get_sound(), burn)
         del self.playback.ui_sounds['burn']
@@ -666,7 +666,7 @@ class PolyphonicCueTests(unittest.TestCase):
         playback = MixerPlayback(self.directory.name, cues)
         burn = playback.ui_sounds['burn']
         self.assertNotEqual(burn.get_raw(), self.playback.ui_sounds['burn'].get_raw())
-        self.assertAlmostEqual(burn.get_volume(), 0.8, places=2)
+        self.assertAlmostEqual(burn.get_volume(), 0.88, delta=1 / 128)
         playback.play_ui('burn')
         self.assertIs(playback.ui_channels['click'].get_sound(), burn)
         # A file that cannot be read leaves the port's own sound.

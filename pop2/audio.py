@@ -40,7 +40,7 @@ LATE_DEATH_CUES = {16: 250}
 # itself (its source and licence unknown, so not distributed), put beside the
 # imported audio as this file, still replaces it.
 BURN_FILE = "menu-burn.wav"
-BURN_VOLUME = 0.8   # a little quieter than recorded, as the user asked
+BURN_VOLUME = 0.88   # the user asked first for a little quieter than recorded (0.8), then 10% louder
 
 
 class MixerPlayback:
