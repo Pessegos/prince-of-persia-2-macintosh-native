@@ -545,6 +545,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         self.pause_started_at = self.next_animation_at if self.paused else None
         self.active_save_path = Path(path).absolute()
         self.cutscene_campaign_active = True
+        self.forget_cutscene_watch()
         from pop2.cutscenes import CutsceneCollection
 
         self.cutscene_collection = CutsceneCollection.from_saved(saved['cutscenes'])
@@ -2639,7 +2640,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         self.last_intro_at = time.perf_counter()
         self.status.set("Introduction")
         if part_index is None:
-            self.mark_cutscene_seen('opening')
+            self.watch_cutscene('opening')
 
     def development_parts(self):
         if not self.with_intro:
@@ -2790,6 +2791,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         self.cutscene_campaign_active = True
         self.active_save_path = None
         self.cutscene_collection = CutsceneCollection()
+        self.forget_cutscene_watch()
         self.copy_verified = False
         self.copy_challenge = None
         if self.game.level.number != 1:
@@ -2805,6 +2807,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         2:45c2 clears the next level). Port choice: that game keeps the
         finished campaign's cutscenes, and a scene not yet revealed in the
         viewer is revealed the next time it opens. Alt+N or a load leaves it."""
+        self.finish_cutscene_watch()   # the happy ending has just played
         collection = self.cutscene_collection
         fresh = set(getattr(self, 'cutscene_fresh', ()))
         self.new_game()
@@ -2848,7 +2851,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         self.last_intro_at = time.perf_counter()
         self.status.set("Voyage")
         if part_index is None:
-            self.mark_cutscene_seen('voyage')
+            self.watch_cutscene('voyage')
 
     def finish_ending(self):
         max_life = self.combat.player.max_life if self.combat is not None else None
@@ -2876,7 +2879,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         self.last_intro_at = time.perf_counter()
         self.status.set('Discovery')
         if part_index is None:
-            self.mark_cutscene_seen('discovery')
+            self.watch_cutscene('discovery')
 
     def start_tree(self, variant):
         from pop2.intro import IntroAssets, IntroPlayer
@@ -2924,7 +2927,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         self.intro = IntroPlayer(self.carpet_assets, self.audio, music)
         self.last_intro_at = time.perf_counter()
         self.status.set('Carpet')
-        self.mark_cutscene_seen('carpet')
+        self.watch_cutscene('carpet')
 
     def start_vision(self, wake):
         """PlayNIS(6) from 7:38ca: the vision at the throne in level eight.
@@ -2958,7 +2961,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
                                  status=self.native_viewport.crop((0, 365, 512, 384)))
         self.last_intro_at = time.perf_counter()
         self.status.set('Vision')
-        self.mark_cutscene_seen('vision')
+        self.watch_cutscene('vision')
         return True
 
     def start_temple_ride(self, finish, part_index=None):
@@ -3002,7 +3005,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         self.last_intro_at = time.perf_counter()
         self.status.set(status)
         if part_index is None:
-            self.mark_story_scene_seen(program_name)
+            self.watch_story_scene(program_name)
         return True
 
     def finish_level_four(self):
@@ -3724,6 +3727,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         return viewport
 
     def render(self):
+        self.update_cutscene_watch()
         if self.render_cutscene_replay():
             return
         if getattr(self, "intro", None) is not None:
