@@ -176,7 +176,7 @@ class MenuThemeTest(unittest.TestCase):
         seen = []
         frame = Image.new('RGBA', (512, 384), 'black')
         scene = SimpleNamespace(
-            render_cutscene_replay=lambda: False,
+            update_cutscene_watch=lambda: None, render_cutscene_replay=lambda: False,
             intro=SimpleNamespace(frame=lambda: frame, status=None),
             game=SimpleNamespace(level=SimpleNamespace(kind=4), caverns=object(), desert=None, harbor=None),
             dev_menu=None, refresh_game_menu=lambda: None, paused=False,
