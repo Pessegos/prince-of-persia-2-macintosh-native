@@ -1501,6 +1501,18 @@ not seen in an emulator.
 `PalaceSceneTests.test_he_passes_through_and_meets_no_wall_unarmed` replaces
 the bump test and fails on the previous code (SEQS 47).
 
-Not covered: the exploration's moves are the route tool's macros, not a
-player's timing; rooms 1-5 were explored with the opponents the whole route
+### A player's timing (2026-11-17)
+
+`--raw` mixes bursts of raw keys into the episodes: one of fourteen keys or
+pairs (L, R, up, down, shift, Ctrl and their combinations) held for 1-18
+ticks, then released for 0-9 (`key:R+up:7:3`, replayable like the macros).
+Four 25-minute runs at `--raw 0.5` (seeds 101-104) played 28,894 episodes
+and 167,169 moves, 21,573 deaths among them, each followed by a retry. They
+found only the native turning cycle above, five times: period 18, SEQS 5
+alone, with Jaffar on rows 1 and 2 of the palace's left view within 9 pixels
+of a Prince left there without a sword. No exception, unsettled Prince,
+endless cutscene, bookkeeping fault or failed save or load.
+
+Not covered: the raw keys are random, not a player's intent, and the macros
+still carry the route; rooms 1-5 were explored with the opponents the whole route
 leaves alive; the level-13 exit, the Hall of Fame and audio are outside it.

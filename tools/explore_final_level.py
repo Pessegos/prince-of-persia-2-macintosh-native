@@ -49,13 +49,32 @@ def sword_macros():
             'turnL': [(('L',), (), 2), ((), ('L',), 4)], 'turnR': [(('R',), (), 2), ((), ('R',), 4)]}
 
 
+RAW_KEYS = ('L', 'R', 'up', 'down', 'shift', 'ctrl')
+RAW_COMBOS = (('L',), ('R',), ('up',), ('down',), ('shift',), ('R', 'up'), ('L', 'up'),
+              ('R', 'shift'), ('L', 'shift'), ('R', 'down'), ('L', 'down'), ('up', 'shift'),
+              ('down', 'shift'), ('ctrl',))
+
+
+def raw_step(name):
+    """'key:R+up:7:3' holds R and up for 7 ticks, then releases and waits 3:
+    a player's own timing, not the route tool's."""
+    _key, keys, held, wait = name.split(':')
+    keys = tuple(keys.split('+'))
+    return [(keys, (), int(held)), ((), keys, int(wait))]
+
+
+def random_raw(draw):
+    keys = draw.choice(RAW_COMBOS)
+    return f"key:{'+'.join(keys)}:{draw.randint(1, 18)}:{draw.randint(0, 9)}"
+
+
 def pool():
     names = sorted(name for name in audit.SEARCHED if name not in ('altar', 'wake'))
     return names + ['stab', 'sheathe', 'drawstab', 'draw', 'turnL', 'turnR'] * 3
 
 
 class Explorer:
-    def __init__(self, seed=1):
+    def __init__(self, seed=1, raw=0.0):
         from tests import test_final_whole_route as route
 
         self.route_module = route
@@ -71,6 +90,7 @@ class Explorer:
         self.deaths = {}
         self.endings = 0
         self.save_refused = 0
+        self.raw = raw
 
     # Setup.
 
@@ -250,7 +270,11 @@ class Explorer:
         kind = self.draw.choice(('none', 'none', 'life1', 'life2', 'life3', 'no sword', 'life12'))
         steps = []
         for _ in range(length):
-            steps.append(self.draw.choice(self.names))
+            if self.raw and self.draw.random() < self.raw:
+                for _ in range(self.draw.randint(1, 4)):
+                    steps.append(random_raw(self.draw))
+            else:
+                steps.append(self.draw.choice(self.names))
             if self.draw.random() < 0.3:
                 steps.append('@idle')
             if self.draw.random() < 0.05:
@@ -275,7 +299,7 @@ class Explorer:
                         return
                     continue
                 self.moves += 1
-                audit.play(harness, self.macros[name])
+                audit.play(harness, raw_step(name) if name.startswith('key:') else self.macros[name])
                 audit.release_all(harness)
                 rested = self.settle(harness, REST_LIMIT) or self.en_garde()
                 cutscene = 0
@@ -323,9 +347,11 @@ def main(argv=None):
     parser.add_argument('--deadline', type=float, default=600)
     parser.add_argument('--length', type=int, default=12)
     parser.add_argument('--seed', type=int, default=1)
+    parser.add_argument('--raw', type=float, default=0.0,
+                        help='Chance of a burst of raw keys with random timing per move')
     parser.add_argument('--replay', type=Path, help='A report: replay its findings exactly')
     args = parser.parse_args(argv)
-    explorer = Explorer(args.seed)
+    explorer = Explorer(args.seed, args.raw)
     explorer.build()
     try:
         if args.replay:
