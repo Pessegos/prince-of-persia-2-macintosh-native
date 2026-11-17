@@ -54,6 +54,19 @@ class DecisionTests(unittest.TestCase):
         calls, _events, _info = run(jaffar(facing=0), prince())
         self.assertEqual(calls, [('select', TURN)])
 
+    def test_a_prince_between_his_two_turned_positions_keeps_him_turning(self):
+        # Original behaviour, kept: 9:09ca turns him toward the Prince's X
+        # before casting, and SEQS 5 ends 9 pixels ahead in the new facing
+        # (-5 12, 0, 3, -3, 0, -3). Native X 484 facing right turns to 475
+        # facing left; a Prince standing still at 479 is behind him both
+        # times, so he turns for as long as the Prince stays.
+        p = prince(x=479, row=2, room=7, column=5)
+        info = PathInfo(2, 2, 2)
+        calls, _events, _info = run(jaffar(x=484, facing=0, row=2, room=7, column=5), p, info)
+        self.assertEqual(calls, [('select', TURN)])
+        calls, _events, _info = run(jaffar(x=475, facing=-1, row=2, room=7, column=5), p, info)
+        self.assertEqual(calls, [('select', TURN)])
+
     def test_the_spell_strikes_at_pose_282_only_in_range(self):
         calls, events, _info = run(jaffar(pose=282, selected=SPELL_SEQUENCE), prince())
         self.assertEqual((calls, events), ([('select', KILL_SEQUENCE)], [('kill',)]))
@@ -265,6 +278,51 @@ class PalaceSceneTests(unittest.TestCase):
             rows.add((self.jaffar.room, self.jaffar.row))
         self.assertIn((6, 1), rows)
         self.assertEqual((self.jaffar.final_info.prev, self.jaffar.final_info.pos), (3, 2))
+
+    def test_a_fall_through_the_left_views_floor_ends_in_room_6_and_back_at_the_start(self):
+        # Native room 7's row-2 gap (column 3) opens onto room 6. Cut 6:472a
+        # in UpdateOppInfo moves the falling record there; the port kept him
+        # in room 7 at row 3, out of every route. In room 6, 9:08e8 runs the
+        # copies' 9:1526 for him: the last figure shimmers (SEQS 240) and
+        # 9:19fa sends him to the palace start, path words kept.
+        from pop2.final_tower import SHIMMER_SEQUENCE
+
+        from pop2.combat import select_sequence
+
+        combat, jaffar = self.combat, self.jaffar
+        # A Prince keeping his sword on the upper floor: 9:16fe leaves the
+        # run going, left along row 2 to the gap.
+        self.scene.jump_to_room(6, row=0, x=60, facing=1, reset_guards=False, redraw=False)
+        combat.room_encounters[7][0].remove(jaffar)
+        combat.room_encounters[6][0].append(jaffar)
+        jaffar.room, jaffar.row = 6, 2
+        jaffar.state.target_x = jaffar.state.current_x = 260
+        jaffar.state.facing = 0
+        jaffar.terrain_motion = None
+        jaffar.final_info = PathInfo(2, 2, 3)
+        select_sequence(jaffar, 1)
+        rows = set()
+        for _ in range(40):
+            self.ticks(1)
+            rows.add((jaffar.room, jaffar.row))
+            if jaffar.room != 6:
+                break
+        self.assertIn((6, 2), rows)
+        self.assertEqual((jaffar.room, jaffar.row), (5, 0))
+        self.assertIn(jaffar, combat.room_encounters[5][0])
+        self.assertNotIn(jaffar, combat.room_encounters[6][0])
+        self.scene.jump_to_room(5, row=0, x=60, facing=1, reset_guards=False, redraw=False)
+        sequences = set()
+        for _ in range(40):
+            self.ticks(1)
+            sequences.add(jaffar.state.selected_sequence_id)
+            if jaffar.room == 7:
+                break
+        self.assertIn(SHIMMER_SEQUENCE, sequences)
+        self.assertEqual((jaffar.room, jaffar.row, jaffar.state.target_x), (7, 0, 415))
+        self.assertTrue(jaffar.final_path)
+        # 9:185a put him at position 2 (prev = pos) before 9:19fa.
+        self.assertEqual(jaffar.final_info, PathInfo(2, 2, 2))
 
     def test_away_from_the_palace_a_travelling_jaffar_is_put_at_his_target(self):
         info = self.jaffar.final_info

@@ -1881,7 +1881,9 @@ class CombatEncounter:
         from pop2.final_tower import COPY_ROOM, copy_control
 
         state = figure.state
-        if figure.final_path:
+        # 9:08e8 chooses by the record's room, not by the figure: a palace
+        # Jaffar fallen into native room 6 runs the copies' controller.
+        if figure.final_path and figure.room != COPY_ROOM:
             self._advance_final_path(figure)
             return
         if figure.room == COPY_ROOM:
@@ -1998,9 +2000,17 @@ class CombatEncounter:
             protected=state.sequence_id in LEDGE_SEQUENCES)
         state.current_x = state.target_x
         figure.row = motion.row
-        # UpdateOppInfo 6:30b0: crossing a side moves the record to that room.
-        for side, delta in (('left', 510), ('right', -510)):
-            outside = state.target_x < 0 if side == 'left' else state.target_x >= 510
+        # UpdateOppInfo 6:30b0: a cell outside the room (IndexCell 4:29d8
+        # gives 30) calls Cut 6:472a, and the record moves to that room
+        # (AddOppToRoom 6:358e, RemoveOppFromRoom 6:3462): across a side, or
+        # through a floor gap into the room below (native room 7's row-2
+        # gaps lead to room 6, where 9:08e8 runs the copies' controller).
+        # The row word is GetRow 4:3afa of Y, not the floor a fall lands on.
+        native_row = character_row(floor_y(figure.row) + state.current_y)
+        for side, delta, rows in (('left', 510, 0), ('right', -510, 0),
+                                  ('down', 0, -3), ('up', 0, 3)):
+            outside = {'left': state.target_x < 0, 'right': state.target_x >= 510,
+                       'down': native_row > 2, 'up': native_row < 0}[side]
             neighbor = self.terrain.neighbor(figure.room, side) if outside else None
             if neighbor is not None:
                 if neighbor not in self.room_encounters:
@@ -2008,6 +2018,7 @@ class CombatEncounter:
                 self.room_encounters[figure.room][0].remove(figure)
                 self.room_encounters[neighbor][0].append(figure)
                 figure.room = motion.room = neighbor
+                figure.row = motion.row = figure.row + rows
                 state.target_x += delta
                 state.current_x = state.target_x
                 # CutOpponent 6:42fc-430a: the cut record leaves the active
@@ -2020,17 +2031,25 @@ class CombatEncounter:
 
     def _relocate_final_jaffar(self):
         """JaffarUpdateOppInfo 9:185a: away from the palace, a Jaffar
-        travelling to a position is put there at once, standing (SEQS 2)."""
-        from pop2.final_path import POSITIONS
+        travelling to a position is put there at once, standing (SEQS 2).
 
-        for room in PALACE_ROOMS:
+        SetSpecialOppInfo 6:3432-343e calls it for every type-6 record it
+        saves, whatever its room. 9:185a never writes the room word: a
+        Jaffar fallen into native room 6 is placed at the position's cell
+        and X in room 6 itself, and there 9:1526 sends the last figure back
+        to the palace (SEQS 240, 9:19fa)."""
+        from pop2.final_path import POSITIONS
+        from pop2.final_tower import COPY_ROOM
+
+        for room in (*PALACE_ROOMS, COPY_ROOM):
             for figure in tuple(self.room_encounters.get(room, ([], []))[0]):
                 info = figure.final_info
                 if not figure.final_path or info is None or info.pos == info.prev:
                     continue
                 info.prev = info.pos
                 target = POSITIONS[info.pos]
-                destination = PALACE_ROOMS[1] if target.column >= 10 else PALACE_ROOMS[0]
+                destination = (room if room not in PALACE_ROOMS else
+                               PALACE_ROOMS[1] if target.column >= 10 else PALACE_ROOMS[0])
                 # 9:18ca-18d2: X + 10, which lies inside the arrival window
                 # HoneIn 9:0dac tests in the target room's coordinates. (The
                 # 18d6 room-8 adjustment applies to the record's own room.)
@@ -2085,8 +2104,11 @@ class CombatEncounter:
         from pop2.final_path import PathInfo
 
         # The LEVL record's +0x1c/+0x1e/+0x20 words are zero for all four
-        # room-6 records; 9:19fa clears +0x22.
-        figure.final_info = PathInfo()
+        # room-6 records; 9:19fa clears +0x22 only, and UpdateOppInfo's cut
+        # (6:3208-3216) carries the words over, so a palace Jaffar sent back
+        # from room 6 keeps his path state.
+        if figure.final_info is None:
+            figure.final_info = PathInfo()
         select_sequence(figure, 2)
         figure.runtime.next_frame()
         figure.bank_room = None
