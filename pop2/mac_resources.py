@@ -3,6 +3,15 @@
 import struct
 
 
+# The volume reader searches the first megabyte of an image for an HFS
+# master directory block; anything further in is not found.
+VOLUME_SEARCH = 1024 * 1024
+
+
+class NoHfsVolume(ValueError):
+    """The image has no HFS volume where the reader looks for one."""
+
+
 def _span(data, offset, length):
     if offset < 0 or length < 0 or offset + length > len(data):
         raise ValueError("Truncated Macintosh resource or disk image")
@@ -58,14 +67,24 @@ def _volume_header(image):
     if image[1024:1026] == b"BD":
         return 1024
     # Raw HFS images can have a wrapper before the volume's first sector.
-    position = image.find(b"BD", 1024, 1024 * 1024)
+    position = image.find(b"BD", 1024, VOLUME_SEARCH)
     while position >= 0:
         if position + 162 <= len(image):
             block_size = _u32(image, position + 20)
             if block_size and block_size % 512 == 0:
                 return position
-        position = image.find(b"BD", position + 1, 1024 * 1024)
-    raise ValueError("HFS volume header not found")
+        position = image.find(b"BD", position + 1, VOLUME_SEARCH)
+    raise NoHfsVolume("HFS volume header not found")
+
+
+def has_hfs_volume(image):
+    """Whether the reader finds an HFS volume in `image` (its first
+    VOLUME_SEARCH + 162 bytes are enough to decide)."""
+    try:
+        _volume_header(image)
+    except NoHfsVolume:
+        return False
+    return True
 
 
 def _read_extents(image, allocation_start, block_size, extents, length):

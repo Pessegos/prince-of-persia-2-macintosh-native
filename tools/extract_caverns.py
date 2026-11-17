@@ -23,6 +23,10 @@ from tools.extract_lava import lava_tables
 from tools.extract_attract import jump_targets
 
 
+# Progress messages that tools.extract_assets.SceneryProgress follows.
+LEVEL_MESSAGE = 'Cavern scenery: level {number}'
+PREPARING_MESSAGE = 'Preparing level-{number} scenery...'
+SAVING_MESSAGE = 'Saving prepared cavern scenery...'
 SECT_RECT_7 = (0x1f2e, 0x1f8c, 0x2760, 0x2b1a)
 UNION_RECT_7 = (0x1f48, 0x1fa2)
 # Entries of each environment's piece-drawing table (a5-0x4aea + 4 * env):
@@ -721,7 +725,7 @@ def extract_cavern_levels(program, sceneries, prince, output, progress=lambda _t
             levels = {}
             for number, future in futures.items():
                 levels[number] = future.result()
-                progress(f'Cavern scenery: level {number}')
+                progress(LEVEL_MESSAGE.format(number=number))
             contexts = {number: slot_context(program, sceneries[number], prince, level, result)
                         for number, (result, level, _kind, _plates) in levels.items()}
             slots = parallel_slot_rooms(contexts, workers, progress, pool=pool)
@@ -739,7 +743,7 @@ def _level_scenery(program, caverns, prince, number, progress=lambda _text: None
     """(export without its slot/plate/scythe sections, drawn level data, level kind, plates)."""
     from tools.extract_pressure_plates import pressure_scenery
 
-    progress(f'Preparing level-{number} scenery...')
+    progress(PREPARING_MESSAGE.format(number=number))
     with CavernRecovery(program, caverns, prince) as machine:
         recover = partial(recover_room, _machine=machine)
         result, level, kind = _prepare_caverns(program, caverns, prince, progress, recover, level_number=number)
@@ -824,7 +828,7 @@ def _finish_caverns(program, caverns, prince, output, progress, recover, result,
         # version-15 exports only.
         result['scythes'] = {'schema': 1, 'rooms': {},
                              'scythes': [[*key, *partner] for key, partner in scythe_pairs(LevelMap(level))]}
-    progress('Saving prepared cavern scenery...')
+    progress(SAVING_MESSAGE)
     name = scenery_name(result['level'])
     (output / name).write_text(json.dumps(result) + '\n', encoding='ascii')
 

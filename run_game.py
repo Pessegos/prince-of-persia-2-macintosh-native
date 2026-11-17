@@ -219,10 +219,11 @@ def launch_game(peaceful):
         audio.close()
 
 
-def setup_game(project):
+def setup_game(project, missing=()):
+    """The game-files window; `missing` (missing_assets) says why it opened."""
     from pop2.setup_game import setup_game as import_game_files
 
-    return import_game_files(project)
+    return import_game_files(project, missing)
 
 
 def main(argv=None):
@@ -250,7 +251,7 @@ def main(argv=None):
     # Validating the assets parses every cavern export; do it once when complete.
     missing = missing_assets()
     if missing:
-        if not setup_game(PROJECT):
+        if not setup_game(PROJECT, missing):
             return
         missing = None
     errors = installation_errors(missing=missing)

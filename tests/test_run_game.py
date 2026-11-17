@@ -370,7 +370,7 @@ class InstallationTests(unittest.TestCase):
             patch.object(run_game, "launch_game") as launch,
         ):
             run_game.main([])
-        setup.assert_called_once_with(run_game.PROJECT)
+        setup.assert_called_once_with(run_game.PROJECT, ["Kid.rsrc"])
         launch.assert_called_once_with(False)
 
     def test_cancelled_setup_does_not_launch_or_exit_with_an_error(self):

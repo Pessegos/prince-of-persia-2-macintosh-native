@@ -195,8 +195,8 @@ def extract_audio(image, program_bytes, prince_bytes, directory, progress=lambda
     with ThreadPoolExecutor(os.cpu_count() or 1) as pool:
         durations = pool.map(lambda song: render_midi(directory, song[1], song[0]["file"],
                                                       work=f"{song[1]}."), songs)
-        for (entry, _raw_name), duration in zip(songs, durations):
-            progress(f"Preparing music: {entry['name']}")
+        for index, ((entry, _raw_name), duration) in enumerate(zip(songs, durations), 1):
+            progress(f"Preparing music: {entry['name']} ({index}/{len(songs)})")
             entry["playback_duration"] = duration
     level = parse_resource_fork(prince_bytes)["LEVL"][2000]["data"]
     manifest["level_one"] = {

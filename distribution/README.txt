@@ -21,6 +21,7 @@ To update, close the game and extract the new ZIP to a separate folder.
 Keep the previous folder as a backup. Its assets and rendered folders contain
 imported files, saves, settings and screenshots; do not delete them blindly.
 Asset compatibility is checked at launch and may require a fresh import.
+The setup window then offers the disk image you used last time.
 
 Diagnostics: rendered/setup.log (import), rendered/game.log (launch),
 rendered/error.log (window callbacks). BUILD-INFO.json identifies this build.

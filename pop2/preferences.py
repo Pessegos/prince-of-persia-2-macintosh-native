@@ -20,6 +20,9 @@ class Preferences:
     keyboard_bindings: dict = field(default_factory=dict)
     controller_bindings: dict = field(default_factory=dict)
     controller_enabled: bool = True
+    # The disk image of the last completed import, offered again by the
+    # game-files window (also in a new installation folder).
+    game_image: str = ''
 
 
 def load_preferences():

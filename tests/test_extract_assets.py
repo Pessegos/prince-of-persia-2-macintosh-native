@@ -5,7 +5,11 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+from pop2.import_advice import ImageProblem
 import tools.extract_assets as extract_assets
+from tools.extract_caverns import LEVEL_MESSAGE, PREPARING_MESSAGE, SAVING_MESSAGE
+from tools.extract_slots import COMBINATIONS_MESSAGE, ROOMS_MESSAGE
+from tests.test_mac_resources import hfs_image
 
 
 class AssetImportTests(unittest.TestCase):
@@ -196,6 +200,50 @@ class AssetImportTests(unittest.TestCase):
             extract_assets.extract_assets(self.image, self.output)
         self.assertFalse(self.output.exists())
 
+    def test_rejected_images_name_their_problem_for_the_game_files_window(self):
+        def kind():
+            with self.assertRaises(ImageProblem) as raised:
+                extract_assets.extract_assets(self.image, self.output)
+            self.assertIn('not a supported Macintosh PoP2', str(raised.exception))
+            return raised.exception.kind
+
+        self.image.write_bytes(b"not HFS")
+        self.assertEqual(kind(), 'not_mac')
+        self.image.write_bytes(b'PK\x03\x04' + bytes(4000))
+        self.assertEqual(kind(), 'archive')
+        # The real volume reader: a disk without the game, then one with
+        # only some of its files.
+        image = hfs_image()
+        name = image.index(b'Prince.rsrc')
+        image[name:name + 11] = b'Readme.text'
+        self.image.write_bytes(bytes(image))
+        self.assertEqual(kind(), 'no_game')
+        self.image.write_bytes(bytes(hfs_image()))
+        self.assertEqual(kind(), 'unsupported')
+        with (patch.object(extract_assets, "get_resource_fork", side_effect=self.fork),
+              patch.object(extract_assets, "parse_resource_fork", return_value={})):
+            self.assertEqual(kind(), 'unsupported')
+        with (patch.object(extract_assets, "get_resource_fork", side_effect=ValueError('Cyclic HFS catalog')),
+              patch.object(extract_assets, 'image_format')):
+            self.assertEqual(kind(), 'damaged')
+        self.assertFalse(self.output.exists())
+
+    def test_stages_are_reported_in_the_order_the_window_lists_them(self):
+        steps = []
+        with (
+            patch.object(extract_assets, "get_resource_fork", side_effect=self.fork),
+            patch.object(extract_assets, "parse_resource_fork", side_effect=self.resource_types),
+            patch.object(extract_assets, "extract_bytes", return_value=self.profiles),
+        ):
+            extract_assets.extract_assets(self.image, self.output,
+                                          steps=lambda *step: steps.append(step))
+        scenes = len(extract_assets.SCENES)
+        self.assertEqual(steps[:4], [('image', 1, 1), ('scenery', 0, 1000), ('music', 0, 1), ('music', 1, 1)])
+        self.assertEqual(steps[4:], [('scenes', 0, scenes), *(('scenes', n, scenes) for n in range(1, scenes + 1)),
+                                     ('demo', 0, 1), ('demo', 1, 1)])
+        # The cavern export reports through the scenery's progress.
+        self.assertIsInstance(self.caverns.call_args.args[4], extract_assets.SceneryProgress)
+
     def test_staging_failure_preserves_the_existing_installation(self):
         self.output.mkdir()
         original = self.output / "Prince.rsrc"
@@ -337,3 +385,44 @@ class SceneMergeTests(unittest.TestCase):
             self.assertEqual((staging / "audio/b.wav").read_bytes(), b"b")
             self.assertEqual((staging / "first.json").read_bytes(), b"{}")
             self.assertEqual((staging / "audio/cue-1.mid").read_bytes(), b"song")
+
+
+class StageProgressTests(unittest.TestCase):
+    def test_parallel_scenery_progress_follows_the_cavern_messages_to_the_end(self):
+        messages, steps = [], []
+        scenery = extract_assets.SceneryProgress(messages.append, lambda *step: steps.append(step), 12)
+        sequence = [LEVEL_MESSAGE.format(number=number) for number in range(3, 15)]
+        sequence += [ROOMS_MESSAGE.format(done=done, total=381) for done in range(1, 382, 20)]
+        sequence += [ROOMS_MESSAGE.format(done=381, total=381)]
+        sequence += [COMBINATIONS_MESSAGE.format(done=done, total=5299) for done in range(513, 5300, 400)]
+        sequence += [COMBINATIONS_MESSAGE.format(done=5299, total=5299), 'Cavern entrance animation...']
+        sequence += [SAVING_MESSAGE] * 12
+        values = []
+        for message in sequence:
+            scenery(message)
+            values.append(steps[-1][1])
+        self.assertEqual(messages, sequence)
+        self.assertEqual(values, sorted(values))
+        self.assertEqual(steps[-1], ('scenery', 1000, 1000))
+        # The twelve levels' rooms are 15%, the dependency renders half.
+        self.assertEqual(values[11], 150)
+        self.assertEqual(values[len(sequence) - 12 - len(range(513, 5300, 400)) - 3], 650)
+        # Unchanged values are not repeated.
+        self.assertEqual(len(steps), len(set(steps)))
+
+    def test_serial_scenery_progress_counts_prepared_and_saved_levels(self):
+        steps = []
+        scenery = extract_assets.SceneryProgress(lambda _text: None, lambda *step: steps.append(step), 2,
+                                                 parallel=False)
+        for message in (PREPARING_MESSAGE.format(number=3), 'Cavern scenery: room 1/32',
+                        PREPARING_MESSAGE.format(number=4), SAVING_MESSAGE, SAVING_MESSAGE):
+            scenery(message)
+        self.assertEqual([value for _stage, value, _total in steps], [0, 150, 650, 1000])
+
+    def test_music_progress_reads_the_song_count(self):
+        messages, steps = [], []
+        song = extract_assets._music_progress(messages.append, lambda *step: steps.append(step))
+        song('Preparing music: FallKill.mmf  (1/70)')
+        song('Preparing music: RoofA (2/70)')
+        self.assertEqual(steps, [('music', 1, 70), ('music', 2, 70)])
+        self.assertEqual(len(messages), 2)
