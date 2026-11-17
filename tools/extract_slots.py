@@ -373,6 +373,9 @@ _worker = {}
 
 # Combinations per worker job: small enough to share a large room's work.
 CHUNK = 48
+# parallel_slot_rooms' progress, which tools.extract_assets.SceneryProgress follows.
+ROOMS_MESSAGE = 'Cavern floor slots: rooms {done}/{total}'
+COMBINATIONS_MESSAGE = 'Cavern floor slots: combinations {done}/{total}'
 # Levels whose recovery machines a worker keeps.
 MACHINE_LEVELS = 2
 
@@ -518,7 +521,7 @@ def parallel_slot_rooms(contexts, workers, progress=lambda _text: None, *, pool=
                 if kind == 'dependencies':
                     (room_key, index), (base, found) = key, future.result()
                     rooms_done += 1
-                    report(f'Cavern floor slots: rooms {rooms_done}/{len(tasks)}', rooms_done == len(tasks))
+                    report(ROOMS_MESSAGE.format(done=rooms_done, total=len(tasks)), rooms_done == len(tasks))
                     bases[room_key] = base
                     parts.setdefault(room_key, {})[index] = found
                     waiting[room_key] -= 1
@@ -542,7 +545,7 @@ def parallel_slot_rooms(contexts, workers, progress=lambda _text: None, *, pool=
                     combinations_done += 1
                     if rooms_done == len(tasks):
                         total = sum(map(len, jobs.values()))
-                        report(f'Cavern floor slots: combinations {combinations_done}/{total}',
+                        report(COMBINATIONS_MESSAGE.format(done=combinations_done, total=total),
                                combinations_done == total)
                 else:
                     redraws[key] = future.result()

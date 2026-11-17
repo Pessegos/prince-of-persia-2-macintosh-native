@@ -642,48 +642,38 @@ class PolyphonicCueTests(unittest.TestCase):
         self.assertFalse(self.playback.playing_effects())
         self.assertFalse(self.audio.pending_effects)
 
-    def test_a_burning_screenshot_sinks_with_the_lava_sound_of_a_body_at_the_reveal_level(self):
+    def test_a_burning_screenshot_plays_the_ports_own_fire_sound(self):
         from pygame import mixer
+        from pop2.fire_sound import fire_pcm
 
         burn = self.playback.ui_sounds['burn']
-        self.assertIsNot(burn, self.playback.sounds[69])          # the game's own cue keeps its level
-        # Only the bubbling: the rattle of its first 0.165 s is left out (the whole cue was
-        # rejected for it), and the rest is the game's samples, faded in over 5 ms.
-        rate, bits, channels = mixer.get_init()
-        frame = abs(bits) // 8 * channels
-        whole = self.playback.sounds[69].get_raw()
-        cut = round(0.165 * rate) * frame
-        part = len(whole) - cut
-        lap = round(0.04 * rate) * frame
-        # It bubbles twice, the second time over the end of the first: about 0.64 s.
-        self.assertEqual(len(burn.get_raw()), 2 * part - lap)
-        fade = round(0.005 * rate) * frame
-        self.assertEqual(burn.get_raw()[fade:part - lap], whole[cut + fade:len(whole) - lap])
-        self.assertEqual(burn.get_raw()[:frame], bytes(frame))      # no click where it starts
-        self.assertEqual(burn.get_raw()[-frame:], bytes(frame))     # nor where it ends
-        self.assertAlmostEqual(burn.get_volume(), 0.4, places=2)
+        self.assertIsNot(burn, self.playback.sounds[69])          # no longer the game's lava cue
         self.assertEqual(self.playback.sounds[69].get_volume(), 1)
+        rate, _bits, channels = mixer.get_init()
+        self.assertEqual(burn.get_raw(), fire_pcm(rate, channels))
+        self.assertAlmostEqual(burn.get_volume(), 0.88, delta=1 / 128)   # SDL keeps 128 steps
         self.playback.play_ui('burn')
         self.assertIs(self.playback.ui_channels['click'].get_sound(), burn)
-        del self.playback.ui_sounds['burn']                       # an installation without cue 69
+        del self.playback.ui_sounds['burn']
         self.playback.play_ui('burn')
 
-    def test_a_fire_sound_beside_the_audio_replaces_the_lava_for_the_burn(self):
+    def test_the_users_fire_recording_beside_the_audio_replaces_the_ports_sound(self):
         from pop2.audio import MixerPlayback
 
-        fire = Sample(b' ' * 3000, 8000).wav()
+        fire = Sample(b' ' * 3000, 8000).wav()
         Path(self.directory.name, 'menu-burn.wav').write_bytes(fire)
         cues = {69: {'mode': 1, 'priority': 69, 'file': 'sample.wav'}}
         playback = MixerPlayback(self.directory.name, cues)
         burn = playback.ui_sounds['burn']
         self.assertNotEqual(burn.get_raw(), self.playback.ui_sounds['burn'].get_raw())
-        self.assertAlmostEqual(burn.get_volume(), 0.8, places=2)
+        self.assertAlmostEqual(burn.get_volume(), 0.88, delta=1 / 128)
         playback.play_ui('burn')
         self.assertIs(playback.ui_channels['click'].get_sound(), burn)
-        # A file that cannot be read leaves the lava sound.
+        # A file that cannot be read leaves the port's own sound.
         Path(self.directory.name, 'menu-burn.wav').write_bytes(b'not a wave')
         playback = MixerPlayback(self.directory.name, cues)
-        self.assertAlmostEqual(playback.ui_sounds['burn'].get_volume(), 0.4, places=2)
+        self.assertEqual(playback.ui_sounds['burn'].get_raw(), self.playback.ui_sounds['burn'].get_raw())
+
 
     def test_effect_pool_never_steals_music_menu_or_mechanism_channels(self):
         self.audio.add_song(40)

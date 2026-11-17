@@ -1414,7 +1414,105 @@ and its own gates (`controls_locked`, `targetable`, a running SEQS 46/47).
 The earlier opponent test (SEQS 110 for every type) is rejected
 (`tests.test_probe_bump`).
 
-Open: with the Prince standing still against the wall on row 1 of native
-room 7 and Jaffar just behind him, 9:16fe selects SEQS 13 at each bump's
-pose 50 and the next step bumps again, so he never casts. A player moves
-on; whether the original repeats it there is not traced.
+Open (answered 2026-11-17, see "Whole-level exploration" below): with the
+Prince standing still against the wall on row 1 of native room 8 (written
+"room 7" here at first) and Jaffar just behind him, 9:16fe selected SEQS 13
+at each bump's pose 50 and the next step bumped again, so he never cast.
+The bump itself was the divergence: the Kid's Collide is not an opponent
+routine.
+
+## Whole-level exploration (2026-11-17)
+
+`tools.explore_final_level` replays `tests.test_final_whole_route` with the
+opponents on, keeps a snapshot after each move, and plays random episodes
+from them: the route tool's macros, sword moves, waits, a changed life (1,
+2, 3 or 12) or a lost sword, with a save and load now and then. After each
+move it checks exceptions, a Prince who never comes to rest, a cutscene
+that never ends, the opponents' bookkeeping (each figure listed once, in its
+own room, row 0-2, X near the room), the life range, a death that offers no
+retry, a failed save or load, and a final Jaffar who repeats a cycle of
+frames while the Prince stands still. Each finding records the snapshot,
+the change and the moves (`--replay` plays them again). Findings are faults
+to explain against the code, not divergences in themselves.
+
+About 120,000 moves in nine runs, plus runs that start only from the palace
+with no sword, found three things.
+
+### Turning on the spot (native)
+
+With the Prince standing between Jaffar's two turned positions, Jaffar
+turns forever. 9:09ca compares raw X (the Prince's X against Jaffar's,
+both working X), and SEQS 5's turn moves him: pose 5 flips him, then -5
+and 12, a net +9 in his new direction. A Prince within those 9 pixels is on
+the other side after every turn, so 9:09ca selects SEQS 5 again, and he
+never reaches the spell's pose 15 facing the Prince. Nothing in 9:16fe
+breaks the cycle; the port keeps it
+(`DecisionTests.test_a_prince_between_his_two_turned_positions_keeps_him_turning`).
+
+### A fall through a floor gap (fixed)
+
+A Jaffar who ran off row 2 of the palace's left view stayed in that room's
+list with row 3 or more, where 9:16fe went on steering him. In the
+original, UpdateOppInfo 6:30b0 tests IndexCell 4:29d8 for each opponent
+record; a cell outside the room (30) calls Cut 6:472a, which moves the
+record to the neighbouring room in any direction, down included
+(AddOppToRoom 6:358e, RemoveOppFromRoom 6:3462). The row word is GetRow
+4:3afa of Y, not the row a fall would land on. Native room 7's row-2 gaps
+lead to room 6, the copies' room. There 9:08e8 chooses the controller by
+the record's room, so the copies' controller 9:1526 runs for him (the port
+had kept 9:16fe). SetSpecialOppInfo 6:3432-343e calls JaffarUpdateOppInfo
+9:185a for every type-6 record it saves, whatever the room, and 9:185a
+never writes the room word: in room 6 he is placed in place, standing at
+the position's X. When the Prince is in room 6, 9:1526 sends the last
+figure back to the palace with SEQS 240, and 9:19fa keeps his path words
+(+0x1c-0x20; it clears only +0x22).
+`PalaceSceneTests.test_a_fall_through_the_left_views_floor_ends_in_room_6_and_back_at_the_start`
+fails on the previous code (he stayed in room 7 at row 3).
+
+### Row 1's wall (fixed)
+
+The row-1 cycle of 2026-11-16 (SEQS 47, then 9:09ca's STOP 13 at pose 50,
+whose step bumps again) came from the port's Kid-like wall bump. FrameAdv
+runs the Kid's barrier routines only in the Kid's pass (CheckBarr 4:4e34,
+CheckCollide1 4:54da with Collide 4:5738 and GroundBump 4:5868, at
+2:6396-639e). The opponent pass 2:65da-6602 runs Move 4:341a/3464, LoadFrame,
+SetupSword 3:0ac8, GetCharEdges 4:5cbc, then (unless a5-0x5046 is 9)
+EnemyCollide 4:62b0, CheckGateForOpp 4:5ffc, CheckFloor 5:1202 and
+CheckPress 5:127e. EnemyCollide leaves at 4:6310 unless the armed word
+a5-0x503c is 1. The palace's Jaffar is never armed: segment 9 writes the
+word only in FinlGenerateOpp (9:04dc, room 3's generated copies), the Kid's
+reset after NIS 5 (9:05ee), the copies' controller 9:1526 (1 at 9:1696, 0
+at 9:16b0) and 9:16fe's dissolve (-1 at 9:17a0, the Prince's), and HitFloor
+6:036a-0374 leaves types 1 and 6 unarmed. So he meets
+no wall at all. The 2026-11-16 note that "Collide 4:58a6/5910 reads the
+armed word" for him was wrong: those addresses lie in GroundBump, a Kid
+routine.
+
+`RooftopPhysics.advance` gains `barriers=False`, which the final Jaffar
+passes; other unarmed opponents keep the port's swept correction
+(a documented safeguard, see [opponent barriers](opponent-barriers.md)).
+CheckGateForOpp still runs for him. In the same scene he now runs off row
+0, lands softly in row 1 (HitFloor 6:0394, SEQS 17) inside the wall column
+at port X 491 and stays crouched at pose 109: route 3 with prev 0 (9:136e)
+acts only on poses 15, 7 and 11, and 9:0ba6 refuses a crouch, so he
+neither rises nor casts until the Prince leaves the view and 9:185a places
+him at his position. That outcome follows from the code read here; it was
+not seen in an emulator.
+`PalaceSceneTests.test_he_passes_through_and_meets_no_wall_unarmed` replaces
+the bump test and fails on the previous code (SEQS 47).
+
+### A player's timing (2026-11-17)
+
+`--raw` mixes bursts of raw keys into the episodes: one of fourteen keys or
+pairs (L, R, up, down, shift, Ctrl and their combinations) held for 1-18
+ticks, then released for 0-9 (`key:R+up:7:3`, replayable like the macros).
+Four 25-minute runs at `--raw 0.5` (seeds 101-104) played 28,894 episodes
+and 167,169 moves, 21,573 deaths among them, each followed by a retry. They
+found only the native turning cycle above, five times: period 18, SEQS 5
+alone, with Jaffar on rows 1 and 2 of the palace's left view within 9 pixels
+of a Prince left there without a sword. No exception, unsettled Prince,
+endless cutscene, bookkeeping fault or failed save or load.
+
+Not covered: the raw keys are random, not a player's intent, and the macros
+still carry the route; rooms 1-5 were explored with the opponents the whole route
+leaves alive; the level-13 exit, the Hall of Fame and audio are outside it.

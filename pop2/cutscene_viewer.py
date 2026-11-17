@@ -8,7 +8,7 @@ from tkinter import TclError
 
 from PIL import Image
 
-from pop2.cutscenes import CHAPTERS, OPENING_KEYS, CutsceneCollection, chapter_available, chapter_range
+from pop2.cutscenes import CHAPTERS, CutsceneCollection, chapter_available, chapter_range
 from pop2.playback_preview import PlaybackPreviews
 
 
@@ -135,6 +135,10 @@ class ChapterPreviews(PlaybackPreviews):
         return player.frame().crop((0, 0, 510, 384)).convert('RGB')
 
 
+OPENING_ORDER = ('opening', 'opening_titles', 'opening_story')
+CHAPTER_BY_KEY = {chapter.key: chapter for chapter in CHAPTERS}
+
+
 class CutsceneControls:
     def init_cutscene_viewer(self):
         self.cutscene_collection = CutsceneCollection()
@@ -143,6 +147,7 @@ class CutsceneControls:
         self.cutscene_replay = None
         self.cutscene_after_id = None
         self.cutscene_gallery_after_id = None
+        self.cutscene_watch = None   # (chapter key, its player) while a campaign scene plays
 
     def mark_cutscene_seen(self, key):
         if not getattr(self, 'cutscene_campaign_active', True):
@@ -154,17 +159,58 @@ class CutsceneControls:
         collection.unlock_through(key)
         if not hasattr(self, 'cutscene_fresh'):
             self.cutscene_fresh = set()
-        fresh = collection.seen - before
-        if key == 'opening':
-            # The opening's three chapters are open from the start, but a game's
-            # introduction has just shown them: the viewer reveals them once too.
-            fresh |= OPENING_KEYS
+        # The opening's three chapters are open from the start, but a game's
+        # introduction shows them: the viewer reveals each once it has played.
+        fresh = (collection.seen - before) | ({key} if key in OPENING_ORDER else set())
         self.cutscene_fresh |= fresh - collection.revealed
 
-    def mark_story_scene_seen(self, program_name):
+    def watch_cutscene(self, key):
+        """A chapter begins in the campaign: it is unlocked at once, and the
+        viewer reveals it the next time it opens. The opening is one program in
+        three chapters, so each of them is unlocked as it begins: the first
+        version unlocked all three as the introduction began. Unlocking a scene
+        only once it had ended was tried and rejected by the user: the happy
+        ending, last of all, would then appear only in the game that follows."""
+        self.update_cutscene_watch()
+        self.cutscene_watch = None
+        if key not in OPENING_ORDER:
+            self.mark_cutscene_seen(key)
+            return
+        self.cutscene_watch = key, getattr(self, 'intro', None)
+        self.update_cutscene_watch()
+
+    def watch_story_scene(self, program_name):
         chapter = next((chapter for chapter in CHAPTERS if chapter.program == program_name), None)
         if chapter is not None:
-            self.mark_cutscene_seen(chapter.key)
+            self.watch_cutscene(chapter.key)
+
+    def forget_cutscene_watch(self):
+        """A load or a new game: the introduction playing belongs to the old campaign."""
+        self.cutscene_watch = None
+
+    def update_cutscene_watch(self):
+        """Unlock each of the opening's chapters that has begun; the ones a skip
+        passes over count as well, as a loaded save always has all three."""
+        watch = getattr(self, 'cutscene_watch', None)
+        if watch is None:
+            return
+        key, player = watch
+        order = OPENING_ORDER[OPENING_ORDER.index(key):]
+        playing = (player is not None and getattr(self, 'intro', None) is player
+                   and not getattr(player, 'done', False))
+        if not playing:
+            self.cutscene_watch = None
+            for chapter in order:
+                self.mark_cutscene_seen(chapter)
+            return
+        program = {'operations': player.operations}
+        for chapter in order:
+            start = chapter_range(CHAPTER_BY_KEY[chapter], program)[0]
+            if start and player.position <= start:   # not begun yet
+                self.cutscene_watch = chapter, player
+                return
+            self.mark_cutscene_seen(chapter)
+        self.cutscene_watch = None
 
     def open_cutscene_viewer(self, *, developer=False):
         from pop2.cutscene_gallery import CutsceneGallery
@@ -191,6 +237,7 @@ class CutsceneControls:
                     self.cutscene_preview(index)
                 except (OSError, ValueError, KeyError, RuntimeError):
                     pass  # The card and replay action provide the import error.
+        self.update_cutscene_watch()
         fresh = getattr(self, 'cutscene_fresh', set())
         # A new game or a load drops what the previous campaign had unlocked.
         fresh &= self.cutscene_collection.seen

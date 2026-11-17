@@ -177,6 +177,11 @@ for cancel in (True, False):
         assert any(text.startswith('Cavern floor slots:') for text in messages)
     print(f'GUI import: cancel={cancel}, elapsed={monotonic()-started:.1f}s, '
           f'maximum UI heartbeat gap={gap:.3f}s', flush=True)
+    # The patch's mock (a reference cycle) keeps this root. Free it here: a
+    # collection run by the next import's thread would delete the Tcl
+    # interpreter from the wrong thread and end the process (Tcl_AsyncDelete).
+    import gc
+    gc.collect()
 """
             for index, arguments in enumerate((
                 ["-c", setup_script, str(image)],

@@ -44,10 +44,17 @@ second looked choppy; stages dissolving into each other at the display's
 rate, and then twenty whole frames a second, looked too smooth to belong to
 this game.
 
-The opening's three chapters are open from the start. Once a game's
-introduction has played they are revealed in the same way, one after another,
-the first time the viewer is opened in that game. Chapters revealed together
-share one sound.
+A chapter is unlocked as it begins, and revealed the next time the viewer
+opens. A new game starts with every chapter locked, the opening's three too
+(at first they were open from the start). The opening is one program in three
+chapters, and each of them unlocks as it begins: the first with the
+introduction, the title screen when it appears, the palace escape when it
+starts (the first version unlocked all three as the introduction began).
+Skipping the introduction unlocks the chapters it passes over, as a loaded save
+always has all three: a campaign is saved after its introduction. Unlocking
+each scene only once it had ended was tried and rejected: the happy ending,
+the last scene, would then appear only in the game that follows it. Chapters revealed
+together, one after another, share one sound.
 
 Only the revealing card is redrawn, and only when it reaches its next frame:
 `CutsceneGallery.refresh_reveal` paints that card into the cached grid in

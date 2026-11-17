@@ -54,7 +54,11 @@ distances. Other opponent states (unarmed, falling, recoiling) keep the
 port's swept correction: natively they meet no barrier at all, but the
 correction prevents walking through walls in port paths whose controller is
 not yet native (for example the unarmed running skeleton of 21c5606). That
-safeguard is a port exception, not recovered behaviour.
+safeguard is a port exception, not recovered behaviour. The final level's
+palace Jaffar (9:16fe) is excluded from it since 2026-11-17
+(`barriers=False`): there the safeguard's bump made him repeat SEQS 47 and
+13 against a wall, and his native controller needs no such help (see
+[final-level preparation](final-level-preparation.md), "Row 1's wall").
 
 Decision (2026-10-31): the safeguard stays. The unarmed runner's decision
 4:057c is now native over every LEVL (`probe_unarmed_brake`, 75,472 cases)

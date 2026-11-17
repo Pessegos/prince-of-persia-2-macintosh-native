@@ -24,8 +24,11 @@ class CollectionTests(unittest.TestCase):
 
     def test_collections_keep_independent_chronological_progress(self):
         first, second = CutsceneCollection(), CutsceneCollection()
-        first.unlock('voyage', 'unknown')
-        second.unlock('discovery', 'carpet')
+        self.assertEqual(first.seen, set())                  # a new game: the opening is locked too
+        first.unlock('voyage')
+        self.assertEqual(first.seen, set())                  # not before the introduction has played
+        first.unlock(*OPENING_KEYS, 'voyage', 'unknown')
+        second.unlock(*OPENING_KEYS, 'discovery', 'carpet')
         self.assertEqual(first.seen, OPENING_KEYS | {'voyage'})
         self.assertEqual(second.seen, set(OPENING_KEYS))
         second.unlock('voyage', 'discovery', 'carpet')
@@ -601,7 +604,8 @@ class ViewerSceneTests(unittest.TestCase):
         RooftopSceneTests.setUp(self)
         self.directory = TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
-        self.scene.cutscene_collection = CutsceneCollection()
+        # A game whose introduction has played: its three chapters are open.
+        self.scene.cutscene_collection = CutsceneCollection(set(OPENING_KEYS))
 
     def snapshot(self):
         from pop2.save_game import capture_snapshot
@@ -713,30 +717,45 @@ class ViewerSceneTests(unittest.TestCase):
         scene.cutscene_collection.unlock(*CHAPTER_KEYS)
         self.assertEqual(self.open_viewer().reveal, {})
 
-    def test_a_game_s_introduction_reveals_the_three_opening_chapters_once_with_one_sound(self):
+    def test_a_game_s_introduction_unlocks_each_opening_chapter_as_it_begins(self):
+        from pop2.cutscenes import chapter_range
+
         scene = self.scene
-        self.assertEqual(self.open_viewer().reveal, {})                 # open from the start: nothing to reveal yet
-        scene.close_game_menu()
-        scene.mark_cutscene_seen('opening')                            # the introduction has played
-        self.assertEqual(scene.cutscene_fresh, set(OPENING_KEYS))
-        gallery = self.open_viewer()
+        scene.cutscene_collection = CutsceneCollection()               # a new game: all locked
         opening = [index for index, chapter in enumerate(CHAPTERS) if chapter.key in OPENING_KEYS]
-        self.assertEqual((sorted(gallery.reveal), gallery.index), (opening, opening[0]))
-        waits = [gallery.reveal[index] for index in opening]
-        self.assertEqual(waits, sorted(waits, reverse=True))           # one after another
+        gallery = self.open_viewer()
+        self.assertEqual([gallery.chapter_unlocked(index) for index in opening], [False] * 3)
+        scene.close_game_menu()
+        scene.start_intro()
+        # The first versions showed all three open from the start, and revealed
+        # all three as soon as the introduction began.
+        gallery = self.open_viewer()
+        self.assertEqual(sorted(gallery.reveal), opening[:1])           # the first chapter is playing
+        self.assertEqual([gallery.chapter_unlocked(index) for index in opening], [True, False, False])
+        scene.close_game_menu()
+        titles = chapter_range(CHAPTERS[opening[1]], scene.intro_assets.program)[0]
+        scene.intro.seek_operation(titles + 1)                         # the title screen has begun
+        gallery = self.open_viewer()
+        self.assertEqual(sorted(gallery.reveal), opening[1:2])
+        self.assertEqual([gallery.chapter_unlocked(index) for index in opening], [True, True, False])
+        scene.close_game_menu()
+        scene.finish_intro()                                           # skipped: the escape counts too
+        gallery = self.open_viewer()
+        self.assertEqual(sorted(gallery.reveal), opening[2:])
         cues = 0
         for _ in range(400):
             gallery.advance(1 / 30)
             cues += gallery.reveal_cue
             gallery.reveal_cue = False
-        self.assertEqual((gallery.reveal, cues), ({}, 1))              # three chapters, one sound
+        self.assertEqual((gallery.reveal, cues), ({}, 1))
         scene.close_game_menu()
-        scene.mark_cutscene_seen('opening')                            # the introduction again, same game
-        self.assertEqual(scene.cutscene_fresh, set())
+        scene.start_intro()                                            # the introduction again, same game
+        scene.finish_intro()
         self.assertEqual(self.open_viewer().reveal, {})
         scene.close_game_menu()
         scene.cutscene_collection = CutsceneCollection()               # a new game reveals them again
-        scene.mark_cutscene_seen('opening')
+        scene.start_intro()
+        scene.finish_intro()
         self.assertEqual(sorted(self.open_viewer().reveal), opening)
 
     def test_developer_replay_leaves_profile_world_and_normal_shortcut_locks_unchanged(self):
@@ -1360,7 +1379,7 @@ class ViewerSceneTests(unittest.TestCase):
         self.assertEqual(read_document(advanced)['cutscenes'],
                          sorted(OPENING_KEYS | {'voyage', 'discovery'}))
         scene.new_game()
-        self.assertEqual(scene.cutscene_collection.seen, set(OPENING_KEYS))
+        self.assertEqual(scene.cutscene_collection.seen, set())   # all locked until the introduction plays
         scene.load_game_from(advanced)
         self.assertEqual(scene.cutscene_collection.seen, OPENING_KEYS | {'voyage', 'discovery'})
         scene.load_game_from(early)
@@ -1397,7 +1416,7 @@ class ViewerSceneTests(unittest.TestCase):
         self.assertTrue(earlier <= scene.cutscene_fresh)                  # all of them are revealed
         self.assertNotIn('tower', scene.cutscene_collection.seen)
         scene.new_game()
-        self.assertEqual(scene.cutscene_collection.seen, set(OPENING_KEYS))
+        self.assertEqual(scene.cutscene_collection.seen, set())
 
     def test_developer_playback_seek_still_unlocks_nothing(self):
         scene = self.scene
@@ -1411,11 +1430,11 @@ class ViewerSceneTests(unittest.TestCase):
                                 (scene.start_carpet, 'carpet'), (lambda: scene.start_vision(lambda: None), 'vision'),
                                 (lambda: scene.start_temple_ride(lambda: None), 'horse'),
                                 (lambda: scene.start_tower_flight(lambda: None), 'tower')):
-            start()
-            self.assertIn(expected, scene.cutscene_collection.seen)
+            with self.subTest(expected):
+                start()
+                self.assertIn(expected, scene.cutscene_collection.seen)    # as it begins
         scene.new_game()
-        self.assertEqual(scene.cutscene_collection.seen, set(OPENING_KEYS))
-
+        self.assertEqual(scene.cutscene_collection.seen, set())         # everything locked again
 
 if __name__ == '__main__':
     unittest.main()

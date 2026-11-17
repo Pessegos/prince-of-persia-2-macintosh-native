@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from unittest.mock import Mock, patch
 
-from pop2.asset_import import AssetImport, ImportCancelled
+from pop2.asset_import import AssetImport, ImportCancelled, ImportFailed
 from pop2.paths import PROJECT_DIR
 
 
@@ -53,11 +53,34 @@ class AssetImportProcessTests(unittest.TestCase):
         self.assertFalse(list(assets.glob('.setup-*')))
         self.assertIn('native recovery failed', (self.project / 'rendered/setup.log').read_text())
 
+    def test_stages_reach_the_window_and_the_installation_is_counted(self):
+        self.process.stdout = [json.dumps({'event': 'step', 'stage': 'scenery', 'done': 5, 'total': 1000}) + '\n',
+                               json.dumps({'event': 'progress', 'message': 'Preparing music: A (1/2)'}) + '\n']
+        steps = Mock()
+        with patch('pop2.asset_import.subprocess.Popen', side_effect=self.start):
+            self.task.run('game.hfs', Mock(), steps)
+        calls = [call.args for call in steps.call_args_list]
+        self.assertEqual(calls, [('scenery', 5, 1000), ('install', 0, 2), ('install', 1, 2), ('install', 2, 2)])
+
+    def test_reported_problem_kind_and_message_survive_the_process(self):
+        self.process.stdout = [
+            json.dumps({'event': 'error', 'kind': 'archive', 'message': 'This is not a supported image'}) + '\n',
+            'Asset extraction failed: This is not a supported image\n',
+            'This file is an archive. Extract the disk image from it first.\n']
+        self.process.wait.return_value = 1
+        with (patch('pop2.asset_import.subprocess.Popen', side_effect=self.start),
+              self.assertRaises(ImportFailed) as failure):
+            self.task.run('game.hfs')
+        self.assertEqual(failure.exception.kind, 'archive')
+        self.assertTrue(str(failure.exception).startswith('This is not a supported image\nDetails: '))
+        self.assertEqual(failure.exception.log, self.project / 'rendered/setup.log')
+
     def test_real_child_reports_invalid_image_and_cleans_up(self):
         image = self.project / 'invalid disk image.hfs'
         image.write_bytes(b'not HFS')
-        with self.assertRaisesRegex(ValueError, 'not a supported Macintosh PoP2'):
+        with self.assertRaisesRegex(ImportFailed, 'not a supported Macintosh PoP2') as failure:
             self.task.run(image)
+        self.assertEqual(failure.exception.kind, 'not_mac')
         self.assertIsNone(self.task.process)
         self.assertEqual(list((self.project / 'assets').iterdir()), [])
         self.assertIn('Asset extraction failed:', (self.project / 'rendered/setup.log').read_text())

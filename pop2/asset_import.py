@@ -17,6 +17,15 @@ class ImportCancelled(Exception):
     pass
 
 
+class ImportFailed(ValueError):
+    """The recovery process stopped; `kind` is its import_advice kind and
+    `log` the file holding its output."""
+
+    def __init__(self, kind, message, log):
+        super().__init__(message)
+        self.kind, self.log = kind, log
+
+
 class AssetImport:
     def __init__(self, project):
         self.project = Path(project)
@@ -38,7 +47,10 @@ class AssetImport:
         if self.cancelled.is_set():
             raise ImportCancelled()
 
-    def run(self, image_path, progress=lambda _text: None):
+    def run(self, image_path, progress=lambda _text: None, steps=lambda _stage, _done, _total: None):
+        """Import `image_path`. `progress(text)` receives the recovery's
+        messages and `steps(stage, done, total)` its stages (see
+        tools.extract_assets), ending with 'install' as files are installed."""
         self.check_cancelled()
         assets = self.project / 'assets'
         assets.mkdir(parents=True, exist_ok=True)
@@ -60,6 +72,7 @@ class AssetImport:
                                       **options) as process:
                     self.process = process
                     errors = deque(maxlen=12)
+                    kind, reported = 'failed', None
                     try:
                         if self.cancelled.is_set():
                             self.cancel()
@@ -71,8 +84,14 @@ class AssetImport:
                             except ValueError:
                                 errors.append(line.rstrip())
                             else:
-                                if isinstance(event, dict) and event.get('event') == 'progress':
+                                if not isinstance(event, dict):
+                                    continue
+                                if event.get('event') == 'progress':
                                     progress(event['message'])
+                                elif event.get('event') == 'step':
+                                    steps(event['stage'], event['done'], event['total'])
+                                elif event.get('event') == 'error':
+                                    kind, reported = event.get('kind', kind), event.get('message')
                         code = process.wait()
                     finally:
                         if process.poll() is None:
@@ -81,13 +100,16 @@ class AssetImport:
                         self.process = None
                 self.check_cancelled()
                 if code:
-                    detail = next((line for line in reversed(errors) if line.strip()), 'Recovery failed.')
-                    raise ValueError(f'{detail}\nDetails: {log}')
+                    detail = reported or next((line for line in reversed(errors) if line.strip()),
+                                              'Recovery failed.')
+                    raise ImportFailed(kind, f'{detail}\nDetails: {log}', log)
             self.check_cancelled()
             progress('Installing prepared game files...')
             self.check_cancelled()
             files = [path for path in staging.rglob('*') if path.is_file()]
-            for source in files:
+            steps('install', 0, len(files))
+            for index, source in enumerate(files, 1):
                 destination = assets / source.relative_to(staging)
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 source.replace(destination)
+                steps('install', index, len(files))

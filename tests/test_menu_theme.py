@@ -165,6 +165,26 @@ class MenuThemeTest(unittest.TestCase):
         os.environ['POP2_MENU_THEME'] = 'Caverns'
         self.assertIs(menu_theme.theme_for(game(5, harbor=object())), CAVERNS)
 
+    def test_a_menu_over_a_cutscene_takes_the_look_of_the_level_it_follows(self):
+        # The first version kept every menu over a cutscene neutral.
+        from pop2.scene_prototype import ScenePrototype
+
+        patcher = mock.patch.dict(os.environ, {'POP2_MENU_THEME': ''})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.addCleanup(menu_theme.use, menu_theme.current())
+        seen = []
+        frame = Image.new('RGBA', (512, 384), 'black')
+        scene = SimpleNamespace(
+            update_cutscene_watch=lambda: None, render_cutscene_replay=lambda: False,
+            intro=SimpleNamespace(frame=lambda: frame, status=None),
+            game=SimpleNamespace(level=SimpleNamespace(kind=4), caverns=object(), desert=None, harbor=None),
+            dev_menu=None, refresh_game_menu=lambda: None, paused=False,
+            game_menu=SimpleNamespace(draw=lambda viewport, font: seen.append(menu_theme.current()) or viewport),
+            ui_font=None, draw_screenshot_notice=lambda viewport: viewport, present_viewport=lambda: None)
+        ScenePrototype.render(scene)   # the ride to the temple, after level 9 in the ruins
+        self.assertEqual(seen, [RUINS])
+
     def test_chess_frame_alternates_between_violet_corners(self):
         rgb = menu_theme._rgb
         violet, pearl = (rgb(shades[1]) + (255,) for shades in menu_theme._CHESS_SQUARES)
