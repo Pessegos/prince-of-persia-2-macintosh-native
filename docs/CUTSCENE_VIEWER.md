@@ -47,10 +47,13 @@ this game.
 A chapter counts as played, and is unlocked, only once it has ended or been
 skipped, never as it begins: the first version unlocked each scene as it
 started, so opening the viewer during the first moments of the introduction
-already revealed its three chapters. The opening's three chapters are open
-from the start, but a game's introduction reveals each of them the first time
-the viewer is opened after that chapter has played: the first once the title
-screen begins, the title screen once the palace escape begins. Skipping the
+already revealed its three chapters. A new game starts with every chapter
+locked, the opening's three too (at first they were open from the start).
+Each of the opening's chapters unlocks, and is revealed the next time the
+viewer is opened, once it has played: the first once the title screen begins,
+the title screen once the palace escape begins, the escape at the
+introduction's end. A loaded save always has them, since a campaign is saved
+after its introduction. Skipping the
 introduction counts its remaining chapters as played. Chapters revealed
 together, one after another, share one sound.
 

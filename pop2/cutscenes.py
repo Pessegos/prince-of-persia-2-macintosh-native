@@ -38,10 +38,8 @@ CHAPTER_KEYS = frozenset(chapter.key for chapter in CHAPTERS)
 
 def ordered_seen(keys):
     """Story unlocks form a chronological prefix, never isolated debug scenes."""
-    seen = set(OPENING_KEYS)
+    seen = set()
     for chapter in CHAPTERS:
-        if chapter.key in OPENING_KEYS:
-            continue
         if chapter.key not in keys:
             break
         seen.add(chapter.key)
@@ -50,14 +48,18 @@ def ordered_seen(keys):
 
 @dataclass
 class CutsceneCollection:
-    seen: set = field(default_factory=lambda: set(OPENING_KEYS))
+    # A new game starts with every chapter locked, the opening's three too:
+    # each unlocks once the introduction has played it (they were open from
+    # the start at first).
+    seen: set = field(default_factory=set)
     error: str = ''
     # Chapters the viewer has already shown being revealed in this game. Not saved.
     revealed: set = field(default_factory=set, compare=False)
 
     @classmethod
     def from_saved(cls, keys):
-        return cls(ordered_seen(keys))
+        # A campaign is saved in play, after its introduction.
+        return cls(ordered_seen(set(keys) | OPENING_KEYS))
 
     def unlock(self, *keys):
         self.seen = ordered_seen(self.seen | CHAPTER_KEYS.intersection(keys))
@@ -80,8 +82,9 @@ class CutsceneCollection:
         developer room/level jumps or a gallery replay.
         """
         level = game.level.number
-        keys = [chapter.key for chapter in CHAPTERS
-                if chapter.after_level is not None and level > chapter.after_level]
+        keys = [chapter.key for chapter in CHAPTERS   # the introduction came first
+                if chapter.key in OPENING_KEYS
+                or (chapter.after_level is not None and level > chapter.after_level)]
         if level == 8 and (getattr(game.caverns, 'throne_seen', False)
                            or getattr(game.caverns, 'throne_done', False)):
             keys.append('vision')
