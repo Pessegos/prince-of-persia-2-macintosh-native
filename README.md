@@ -157,7 +157,7 @@ New chapters reveal their covers and titles in a pixelated animation, with a bri
 
 Click a chapter to watch it, or browse with the keyboard or controller. Replaying a cutscene leaves your current game where it was.
 
-<img src="docs/github readme/menus/cutscene-reveal.gif" alt="Cutscene Viewer revealing The Magic Carpet chapter cover and title" width="850">
+<img src="docs/github readme/menus/cutscene-reveal.gif" alt="Cutscene Viewer by the horse statue: The Mother's Vision reveals its cover and title with a glint, plays as the ruined hall turns back into the palace and pauses, while the next chapter stays under its veil" width="850">
 
 <br/>
 
