@@ -13,6 +13,7 @@ from pop2.audio_duck import PcmGateDuck
 from pop2.audio_release import PcmRelease, seamless_loop
 from pop2.audio_loop import PcmSustain, gate_loop_bounds
 from pop2.ui_audio import HOVER_NOTES, menu_pcm
+from pop2.fire_sound import fire_pcm
 from pop2.mechanism_audio import GateVoice
 from pop2.music_transition import fade_pcm, horse_music_ending, TEMPLE_FADE_IN
 
@@ -34,44 +35,13 @@ def scene_sound_key(resource_id, kind):
 
 # a5-0x4396[16]: the altar burn (SetKidDeathMethod(16), 10:2aa6).
 LATE_DEATH_CUES = {16: 250}
-# The lava sound a screenshot burns with in the screenshots page, and its level.
-BURN_CUE = 69
-BURN_VOLUME = 0.4   # cue 69 peaks at 23% of full scale: 9%, as the reveal
-# A fire sound of the user's own put beside the imported audio replaces it. It
-# is not one of the game's resources and is not in the repository; its level
-# as recorded is about as loud as the lava sound above.
+# A screenshot dropped on the lava burns with the port's own fire sound
+# (pop2.fire_sound), made to follow the user's chosen recording. That recording
+# itself (its source and licence unknown, so not distributed), put beside the
+# imported audio as this file, still replaces it.
 BURN_FILE = "menu-burn.wav"
-BURN_FILE_VOLUME = 0.8   # a little quieter than recorded, as the user asked
-# The file is used as the user prepared it (1 s, already faded out).
-# Cue 69 opens with a bright pulsing rattle (to 0.165 s, a quiet gap), like
-# bones; only the lava's bubbling after it is kept, faded in over 5 ms. It is
-# short (0.34 s), so it bubbles twice, the second time over the end of the
-# first (BURN_OVERLAP) and dying away over its second half.
-BURN_START = 0.165
-BURN_FADE_IN = 0.005
-BURN_PASSES = 2
-BURN_OVERLAP = 0.04
+BURN_VOLUME = 0.8   # a little quieter than recorded, as the user asked
 
-
-def lava_part(raw, rate, channels, start=BURN_START, fade=BURN_FADE_IN,
-              passes=BURN_PASSES, overlap=BURN_OVERLAP):
-    """The mixer's 16-bit samples of cue 69's bubbling: from ``start`` seconds,
-    faded in over ``fade``, played ``passes`` times, each over the last
-    ``overlap`` seconds of the one before, the last dying away over its second half."""
-    import numpy
-
-    part = numpy.frombuffer(raw, dtype='<i2').reshape(-1, channels)[round(start * rate):].astype(float)
-    ramp = min(len(part), max(1, round(fade * rate)))
-    part[:ramp] *= (numpy.arange(ramp) / ramp)[:, None]
-    lap = min(len(part) // 2, round(overlap * rate))
-    step = len(part) - lap
-    out = numpy.zeros((step * (passes - 1) + len(part), channels))
-    for index in range(passes):
-        out[index * step:index * step + len(part)] += part
-    if passes > 1:
-        half = len(part) // 2
-        out[len(out) - half:] *= numpy.linspace(1, 0, half)[:, None]
-    return numpy.clip(out.round(), -32768, 32767).astype('<i2').tobytes()
 
 class MixerPlayback:
     def __init__(self, directory, cues, mix_mechanisms=False, split_mechanisms=False):
@@ -108,24 +78,19 @@ class MixerPlayback:
         self.ui_hover_step = 0
         self.sounds = {cue: mixer.Sound(str(Path(directory) / item["file"]))
                        for cue, item in cues.items() if item.get("file")}
-        # A screenshot dropped on the lava sinks into it with the game's own
-        # sound for a body sinking into lava (cue 69, GetLavaInfoHnd 8:34a6),
-        # without its rattling start, a copy of it brought down to the reveal's peak, on the click's channel.
+        # The screenshots page's burn, on the click's channel.
+        burn = None
         burn_file = Path(directory) / BURN_FILE
         if burn_file.is_file():
             try:
                 burn = mixer.Sound(file=io.BytesIO(burn_file.read_bytes()))   # the file is not kept open
-            except Exception:   # an unreadable file: the lava sound instead
+            except Exception:   # an unreadable file: the port's own sound instead
                 burn = None
-            if burn is not None:
-                burn.set_volume(BURN_FILE_VOLUME)
-                self.ui_sounds['burn'] = burn
-                self.ui_channels['burn'] = self.ui_channels['click']
-        if 'burn' not in self.ui_sounds and BURN_CUE in self.sounds:
-            burn = mixer.Sound(buffer=lava_part(self.sounds[BURN_CUE].get_raw(), rate, channels))
-            burn.set_volume(BURN_VOLUME)
-            self.ui_sounds['burn'] = burn
-            self.ui_channels['burn'] = self.ui_channels['click']
+        if burn is None:
+            burn = mixer.Sound(buffer=fire_pcm(rate, channels))
+        burn.set_volume(BURN_VOLUME)
+        self.ui_sounds['burn'] = burn
+        self.ui_channels['burn'] = self.ui_channels['click']
         horse_theme = scene_sound_key(25006, 0)
         if horse_theme in self.sounds:
             self.sounds[horse_theme] = mixer.Sound(buffer=horse_music_ending(
