@@ -111,9 +111,9 @@ of its whole size, which Tk then painted again in full: about 35 ms at
 3440x1440, against 19 ms in a 1020x768 window. Now only the bands of rows that
 changed are enlarged, exactly as the whole page's enlargement shows them
 (`nearest_axes`, `changed_bands`), and written into the window's photo
-(`WindowControls.patch_native_menu`). Small patches go to Tk as data with no
-alpha (`put_patch`). Copying a patch from another photo made Tk check the alpha
-of the whole photo, about 2 ms at 3440x1440 for each patch. The photo is moved
+(`WindowControls.patch_native_menu`) by Tk's own function (`put_patch`, see
+below). Copying a patch from another photo made Tk check the alpha of the
+whole photo, about 2 ms at 3440x1440 for each patch. The photo is moved
 only when its place changes (`keep_photo_at`), since even unchanged
 coordinates make Tk paint all of it.
 
@@ -142,10 +142,28 @@ the ruins and the spider compares each pixel as one number. Drawing a page took
 2-2.3 ms (menu, options), 3-5 ms (controls) and 1.4 ms (tools), up to 7 ms
 under the spider; it takes 0.3-0.7 ms, up to 1.5 ms under the spider. A step
 over the menu or its options takes about 5 ms at 3440x1440 and 2.5-3 ms at
-1020x768, one over the controls 3-4 ms and 2.6 ms. The rest is Tk's copy of
+1020x768, one over the controls 3-4 ms and 2.6 ms. The rest was Tk's copy of
 the changed rows. Drawn by the previous code and this one, 4176 pages (the menu, its
 options, dialogs, controls and tools, eight themes, every focus, three pictures
 under them, each drawn twice) were the same.
+
+The changed rows go into the window's photo through `Tk_PhotoPutBlock`, the
+function in which Tk's photo commands end and which Pillow calls for a whole
+photo (`pop2.tk_photo.put_pixels`). Given as data, Tk 8.6 read a patch at about
+26 ns a pixel (1.8 ms for two options at 3440x1440); copied from another photo,
+a patch made Tk check the alpha of the whole photo. Called directly, with the
+pixels marked opaque, the function takes them where they are, about 5 ns a
+pixel, most of it Tk preparing them for the display. It is taken from the Tk
+this process loaded, only for Tk 8.6, whose structure it is given, and only
+once two pixels it wrote into a photo of its own read back as written;
+otherwise `put_patch` sends data or copies as before. The changed bands are
+found by comparing the page's packed pixels whole, a fifth of the time of
+finding the box of what changed first, and each band is enlarged from its own
+pixels, columns first. A step over the menu or its options took about 5 ms at
+3440x1440 and takes 2.5-2.7, one over the controls 3.8 and 2.5, over the tools
+6 and 2.6; at 1020x768 2.6-2.8 ms, now 1.4-1.8. The saves and screenshots pages
+send their patches the same way, but their time is their own drawing (6.5-8 ms
+at 3440x1440): each step copies the window-sized page they keep.
 
 The copy challenge covers the whole window, yet the game was drawn under it at
 each of its 60 frames a second, and the same page again between its fades.

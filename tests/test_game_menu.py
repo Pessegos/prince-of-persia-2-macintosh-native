@@ -1024,7 +1024,7 @@ class GameMenuSceneTests(unittest.TestCase):
                             expected = scene.native_viewport.crop((1, 0, 511, 384)).resize(size, Image.Resampling.NEAREST)
                             self.assertEqual(shown.tobytes(), expected.convert('RGB').tobytes(), (page, x, y))
                     self.assertIs(scene.image_ref, photo)
-                    sent = [call.args[1].size for call in made.call_args_list]
+                    sent = [call.args[1].shape[1::-1] for call in made.call_args_list]
                     self.assertTrue(sent, page)
                     self.assertTrue(all(w * h * 8 < size[0] * size[1] for w, h in sent), (page, sent))
 

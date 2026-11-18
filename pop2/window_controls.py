@@ -17,6 +17,7 @@ from pop2.game_ui import (DevelopmentMenu, VISIBLE_SIZE, VISIBLE_VIEWPORT, fit_v
                           viewport_point, fit_menu_viewport, menu_viewport_point)
 from pop2.preferences import remember
 from pop2.screenshots import ScreenshotSettings, save_screenshot
+from pop2.tk_photo import put_pixels
 
 
 PAUSE_GAMEPLAY_KEYS = frozenset({
@@ -67,16 +68,22 @@ def changed_bands(before, after, gap=8):
 
 
 def put_patch(photo, image, x, y):
-    """Write an opaque ``image`` into the Tk ``photo`` at (x, y). Copied from another photo,
-    it makes Tk look over the alpha of all of ``photo`` (about 2 ms at 3440x1440); given as
-    data with no alpha it spares that, but Tk reads such data about twice as slowly, so
-    only the smaller patches go as data."""
-    if image.width * image.height * 20 < photo.width() * photo.height():
-        rgb = image if image.mode == 'RGB' else image.convert('RGB')
+    """Write an opaque ``image`` (a picture, or an array of rows of RGB or RGBA bytes, alpha
+    ignored) into the Tk ``photo`` at (x, y), by Tk's own function (pop2.tk_photo): about
+    five times faster than the data below, at least twice as fast as the copy. Without it,
+    copied from another photo, a part makes Tk look over the alpha of all of ``photo``
+    (about 2 ms at 3440x1440); given as data with no alpha it spares that, but Tk reads
+    such data about twice as slowly, so only the smaller patches go as data."""
+    if put_pixels(photo, image, x, y):
+        return
+    if isinstance(image, numpy.ndarray):
+        image = Image.fromarray(image)
+    rgb = image if image.mode == 'RGB' else image.convert('RGB')
+    if rgb.width * rgb.height * 20 < photo.width() * photo.height():
         photo.tk.call(str(photo), 'put', b'P6 %d %d 255 ' % rgb.size + rgb.tobytes(), '-format', 'ppm',
                       '-to', x, y)
     else:
-        patch = ImageTk.PhotoImage(image)
+        patch = ImageTk.PhotoImage(rgb)
         photo.tk.call(str(photo), 'copy', str(patch), '-to', x, y, '-compositingrule', 'set')
 
 
@@ -2152,7 +2159,7 @@ class WindowControls(InputRouting):
             else:
                 source = cached[2]
             # A dragged picture is shown over the page by itself (show_screenshot_held). The page
-            # stays RGBA: only the parts sent to Tk are converted, not the whole window's picture.
+            # stays RGBA: Tk is given only the parts that changed, their alpha ignored.
             frame = self.draw_screenshot_notice(gallery.draw(source, self.ui_font, visible=True, held_picture=False),
                                                 visible=True, uniform=bool(spread), inset=shift)
             previous = getattr(self, 'screenshot_gallery_frame', None)
@@ -2230,7 +2237,7 @@ class WindowControls(InputRouting):
                         if (lava[0] <= damage[0] and lava[1] <= damage[1] and damage[2] <= lava[2]
                                 and damage[3] <= lava[3] and getattr(self, 'screenshot_lava', None) is not None):
                             continue   # only the lava's own item shows it
-                    put_patch(self.image_ref, frame.crop(damage).convert('RGB'), *damage[:2])
+                    put_patch(self.image_ref, frame.crop(damage), *damage[:2])
                 self.keep_photo_at(position)
             else:
                 self.image_ref = ImageTk.PhotoImage(frame.convert('RGB'))
@@ -2259,7 +2266,7 @@ class WindowControls(InputRouting):
             else:
                 source = source_cache[2]
             browser = game_menu.save_browser
-            # The page stays RGBA: only the parts sent to Tk are converted.
+            # The page stays RGBA: Tk is given only the parts that changed, their alpha ignored.
             frame = self.draw_screenshot_notice(
                 browser.draw(source, self.ui_font, visible=True,
                                             background_key=id(self.screenshot_viewport)),
@@ -2300,7 +2307,7 @@ class WindowControls(InputRouting):
                         continue
                     damage = (damage[0] + rect[0], damage[1] + rect[1],
                               damage[2] + rect[0], damage[3] + rect[1])
-                    put_patch(self.image_ref, frame.crop(damage).convert('RGB'), *damage[:2])
+                    put_patch(self.image_ref, frame.crop(damage), *damage[:2])
                 self.save_menu_frame = (game_menu, frame, self.image_ref, state, listing)
                 self.keep_photo_at(position)
                 return
@@ -2365,20 +2372,23 @@ class WindowControls(InputRouting):
         if (previous is None or previous[0] is not self.image_ref or previous[2] != size
                 or previous[1].size != source.size or 'RGBA' != previous[1].mode or 'RGBA' != source.mode):
             return False
-        pixels = previous[3]   # the shown page's packed pixels, once they were needed
-        changed = ImageChops.difference(previous[1], source).getbbox(alpha_only=False)
-        if changed is not None:
+        # The shown page's packed pixels, kept once they were needed: compared as one number
+        # each, the whole page takes a fifth of the time of finding its changed box.
+        before = packed_pixels(previous[1]) if previous[3] is None else previous[3]
+        pixels = packed_pixels(source)
+        bands = changed_bands(before, pixels)
+        if bands:
             columns, rows = nearest_axes(source.size, size)
-            before = packed_pixels(previous[1]) if pixels is None else pixels
-            pixels = packed_pixels(source)
-            x, y = changed[:2]
-            within = numpy.s_[changed[1]:changed[3], changed[0]:changed[2]]
-            for left, top, right, bottom in changed_bands(before[within], pixels[within]):
+            for left, top, right, bottom in bands:
                 # The window's columns and rows that show the changed ones.
-                left, right = (int(edge) for edge in numpy.searchsorted(columns, (left + x, right + x)))
-                top, bottom = (int(edge) for edge in numpy.searchsorted(rows, (top + y, bottom + y)))
-                part = pixels.take(rows[top:bottom], 0).take(columns[left:right], 1)
-                put_patch(self.image_ref, Image.fromarray(part.view(numpy.uint8).reshape(*part.shape, 4)), left, top)
+                left, right = (int(edge) for edge in numpy.searchsorted(columns, (left, right)))
+                top, bottom = (int(edge) for edge in numpy.searchsorted(rows, (top, bottom)))
+                # Gathered from the changed pixels alone, columns first: the rows are then
+                # whole copies (a third of the time of gathering the rows of the page's width).
+                shown_columns, shown_rows = columns[left:right], rows[top:bottom]
+                part = pixels[shown_rows[0]:shown_rows[-1] + 1, shown_columns[0]:shown_columns[-1] + 1]
+                part = part.take(shown_columns - shown_columns[0], 1).take(shown_rows - shown_rows[0], 0)
+                put_patch(self.image_ref, part.view(numpy.uint8).reshape(*part.shape, 4), left, top)
         self.native_menu_frame = self.image_ref, source, size, pixels
         self.keep_photo_at(position)
         return True
