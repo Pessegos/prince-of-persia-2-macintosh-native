@@ -428,6 +428,7 @@ class ScreenshotGallery:
         self.dragging = False
         self.burn_seconds, self.burn_image = None, None
         self.burn_target = None
+        self.burn_clock = None   # 'waiting' for the burn's first frame, 'drawn' once it is
         self.burn_cue = False
         self.held_rect = None
         self.held_cache = None   # the dragged picture as held_overlay last framed it
@@ -562,6 +563,7 @@ class ScreenshotGallery:
             if not result.error and self.delete_from_drop:
                 self.burn_seconds, self.burn_image = 0.0, self.delete_art
                 self.burn_target = target
+                self.burn_clock = 'waiting'   # for its first frame: see animate
             self.delete_from_drop, self.delete_art = False, None
             if not result.error and target is not None:
                 # As the folder's next listing will show it, so that the page is drawn again once,
@@ -706,7 +708,7 @@ class ScreenshotGallery:
     def close(self):
         self.cancel_drag()
         self.burn_seconds, self.burn_image = None, None
-        self.burn_target = None
+        self.burn_target, self.burn_clock = None, None
         self.reads.close()
         self.text_cache.clear()
         self.image_cache.clear()
@@ -730,11 +732,15 @@ class ScreenshotGallery:
         step = math.floor(seconds * 12 + 1e-9)
         return min(1, step / 12 / self.BURN_SECONDS) >= self.BURN_LANDING
 
+    @property
+    def burn_cue_seconds(self):
+        """When the fire sound starts: BURN_LEAD before the step the picture meets
+        the lava and starts to burn, as the user timed it on a recording."""
+        return math.ceil(self.BURN_LANDING * self.BURN_SECONDS * 12 - 1e-9) / 12 - self.BURN_LEAD
+
     def burn_heard(self, seconds):
-        """Whether the fire sound has started by then: BURN_LEAD before the step the
-        picture meets the lava and starts to burn, as the user timed it on a recording."""
-        alight = math.ceil(self.BURN_LANDING * self.BURN_SECONDS * 12 - 1e-9) / 12
-        return seconds + 1e-9 >= alight - self.BURN_LEAD
+        """Whether the fire sound has started by then."""
+        return seconds + 1e-9 >= self.burn_cue_seconds
 
     def ensure_visible(self, immediate=False):
         row = self.selected // self.COLUMNS
@@ -746,6 +752,21 @@ class ScreenshotGallery:
         if immediate:
             self.scroll, self.velocity = self.scroll_target, 0
 
+    def next_change(self):
+        """Seconds until the lava's next frame, the burn's next step or its sound, whichever
+        comes first; None when neither runs. The window waits that long, so that each step
+        lasts its twelfth of a second: caught by a tick 60 times a second, they took 70 or 88 ms."""
+        waits = []
+        if self.burn_seconds is not None and not (self.choosing or self.deleting):
+            if self.burn_clock == 'waiting':
+                return 0
+            waits.append((math.floor(self.burn_seconds * 12 + 1e-9) + 1) / 12 - self.burn_seconds)
+            if not self.burn_heard(self.burn_seconds):
+                waits.append(self.burn_cue_seconds - self.burn_seconds)
+        if self.animation_running:
+            waits.append((math.floor(self.icon_seconds * 12 + 1e-9) + 1) / 12 - self.icon_seconds)
+        return max(0, min(waits)) if waits else None
+
     def animate(self, seconds):
         if self.choosing or self.deleting:
             return False
@@ -753,15 +774,24 @@ class ScreenshotGallery:
         if self.burn_seconds is not None:
             heard = self.burn_heard(self.burn_seconds)
             step = math.floor(self.burn_seconds * 12 + 1e-9)
-            self.burn_seconds += max(0, seconds)
+            burning = max(0, seconds)
+            if self.burn_clock == 'waiting':
+                # Its clock starts with its first frame. The one that closes the confirmation
+                # is the page's costliest (about 75 ms at 3440x1440 until Tk shows it), and
+                # counting that time cut the picture's first place above the lava to a glimpse.
+                burning = 0
+            elif self.burn_clock == 'drawn':
+                burning, self.burn_clock = min(burning, 1 / 60), None
+            self.burn_seconds += burning
             if not heard and self.burn_heard(self.burn_seconds):
                 self.burn_cue = True   # the scene plays the fire's sound and clears it
             if self.burn_seconds >= self.BURN_SECONDS:
                 self.burn_seconds, self.burn_image = None, None
-                self.burn_target = None
+                self.burn_target, self.burn_clock = None, None
                 icon_changed = True
             else:   # drawn in the game's steps, as draw_held_image counts them
-                icon_changed = math.floor(self.burn_seconds * 12 + 1e-9) != step
+                icon_changed = (self.burn_clock == 'waiting'
+                                or math.floor(self.burn_seconds * 12 + 1e-9) != step)
         if self.animation_running:
             self.icon_seconds += max(0, seconds)
             frame = math.floor(self.icon_seconds * 12 + 1e-9) % len(self.reads.cache[self.lava_key].value)
@@ -1241,6 +1271,8 @@ class ScreenshotGallery:
                              left + sprite.width + outline + 1, top + sprite.height + outline + 1))
                 return
             raw = self.burn_image
+            if self.burn_clock == 'waiting':
+                self.burn_clock = 'drawn'   # its clock starts now: see animate
             # The picture falls to the lava and burns away from its foot, in the game's steps.
             step = math.floor(self.burn_seconds * 12 + 1e-9)
             progress = min(1, step / 12 / self.BURN_SECONDS)

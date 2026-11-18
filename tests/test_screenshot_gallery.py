@@ -741,6 +741,31 @@ class ScreenshotGalleryTests(unittest.TestCase):
         # Twelve steps a second: the eleven after the first and the burn's end, not 60 frames.
         self.assertEqual(sum(frames), 12)
 
+    def test_a_burn_s_clock_starts_with_its_first_frame(self):
+        # The frame that closes the confirmation is the page's costliest; counting the time it
+        # took to show cut the picture's first place above the lava to a glimpse.
+        self.png()
+        gallery = self.gallery()
+        source, font = Image.new('RGBA', (512, 384)), self.font()
+        gallery.draw(source, font)
+        self.drain(gallery)
+        gallery.begin_drag(70, 100)
+        gallery.move_drag(453, 286)
+        gallery.release_drag(453, 286)
+        gallery.delete_capture()
+        self.drain(gallery)
+        self.assertEqual(gallery.burn_seconds, 0)
+        self.assertTrue(gallery.animate(0.2))         # the time before its first frame does not count
+        self.assertEqual(gallery.burn_seconds, 0)
+        self.assertEqual(gallery.next_change(), 0)    # that frame is drawn at once
+        gallery.draw(source, font, visible=True)
+        gallery.animate(0.2)                          # nor more than a frame of the time it took
+        self.assertAlmostEqual(gallery.burn_seconds, 1 / 60)
+        gallery.animate(0.05)                         # then the burn keeps the clock
+        self.assertAlmostEqual(gallery.burn_seconds, 1 / 60 + 0.05)
+        # The window next looks at the burn's next step, or at the lava's frame if sooner.
+        self.assertTrue(0 < gallery.next_change() <= 1 / 12 - gallery.burn_seconds + 1e-9)
+
     def test_dropping_confirms_original_capture_and_burns_only_after_success(self):
         original = self.png('original.png')
         gallery = self.gallery()

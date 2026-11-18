@@ -1,5 +1,6 @@
 """Tk window controls and modal input for the scene host."""
 
+import math
 import sys
 import time
 import tkinter as tk
@@ -533,13 +534,15 @@ class WindowControls(InputRouting):
             if changed or moving:
                 self.redraw_screenshot_gallery()
             if gallery.reads.pending or gallery.scrolling or gallery.animation_running or gallery.burn_seconds is not None:
-                if gallery.scrolling or gallery.burn_seconds is not None:
-                    fps = 120 if gallery.scrolling else 60
-                    delay = max(1, round(1000 / fps - (time.perf_counter() - now) * 1000))
-                elif gallery.reads.pending:
+                # Otherwise at the lava's next frame, the burn's next step or its sound: a burn
+                # ticked 60 times a second showed its steps for 70 or 88 ms, not each for 83.
+                wait = None if gallery.scrolling else gallery.next_change()
+                if gallery.scrolling:
+                    delay = max(1, round(1000 / 120 - (time.perf_counter() - now) * 1000))
+                elif gallery.reads.pending and (wait is None or wait > 0.012):
                     delay = 12
                 else:
-                    delay = max(1, round((1 - (gallery.icon_seconds * 12) % 1) * 1000 / 12))
+                    delay = max(1, math.ceil((wait - (time.perf_counter() - now)) * 1000))
                 self.screenshot_gallery_after_id = self.root.after(delay, tick)
         self.screenshot_gallery_after_id = self.root.after(12, tick)
 

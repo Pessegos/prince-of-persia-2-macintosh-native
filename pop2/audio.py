@@ -8,6 +8,8 @@ import random
 import struct
 import time
 
+import numpy as np
+
 from pop2.paths import ASSET_DIR
 from pop2.audio_duck import PcmGateDuck
 from pop2.audio_release import PcmRelease, seamless_loop
@@ -40,7 +42,18 @@ LATE_DEATH_CUES = {16: 250}
 # itself (its source and licence unknown, so not distributed), put beside the
 # imported audio as this file, still replaces it.
 BURN_FILE = "menu-burn.wav"
-BURN_VOLUME = 0.88   # the user asked first for a little quieter than recorded (0.8), then 10% louder
+# The user asked first for a little quieter than recorded (0.8), then 10% louder (0.88), then 20% louder.
+BURN_VOLUME = 0.88 * 1.2
+
+
+def at_volume(mixer, sound, volume):
+    """``sound`` at ``volume``. A mixer sound's own volume stops at 1, so above
+    that its 16-bit samples are scaled instead (the fire peaks near 10% of full scale)."""
+    if volume <= 1 or abs(mixer.get_init()[1]) != 16:
+        sound.set_volume(min(1, volume))
+        return sound
+    samples = np.frombuffer(sound.get_raw(), dtype='<i2') * volume
+    return mixer.Sound(buffer=np.clip(np.round(samples), -32768, 32767).astype('<i2').tobytes())
 
 
 class MixerPlayback:
@@ -88,8 +101,7 @@ class MixerPlayback:
                 burn = None
         if burn is None:
             burn = mixer.Sound(buffer=fire_pcm(rate, channels))
-        burn.set_volume(BURN_VOLUME)
-        self.ui_sounds['burn'] = burn
+        self.ui_sounds['burn'] = at_volume(mixer, burn, BURN_VOLUME)
         self.ui_channels['burn'] = self.ui_channels['click']
         horse_theme = scene_sound_key(25006, 0)
         if horse_theme in self.sounds:

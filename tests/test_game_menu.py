@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 from pathlib import Path
 from tempfile import TemporaryDirectory
+import math
 import subprocess
 import sys
 import textwrap
@@ -602,6 +603,48 @@ class GameMenuSceneTests(unittest.TestCase):
                     self.assertEqual(actual.tobytes(), scene.screenshot_gallery_frame[1].convert('RGB').tobytes())
                 self.assertFalse(gallery.overlay_active)
                 self.assertEqual((scene.player_x, scene.action, scene.combat.world_frame), game)
+
+    def test_a_burn_s_steps_each_last_a_twelfth_of_a_second(self):
+        # Ticked 60 times a second, the burn showed its steps for 70 or 88 ms in turn and the
+        # fire's sound up to a tick late; the window now waits for the burn's next step, the
+        # lava's next frame or the sound, whichever comes first.
+        scene = self.scene
+        clock = [100.0]
+        with TemporaryDirectory() as directory, \
+                patch('pop2.window_controls.time.perf_counter', side_effect=lambda: clock[0]):
+            for index in range(2):
+                Image.new('RGB', (510, 384), (index * 90, 52, 86)).save(Path(directory) / f'{index}.png')
+            scene.screenshot_settings = ScreenshotSettings(Path(directory), 1)
+            self.press('F2')
+            gallery = self.settle_screenshot_gallery()
+            with patch.object(scene, 'dev_pointer', side_effect=lambda event: (event.x, event.y)):
+                scene.dev_click(SimpleNamespace(x=70, y=100, num=1))
+                scene.dev_hover(SimpleNamespace(x=453, y=286))
+                scene.dev_release(SimpleNamespace(x=453, y=286, num=1))
+                scene.dev_click(SimpleNamespace(x=330, y=238, num=1))
+            self.settle_screenshot_gallery()   # deleted: the burn starts, its clock still at 0
+            self.assertEqual(gallery.burn_seconds, 0)
+            self.assertTrue(gallery.animation_running)
+            pending = scene.screenshot_gallery_after_id
+            if pending is not None:
+                scene.root.after_cancel(pending)
+                scene.screenshot_gallery_after_id = None
+            timers, cues, steps = [], [], {}
+            with patch.object(scene.root, 'after', side_effect=lambda delay, tick: timers.append((delay, tick)) or 'tick'), \
+                    patch.object(scene, 'play_menu_sound', side_effect=lambda kind: cues.append(gallery.burn_seconds)):
+                scene.schedule_screenshot_gallery()
+                while timers and gallery.burn_seconds is not None:
+                    delay, tick = timers.pop(0)
+                    clock[0] += delay / 1000
+                    tick()
+                    if gallery.burn_seconds is not None:
+                        steps.setdefault(math.floor(gallery.burn_seconds * 12 + 1e-9), clock[0])
+            self.assertIsNone(gallery.burn_seconds)
+            self.assertEqual(sorted(steps), list(range(12)))
+            for step in range(2, 12):   # step 1 began on the clock's first frame, a share of a tick
+                self.assertAlmostEqual(steps[step] - steps[step - 1], 1 / 12, delta=0.0011, msg=step)
+            self.assertEqual(len(cues), 1)
+            self.assertAlmostEqual(cues[0], gallery.burn_cue_seconds, delta=0.0011)
 
     def test_reaching_the_lava_with_a_picture_changes_only_the_lava_s_own_item(self):
         # Reaching or leaving the lava with a dragged picture drew the whole page again and

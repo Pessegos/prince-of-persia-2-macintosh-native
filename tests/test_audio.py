@@ -650,14 +650,24 @@ class PolyphonicCueTests(unittest.TestCase):
         self.assertIsNot(burn, self.playback.sounds[69])          # no longer the game's lava cue
         self.assertEqual(self.playback.sounds[69].get_volume(), 1)
         rate, _bits, channels = mixer.get_init()
-        self.assertEqual(burn.get_raw(), fire_pcm(rate, channels))
-        self.assertAlmostEqual(burn.get_volume(), 0.88, delta=1 / 128)   # SDL keeps 128 steps
+        # 20% louder than the 88% it had: past what a sound's own volume reaches, so in its samples.
+        self.assertEqual(burn.get_volume(), 1)
+        self.assertLouder(burn.get_raw(), fire_pcm(rate, channels), 0.88 * 1.2)
         self.playback.play_ui('burn')
         self.assertIs(self.playback.ui_channels['click'].get_sound(), burn)
         del self.playback.ui_sounds['burn']
         self.playback.play_ui('burn')
 
+    def assertLouder(self, raw, original, gain):
+        import numpy
+
+        louder, original = (numpy.frombuffer(data, dtype='<i2').astype(float) for data in (raw, original))
+        self.assertEqual(len(louder), len(original))
+        self.assertGreater(abs(original).max(), 0)
+        self.assertLessEqual(abs(louder - original * gain).max(), 0.5)   # rounded, never clipped here
+
     def test_the_users_fire_recording_beside_the_audio_replaces_the_ports_sound(self):
+        from pygame import mixer
         from pop2.audio import MixerPlayback
 
         fire = Sample(b' ' * 3000, 8000).wav()
@@ -666,7 +676,8 @@ class PolyphonicCueTests(unittest.TestCase):
         playback = MixerPlayback(self.directory.name, cues)
         burn = playback.ui_sounds['burn']
         self.assertNotEqual(burn.get_raw(), self.playback.ui_sounds['burn'].get_raw())
-        self.assertAlmostEqual(burn.get_volume(), 0.88, delta=1 / 128)
+        self.assertEqual(burn.get_volume(), 1)
+        self.assertLouder(burn.get_raw(), mixer.Sound(file=io.BytesIO(fire)).get_raw(), 0.88 * 1.2)
         playback.play_ui('burn')
         self.assertIs(playback.ui_channels['click'].get_sound(), burn)
         # A file that cannot be read leaves the port's own sound.
