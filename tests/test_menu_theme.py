@@ -182,6 +182,7 @@ class MenuThemeTest(unittest.TestCase):
             dev_menu=None, refresh_game_menu=lambda: None, paused=False,
             game_menu=SimpleNamespace(draw=lambda viewport, font: seen.append(menu_theme.current()) or viewport),
             ui_font=None, draw_screenshot_notice=lambda viewport: viewport, present_viewport=lambda: None)
+        scene.draw_menus = lambda viewport: ScenePrototype.draw_menus(scene, viewport)
         ScenePrototype.render(scene)   # the ride to the temple, after level 9 in the ruins
         self.assertEqual(seen, [RUINS])
 

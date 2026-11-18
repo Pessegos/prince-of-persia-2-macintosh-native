@@ -111,12 +111,31 @@ of its whole size, which Tk then painted again in full: about 35 ms at
 3440x1440, against 19 ms in a 1020x768 window. Now only the bands of rows that
 changed are enlarged, exactly as the whole page's enlargement shows them
 (`nearest_axes`, `changed_bands`), and written into the window's photo
-(`WindowControls.patch_native_menu`). A step takes 8-12 ms at either size,
-most of it spent drawing the game under the menu again. Small patches go to Tk
-as data with no alpha (`put_patch`). Copying a patch from another photo made Tk
-check the alpha of the whole photo, about 2 ms at 3440x1440 for each patch. The
-photo is moved only when its place changes (`keep_photo_at`), since even
-unchanged coordinates make Tk paint all of it.
+(`WindowControls.patch_native_menu`). Small patches go to Tk as data with no
+alpha (`put_patch`). Copying a patch from another photo made Tk check the alpha
+of the whole photo, about 2 ms at 3440x1440 for each patch. The photo is moved
+only when its place changes (`keep_photo_at`), since even unchanged
+coordinates make Tk paint all of it.
+
+The paused game under a menu is not drawn again for what only moves the
+menu's focus or leads to another of its pages: the pointer, the keys, the
+wheel. `ScenePrototype.draw_menus` keeps the picture it drew the menu over;
+`WindowControls.redraw_menu` draws the menu again over it, while the game is
+paused and no other picture (a cutscene played from the menu) was shown since.
+Anything else that changes, a loaded save or a setting, still draws all of it.
+Under the tools the pointer now shows the same picture as a whole drawing: it
+was drawn over the captures' picture, which keeps the prompt to restart that
+the window leaves out under a menu. A step over the menu, its options or its
+controls took 11-13 ms at 3440x1440 and takes 7-10; in a 1020x768 window
+8-11 ms, now 4-7. The rest is the menu's own drawing and Tk's copy of the
+changed rows.
+
+The copy challenge covers the whole window, yet the game was drawn under it at
+each of its 60 frames a second, and the same page again between its fades.
+The game is no longer drawn under it, and a frame is drawn only when the fade
+changes it; a symbol the pointer or the keys light is drawn at once. A frame
+took about 6 ms; between fades nothing is drawn, and a lit symbol takes 4-5 ms
+instead of 7-8.
 
 The saves and screenshots pages are drawn at the window's resolution. They kept
 a cached page for each focus, so each button, save or picture the pointer

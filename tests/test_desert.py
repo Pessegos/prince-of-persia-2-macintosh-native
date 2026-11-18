@@ -526,6 +526,45 @@ class OriginalDesertTests(unittest.TestCase):
         self.assertIsNone(scene.copy_challenge)
         self.assertEqual(scene.game.level.number, 3)
 
+    def test_the_challenge_is_drawn_without_the_game_under_it_and_only_when_it_changes(self):
+        # Its page covers the window, yet the game was drawn under it at each of its 60 frames
+        # a second (about 5 ms each), and the same page was drawn again between its fades.
+        from tests.test_terrain import RooftopSceneTests
+
+        scene = self.scene
+        scene.jump_to_room(0, x=440)
+        scene.game.desert.gate = 20
+        scene.player_x = -1
+        scene.advance_level_events()
+        challenge = scene.copy_challenge
+        self.assertIsNotNone(challenge)
+        self.now = 100
+
+        def page():
+            return challenge.draw(Image.new('RGBA', (512, 384), 'black'), scene.ui_font).tobytes()
+
+        with patch('pop2.scene_prototype.environment_for', side_effect=AssertionError('the game was drawn')), \
+                patch.object(scene, 'render', wraps=scene.render) as render:
+            scene.render()
+            self.assertEqual(scene.native_viewport.tobytes(), page())
+            self.assertEqual(scene.screenshot_viewport.tobytes(), page())
+            fading = 0
+            while challenge.fade == 'in':
+                render.reset_mock()
+                brightness = challenge.brightness
+                RooftopSceneTests.tick(self)
+                self.assertEqual(render.call_count, int(challenge.brightness != brightness))
+                fading += render.call_count
+                self.assertEqual(scene.native_viewport.tobytes(), page())
+            self.assertGreater(fading, 1)
+            render.reset_mock()
+            RooftopSceneTests.tick(self, 10)
+            render.assert_not_called()
+            scene.copy_challenge_key(challenge, 'Right')
+            render.assert_called_once_with()
+            self.assertEqual(challenge.focus, 0)
+            self.assertEqual(scene.native_viewport.tobytes(), page())
+
     def test_f1_bypass_keeps_stones_and_does_not_open_exit(self):
         scene = self.scene
         scene.jump_to_room(0, x=440)

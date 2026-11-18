@@ -1732,11 +1732,16 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         if getattr(self, "copy_challenge", None) is not None:
             now = time.perf_counter()
             last = getattr(self, 'last_copy_at', None)
+            shown = getattr(self.copy_challenge, 'brightness', None)
             self.copy_challenge.advance(1 / 60 if last is None else max(0, now - last))
             self.last_copy_at = now
             if self.copy_challenge.closed:
                 self.resolve_copy_challenge()
-            self.render()
+                self.render()
+            elif shown is None or self.copy_challenge.brightness != shown:
+                # Between its fades the page changes only when a symbol is chosen or lit,
+                # which draws it then: its 60 frames a second are not drawn the same again.
+                self.render()
             self.in_animation_tick = False
             self.schedule_next_animation()
             return
@@ -3749,18 +3754,20 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
                 viewport.paste(intro_frame.crop((0, ROOM_HEIGHT, VIEWPORT_WIDTH, VIEWPORT_HEIGHT)),
                                (0, ROOM_HEIGHT))
             self.screenshot_viewport = viewport.copy()
-            if self.dev_menu is not None or self.game_menu is not None:
-                # A story scene plays after the level that leads to it: the menu takes that level's look.
-                menu_theme.use(menu_theme.theme_for(self.game))
-            if self.dev_menu is not None:
-                viewport = self.dev_menu.draw(viewport, self.ui_font)
-            elif self.game_menu is not None:
-                self.refresh_game_menu()
-                viewport = self.game_menu.draw(viewport, self.ui_font)
-            elif self.paused:
+            if self.dev_menu is None and self.game_menu is None and self.paused:
                 viewport = self.draw_cutscene_pause(viewport)
-            viewport = self.draw_screenshot_notice(viewport)
-            self.native_viewport = viewport
+            # A story scene plays after the level that leads to it: the menu takes that level's look.
+            self.native_viewport = self.draw_menus(viewport)
+            self.present_viewport()
+            return
+        challenge = getattr(self, "copy_challenge", None)
+        if challenge is not None:
+            # The challenge's page covers the whole window: the game under it is not drawn
+            # (about 5 ms of each of its 60 frames a second, and of each symbol the focus reached).
+            viewport = challenge.draw(Image.new("RGBA", (VIEWPORT_WIDTH, VIEWPORT_HEIGHT), (0, 0, 0, 255)),
+                                      self.ui_font)
+            self.screenshot_viewport = viewport.copy()
+            self.native_viewport = self.draw_menus(viewport)
             self.present_viewport()
             return
         environment = environment_for(self)
@@ -3931,20 +3938,29 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
             self.screenshot_viewport.paste(text, ((VIEWPORT_WIDTH - text.width) // 2, ROOM_HEIGHT), text)
         if demo_paused and self.dev_menu is None and self.game_menu is None:
             viewport = self.draw_cutscene_pause(viewport)
-        if getattr(self, "copy_challenge", None) is not None:
-            viewport = self.copy_challenge.draw(viewport, self.ui_font)
-            self.screenshot_viewport = viewport.copy()
-        if self.dev_menu is not None or self.game_menu is not None:
+        self.native_viewport = self.draw_menus(viewport)
+        self.present_viewport()
+
+    def draw_menus(self, viewport):
+        """The open menu, the F3 tools or the game menu, and a capture's notice over the game's
+        picture. A menu over the paused game keeps that picture (menu_underlay) for redraw_menu:
+        what only moves the menu's focus does not draw the game again."""
+        menus = self.dev_menu is not None or self.game_menu is not None
+        self.menu_underlay = (viewport, self.screenshot_viewport) if menus else None
+        if menus:
             # The port's menus take the colours and frame of the level being played.
             menu_theme.use(menu_theme.theme_for(self.game))
+        drawn = viewport
         if self.dev_menu is not None:
-            viewport = self.dev_menu.draw(viewport, self.ui_font)
+            drawn = self.dev_menu.draw(drawn, self.ui_font)
         if self.game_menu is not None:
             self.refresh_game_menu()
-            viewport = self.game_menu.draw(viewport, self.ui_font)
-        viewport = self.draw_screenshot_notice(viewport)
-        self.native_viewport = viewport
-        self.present_viewport()
+            drawn = self.game_menu.draw(drawn, self.ui_font)
+        if drawn is viewport:
+            # A page drawn elsewhere (the Cutscene Viewer) leaves the picture itself, which the
+            # notice may then be drawn into.
+            self.menu_underlay = None
+        return self.draw_screenshot_notice(drawn)
 
 
 if __name__ == "__main__":

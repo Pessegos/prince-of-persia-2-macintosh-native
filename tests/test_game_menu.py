@@ -1028,6 +1028,111 @@ class GameMenuSceneTests(unittest.TestCase):
                     self.assertTrue(sent, page)
                     self.assertTrue(all(w * h * 8 < size[0] * size[1] for w, h in sent), (page, sent))
 
+    def test_passing_over_a_menu_draws_it_over_the_paused_game_without_drawing_the_game(self):
+        # Each option the pointer or the keys reached, and each page the menu led to, drew the
+        # whole game again under the menu: about 5 ms of every step, whatever the window's size.
+        scene = self.scene
+
+        def shown():
+            return ImageTk.getimage(scene.image_ref).convert('RGB').tobytes()
+
+        with patch.object(scene, 'dev_pointer', side_effect=lambda event: (event.x, event.y)), \
+                patch.object(scene.canvas, 'winfo_width', return_value=1020), \
+                patch.object(scene.canvas, 'winfo_height', return_value=768):
+            self.press('F1')
+            menu = scene.game_menu
+            for page in ('menu', 'options', 'controls'):
+                with self.subTest(page=page):
+                    if page == 'controls':
+                        scene.open_controls_page()
+                    elif page == 'options':
+                        # Led to from the menu: the game under it is not drawn either.
+                        with patch.object(scene, 'render', side_effect=AssertionError('the game was drawn')):
+                            scene.apply_game_action('options')
+                        self.assertEqual(menu.page, 'options')
+                        drawn = shown()
+                        scene.render()
+                        self.assertEqual(shown(), drawn)
+                    points = [(x, y) for y in range(8, 384, 6) for x in range(8, 512, 12) if menu.hover(x, y)]
+                    self.assertGreater(len(points), 3)
+                    scene.render()
+                    steps = [('pointer', point) for point in points[::max(1, len(points) // 8)]]
+                    steps += [('key', 'Down'), ('key', 'Down'), ('key', 'Up')]
+                    for kind, step in steps:
+                        with patch.object(scene, 'render', side_effect=AssertionError('the game was drawn')):
+                            if kind == 'pointer':
+                                scene.dev_hover(SimpleNamespace(x=step[0], y=step[1]))
+                            else:
+                                self.press(step)
+                        drawn = shown()
+                        # The same as the whole window drawn again, game and all.
+                        scene.render()
+                        self.assertEqual(shown(), drawn, (kind, step))
+
+    def test_a_menu_s_game_picture_is_drawn_again_once_it_may_have_changed(self):
+        scene = self.scene
+
+        def shown():
+            return ImageTk.getimage(scene.image_ref).convert('RGB').tobytes()
+
+        self.press('F1')
+        menu = scene.game_menu
+        points = [(x, y) for y in range(8, 384, 6) for x in range(8, 512, 12) if menu.hover(x, y)]
+        kept = scene.kept_menu_underlay()
+        self.assertIsNotNone(kept)
+        # What changes the game draws it again, and the menu then passes over the new picture.
+        scene.player_x += 40
+        scene.render()
+        self.assertIsNot(scene.kept_menu_underlay(), kept)
+        with patch.object(scene, 'render', side_effect=AssertionError('the game was drawn')):
+            scene.dev_hover(SimpleNamespace(x=-1, y=-1))
+            for x, y in points[:3]:
+                with patch.object(scene, 'dev_pointer', return_value=(x, y)):
+                    scene.dev_hover(SimpleNamespace(x=x, y=y))
+        drawn = shown()
+        scene.render()
+        self.assertEqual(shown(), drawn)
+        # Another picture shown since (a cutscene played from the menu), a game that runs or a
+        # closed menu: the game is drawn again.
+        for change, undo in ((lambda: setattr(scene, 'screenshot_viewport', scene.screenshot_viewport.copy()), None),
+                             (lambda: setattr(scene, 'paused', False), lambda: setattr(scene, 'paused', True)),
+                             (lambda: setattr(scene, 'cutscene_replay', object()),
+                              lambda: setattr(scene, 'cutscene_replay', None))):
+            scene.render()
+            change()
+            self.assertIsNone(scene.kept_menu_underlay())
+            with patch.object(scene, 'render') as render:
+                scene.redraw_menu()
+            render.assert_called_once_with()
+            if undo is not None:
+                undo()
+        scene.close_game_menu()
+        self.assertIsNone(scene.kept_menu_underlay())
+
+    def test_f3_over_the_restart_prompt_shows_the_same_picture_when_the_pointer_moves(self):
+        # The tools were drawn again over the captures' picture, which keeps the prompt to
+        # restart that the window does not show under a menu.
+        scene = self.scene
+
+        def shown():
+            return ImageTk.getimage(scene.image_ref).convert('RGB').tobytes()
+
+        scene.death.prompt_visible = True
+        self.press('F3')
+        menu = scene.dev_menu
+        self.assertIsNotNone(menu)
+        scene.render()
+        points = [(x, y) for y in range(8, 384, 4) for x in range(8, 512, 8) if menu.hit(x, y) is not None]
+        self.assertTrue(points)
+        for x, y in points[::max(1, len(points) // 6)] + [(-1, -1)]:
+            with patch.object(scene, 'render', side_effect=AssertionError('the game was drawn')), \
+                    patch.object(scene, 'dev_pointer', return_value=(x, y)):
+                scene.dev_hover(SimpleNamespace(x=x, y=y))
+                scene.redraw_dev_menu()
+            drawn = shown()
+            scene.render()
+            self.assertEqual(shown(), drawn, (x, y))
+
     def test_save_dialog_and_scroll_update_pixels_without_redrawing_gameplay(self):
         scene = self.scene
         scene.apply_game_action('save')
