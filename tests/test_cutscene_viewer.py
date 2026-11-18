@@ -324,7 +324,8 @@ class GalleryTests(unittest.TestCase):
             self.assertEqual([call.args[0] for call in card_image.call_args_list], [1])   # one card, not the shelf
             self.assertIs(gallery.grid_cache[1], grid)                        # the same picture, changed in place
             self.assertEqual(gallery.grid_cache[0], key)
-            (x, y, card), = gallery.take_reveal_patches()
+            (x, y, card, moving), = gallery.take_reveal_patches()
+            self.assertTrue(moving)
             changed = ImageChops.difference(before, grid).getbbox()
             self.assertTrue(x <= changed[0] and y <= changed[1]
                             and changed[2] <= x + card.width and changed[3] <= y + card.height)
@@ -338,9 +339,62 @@ class GalleryTests(unittest.TestCase):
             self.assertEqual(gallery.reveal, {})
             gallery.draw(source, font)
             settled = gallery.card_image(1, font, 2, 2).convert('RGB')
-            (x, y, card), = gallery.take_reveal_patches()
+            (x, y, card, moving), = gallery.take_reveal_patches()
+            self.assertFalse(moving)
             self.assertEqual(card.tobytes(), settled.tobytes())
             self.assertEqual(gallery.reveal_drawn, {})
+
+    def test_reveal_frames_reuse_the_card_s_captions_and_keep_no_stage_after_it(self):
+        # Each frame used to draw the whole card again in RGBA, captions included:
+        # at 3440x1440 eight cards resolving at once took more time than the page had.
+        gallery, font = self.striped_gallery(), CaptionFont()
+        with patch('pop2.cutscene_gallery.chapter_available', return_value=True):
+            gallery.draw(Image.new('RGBA', (1024, 768)), font)
+            gallery.begin_reveal([1])
+            frames = 0
+            with patch.object(gallery, 'caption', wraps=gallery.caption) as caption:
+                while gallery.reveal:
+                    self.assertEqual(gallery.card_image(1, font, 2, 2).mode, 'RGB')
+                    gallery.advance(1 / gallery.REVEAL_RATE)
+                    frames += 1
+                gallery.card_image(1, font, 2, 2)                             # settled
+            self.assertGreater(frames, 30)
+            self.assertEqual(sorted(call.args[2] for call in caption.call_args_list),
+                             sorted(('Chapter 2', CHAPTERS[1].title)))        # once each, for every frame
+            gallery.refresh_reveal(font, 2, 2)
+        self.assertEqual(gallery.reveal_cache, {})                            # dropped with the reveal
+        # A reveal keeps none of its stages: keeping them filled the cache until it dropped the covers.
+        self.assertEqual([key for key in gallery.image_cache if 'veil' in key and key[3]], [])
+
+    def test_a_card_revealed_out_of_sight_waits_until_it_is_in_view_or_settles(self):
+        gallery, font = self.gallery(), CaptionFont()
+        gallery.collection.seen.update(chapter.key for chapter in CHAPTERS)
+        source = Image.new('RGBA', (1024, 768))
+        last = len(CHAPTERS) - 1
+        with patch('pop2.cutscene_gallery.chapter_available', return_value=True):
+            gallery.draw(source, font)
+            self.assertNotIn(last, gallery.visible)
+            gallery.reveal = {last: 0.0, 0: 0.0}
+            gallery.advance(.3)
+            with patch.object(gallery, 'card_image', wraps=gallery.card_image) as card_image:
+                gallery.refresh_reveal(font, 2, 2)
+                self.assertEqual([call.args[0] for call in card_image.call_args_list], [0])
+                card_image.reset_mock()
+                gallery.scroll = gallery.scroll_target = gallery.max_scroll   # scrolled to it
+                gallery.refresh_reveal(font, 2, 2)
+                self.assertEqual([call.args[0] for call in card_image.call_args_list], [last])
+                gallery.scroll = gallery.scroll_target = 0
+                gallery.take_reveal_patches()
+                card_image.reset_mock()
+                gallery.advance(gallery.reveal_seconds)
+                gallery.refresh_reveal(font, 2, 2)                            # both settle, seen or not
+                self.assertEqual(sorted(call.args[0] for call in card_image.call_args_list), [0, last])
+        self.assertEqual([moving for *_place, moving in gallery.take_reveal_patches()], [False, False])
+        settled = gallery.card_image(last, font, 2, 2)
+        rect = gallery.card_rect(last, offset=0)
+        x, y = round((rect[0] - gallery.STRIP[0] + gallery.GRID_PADDING) * 2), round((rect[1] - gallery.STRIP[1]) * 2)
+        self.assertEqual(gallery.grid_cache[1].crop((x, y, x + settled.width, y + settled.height)).tobytes(),
+                         settled.tobytes())
 
     def test_developer_viewer_never_animates_but_r_replays_the_selected_reveal(self):
         gallery = self.gallery()
@@ -629,6 +683,9 @@ class ViewerSceneTests(unittest.TestCase):
             left, top, right, bottom = strip.region
             offset = round(-strip.canvas.coords(strip.item)[0])
             source = ImageTk.getimage(strip.photo).convert('RGB')
+            for item, photo in strip.overlays.values():               # cards being revealed
+                x, y = strip.canvas.coords(item)
+                source.paste(ImageTk.getimage(photo).convert('RGB'), (round(x) + offset, round(y)))
             visible = source.crop((offset, 0, offset + right - left, bottom - top))
             draw = ImageDraw.Draw(visible)
             for item in strip.borders:
@@ -716,6 +773,41 @@ class ViewerSceneTests(unittest.TestCase):
         # A chapter admitted from a loaded save, or seen in the developer viewer, does not animate.
         scene.cutscene_collection.unlock(*CHAPTER_KEYS)
         self.assertEqual(self.open_viewer().reveal, {})
+
+    def test_revealed_cards_change_in_photos_of_their_own_until_they_settle(self):
+        # Copying every frame into the wide strip photo made Tk rescan all of it.
+        from PIL import ImageTk
+
+        scene = self.scene
+        scene.canvas.winfo_width = lambda: 1920
+        scene.canvas.winfo_height = lambda: 1080
+        scene.cutscene_collection = CutsceneCollection()
+        for chapter in CHAPTERS[:5]:
+            scene.mark_cutscene_seen(chapter.key)
+        gallery = self.open_viewer()
+        scene.cancel_cutscene_gallery_tick()
+        self.assertEqual(sorted(gallery.reveal), [0, 1, 2, 3, 4])
+        scene.present_viewport()
+        strip = scene._cutscene_gallery_strip
+        photo = strip.photo
+        start = ImageTk.getimage(photo).tobytes()
+        middle = None
+        while gallery.reveal:
+            gallery.advance(1 / 60)
+            scene.present_viewport()
+            if middle is None and len(strip.overlays) >= 3:
+                middle = self.displayed_gallery()
+                expected = scene.cutscene_gallery_frame(middle.size)
+                self.assertEqual(middle.tobytes(), expected.tobytes())       # what the window shows
+                self.assertIs(strip.photo, photo)
+                self.assertEqual(ImageTk.getimage(photo).tobytes(), start)   # the strip's own photo is untouched
+        self.assertIsNotNone(middle)
+        scene.present_viewport()
+        self.assertEqual(strip.overlays, {})                                  # each settled into the strip
+        self.assertIs(strip.photo, photo)
+        self.assertEqual(self.displayed_gallery().tobytes(),
+                         scene.cutscene_gallery_frame(middle.size).tobytes())
+        self.assertNotEqual(ImageTk.getimage(photo).tobytes(), start)
 
     def test_a_game_s_introduction_unlocks_each_opening_chapter_as_it_begins(self):
         from pop2.cutscenes import chapter_range

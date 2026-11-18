@@ -58,9 +58,19 @@ together, one after another, share one sound.
 
 Only the revealing card is redrawn, and only when it reaches its next frame:
 `CutsceneGallery.refresh_reveal` paints that card into the cached grid in
-place, and the presenter copies the same card into the retained Tk photo. The
-page and the shelf are not rebuilt. Every card's border is drawn last, over
-its picture and its title band.
+place. A card scrolled out of sight waits until it comes into view or
+settles. The page and the shelf are not rebuilt. Every card's border is drawn
+last, over its picture and its title band. A frame starts from a copy of the
+card's face (background, title band and caption, drawn once for each of
+"Chapter N" and the title) and adds the veil or cover, the dissolving title
+below it, the light and the border, all in RGB. While a card resolves, the
+presenter shows its frames in a small Tk photo of its own over the strip;
+when it settles, the card is copied into the strip's retained photo once and
+the small photo removed. Tk rescans a whole photo whenever any part of it
+changes, so copying every frame into the wide strip photo cost several times
+the card itself. With ten chapters revealed at 3440x1440 the reveal used to
+need more processor time than it had (about 1.15 s a second at its busiest,
+offscreen); it now needs about 0.4 s, with the same pixels.
 Chapters admitted from a loaded save, and the developer viewer, do not animate.
 The unlocks are kept in each saved game, and developer level or room jumps
 never unlock a chapter, so a chapter already seen in the loaded game is not

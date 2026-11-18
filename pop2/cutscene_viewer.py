@@ -371,14 +371,23 @@ class CutsceneControls:
                   gallery.scroll_target < gallery.max_scroll, gallery.grid_cache[0], gallery.display_scroll)
         grid_photo = getattr(self, '_cutscene_gallery_grid_photo', None)
         patches = gallery.take_reveal_patches()
+        strip = getattr(self, '_cutscene_gallery_strip', None)
+        if strip is None:
+            strip = self._cutscene_gallery_strip = CutsceneStrip(self)
         if grid_photo is None or grid_photo[0] is not gallery.grid_cache[1]:
             grid_photo = self._cutscene_gallery_grid_photo = (
                 gallery.grid_cache[1], ImageTk.PhotoImage(gallery.grid_cache[1]))
+            strip.clear_overlays()   # the new photo already shows every card as it is
         else:
-            for x, y, card in patches:
+            for x, y, card, revealing in patches:
+                if revealing:
+                    # A card still being revealed is shown over the strip until it settles.
+                    strip.overlay((x, y), card)
+                    continue
                 card_photo = ImageTk.PhotoImage(card)
                 grid_photo[1].tk.call(str(grid_photo[1]), 'copy', str(card_photo), '-to', x, y,
                                       '-compositingrule', 'set')
+                strip.drop_overlay((x, y))
         if (previous is not None and previous[0] is gallery and previous[1].size == size
                 and previous[2] is self.image_ref):
             def upload(region, pixels):
@@ -418,9 +427,6 @@ class CutsceneControls:
             # Even identical "coords" assignments invalidate the whole Tk
             # item. Leave the large static background alone while scrolling.
             self.canvas.coords(item, *position)
-        strip = getattr(self, '_cutscene_gallery_strip', None)
-        if strip is None:
-            strip = self._cutscene_gallery_strip = CutsceneStrip(self)
         if getattr(self, 'screenshot_toast', None) is not None:
             # Toasts can overlap the strip; the full renderer owns that frame.
             strip.hide()

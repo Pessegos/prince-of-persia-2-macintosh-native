@@ -46,6 +46,8 @@ class CutsceneGallery:
     # What the cached grid shows of each reveal, and the cards redrawn since a presenter last asked.
     reveal_drawn: dict = field(default_factory=dict, repr=False)
     reveal_patches: dict = field(default_factory=dict, repr=False)
+    # What the frames of a reveal share (each card's two faces, its cover), dropped when the reveals end.
+    reveal_cache: dict = field(default_factory=dict, repr=False)
 
     PANEL = (8, 10, 504, 363)
     STRIP = (20, 61, 492, 334)
@@ -407,6 +409,7 @@ class CutsceneGallery:
             y += height
 
     def card_image(self, index, font, sx, sy):
+        """The card as an RGB picture, opaque everywhere."""
         chapter = self.chapters[index]
         selected = self.index == index
         unlocked = self.chapter_unlocked(index)
@@ -416,8 +419,6 @@ class CutsceneGallery:
         key = index, id(font), size, selected, unlocked, menu_theme.current().name, round(sx, 4), round(sy, 4)
         if elapsed is None and key in self.card_cache:
             return self.card_cache[key]
-        image = Image.new('RGBA', size, c('#252525'))
-        draw = ImageDraw.Draw(image)
         stroke = max(1, round(min(sx, sy)))
         thumb_bottom = 2 + (self.CARD_WIDTH - 4) * 9 / 16
         thumb_rect = (2, 2, self.CARD_WIDTH - 2, thumb_bottom)
@@ -436,35 +437,26 @@ class CutsceneGallery:
                 cover = None
         stage = self.reveal_stage(index) if unlocked else None
         veiled = not unlocked or (stage is not None and stage < self.reveal_stages)
+        # A locked chapter never shows its title. During a reveal "Chapter N" dissolves
+        # into the title, block by block, while the cover resolves.
+        progress = self.title_dissolve(stage) if unlocked else 0
+        # Each frame of a reveal starts from a copy of the card without its cover
+        # or border, drawn once: at 1440p drawing whole cards in RGBA, with their
+        # captions, spent most of the time the page had for a frame.
+        image = self.card_face(key, font, sx, sy, cover is None, progress >= 1, elapsed is not None).copy()
         if cover is None:
-            if unlocked:
-                self.caption(image, font, 'Unavailable', thumb_rect, c('#999999'), .7, sx, sy)
-            else:
-                draw.rectangle(thumb, fill=c('#101010'))
+            pass   # its face already shows why
         elif veiled:
             # Locked, or resolving after being unlocked: blocks of the cover's own colours.
             image.paste(self.veil(index, cover, stage or 0), thumb[:2])
         else:
-            image.alpha_composite(cover, thumb[:2])
-        band = c('#493c25') if selected else c('#252525')
-        draw.rectangle((stroke, round((thumb_bottom + 1) * sy), size[0] - stroke - 1, size[1] - stroke - 1), fill=band)
-        # A locked chapter never shows its title. During a reveal "Chapter N" dissolves
-        # into the title, block by block, while the cover resolves.
-        caption_rect = (2, thumb_bottom + 1, self.CARD_WIDTH - 2, self.CARD_HEIGHT - 1)
-        named_colour = c('#f4d873') if selected else c('#eeeeee')
-        progress = self.title_dissolve(stage) if unlocked else 0
-        if progress >= 1:
-            self.caption(image, font, chapter.title, caption_rect, named_colour, .72, sx, sy)
-        elif progress <= 0:
-            self.caption(image, font, f'Chapter {index + 1}', caption_rect,
-                         c('#f4d873') if selected else c('#999999'), .72, sx, sy)
-        else:
-            before, after = image.copy(), image.copy()
-            self.caption(before, font, f'Chapter {index + 1}', caption_rect,
-                         c('#f4d873') if selected else c('#999999'), .72, sx, sy)
-            self.caption(after, font, chapter.title, caption_rect, named_colour, .72, sx, sy)
-            image = Image.composite(after, before, self.dissolve_mask(index, progress, size))
-            draw = ImageDraw.Draw(image)
+            image.paste(self.opaque_cover(index, cover, elapsed is not None), thumb[:2])
+        if 0 < progress < 1:
+            # The captions lie below the cover: only there does the title replace "Chapter N".
+            box = 0, thumb[3], *size
+            image.paste(self.card_face(key, font, sx, sy, cover is None, True, True).crop(box), box[:2],
+                        self.dissolve_mask(index, progress, size, top=thumb[3]))
+        draw = ImageDraw.Draw(image)
         outline = c('#f4d873') if selected else c('#626262')
         glow = self.reveal_glow(index) if unlocked else None
         if glow is not None:
@@ -491,11 +483,56 @@ class CutsceneGallery:
                 for offset, breadth in ((0, wide * .16), (wide * .23, wide * .04)):
                     right, left = head - offset, head - offset - breadth
                     pen.polygon(((left, 0), (right, 0), (right - lean, tall), (left - lean, tall)), fill=90)
-                image.paste(Image.new('RGBA', cover.size, bright + (255,)), thumb[:2], shine)
+                if lit_box := shine.getbbox():
+                    image.paste(bright, (thumb[0] + lit_box[0], thumb[1] + lit_box[1],
+                                         thumb[0] + lit_box[2], thumb[1] + lit_box[3]), shine.crop(lit_box))
         # Last, so that neither the picture nor the title's band lies over the border.
         draw.rectangle((0, 0, size[0] - 1, size[1] - 1), outline=outline, width=stroke * (2 if selected else 1))
         if elapsed is None:
             self.card_cache[key] = image
+        return image
+
+    def card_face(self, key, font, sx, sy, plain, named, keep):
+        """A card without its cover or border: its background, the title's band and
+        either caption, "Chapter N" or the title (named). A plain card, without a
+        cover, shows why instead. keep holds it for the frames of a reveal."""
+        face_key = *key, plain, named
+        if face_key in self.reveal_cache:
+            return self.reveal_cache[face_key]
+        index, _font, size, selected, unlocked = key[:5]
+        image = Image.new('RGBA', size, c('#252525'))
+        draw = ImageDraw.Draw(image)
+        stroke = max(1, round(min(sx, sy)))
+        thumb_bottom = 2 + (self.CARD_WIDTH - 4) * 9 / 16
+        thumb_rect = (2, 2, self.CARD_WIDTH - 2, thumb_bottom)
+        if plain:
+            if unlocked:
+                self.caption(image, font, 'Unavailable', thumb_rect, c('#999999'), .7, sx, sy)
+            else:
+                draw.rectangle(tuple(round(value * (sx if i % 2 == 0 else sy)) for i, value in enumerate(thumb_rect)),
+                               fill=c('#101010'))
+        band = c('#493c25') if selected else c('#252525')
+        draw.rectangle((stroke, round((thumb_bottom + 1) * sy), size[0] - stroke - 1, size[1] - stroke - 1), fill=band)
+        caption_rect = (2, thumb_bottom + 1, self.CARD_WIDTH - 2, self.CARD_HEIGHT - 1)
+        if named:
+            self.caption(image, font, self.chapters[index].title, caption_rect,
+                         c('#f4d873') if selected else c('#eeeeee'), .72, sx, sy)
+        else:
+            self.caption(image, font, f'Chapter {index + 1}', caption_rect,
+                         c('#f4d873') if selected else c('#999999'), .72, sx, sy)
+        image = image.convert('RGB')
+        if keep:
+            self.reveal_cache[face_key] = image
+        return image
+
+    def opaque_cover(self, index, cover, keep):
+        """The cover as the card shows it, laid on the card's own background."""
+        key = index, cover.size, 'opaque'
+        if key in self.reveal_cache:
+            return self.reveal_cache[key]
+        image = Image.alpha_composite(Image.new('RGBA', cover.size, c('#252525')), cover).convert('RGB')
+        if keep:
+            self.reveal_cache[key] = image
         return image
 
     def title_dissolve(self, stage):
@@ -506,12 +543,27 @@ class CutsceneGallery:
         start, end = first * self.reveal_stages, last * self.reveal_stages
         return max(0.0, min(1.0, (stage - start) / (end - start)))
 
-    def dissolve_mask(self, index, progress, size):
+    def dissolve_mask(self, index, progress, size, *, top=0):
         """Which pixels already show the title, the way the game's story text dissolves
         (DrawDisolveData 15:31ba, pop2.intro.dissolve_words): the card is cut into groups
         of four page pixels a row, taken in a shuffled order; the first pass copies one
         pair of each group (alternately the left and the right pair), the second pass
-        their other pair in the same order. Hard-edged, nothing blended."""
+        their other pair in the same order. Hard-edged, nothing blended. The mask
+        covers the card's rows from top down."""
+        # Each pixel's turn, scaled to the card once for all the frames of a reveal.
+        key = index, 'dissolve', size, top
+        if key not in self.reveal_cache:
+            rank = Image.fromarray(self.dissolve_rank(index), 'I')
+            width, height = rank.size
+            rank = rank.resize((round(width * size[0] / self.CARD_WIDTH), round(height * size[1] / self.CARD_HEIGHT)),
+                               Image.Resampling.NEAREST).crop((0, top, *size))
+            self.reveal_cache[key] = np.asarray(rank), width * height
+        rank, count = self.reveal_cache[key]
+        shown = rank < int(progress * count / 2 + 1e-6)   # pairs copied so far, of two per group
+        return Image.fromarray(np.where(shown, 255, 0).astype(np.uint8), 'L')
+
+    def dissolve_rank(self, index):
+        """When each of a card's page pixels takes the title's, in its dissolve."""
         width = max(4, math.ceil(self.CARD_WIDTH / 4) * 4)
         height = max(1, math.ceil(self.CARD_HEIGHT))
         key = index, 'dissolve', width, height
@@ -528,35 +580,44 @@ class CutsceneGallery:
                 for half in (0, 1):
                     rank[rows, lefts + pair * 2 + half] = when
             self.image_cache[key] = rank
-        rank = self.image_cache[key]
-        shown = rank < int(progress * rank.size / 2 + 1e-6)   # pairs copied so far, of two per group
-        mask = Image.fromarray(np.where(shown, 255, 0).astype(np.uint8), 'L')
-        return mask.resize((round(width * size[0] / self.CARD_WIDTH), round(height * size[1] / self.CARD_HEIGHT)),
-                           Image.Resampling.NEAREST).crop((0, 0, *size))
+        return self.image_cache[key]
 
     def veil(self, index, cover, stage):
         """The cover at one stage of its veil: 0 as a locked chapter shows it, reveal_stages whole."""
+        # Only the locked veil is kept: a reveal shows each later stage once, and
+        # keeping them all filled the cache until it dropped every cover.
         key = index, cover.size, 'veil', stage, menu_theme.current().name
-        if key not in self.image_cache:
-            if stage >= self.reveal_stages:
-                picture = cover.convert('RGB')
+        if key in self.image_cache:
+            return self.image_cache[key]
+        if stage >= self.reveal_stages:
+            picture = cover.convert('RGB')
+        else:
+            columns = (self.VEIL_COLUMNS, *self.REVEAL_COLUMNS)[stage]
+            rgb = index, cover.size, 'rgb'
+            if rgb in self.reveal_cache:
+                source = self.reveal_cache[rgb]
             else:
-                columns = (self.VEIL_COLUMNS, *self.REVEAL_COLUMNS)[stage]
-                blocks = cover.convert('RGB').resize(
-                    (columns, max(1, round(columns * cover.height / cover.width))), Image.Resampling.BOX)
-                depth = self.VEIL_DEPTH * (1 - stage / self.reveal_stages)
-                blocks = Image.blend(blocks, Image.new('RGB', blocks.size, c('#101010')), depth)
-                picture = blocks.resize(cover.size, Image.Resampling.NEAREST)
+                source = cover.convert('RGB')
+                if stage:   # a reveal's: its other stages need it too
+                    self.reveal_cache[rgb] = source
+            blocks = source.resize(
+                (columns, max(1, round(columns * cover.height / cover.width))), Image.Resampling.BOX)
+            depth = self.VEIL_DEPTH * (1 - stage / self.reveal_stages)
+            blocks = Image.blend(blocks, Image.new('RGB', blocks.size, c('#101010')), depth)
+            picture = blocks.resize(cover.size, Image.Resampling.NEAREST)
+        if stage == 0:
             self.image_cache[key] = picture
-        return self.image_cache[key]
+        return picture
 
     def refresh_reveal(self, font, sx, sy):
         """Redraw the cards whose reveal has moved on, straight into the cached grid.
 
         Only those cards are drawn, not the shelf, and only when a reveal has
-        reached its next frame. Each redrawn card is also kept in ``reveal_patches``, as
-        (x, y, picture) in the grid's pixels, for a presenter that holds a
-        copy of the grid (the retained Tk photo) to bring up to date.
+        reached its next frame; a card out of sight waits until it scrolls into
+        view or settles. Each redrawn card is also kept in ``reveal_patches``, as
+        (x, y, picture, moving) in the grid's pixels, for a presenter that holds a
+        copy of the grid (the retained Tk photo) to bring up to date. moving is
+        true while the card has further frames to show.
         """
         if self.grid_cache is None:
             return
@@ -565,15 +626,20 @@ class CutsceneGallery:
             elapsed = self.reveal_frame(index)
             if index in self.reveal_drawn and self.reveal_drawn[index] == elapsed:
                 continue
+            shown = self.card_rect(index)
+            if elapsed is not None and not (shown[2] > self.STRIP[0] and shown[0] < self.STRIP[2]):
+                continue   # out of sight: drawn once it scrolls into view, or settles
             rect = self.card_rect(index, offset=0)
             position = (round((rect[0] - self.STRIP[0] + self.GRID_PADDING) * sx), round((rect[1] - self.STRIP[1]) * sy))
-            card = self.card_image(index, font, sx, sy).convert('RGB')
+            card = self.card_image(index, font, sx, sy)
             grid.paste(card, position)
-            self.reveal_patches[index] = (*position, card)
+            self.reveal_patches[index] = (*position, card, elapsed is not None)
             if elapsed is None:
                 del self.reveal_drawn[index]
             else:
                 self.reveal_drawn[index] = elapsed
+        if not self.reveal and not self.reveal_drawn:
+            self.reveal_cache.clear()
 
     def take_reveal_patches(self):
         patches, self.reveal_patches = tuple(self.reveal_patches.values()), {}
@@ -632,13 +698,13 @@ class CutsceneGallery:
         grid_key = (viewport.size, visible, id(font), self.index,
                     tuple(sorted(self.collection.seen)), self.chapters, self.developer, theme.name)
         if self.grid_cache is None or self.grid_cache[0] != grid_key:
-            grid = Image.new('RGBA', (width + round((self.max_scroll + 2 * self.GRID_PADDING) * sx), height), c('#181818'))
+            grid = Image.new('RGB', (width + round((self.max_scroll + 2 * self.GRID_PADDING) * sx), height), c('#181818'))
             for index in range(len(self.chapters)):
                 rect = self.card_rect(index, offset=0)
                 card = self.card_image(index, font, sx, sy)
-                grid.alpha_composite(card, (round((rect[0] - self.STRIP[0] + self.GRID_PADDING) * sx),
-                                             round((rect[1] - self.STRIP[1]) * sy)))
-            self.grid_cache = grid_key, grid.convert('RGB')
+                grid.paste(card, (round((rect[0] - self.STRIP[0] + self.GRID_PADDING) * sx),
+                                  round((rect[1] - self.STRIP[1]) * sy)))
+            self.grid_cache = grid_key, grid
             self.reveal_drawn, self.reveal_patches = {index: self.reveal_frame(index) for index in self.reveal}, {}
         else:
             self.refresh_reveal(font, sx, sy)

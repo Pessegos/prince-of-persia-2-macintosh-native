@@ -3,6 +3,8 @@
 import tkinter as tk
 from types import SimpleNamespace
 
+from PIL import ImageTk
+
 from pop2.menu_theme import c
 
 
@@ -20,6 +22,7 @@ class CutsceneStrip:
         self.photo = None
         self.offset = None
         self.shown = False
+        self.overlays = {}   # grid position -> (canvas item, its photo)
         for sequence, callback in (
                 ('<Button-1>', scene.dev_click), ('<Double-Button-1>', scene.dev_double_click),
                 ('<ButtonRelease-1>', scene.dev_release), ('<Motion>', scene.dev_hover),
@@ -63,6 +66,30 @@ class CutsceneStrip:
             if rect is not None:
                 x1, y1, x2, y2 = rect
                 self.canvas.coords(item, x1 - self.offset, y1, x2 - self.offset, y2)
+
+    def overlay(self, position, picture):
+        """Show a card that changes on every frame of its reveal in a photo of its own,
+        over the strip's. Tk rescans the whole of a photo whenever a part of it
+        changes: copying each frame into the wide strip cost several times more."""
+        entry = self.overlays.get(position)
+        if entry is not None and (entry[1].width(), entry[1].height()) == picture.size:
+            entry[1].paste(picture)
+            return
+        self.drop_overlay(position)
+        photo = ImageTk.PhotoImage(picture, master=self.canvas)
+        item = self.canvas.create_image(position[0] - (self.offset or 0), position[1], anchor='nw',
+                                        image=photo, tags='content')
+        self.canvas.tag_lower(item, self.borders[0])   # under the hover border
+        self.overlays[position] = item, photo
+
+    def drop_overlay(self, position):
+        entry = self.overlays.pop(position, None)
+        if entry is not None:
+            self.canvas.delete(entry[0])
+
+    def clear_overlays(self):
+        for position in tuple(self.overlays):
+            self.drop_overlay(position)
 
     def hide(self):
         if self.shown:
