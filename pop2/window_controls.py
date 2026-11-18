@@ -534,8 +534,8 @@ class WindowControls(InputRouting):
             if changed or moving:
                 self.redraw_screenshot_gallery()
             if gallery.reads.pending or gallery.scrolling or gallery.animation_running or gallery.burn_seconds is not None:
-                # Otherwise at the lava's next frame, the burn's next step or its sound: a burn
-                # ticked 60 times a second showed its steps for 70 or 88 ms, not each for 83.
+                # Otherwise at the lava's next frame or the burn's (see next_change): ticks of
+                # their own caught the burn's steps after 70 or 88 ms, not each after 83.
                 wait = None if gallery.scrolling else gallery.next_change()
                 if gallery.scrolling:
                     delay = max(1, round(1000 / 120 - (time.perf_counter() - now) * 1000))

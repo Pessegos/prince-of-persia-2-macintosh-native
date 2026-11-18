@@ -1,3 +1,4 @@
+import math
 import os
 from pathlib import Path
 import random
@@ -734,16 +735,29 @@ class ScreenshotGalleryTests(unittest.TestCase):
                 first = gallery.draw(source, font, visible=True).tobytes()
                 self.assertEqual(gallery.draw(source, font, visible=True).tobytes(), first)
 
-    def test_a_burn_asks_for_a_new_frame_only_on_its_steps(self):
+    def test_a_burning_picture_moves_on_every_frame_and_its_fire_on_the_game_s_steps(self):
+        # In the game's steps alone, the picture's fall to the lava was five places.
         self.png()
         gallery = self.gallery()
         gallery.burn_seconds, gallery.burn_target = 0.0, gallery.entry
-        gallery.burn_image = Image.new('RGBA', (20, 15), 'red')
-        frames = [gallery.animate(1 / 60) for _ in range(round(gallery.BURN_SECONDS * 60) + 3)]
-        self.assertIsNone(gallery.burn_seconds)
+        gallery.burn_image = Image.effect_noise((40, 30), 60).convert('RGBA')
+        frames = []
+        while gallery.burn_seconds is not None and len(frames) < 100:
+            frames.append(gallery.animate(1 / 60))
         self.assertFalse(gallery.animation_running)   # no lava frames in this test
-        # Twelve steps a second: the eleven after the first and the burn's end, not 60 frames.
-        self.assertEqual(sum(frames), 12)
+        self.assertTrue(all(frames))                  # each of the burn's frames is drawn
+        self.assertIn(len(frames), (60, 61))
+        source, font = Image.new('RGBA', (1434, 1080)), self.font()
+        drawn = {}
+        for seconds in (0.10, 0.14, 0.50, 0.53):   # two frames in each of two of the fire's steps
+            gallery.burn_seconds, gallery.burn_image = seconds, Image.effect_noise((40, 30), 60).convert('RGBA')
+            gallery.draw(source, font, visible=True)
+            drawn[seconds] = gallery.held_rect, gallery.draw(source, font, visible=True).crop(gallery.held_rect)
+        gallery.burn_seconds = None
+        self.assertNotEqual(drawn[0.10][0], drawn[0.14][0])   # falling between the fire's steps
+        self.assertNotEqual(drawn[0.50][0], drawn[0.53][0])   # and sinking
+        steps = [math.floor(seconds * 12) for seconds in drawn]
+        self.assertEqual(steps, [1, 1, 6, 6])
 
     def test_a_burn_s_clock_starts_with_its_first_frame(self):
         # The frame that closes the confirmation is the page's costliest; counting the time it

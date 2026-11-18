@@ -441,6 +441,7 @@ class ScreenshotGallery:
         self.folder_error, self.revision = '', 0
         self.reads = GalleryReads(SHARED_READS)
         self.text_cache, self.image_cache = {}, {}
+        self.burn_fits = {}   # the burning picture at its last sizes
         self.modal_cache, self.art_revision = {}, 0
         self.surface_cache = {}
         self.backdrops = {}   # id of a picture under the page -> (it, it darkened)
@@ -712,6 +713,7 @@ class ScreenshotGallery:
         self.reads.close()
         self.text_cache.clear()
         self.image_cache.clear()
+        self.burn_fits.clear()
         self.modal_cache.clear()
         self.surface_cache.clear()
         self.backdrops.clear()
@@ -753,14 +755,15 @@ class ScreenshotGallery:
             self.scroll, self.velocity = self.scroll_target, 0
 
     def next_change(self):
-        """Seconds until the lava's next frame, the burn's next step or its sound, whichever
-        comes first; None when neither runs. The window waits that long, so that each step
-        lasts its twelfth of a second: caught by a tick 60 times a second, they took 70 or 88 ms."""
+        """Seconds until the lava's next frame or the burn's, whichever comes first; None when
+        neither runs. The window waits that long. The burn's frames are its sixtieths of a second,
+        which hold the fire's steps and its sound: caught by ticks of their own, the steps took
+        70 or 88 ms in turn rather than 83."""
         waits = []
         if self.burn_seconds is not None and not (self.choosing or self.deleting):
             if self.burn_clock == 'waiting':
                 return 0
-            waits.append((math.floor(self.burn_seconds * 12 + 1e-9) + 1) / 12 - self.burn_seconds)
+            waits.append((math.floor(self.burn_seconds * 60 + 1e-9) + 1) / 60 - self.burn_seconds)
             if not self.burn_heard(self.burn_seconds):
                 waits.append(self.burn_cue_seconds - self.burn_seconds)
         if self.animation_running:
@@ -788,9 +791,10 @@ class ScreenshotGallery:
             if self.burn_seconds >= self.BURN_SECONDS:
                 self.burn_seconds, self.burn_image = None, None
                 self.burn_target, self.burn_clock = None, None
+                self.burn_fits.clear()
                 icon_changed = True
-            else:   # drawn in the game's steps, as draw_held_image counts them
-                icon_changed = (self.burn_clock == 'waiting'
+            else:   # the picture moves on each frame (see draw_held_image), its fire on the steps
+                icon_changed = (self.burn_clock == 'waiting' or burning > 0
                                 or math.floor(self.burn_seconds * 12 + 1e-9) != step)
         if self.animation_running:
             self.icon_seconds += max(0, seconds)
@@ -1001,14 +1005,16 @@ class ScreenshotGallery:
             self.confirm_delete()
         return 'changed'
 
-    def fitted_held(self, raw, entry, size):
-        """A held or burning picture at its size on the page; grey while it is still being read."""
+    def fitted_held(self, raw, entry, size, cache=None):
+        """A held or burning picture at its size on the page; grey while it is still being read.
+        A falling picture changes size on each frame: it keeps its own few, not the thumbnails'."""
+        cache, limit = (self.image_cache, 48) if cache is None else (cache, 2)
         fit_key = 'held', entry, size
-        if fit_key not in self.image_cache:
+        if fit_key not in cache:
             sprite = (ImageOps.contain(raw, size, Image.Resampling.NEAREST).convert('RGBA') if raw is not None
                       else Image.new('RGBA', size, c('#999999')))
-            remember(self.image_cache, fit_key, sprite, 48)
-        return self.image_cache[fit_key]
+            remember(cache, fit_key, sprite, limit)
+        return cache[fit_key]
 
     def held_sprite(self, sx, sy, point):
         """The picture being dragged, fitted to its box, and its top left corner in pixels."""
@@ -1273,18 +1279,22 @@ class ScreenshotGallery:
             raw = self.burn_image
             if self.burn_clock == 'waiting':
                 self.burn_clock = 'drawn'   # its clock starts now: see animate
-            # The picture falls to the lava and burns away from its foot, in the game's steps.
+            # The picture falls to the lava and burns away from its foot. It moves at the
+            # window's rate, as it moved while it was held: in the game's steps alone its fall
+            # was five places. Its fire still flickers and sparks in those steps.
             step = math.floor(self.burn_seconds * 12 + 1e-9)
             progress = min(1, step / 12 / self.BURN_SECONDS)
-            fall = min(1, progress / self.BURN_LANDING)
-            sinking = max(0, progress - self.BURN_LANDING) / (1 - self.BURN_LANDING)
+            moved = min(1, self.burn_seconds / self.BURN_SECONDS)
+            fall = min(1, moved / self.BURN_LANDING)
+            sinking = max(0, moved - self.BURN_LANDING) / (1 - self.BURN_LANDING)
             scale = 1 - 0.45 * fall
-            width, height = max(1, round(56 * scale)), max(1, round(42 * scale))
+            width, height = 56 * scale, 42 * scale
             x = self.DELETE[0] + 21
             # It falls until its foot meets the pool's middle, then sinks into it as it burns.
             y = (self.DELETE[1] - 24 + (24 + self.BURN_ENTRY - height / 2) * fall * fall
                  + self.BURN_SINK * height * sinking)
-            sprite = self.fitted_held(raw, self.burn_target, (max(1, round(width * sx)), max(1, round(height * sy))))
+            sprite = self.fitted_held(raw, self.burn_target, (max(1, round(width * sx)), max(1, round(height * sy))),
+                                      self.burn_fits)
             left, top = point(x, y)
             left, top = left - sprite.width // 2, top - sprite.height // 2
             block = max(1, round(min(sx, sy)))
