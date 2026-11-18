@@ -351,6 +351,42 @@ def panel(image, rect, clear_sides=False, limit=_LIMIT):
     image.paste(picture, shown[:2], picture)
 
 
+_held = None        # the picture that menus are drawn over again while it stays as it is
+_grounds = {}       # its page grounds, by theme, panel and frame
+
+
+def hold(picture):
+    """Declare ``picture`` the one the open menu is drawn over again, unchanged, until another
+    (or None) is held: ``ground`` then keeps the pages' grounds over it."""
+    global _held
+    if picture is not _held:
+        _held = picture
+        _grounds.clear()
+
+
+def ground(viewport, rect=None, clear_sides=False, limit=_LIMIT):
+    """A page's ground: ``viewport`` under the theme's veil, with the panel at ``rect`` (none
+    without one), as a new picture to draw the page on.
+
+    Over the held picture it is drawn once for each panel: darkening the whole picture and
+    laying the frame took about half of a menu's drawing, again for each option the pointer
+    reached.
+    """
+    theme = _current
+    key = theme.name, rect, clear_sides, limit
+    kept = _grounds.get(key) if viewport is _held else None
+    if kept is None or kept[0] is not theme:
+        drawn = Image.alpha_composite(viewport, Image.new('RGBA', viewport.size, (0, 0, 0, theme.dim)))
+        if rect is not None:
+            panel(drawn, rect, clear_sides, limit)
+        if viewport is not _held:
+            return drawn
+        if len(_grounds) >= 8:
+            _grounds.clear()
+        kept = _grounds[key] = theme, drawn
+    return kept[1].copy()
+
+
 def panel_scaled(image, rect, point, limit=None):
     """Draw a framed panel on a page drawn at the window's resolution.
 
@@ -1017,17 +1053,19 @@ def watermark(image, rect, point=None, avoid=(), within=None):
             keep &= ~((rows >= top - box[1]) & (rows <= bottom - box[1])
                       & (columns >= left - box[0]) & (columns <= right - box[0]))
         spots = spots[keep]
-    pixels = numpy.array(image.crop(box).convert('RGBA'))
-    flat = pixels.reshape(-1, 4)
-    under = flat[spots, :3].astype(numpy.uint32)
-    packed = under[:, 0] << 16 | under[:, 1] << 8 | under[:, 2]
+    part = image.crop(box)
+    pixels = numpy.array(part if part.mode == 'RGBA' else part.convert('RGBA'))
+    # Each pixel as one number, red in its lowest byte, compared without its alpha.
+    flat = pixels.view('<u4').reshape(-1)
+    under = flat[spots] & 0xFFFFFF
     toward = _rgb(theme.mark)
     changed = False
     for colour in {_rgb(theme.colour(role)) for role in ('panel', 'row', 'row_dark', 'selected', 'hover')}:
-        same = spots[packed == (colour[0] << 16 | colour[1] << 8 | colour[2])]
+        same = spots[under == (colour[0] | colour[1] << 8 | colour[2] << 16)]
         if len(same):
-            flat[same] = tuple(round(a + (b - a) * _MARK_STRENGTH.get(theme.name, 0.4))
-                               for a, b in zip(colour, toward)) + (255,)
+            red, green, blue = (round(a + (b - a) * _MARK_STRENGTH.get(theme.name, 0.4))
+                                for a, b in zip(colour, toward))
+            flat[same] = red | green << 8 | blue << 16 | 0xFF000000
             changed = True
     if changed:
         image.paste(Image.fromarray(pixels, 'RGBA'), box)

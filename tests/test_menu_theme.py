@@ -605,6 +605,48 @@ class MenuThemeTest(unittest.TestCase):
                 self.assertNotEqual(limited.tobytes(), page.tobytes())   # the sign is back on the part
                 self.assertEqual(limited.tobytes(), whole.tobytes())
 
+    def test_a_page_s_ground_over_the_held_picture_is_drawn_once_for_each_panel(self):
+        # Darkening the whole picture and laying the frame took about half of a menu's
+        # drawing, again for each option the pointer reached.
+        self.addCleanup(menu_theme.hold, None)
+        picture = Image.effect_noise((512, 384), 60).convert('RGBA')
+        rect = GameMenu.PANEL
+
+        def drawn(theme, rect, clear_sides=False):
+            menu_theme.use(theme)
+            image = Image.alpha_composite(picture, Image.new('RGBA', picture.size, (0, 0, 0, theme.dim)))
+            menu_theme.panel(image, rect, clear_sides)
+            return image.tobytes()
+
+        menu_theme.hold(picture)
+        for theme in (SPIDER, PALACE, NEUTRAL):
+            with self.subTest(theme=theme.name):
+                reference = drawn(theme, rect, True)
+                first = menu_theme.ground(picture, rect, True)
+                self.assertEqual(first.tobytes(), reference)
+                first.paste((255, 0, 0, 255), (0, 0, 512, 384))   # each caller draws on its own
+                with mock.patch('pop2.menu_theme.panel', side_effect=AssertionError('drawn again')),                         mock.patch('pop2.menu_theme.Image.alpha_composite', side_effect=AssertionError('darkened')):
+                    again = menu_theme.ground(picture, rect, True)
+                self.assertEqual(again.tobytes(), reference)
+                # Another panel or frame is another ground.
+                self.assertEqual(menu_theme.ground(picture, GameMenu.DIALOG).tobytes(), drawn(theme, GameMenu.DIALOG))
+                self.assertEqual(menu_theme.ground(picture, rect).tobytes(), drawn(theme, rect))
+        # A theme of the same name is not taken for another; a picture that is not held is
+        # darkened every time, and holding another lets the kept grounds go.
+        menu_theme.use(SPIDER)
+        twin = menu_theme.MenuTheme('spider', dim=10)
+        menu_theme.use(twin)
+        self.assertEqual(menu_theme.ground(picture, rect, True).tobytes(), drawn(twin, rect, True))
+        other = picture.copy()
+        with mock.patch('pop2.menu_theme.panel') as laid:
+            menu_theme.ground(other, rect)
+            menu_theme.ground(other, rect)
+        self.assertEqual(laid.call_count, 2)
+        menu_theme.hold(other)
+        self.assertEqual(menu_theme._grounds, {})
+        menu_theme.ground(picture, rect)
+        self.assertEqual(menu_theme._grounds, {})
+
     def test_sign_caches_keep_only_recent_window_sizes(self):
         menu_theme.use(RUINS)
         self.addCleanup(menu_theme.use, None)

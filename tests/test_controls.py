@@ -479,6 +479,33 @@ class ControlsPageTests(unittest.TestCase):
         self.assertGreater(top, max(tab[3] for tab in ControlsPage.TABS) + 8)
         self.assertLess(bottom, ControlsPage.LEGEND_TOP - 8)
 
+    def test_the_keyboard_laid_at_once_looks_as_laid_key_by_key(self):
+        # Drawn key by key over the page, it took most of the controls page's time for each
+        # option the pointer reached; it is now one picture, drawn once.
+        origin, unit = ControlsPage.KEYBOARD_ORIGIN, ControlsPage.KEYBOARD_UNIT
+        left, top, right, bottom = keyboard_bounds(origin, unit)
+        keys = keyboard_keys(origin, unit)
+
+        def key_by_key(image, colors, lit):
+            holes = tuple((x0 - left, y0 - top, x1 - left, y1 - top) for _token, _label, (x0, y0, x1, y1) in keys)
+            image.alpha_composite(controls_art.keyboard_case(right - left + 1, bottom - top + 1, holes), (left, top))
+            for token, label, rect in keys:
+                draw_keycap(image, rect, token, label, colors.get(token))
+            controls_art.draw_leds(image, led_rect(origin, unit), lit)
+
+        noise = Image.effect_noise((512, 384), 80).convert('RGBA')
+        grounds = (noise, Image.new('RGBA', (512, 384), (24, 24, 24, 255)), Image.new('RGBA', (512, 384)))
+        page = ControlsPage(Bindings('keyboard'), Bindings('controller'))
+        colors = (page.keyboard_colors(), {}, {'a': ACTION_COLORS['left'], 'space': ACTION_COLORS['up']})
+        for ground, token_colors, lit in itertools.product(grounds, colors, (('NUM',), frozenset(), ('CAPS', 'SCRL'))):
+            expected, laid = ground.copy(), ground.copy()
+            key_by_key(expected, token_colors, lit)
+            controls_page.draw_keyboard(laid, origin, unit, token_colors, lit)
+            self.assertEqual(laid.tobytes(), expected.tobytes())
+        controls_page.draw_keyboard(noise.copy(), origin, unit, colors[0], ('NUM',))
+        with patch('pop2.controls_page.draw_keycap', side_effect=AssertionError('drawn again')):
+            controls_page.draw_keyboard(noise.copy(), origin, unit, dict(colors[0]), frozenset({'NUM'}))
+
     def test_lock_lights_follow_the_real_keyboard(self):
         page = self.page()
         self.assertEqual(page.locks, {'NUM'})  # until the real state is read
@@ -637,6 +664,32 @@ class PadArtTests(unittest.TestCase):
                 if button in art.points or button.endswith(('shoulder', 'trigger')):
                     with self.subTest(style=style, button=button):
                         self.assertIn(button, members)
+
+    def test_a_callout_draws_the_line_it_worked_out_once(self):
+        # Each pixel's colour was worked out from the pad under it for each option the
+        # pointer reached: most of the controller page's drawing.
+        for style in ('xbox', 'playstation', 'nintendo'):
+            page = ControlsPage(Bindings('keyboard'), Bindings('controller'),
+                                pads=(PadState(1, 'Pad', style),))
+            page.device = 'controller'
+            art = controls_art.pad_art(page.style)
+            origin = page.PAD_ORIGIN
+            for _name, _side, _line, points, _rows in page.callouts():
+                with self.subTest(style=style, line=points[0]):
+                    expected = Image.effect_noise((512, 384), 50).convert('RGBA')
+                    drawn = expected.copy()
+                    for x, y in line_pixels(points):
+                        px, py = x - origin[0], y - origin[1]
+                        over = ((0 <= px < art.image.width and 0 <= py < art.image.height)
+                                and art.image.getpixel((px, py)))
+                        light = over and over[3] and sum(over[:3]) > 330
+                        expected.putpixel((x, y), (*(controls_art.INK if light else controls_page.LINE), 255))
+                    controls_page.draw_callout(drawn, points, art, origin)
+                    self.assertEqual(drawn.tobytes(), expected.tobytes())
+                    with patch('pop2.controls_page.line_pixels', side_effect=AssertionError('worked out again')):
+                        again = expected.copy()
+                        controls_page.draw_callout(again, points, art, origin)
+                    self.assertEqual(again.tobytes(), expected.tobytes())
 
     def test_moving_a_button_changes_only_its_own_callout(self):
         def labels(page):

@@ -368,7 +368,10 @@ class GameMenu:
             return self.screenshot_gallery.draw(viewport, font)
         if self.page == 'saves':
             return self.save_browser.draw(viewport, font)
-        image = Image.alpha_composite(viewport, Image.new("RGBA", viewport.size, (0, 0, 0, menu_theme.current().dim)))
+        panel = {"screenshots": self.SCREENSHOT_PANEL, "menu": self.PANEL, "options": self.OPTIONS_PANEL,
+                 "about": self.ABOUT_DIALOG, "hall": self.HALL_PANEL}.get(self.page, self.DIALOG)
+        # The menu's scroll arrows sit at the panel's right edge: keep the frame clear of them.
+        image = menu_theme.ground(viewport, panel, clear_sides=self.page == "menu")
         draw = ImageDraw.Draw(image)
         gold, white, muted = c("#f4d873"), c("#eeeeee"), c("#999999")
 
@@ -409,11 +412,6 @@ class GameMenu:
             # The game's NFNT replaces '+' with a trademark glyph.
             text(item.shortcut.replace("+", "-"), rect[2] - 10, y, color, "right", 100)
 
-        panel = {"screenshots": self.SCREENSHOT_PANEL, "menu": self.PANEL, "options": self.OPTIONS_PANEL,
-                 "about": self.ABOUT_DIALOG, "hall": self.HALL_PANEL}.get(self.page, self.DIALOG)
-        # The menu's scroll arrows sit at the panel's right edge: keep the frame clear of them.
-        menu_theme.panel(image, panel, clear_sides=self.page == "menu")
-        draw = ImageDraw.Draw(image)
         panel_top = panel[1]
         if self.page == "screenshots":
             text("Screenshots", 256, panel_top + 18, gold, "center")

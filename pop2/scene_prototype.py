@@ -3947,6 +3947,8 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         what only moves the menu's focus does not draw the game again."""
         menus = self.dev_menu is not None or self.game_menu is not None
         self.menu_underlay = (viewport, self.screenshot_viewport) if menus else None
+        # Nothing draws into the picture under a menu: the pages' grounds over it are kept.
+        menu_theme.hold(viewport if menus else None)
         if menus:
             # The port's menus take the colours and frame of the level being played.
             menu_theme.use(menu_theme.theme_for(self.game))
@@ -3960,6 +3962,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
             # A page drawn elsewhere (the Cutscene Viewer) leaves the picture itself, which the
             # notice may then be drawn into.
             self.menu_underlay = None
+            menu_theme.hold(None)
         return self.draw_screenshot_notice(drawn)
 
 

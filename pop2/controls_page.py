@@ -5,6 +5,7 @@ action's keys lit; the remap view lists two keys per action. It edits the
 window's live Bindings, so a change works at once; the window keeps it.
 """
 
+import functools
 import sys
 
 from PIL import Image, ImageDraw
@@ -212,13 +213,27 @@ def lock_lights():
 
 
 def draw_keyboard(image, origin, unit, token_colors, lit=('NUM',)):
+    left, top, _right, _bottom = keyboard_bounds(origin, unit)
+    colors = tuple(sorted(token_colors.items()))
+    image.alpha_composite(keyboard_picture(origin, unit, colors, frozenset(lit)), (left, top))
+
+
+@functools.lru_cache(maxsize=8)
+def keyboard_picture(origin, unit, token_colors, lit):
+    """The whole keyboard on its own, its case with the keys and the lights on it. Laid over a
+    page at once, it looks as the case and each key laid there in turn: the keys are opaque
+    but for their corners, which show the case. Drawn key by key, it took most of the
+    controls page's time, for each option the pointer reached."""
     left, top, right, bottom = keyboard_bounds(origin, unit)
     keys = keyboard_keys(origin, unit)
     holes = tuple((x0 - left, y0 - top, x1 - left, y1 - top) for _token, _label, (x0, y0, x1, y1) in keys)
-    image.alpha_composite(keyboard_case(right - left + 1, bottom - top + 1, holes), (left, top))
-    for token, label, rect in keys:
-        draw_keycap(image, rect, token, label, token_colors.get(token))
-    draw_leds(image, led_rect(origin, unit), lit)
+    picture = keyboard_case(right - left + 1, bottom - top + 1, holes).copy()
+    colors = dict(token_colors)
+    for (token, label, _rect), hole in zip(keys, holes):
+        draw_keycap(picture, hole, token, label, colors.get(token))
+    lights = led_rect(origin, unit)
+    draw_leds(picture, (lights[0] - left, lights[1] - top, lights[2] - left, lights[3] - top), lit)
+    return picture
 
 
 # -- controller drawing -------------------------------------------------
@@ -246,14 +261,33 @@ def line_pixels(points):
 
 def draw_callout(image, points, art, origin):
     """A one-pixel leader line, dark where it crosses a light shell."""
-    pad = art.image
-    ink = INK
-    for x, y in line_pixels(points):
-        px, py = x - origin[0], y - origin[1]
-        over = (0 <= px < pad.width and 0 <= py < pad.height) and pad.getpixel((px, py))
-        light = over and over[3] and sum(over[:3]) > 330
-        if 0 <= x < image.width and 0 <= y < image.height:
-            image.putpixel((x, y), (*(ink if light else LINE), 255))
+    pixels = image.load()
+    width, height = image.size
+    for x, y, colour in callout_pixels(tuple(points), art, origin):
+        if 0 <= x < width and 0 <= y < height:
+            pixels[x, y] = colour
+
+
+_callouts = {}
+
+
+def callout_pixels(points, art, origin):
+    """The pixels of a leader line and the colour of each, which the pad under it decides:
+    worked out pixel by pixel, they took most of the controller page's drawing."""
+    key = points, id(art), origin
+    kept = _callouts.get(key)
+    if kept is None or kept[0] is not art:
+        pad = art.image
+        line = []
+        for x, y in line_pixels(points):
+            px, py = x - origin[0], y - origin[1]
+            over = (0 <= px < pad.width and 0 <= py < pad.height) and pad.getpixel((px, py))
+            light = over and over[3] and sum(over[:3]) > 330
+            line.append((x, y, (*(INK if light else LINE), 255)))
+        if len(_callouts) > 64:
+            _callouts.clear()
+        kept = _callouts[key] = art, tuple(line)
+    return kept[1]
 
 
 class ControlsPage:
@@ -514,7 +548,7 @@ class ControlsPage:
 
     # -- drawing --------------------------------------------------------
     def draw(self, viewport, font):
-        image = Image.alpha_composite(viewport, Image.new('RGBA', viewport.size, (0, 0, 0, menu_theme.current().dim)))
+        image = menu_theme.ground(viewport, self.PANEL, clear_sides=True)  # labels reach the panel's sides
         draw = ImageDraw.Draw(image)
 
         def text(value, x, y, color=c(WHITE), align='left', max_width=None):
@@ -540,8 +574,6 @@ class ControlsPage:
             text(label, (rect[0] + rect[2]) // 2, rect[1] + (rect[3] - rect[1]) // 2 - 4,
                  color, 'center', rect[2] - rect[0] - 12)
 
-        menu_theme.panel(image, self.PANEL, clear_sides=True)  # labels reach the panel's sides
-        draw = ImageDraw.Draw(image)
         focused = self.focused
         if self.view == 'overview':
             text('Controls', 256, self.PANEL[1] + 12, c(GOLD), 'center')

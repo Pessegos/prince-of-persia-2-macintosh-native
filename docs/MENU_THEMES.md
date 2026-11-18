@@ -57,6 +57,14 @@ strip. A page whose content reaches the panel's sides (Controls, and the F1
 menu with its scroll arrows) passes `clear_sides=True`, and the frame then
 stands wholly outside the panel there.
 
+The pages drawn at the game's resolution start from
+`menu_theme.ground(viewport, rect, clear_sides)`: the picture under the
+theme's veil (`dim`) with the panel laid over it. Over the picture the scene
+holds (`menu_theme.hold`, the game's picture while it is shown under a menu)
+each ground is drawn once and kept, so an option the pointer reaches does not
+darken the whole picture and lay the frame again. A held picture must not be
+drawn into.
+
 Each environment has a frame of its own; a frame drawn for one is not reused
 for another. The theme names its kind in `frame`:
 

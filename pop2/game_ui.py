@@ -421,7 +421,7 @@ class DevelopmentMenu:
         return self.activate()
 
     def draw(self, viewport, font):
-        image = Image.alpha_composite(viewport, Image.new("RGBA", viewport.size, (0, 0, 0, menu_theme.current().dim)))
+        image = menu_theme.ground(viewport, None if self.map_enabled else self.panel_rect)
         draw = ImageDraw.Draw(image)
         gold, white, muted = c("#f4d873"), c("#eeeeee"), c("#b9b9b9")
         offset = self.layout_offset
@@ -439,8 +439,6 @@ class DevelopmentMenu:
             self.draw_map(image, draw, font, text)
             self.draw_popup(draw, text)
             return image
-        menu_theme.panel(image, self.panel_rect)
-        draw = ImageDraw.Draw(image)
         text('Developer Tools', 256, 87 + offset, gold, centered=True)
         if self.page == 'tools' and (self.map_available or not self.level_available):
             self.draw_game_tools(draw, text)
@@ -800,8 +798,25 @@ class MacintoshFont:
                     if data[26 + y * row_bytes + bit // 8] & (128 >> (bit % 8)):
                         pixels[x, y] = 255
             self.glyphs[self.first + index] = (mask, offset + header[4], advance)
+        self.drawn = {}
+
+    # Lines kept drawn: a menu page draws all its labels again for each option the pointer
+    # reaches, and drawing one letter by letter took most of the page's time.
+    KEPT_LINES = 512
 
     def text(self, text, color=(255, 255, 85, 255)):
+        """The line drawn in ``color`` on a transparent strip as tall as the font. Each call
+        gives its own picture, which the caller may change."""
+        key = text, color
+        drawn = self.drawn.get(key)
+        if drawn is None:
+            drawn = self.draw_line(text, color)
+            if len(self.drawn) >= self.KEPT_LINES:
+                del self.drawn[next(iter(self.drawn))]
+            self.drawn[key] = drawn
+        return drawn.copy()
+
+    def draw_line(self, text, color):
         glyphs = [self.glyphs[code] for code in text.encode("mac_roman")]
         image = Image.new("RGBA", (sum(glyph[2] for glyph in glyphs), self.height))
         x = 0

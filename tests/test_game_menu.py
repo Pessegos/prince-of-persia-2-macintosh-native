@@ -1059,7 +1059,9 @@ class GameMenuSceneTests(unittest.TestCase):
                     steps = [('pointer', point) for point in points[::max(1, len(points) // 8)]]
                     steps += [('key', 'Down'), ('key', 'Down'), ('key', 'Up')]
                     for kind, step in steps:
-                        with patch.object(scene, 'render', side_effect=AssertionError('the game was drawn')):
+                        # Nor are the page's ground (the veil and the panel) and the keyboard
+                        # drawn again: they took most of the menu's own drawing.
+                        with patch.object(scene, 'render', side_effect=AssertionError('the game was drawn')),                                 patch('pop2.menu_theme.panel', side_effect=AssertionError('the ground was drawn')),                                 patch('pop2.controls_page.draw_keycap', side_effect=AssertionError('a key was drawn')):
                             if kind == 'pointer':
                                 scene.dev_hover(SimpleNamespace(x=step[0], y=step[1]))
                             else:
@@ -1068,6 +1070,23 @@ class GameMenuSceneTests(unittest.TestCase):
                         # The same as the whole window drawn again, game and all.
                         scene.render()
                         self.assertEqual(shown(), drawn, (kind, step))
+
+    def test_the_font_draws_each_line_once_and_gives_each_caller_its_own_picture(self):
+        # A menu page drew each of its labels letter by letter again for each option the
+        # pointer reached: most of its drawing.
+        font = self.scene.ui_font
+        first = font.text('Options', (238, 238, 238, 255))
+        reference = first.tobytes()
+        first.paste((255, 0, 0, 255), (0, 0, first.width, first.height))   # a caller may change its own
+        with patch.object(type(font), 'draw_line', side_effect=AssertionError('drawn again')):
+            again = font.text('Options', (238, 238, 238, 255))
+        self.assertIsNot(again, first)
+        self.assertEqual(again.tobytes(), reference)
+        self.assertEqual(again.tobytes(), font.draw_line('Options', (238, 238, 238, 255)).tobytes())
+        self.assertNotEqual(font.text('Options', '#f4d873').tobytes(), reference)   # another colour
+        for index in range(font.KEPT_LINES + 10):
+            font.text(str(index))
+        self.assertLessEqual(len(font.drawn), font.KEPT_LINES)
 
     def test_a_menu_s_game_picture_is_drawn_again_once_it_may_have_changed(self):
         scene = self.scene

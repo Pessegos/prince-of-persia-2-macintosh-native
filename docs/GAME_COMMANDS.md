@@ -127,8 +127,25 @@ Under the tools the pointer now shows the same picture as a whole drawing: it
 was drawn over the captures' picture, which keeps the prompt to restart that
 the window leaves out under a menu. A step over the menu, its options or its
 controls took 11-13 ms at 3440x1440 and takes 7-10; in a 1020x768 window
-8-11 ms, now 4-7. The rest is the menu's own drawing and Tk's copy of the
-changed rows.
+8-11 ms, now 4-7.
+
+The menu's own drawing keeps what does not change with the focus. The font
+keeps each line it drew (`MacintoshFont.text`, a copy for each caller): letter
+by letter, the labels took most of a page's time. The page's ground, the game's
+picture under the theme's veil with the panel laid over it, is kept for the
+picture `draw_menus` holds (`menu_theme.hold`, `menu_theme.ground`); the
+picture is held while it is shown under the menu, and nothing draws into it.
+The controls page lays its keyboard as one picture (`keyboard_picture`), drawn
+once for each set of key colours and lock lights, rather than each key in turn,
+and each controller callout keeps its pixels (`callout_pixels`). The sign of
+the ruins and the spider compares each pixel as one number. Drawing a page took
+2-2.3 ms (menu, options), 3-5 ms (controls) and 1.4 ms (tools), up to 7 ms
+under the spider; it takes 0.3-0.7 ms, up to 1.5 ms under the spider. A step
+over the menu or its options takes about 5 ms at 3440x1440 and 2.5-3 ms at
+1020x768, one over the controls 3-4 ms and 2.6 ms. The rest is Tk's copy of
+the changed rows. Drawn by the previous code and this one, 4176 pages (the menu, its
+options, dialogs, controls and tools, eight themes, every focus, three pictures
+under them, each drawn twice) were the same.
 
 The copy challenge covers the whole window, yet the game was drawn under it at
 each of its 60 frames a second, and the same page again between its fades.
