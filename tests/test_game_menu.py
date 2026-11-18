@@ -742,9 +742,12 @@ class GameMenuSceneTests(unittest.TestCase):
                 self.assertEqual(self.displayed_screenshots().tobytes(), self.expected_screenshots(fresh=True).tobytes())
                 self.assertIs(scene.image_ref, photo)
 
-    def test_passing_over_the_screenshots_page_s_controls_draws_and_compares_only_them(self):
+    def test_passing_over_the_screenshots_page_s_controls_draws_and_sends_only_what_changed(self):
         # The page's surface was kept for each focus: each control or picture the pointer
         # reached drew the whole page again and compared all of it (up to 45 ms at 3440x1440).
+        # After that each step copied the window-sized surface (about 8 ms in all): the page
+        # shown is now drawn over where the focus changed, and a picture's outline goes to
+        # Tk as its four sides.
         from pop2 import menu_theme
 
         scene = self.scene
@@ -756,12 +759,12 @@ class GameMenuSceneTests(unittest.TestCase):
             scene.screenshot_settings = ScreenshotSettings(folder, 1)
             self.press('F2')
             gallery = self.settle_screenshot_gallery()
-            compared = []
-            difference = ImageChops.difference
+            copied = []
+            copy = Image.Image.copy
 
-            def counted(first, second):
-                compared.append(first.size)
-                return difference(first, second)
+            def counted(image):
+                copied.append(image.size)
+                return copy(image)
 
             with patch.object(scene, 'dev_pointer', side_effect=lambda event: (event.x, event.y)), \
                     patch.object(scene.canvas, 'winfo_width', return_value=3440), \
@@ -774,8 +777,10 @@ class GameMenuSceneTests(unittest.TestCase):
                         if index is not None and (index in (0, 1, 2, 3, 4, 10, 11, 12, 15, 18) or 100 <= index < 103):
                             targets.setdefault(index, (x, y))
                 self.assertEqual(set(targets), {0, 1, 2, 3, 4, 10, 11, 12, 15, 18, 100, 101, 102})
-                # From a picture to the controls and back, from one control to the next.
-                route = [targets[index] for index in (100, 15, 1, 4, 102, 10, 18, 12, 101, 3, 0)] + [(250, 160)]
+                # From a picture to the controls and back, from one control to the next, from
+                # a picture to the next.
+                order = (100, 101, 15, 1, 4, 102, 10, 18, 12, 101, 3, 0, 102, 100)
+                route = [targets[index] for index in order] + [(250, 160)]
                 frame = 3440 * 1440
                 for theme in menu_theme.THEMES.values():
                     with self.subTest(theme=theme.name):
@@ -786,20 +791,129 @@ class GameMenuSceneTests(unittest.TestCase):
                             cache.clear()
                         scene.screenshot_gallery_frame = None
                         scene.redraw_screenshot_gallery()
-                        photo = scene.image_ref
+                        photo, page = scene.image_ref, scene.screenshot_gallery_frame[1]
                         surfaces = [surface[0] for surface in gallery.surface_cache.values()]
-                        for x, y in route:
-                            compared.clear()
-                            with patch('pop2.window_controls.ImageChops.difference', side_effect=counted):
+                        for step, (x, y) in enumerate(route):
+                            copied.clear()
+                            with patch('pop2.window_controls.put_patch', wraps=put_patch) as sent, \
+                                    patch.object(Image.Image, 'copy', counted):
                                 scene.dev_hover(SimpleNamespace(x=x, y=y))
-                            self.assertTrue(all(width * height * 40 < frame for width, height in compared),
-                                            (x, y, compared))
+                            # No copy of the window-sized page (the game's resolution's is small).
+                            self.assertFalse([size for size in copied if size[0] * size[1] * 4 > frame], (x, y))
+                            sizes = [call.args[1].size for call in sent.call_args_list]
+                            self.assertTrue(all(width * height * 40 < frame for width, height in sizes), (x, y, sizes))
+                            if step and step < len(order) and min(order[step - 1], order[step]) >= 100:
+                                # From a picture to another: only their outlines, by their sides.
+                                self.assertTrue(sizes, (x, y))
+                                self.assertTrue(all(min(size) <= 8 for size in sizes), (x, y, sizes))
                             self.assertEqual(self.displayed_screenshots().tobytes(),
                                              self.expected_screenshots(fresh=True).tobytes(), (x, y))
+                            self.assertIs(scene.screenshot_gallery_frame[1], page)
                         self.assertIs(scene.image_ref, photo)
                         # The surface was not drawn again: only the list took the pictures' outlines.
                         self.assertTrue(all(any(surface is kept[0] for kept in gallery.surface_cache.values())
                                             for surface in surfaces))
+
+    def test_the_screenshots_page_drawn_in_place_shows_what_a_fresh_drawing_shows(self):
+        # The page shown is drawn over where its focus, list, delete button or label changed,
+        # while no picture is held or burning; a held or burning picture draws the page as
+        # before, after which the page drawn over is not the one shown.
+        from pop2 import menu_theme
+
+        scene = self.scene
+        self.addCleanup(menu_theme.use, menu_theme.current())
+        with TemporaryDirectory() as directory:
+            folder = Path(directory)
+            for index in range(14):
+                Image.new('RGB', (510, 384), (index * 17, 90, 160)).save(folder / f'{index:02}.png')
+            scene.screenshot_settings = ScreenshotSettings(folder, 1)
+            self.press('F2')
+            gallery = self.settle_screenshot_gallery()
+
+            def check(label):
+                in_place.append(gallery.redrawn is not None)   # a fresh drawing is a new picture
+                self.assertEqual(self.displayed_screenshots().tobytes(),
+                                 self.expected_screenshots(fresh=True).tobytes(), label)
+
+            for width, height, theme in ((3440, 1440, 'spider'), (1020, 768, 'ruins')):
+                in_place = []
+                with self.subTest(window=(width, height), theme=theme), \
+                        patch.object(scene, 'dev_pointer', side_effect=lambda event: (event.x, event.y)), \
+                        patch.object(scene.canvas, 'winfo_width', return_value=width), \
+                        patch.object(scene.canvas, 'winfo_height', return_value=height):
+                    menu_theme.use(menu_theme.THEMES[theme])
+                    for cache in (gallery.surface_cache, gallery.modal_cache, gallery.backdrops):
+                        cache.clear()
+                    gallery.scroll = gallery.scroll_target = 0
+                    scene.screenshot_gallery_frame = None
+                    scene.redraw_screenshot_gallery()
+                    self.settle_screenshot_gallery()
+                    scene.redraw_screenshot_gallery()
+                    photo = scene.image_ref
+                    cells = {}
+                    for y in range(84, 330, 4):
+                        for x in range(30, 400, 6):
+                            index = gallery.hit(x, y)
+                            if index is not None and index >= 100:
+                                cells.setdefault(index, (x, y))
+                    cells = list(cells.values())
+                    self.assertGreater(len(cells), 3)
+                    delete = gallery.DELETE
+                    lava = (delete[0] + delete[2]) / 2, (delete[1] + delete[3]) / 2
+                    for x, y in cells[:3] + [lava, (250, 160), lava, cells[0]]:
+                        scene.dev_hover(SimpleNamespace(x=x, y=y))
+                        check(('hover', x, y, gallery.hovered))
+                    scene.dev_hover(SimpleNamespace(x=lava[0], y=lava[1]))
+                    for _ in range(3):   # the lava's frames under its label, then without it
+                        gallery.animate(1 / 12)
+                        scene.redraw_screenshot_gallery()
+                        check(('lava', gallery.icon_frame))
+                    scene.dev_hover(SimpleNamespace(x=cells[1][0], y=cells[1][1]))
+                    gallery.animate(1 / 12)
+                    scene.redraw_screenshot_gallery()
+                    check('lava without its label')
+                    self.assertTrue(gallery.wheel(1))
+                    for _ in range(10):
+                        gallery.animate(1 / 60)
+                        scene.redraw_screenshot_gallery()
+                        self.settle_screenshot_gallery()
+                        scene.redraw_screenshot_gallery()
+                        check(('scroll', gallery.scroll))
+                    for x, y in cells[:3]:
+                        scene.dev_hover(SimpleNamespace(x=x, y=y))
+                        check(('scrolled hover', x, y))
+                    # A picture held and let go where it was: the page is drawn as before.
+                    scene.dev_click(SimpleNamespace(x=cells[2][0], y=cells[2][1], num=1))
+                    scene.dev_hover(SimpleNamespace(x=250, y=160))
+                    self.assertTrue(gallery.dragging)
+                    scene.dev_hover(SimpleNamespace(x=cells[2][0], y=cells[2][1]))
+                    scene.dev_release(SimpleNamespace(x=cells[2][0], y=cells[2][1], num=1))
+                    self.assertFalse(gallery.overlay_active)
+                    for x, y in (cells[0], (250, 160), cells[1], lava, cells[2]):
+                        scene.dev_hover(SimpleNamespace(x=x, y=y))
+                        check(('after the drag', x, y))
+                    self.assertIs(scene.image_ref, photo)
+                    # A picture dropped into the lava and burnt: then drawn in place again.
+                    scene.dev_click(SimpleNamespace(x=cells[0][0], y=cells[0][1], num=1))
+                    scene.dev_hover(SimpleNamespace(x=lava[0], y=lava[1]))
+                    scene.dev_release(SimpleNamespace(x=lava[0], y=lava[1], num=1))
+                    self.assertTrue(gallery.deleting)
+                    confirm = gallery.CONFIRM_BUTTONS[1]
+                    scene.dev_click(SimpleNamespace(x=(confirm[0] + confirm[2]) / 2 + gallery.dialog_shift,
+                                                    y=238, num=1))
+                    self.settle_screenshot_gallery()
+                    self.assertIsNotNone(gallery.burn_seconds)
+                    while gallery.burn_seconds is not None:
+                        gallery.animate(1 / 36)
+                        scene.redraw_screenshot_gallery()
+                        self.settle_screenshot_gallery()
+                    scene.redraw_screenshot_gallery()
+                    check('burnt')
+                    for x, y in (cells[1], lava, (250, 160), cells[0], cells[2]):
+                        scene.dev_hover(SimpleNamespace(x=x, y=y))
+                        check(('after the burn', x, y))
+                    # All but the first frames after a new list or a burn were drawn in place.
+                    self.assertGreater(sum(in_place), len(in_place) * 3 // 4, in_place)
 
     def test_gallery_drag_escape_leave_and_close_cancel_without_deleting(self):
         scene = self.scene

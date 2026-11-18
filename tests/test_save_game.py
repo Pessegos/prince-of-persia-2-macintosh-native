@@ -1003,12 +1003,15 @@ class SaveSceneTests(unittest.TestCase):
                     self.assertNotEqual(actual.tobytes(), hovered.tobytes())
                 self.assertIs(scene.image_ref, photo)
 
-    def test_passing_over_the_saves_page_s_buttons_draws_and_compares_only_them(self):
+    def test_passing_over_the_saves_page_s_buttons_draws_and_sends_only_what_changed(self):
         # The page was kept for each focus: each button or save the pointer reached drew all
         # of it again and compared the whole window (about 60 ms at 3440x1440), then the
-        # whole list.
-        from PIL import ImageChops, ImageTk
+        # whole list. After that it copied the window-sized page it kept, over which it drew
+        # the buttons and the list (about 7 ms): the page shown is now drawn over where the
+        # focus changed, and a save's outline goes to Tk as its four sides.
+        from PIL import Image, ImageChops, ImageTk
         from pop2 import menu_theme
+        from pop2.window_controls import put_patch
 
         scene = self.scene
         self.addCleanup(menu_theme.use, menu_theme.current())
@@ -1016,12 +1019,12 @@ class SaveSceneTests(unittest.TestCase):
             scene.save_game_to(self.path.with_name(f'{index}.pop2save'), name)
         scene.open_save_browser()
         browser = scene.game_menu.save_browser
-        compared = []
-        difference = ImageChops.difference
+        copied = []
+        copy = Image.Image.copy
 
-        def counted(first, second):
-            compared.append(first.size)
-            return difference(first, second)
+        def counted(image):
+            copied.append(image.size)
+            return copy(image)
 
         def fresh():
             caches = browser.list_base_cache, browser.modal_cache
@@ -1043,7 +1046,8 @@ class SaveSceneTests(unittest.TestCase):
                     if index is not None and (index in (0, 1, 26, 27, 28, 29) or 100 <= index < 103):
                         targets.setdefault(index, (x, y))
             self.assertEqual(set(targets), {0, 1, 26, 27, 28, 29, 100, 101, 102})
-            route = [targets[index] for index in (100, 0, 28, 101, 27, 29, 1, 102, 26)] + [(-1, -1)]
+            order = (100, 101, 102, 0, 28, 101, 27, 29, 1, 102, 26, 100)
+            route = [targets[index] for index in order] + [(-1, -1)]
             left, top, right, bottom = browser.pixel_rect(browser.LIST, (3440, 1440))
             listed = (right - left) * (bottom - top)
             for theme in menu_theme.THEMES.values():
@@ -1053,23 +1057,103 @@ class SaveSceneTests(unittest.TestCase):
                     # here the page is shown again from the start in this one.
                     scene.save_menu_frame = None
                     scene.redraw_save_menu()
-                    photo = scene.image_ref
+                    photo, page = scene.image_ref, scene.save_menu_frame[1]
                     bases, steps = dict(browser.list_base_cache), 0
-                    for x, y in route:
-                        compared.clear()
-                        with patch('pop2.window_controls.ImageChops.difference', side_effect=counted):
+                    for step, (x, y) in enumerate(route):
+                        copied.clear()
+                        with patch('pop2.window_controls.put_patch', wraps=put_patch) as sent, \
+                                patch.object(Image.Image, 'copy', counted):
                             scene.dev_hover(SimpleNamespace(x=x, y=y))
-                        # A list that did not scroll is compared only in the rows the focus left
-                        # and reached, each a fifth of it.
-                        self.assertTrue(all(width * height * 3 < listed for width, height in compared), (x, y, compared))
-                        steps += bool(compared)
+                        # No copy of the window-sized page (the game's resolution's is small).
+                        self.assertFalse([size for size in copied if size[0] * size[1] * 4 > 3440 * 1440], (x, y))
+                        sizes = [call.args[1].size for call in sent.call_args_list]
+                        steps += bool(sizes)
+                        self.assertTrue(all(width * height * 8 < listed for width, height in sizes), (x, y, sizes))
+                        if step and order[step - 1] >= 100 and step < len(order) and order[step] >= 100:
+                            # From a save to another: only their outlines, by their sides.
+                            self.assertTrue(sizes, (x, y))
+                            self.assertTrue(all(min(size) <= 8 for size in sizes), (x, y, sizes))
                         shown = ImageTk.getimage(scene.image_ref).convert('RGB')
                         self.assertIsNone(ImageChops.difference(shown, fresh()).getbbox(), (x, y))
+                        self.assertIs(scene.save_menu_frame[1], page)
                     self.assertIs(scene.image_ref, photo)
                     self.assertGreater(steps, len(route) // 2)
                     # The page under the list and the buttons was not drawn again.
                     self.assertEqual(browser.list_base_cache.keys(), bases.keys())
                     self.assertTrue(all(browser.list_base_cache[key] is base for key, base in bases.items()))
+
+    def test_the_saves_page_drawn_in_place_scrolls_and_shows_a_toast_as_drawn_afresh(self):
+        # The page shown is drawn over again where the scroll or the focus changed; a toast
+        # makes a new picture of it, after which the page shown is not the one drawn over.
+        from PIL import Image, ImageChops, ImageTk
+        from pop2 import menu_theme
+
+        scene = self.scene
+        self.addCleanup(menu_theme.use, menu_theme.current())
+        for index in range(12):
+            scene.save_game_to(self.path.with_name(f'{index}.pop2save'), f'Journey {index}')
+        scene.open_save_browser()
+        browser = scene.game_menu.save_browser
+        self.assertGreater(browser.max_scroll, 0)
+
+        def check(label):
+            caches = browser.list_base_cache, browser.modal_cache
+            browser.list_base_cache, browser.modal_cache = {}, {}
+            try:
+                page = browser.draw(scene.save_menu_source[2], scene.ui_font, visible=True,
+                                    background_key=id(scene.screenshot_viewport))
+            finally:
+                browser.list_base_cache, browser.modal_cache = caches
+            expected = scene.draw_screenshot_notice(page, visible=True, uniform=bool(browser.spread)).convert('RGB')
+            shown = ImageTk.getimage(scene.image_ref).convert('RGB')
+            self.assertIsNone(ImageChops.difference(shown, expected).getbbox(), label)
+
+        for width, height, theme in ((3440, 1440, 'spider'), (1020, 768, 'ruins'), (800, 900, 'palace')):
+            menu_theme.use(menu_theme.THEMES[theme])
+            with self.subTest(window=(width, height), theme=theme), \
+                    patch.object(scene, 'dev_pointer', side_effect=lambda event: (event.x, event.y)), \
+                    patch.object(scene.canvas, 'winfo_width', return_value=width), \
+                    patch.object(scene.canvas, 'winfo_height', return_value=height):
+                browser.scroll = browser.scroll_target = 0
+                scene.save_menu_frame = None
+                scene.redraw_save_menu()
+                photo = scene.image_ref
+                found = {}
+                for y in range(100, 320, 7):
+                    for x in range(30, 260, 9):
+                        if (browser.hit(x, y) or 0) >= 100:
+                            found.setdefault(browser.hit(x, y), (x, y))
+                rows = list(found.values())   # one point in each save in sight
+                self.assertGreater(len(rows), 3)
+                for x, y in rows[:4]:
+                    scene.dev_hover(SimpleNamespace(x=x, y=y))
+                    check(('hover', x, y))
+                browser.wheel(3)
+                for _ in range(8):
+                    browser.animate(1 / 60)
+                    scene.redraw_save_menu()
+                    check(('scroll', browser.scroll))
+                for x, y in rows[1:4]:
+                    scene.dev_hover(SimpleNamespace(x=x, y=y))
+                    check(('scrolled hover', x, y))
+                # A toast that comes with a new focus: the page shown was drawn over in the
+                # same drawing that gave the window a new picture of it.
+                scene.screenshot_toast = 'Saved screenshot as a.png'
+                scene.dev_hover(SimpleNamespace(x=rows[0][0], y=rows[0][1]))
+                check('toast with a new focus')
+                for x, y in rows[1:3]:
+                    scene.dev_hover(SimpleNamespace(x=x, y=y))
+                    check(('toast', x, y))
+                scene.clear_screenshot_toast()
+                check('toast gone')
+                scene.show_screenshot_toast('b.png')
+                check('another toast')
+                scene.clear_screenshot_toast()
+                for x, y in rows[2:4] + [(-1, -1)]:
+                    scene.dev_hover(SimpleNamespace(x=x, y=y))
+                    check(('after the toast', x, y))
+                self.assertIs(scene.image_ref, photo)
+                self.assertIsInstance(scene.save_menu_frame[1], Image.Image)
 
     def test_old_snapshot_preview_is_a_resume_image_and_keeps_the_file_untouched(self):
         scene = self.scene

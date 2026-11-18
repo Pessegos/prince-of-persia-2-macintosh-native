@@ -124,6 +124,10 @@ class SaveBrowser:
     modal_cache: dict = field(default_factory=dict, repr=False, compare=False)
     list_base_cache: dict = field(default_factory=dict, repr=False, compare=False)
     icon_cache: dict = field(default_factory=dict, repr=False, compare=False)
+    # The last page drawn in place (see draw) for each kind of picture, visible or not:
+    # (list_key, page, focus, scroll); and the parts the last drawing changed in it.
+    kept_pages: dict = field(default_factory=dict, repr=False, compare=False)
+    redrawn: list | None = field(default=None, repr=False, compare=False)
     # The wide layout, set by draw from the picture it is given: how many
     # units wider than the classic page the panel is, and where it starts.
     spread: int = field(default=0, compare=False)
@@ -460,7 +464,16 @@ class SaveBrowser:
             self.confirmation, self.focus = 'delete', 30
         return 'changed'
 
-    def draw(self, viewport, font, *, visible=False, background_key=None):
+    def draw(self, viewport, font, *, visible=False, background_key=None, in_place=False):
+        """The page over ``viewport``, as a picture of its size.
+
+        ``in_place`` is for a caller that shows each page before it asks for the next (the
+        window): a page that differs from the last one drawn so only in the focus or the
+        scroll is that same picture, drawn over again where they changed, and ``redrawn``
+        lists those parts as (box in pixels, the pixels it had or None where all of it
+        changed). It is None when the page is a new picture. Copying the window-sized page
+        for each button or save the pointer reached took about 2.5 ms at 3440x1440.
+        """
         modal = self.confirmation or self.editing
         self.spread, self.shift = self.wide_layout(*viewport.size, 510 if visible else 512)
         grown, right, half = self.list_growth, self.right, self.spread // 2
@@ -476,9 +489,14 @@ class SaveBrowser:
         # the Rename highlight is the page's own).
         list_key = key[:8] + key[9:] + (self.focus == 25,)
         list_base = self.list_base_cache.get(list_key) if not modal else None
+        kept = self.kept_pages.get(visible) if in_place and list_base is not None else None
+        if kept is not None and kept[0] != list_key:
+            kept = None
+        self.redrawn = None
         if not modal:
             self.modal_cache.clear()
-        image = (cached.copy() if cached is not None else list_base.copy() if list_base is not None else
+        image = (kept[1] if kept is not None else cached.copy() if cached is not None else
+                 list_base.copy() if list_base is not None else
                  Image.alpha_composite(viewport, Image.new('RGBA', viewport.size, (0, 0, 0, 150))))
         draw = ImageDraw.Draw(image)
         gold, white, muted, cyan = c('#f4d873'), c('#eeeeee'), c('#999999'), c('#77c9dc')
@@ -552,30 +570,41 @@ class SaveBrowser:
             else:
                 text(label, rect[0] + 10, rect[1] + 7, white if enabled else muted, rect[2] - rect[0] - 20)
 
+        # The tabs and the footer by their focus: rectangle and label. Loading has no New
+        # save, which the zip leaves out.
+        buttons = {0: (self.TABS[0], 'Save'), 1: (self.TABS[1], 'Load'), **dict(zip((28, 26, 27, 29), zip(
+            self.footer_rects, ('Back', 'Delete', 'Overwrite' if self.mode == 'save' else 'Load game', 'New save'))))}
+
+        def lit(index):
+            rect, label = buttons[index]
+            if index in (0, 1):
+                button(rect, label, index, active=self.mode == label.lower())
+                return
+            enabled = (self.entry.exists if index == 26 else self.primary_enabled if index == 27
+                       else self.save_available if index == 29 else True)
+            button(rect, label, index, enabled, active=index == 29 and enabled)
+
         def draw_buttons():
             # The tabs and the footer light up with the pointer: drawn on every frame, over a
             # page kept whatever has the focus, so that passing over them draws no page again.
-            for index, (rect, label) in enumerate(zip(self.TABS, ('Save', 'Load'))):
-                button(rect, label, index, active=self.mode == label.lower())
-            for index, (rect, label) in zip((28, 26, 27, 29), zip(self.footer_rects,
-                    ('Back', 'Delete', 'Overwrite' if self.mode == 'save' else 'Load game', 'New save'))):
-                enabled = (self.entry.exists if index == 26 else self.primary_enabled if index == 27
-                           else self.save_available if index == 29 else True)
-                button(rect, label, index, enabled, active=index == 29 and enabled)
+            for index in buttons:
+                lit(index)
 
-        def draw_list():
+        def drawn(rect):   # the pixels rectangle covers for rect
+            return (*point(*rect[:2]), *(edge + 1 for edge in point(*rect[2:])))
+
+        def list_rows(clip, rows):
+            """Draw these rows, cut to ``clip`` (pixels), over the list's ground."""
             nonlocal image, draw, origin
-            rectangle(self.LIST, fill=c('#181818'))
-            # Allocate only the clipped list, not another full-window layer. It starts with
+            # Allocate only the clipped part, not another full-window layer. It starts with
             # the list's own ground, which the rows cover, so it is pasted rather than
             # composited (about 2 ms a frame at 3440x1440).
             background = image
-            clip = (*point(*self.LIST[:2]), *point(*self.LIST[2:]))
             origin = clip[:2]
             image = Image.new('RGBA', (clip[2] - clip[0], clip[3] - clip[1]), c('#181818'))
             draw = ImageDraw.Draw(image)
-            for row, slot in enumerate(self.items):
-                rect = self.row_rect(row)
+            for row in rows:
+                slot, rect = self.items[row], self.row_rect(row)
                 if rect[3] <= self.LIST[1] or rect[1] >= self.LIST[3]:
                     continue
                 selected = self.selected == row
@@ -593,6 +622,10 @@ class SaveBrowser:
             background.paste(image, origin)
             image, origin = background, (0, 0)
             draw = ImageDraw.Draw(image)
+
+        def draw_list():
+            rectangle(self.LIST, fill=c('#181818'))
+            list_rows((*point(*self.LIST[:2]), *point(*self.LIST[2:])), range(len(self.items)))
             if not self.items:
                 text('No saved games', 50, 181, muted, 168 + grown, True)
             if self.max_scroll:
@@ -602,11 +635,45 @@ class SaveBrowser:
                 rectangle((225 + grown, self.LIST[1], 227 + grown, self.LIST[3]), fill=c('#303030'))
                 rectangle((225 + grown, top, 227 + grown, top + thumb), fill=c('#858585'))
 
+        def keep():
+            if in_place:
+                self.kept_pages[visible] = list_key, image, self.focus, self.scroll
+            return image
+
+        if kept is not None:
+            # The page last drawn in place, drawn over again where the focus or the scroll
+            # changed, each part with the theme's sign over it.
+            parts = self.redrawn = []
+
+            def again(box, paint, *args, compare=True):
+                box = (max(0, box[0]), max(0, box[1]), min(image.width, box[2]), min(image.height, box[3]))
+                if box[0] < box[2] and box[1] < box[3]:
+                    before = image.crop(box) if compare else None
+                    paint(*args)
+                    menu_theme.watermark(image, self.PANEL, point, within=box)
+                    parts.append((box, before))
+
+            _, _, focus, scroll = kept
+            listed = (*point(*self.LIST[:2]), *point(*self.LIST[2:]))   # where the rows are drawn
+            if scroll != self.scroll:
+                again(drawn(self.LIST), draw_list, compare=False)   # a list that moved changes all over
+            for index in ((focus, self.focus) if focus != self.focus else ()):
+                if index in buttons:
+                    again(drawn(buttons[index][0]), lit, index)
+                elif scroll == self.scroll and isinstance(index, int) and 100 <= index < 100 + len(self.items):
+                    # The row by itself, cut to the list: its neighbours are 3 units away.
+                    row = drawn(self.row_rect(index - 100))
+                    clip = (max(row[0], listed[0]), max(row[1], listed[1]),
+                            min(row[2], listed[2]), min(row[3], listed[3]))
+                    if clip[0] < clip[2] and clip[1] < clip[3]:
+                        again(clip, list_rows, clip, (index - 100,))
+            return keep()
+
         if list_base is not None:
             draw_buttons()
             draw_list()
             menu_theme.watermark(image, self.PANEL, point)   # the list was repainted over it
-            return image
+            return keep()
 
         if cached is None:
             if not menu_theme.panel_scaled(image, self.PANEL, point, wide):
@@ -746,4 +813,4 @@ class SaveBrowser:
                        centered=True)
             return image
         menu_theme.watermark(image, self.PANEL, point)
-        return image
+        return keep()

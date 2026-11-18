@@ -357,7 +357,9 @@ class GameMenu:
         self.focus = index
         return self.activate()
 
-    def draw(self, viewport, font):
+    def draw(self, viewport, font, *, in_place=False):
+        """The open page over ``viewport``. ``in_place``: the saves and screenshots pages may
+        give the picture they gave last, drawn over where it changed (see SaveBrowser.draw)."""
         if self.page == 'controls' and self.controls_page is not None:
             return self.controls_page.draw(viewport, font)
         if self.page == 'cutscenes':
@@ -365,9 +367,9 @@ class GameMenu:
             # by present_cutscene_gallery, independently of the game buffer.
             return viewport
         if self.page == 'screenshots' and self.screenshot_gallery is not None:
-            return self.screenshot_gallery.draw(viewport, font)
+            return self.screenshot_gallery.draw(viewport, font, in_place=in_place)
         if self.page == 'saves':
-            return self.save_browser.draw(viewport, font)
+            return self.save_browser.draw(viewport, font, in_place=in_place)
         panel = {"screenshots": self.SCREENSHOT_PANEL, "menu": self.PANEL, "options": self.OPTIONS_PANEL,
                  "about": self.ABOUT_DIALOG, "hall": self.HALL_PANEL}.get(self.page, self.DIALOG)
         # The menu's scroll arrows sit at the panel's right edge: keep the frame clear of them.

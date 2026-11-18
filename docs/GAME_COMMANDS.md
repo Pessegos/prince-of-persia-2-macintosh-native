@@ -182,6 +182,29 @@ ground. At 3440x1440 a step over the saves page took about 63 ms and now takes
 about 7. A step over the screenshots page took 15-45 ms and now takes about 9.
 In a 1020x768 window both take 2-4 ms.
 
+Nor do they copy that page for each step any more. The window asks for each
+page in place (`in_place`), at its own resolution and at the game's: a page
+that differs from the last one drawn so only where the focus, the scroll, the
+lava or the delete button's label changed is that same picture, drawn over
+again in those parts alone, each with the theme's sign laid over it alone
+(`within`), and the page lists the parts it drew (`redrawn`) with the pixels
+they had. The window compares only those, and an outline that changed colour,
+around a save or a picture the focus left or reached, goes to Tk as its four
+sides (`changed_parts`): at 3440x1440 its box is about fifteen times as many
+pixels. The lava's own item takes only what changed in it, through the same
+Tk function. The screenshots page draws as before while a picture is held or
+burning; its label is taken away by the surface's pixels under it, which never
+had it. A toast makes a new picture of the saves page: the parts drawn over in
+the page the window showed are then sent with what the comparison finds. At
+3440x1440 a step over the saves page took about 7 ms and takes 1.3; over the
+screenshots page about 8, now 1.6. Under the ruins both took about 10 ms and
+take 1.3-1.5; under the spider 22 and 14, now 1.6 and 2.7: the sign was laid
+over the whole panel for each step. At 1020x768 both take about 1 ms. Over
+three random sequences of pointer steps, keys, wheel, lava frames, a dialog
+and the other tab (eight themes, four window sizes), 7040 pages drawn in
+place, the window's and the game's resolution's, were the same as the pages
+drawn afresh.
+
 Master mute sets both SDL channel volumes to zero without stopping their
 playback clocks. This preserves the playback-dependent death prompt timing.
 Disabling ambient music cancels only ambient requests/playback; death cues

@@ -199,10 +199,12 @@ nothing. Three things a page must take care of:
   on the saves and screenshots pages) must call `watermark` again after that
   repaint. It may pass that part as `within`, in the image's own pixels: the
   sign's shades are no background colours, so the rest of a page that has
-  the sign would not change. The screenshots page does so for its list, the
-  delete button's label and the controls the focus lights, which it draws
-  again over a page kept whatever has the focus; the spider's fur over its
-  whole panel took most of a frame's time at 3440x1440.
+  the sign would not change. The saves and screenshots pages do so for each
+  part they draw again over the page they last gave the window (`in_place`):
+  the list, or the rows and pictures the focus left and reached, the controls
+  the focus lights and the delete button's label. The spider's fur over the
+  whole panel took most of a step's time at 3440x1440 (22 ms over the saves
+  page, against 1.6 now).
 - A page with pictures passes their rectangles in `avoid`, in the image's own
   pixels. A slot still waiting for its picture has a background colour, and
   the sign would otherwise show there and vanish when the picture arrives.

@@ -56,6 +56,11 @@ def changed_bands(before, after, gap=8):
     changed = before != after
     if changed.ndim == 3:
         changed = changed.any(axis=2)
+    return mask_bands(changed, gap)
+
+
+def mask_bands(changed, gap=8):
+    """changed_bands for a mask of the pixels that changed."""
     rows = numpy.flatnonzero(changed.any(axis=1))
     if not rows.size:
         return []
@@ -65,6 +70,50 @@ def changed_bands(before, after, gap=8):
         columns = numpy.flatnonzero(changed[first:last + 1].any(axis=0))
         bands.append((int(columns[0]), int(first), int(columns[-1]) + 1, int(last) + 1))
     return bands
+
+
+def changed_parts(before, after, gap=8):
+    """Boxes (left, top, right, bottom) that hold every pixel that differs between two
+    pictures of the same size (packed arrays): the bands of changed_bands, each cut into
+    its two sides, ``gap`` columns wide, and the bands of rows that change between them.
+    An outline that changed colour, as around a save or a picture the focus left or
+    reached, is then its four sides rather than all it encloses: at 3440x1440 about a
+    fifteenth of the pixels."""
+    changed = before != after
+    parts = []
+    for left, top, right, bottom in mask_bands(changed, gap):
+        band = changed[top:bottom, left:right]
+        width = right - left
+        if width <= 4 * gap or bottom - top <= 4 * gap:
+            parts.append((left, top, right, bottom))
+            continue
+        cut = []
+        for start in (0, width - gap):
+            side = band[:, start:start + gap]
+            rows, columns = numpy.flatnonzero(side.any(axis=1)), numpy.flatnonzero(side.any(axis=0))
+            if rows.size:
+                cut.append((left + start + int(columns[0]), top + int(rows[0]),
+                            left + start + int(columns[-1]) + 1, top + int(rows[-1]) + 1))
+        cut += [(left + gap + first, top + upper, left + gap + last, top + lower)
+                for first, upper, last, lower in mask_bands(band[:, gap:width - gap], gap)]
+        # Pieces that cover most of the band anyway cost more calls than pixels saved.
+        area = sum((part[2] - part[0]) * (part[3] - part[1]) for part in cut)
+        parts += cut if area * 3 < width * (bottom - top) * 2 else [(left, top, right, bottom)]
+    return parts
+
+
+def page_damage(redrawn, frame):
+    """The boxes of ``frame`` (pixels) that differ from what the window showed in the parts
+    a page drawn in place over the one shown says it drew again: (box, its pixels before,
+    or None to send all of it)."""
+    boxes = []
+    for box, before in redrawn:
+        if before is None:
+            boxes.append(box)
+            continue
+        boxes += [(left + box[0], top + box[1], right + box[0], bottom + box[1]) for left, top, right, bottom
+                  in changed_parts(packed_pixels(before), packed_pixels(frame.crop(box)))]
+    return boxes
 
 
 def put_patch(photo, image, x, y):
@@ -611,8 +660,10 @@ class WindowControls(InputRouting):
     def redraw_screenshot_gallery(self):
         if self.game_menu.screenshot_gallery.drag_target is None and self.canvas.cget('cursor'):
             self.canvas.configure(cursor='')
+        # At the game's resolution, drawn over in place: the window draws the page it shows
+        # by itself (present_viewport), and a capture with menus draws its own.
         self.native_viewport = self.draw_screenshot_notice(
-            self.game_menu.draw(self.screenshot_viewport, self.ui_font))
+            self.game_menu.draw(self.screenshot_viewport, self.ui_font, in_place=True))
         self.present_viewport()
 
     def apply_gallery_action(self, action):
@@ -1176,8 +1227,9 @@ class WindowControls(InputRouting):
 
     def redraw_save_menu(self):
         self.refresh_game_menu()
+        # Drawn over in place, as redraw_screenshot_gallery draws its page.
         self.native_viewport = self.draw_screenshot_notice(
-            self.game_menu.draw(self.screenshot_viewport, self.ui_font))
+            self.game_menu.draw(self.screenshot_viewport, self.ui_font, in_place=True))
         self.present_viewport()
 
     def open_save_browser(self, load=False):
@@ -1884,7 +1936,9 @@ class WindowControls(InputRouting):
         """Show the page's delete button and its label in a small canvas item of their own,
         just over the page. The lava changes twelve times a second and the label comes and
         goes with the pointer: each copy into the page's photo made Tk look over all of
-        that photo again (2 ms at 3440x1440); in this one it looks over only these pixels."""
+        that photo again (2 ms at 3440x1440); in this one it looks over only these pixels.
+        ``refresh`` is true to show all of the region again, or the boxes of the page that
+        changed in it."""
         shown = getattr(self, 'screenshot_lava', None)
         if region[0] >= region[2] or region[1] >= region[3]:
             self.hide_screenshot_lava()
@@ -1900,7 +1954,10 @@ class WindowControls(InputRouting):
                 self.canvas.itemconfigure(item, image=photo)
             self.screenshot_lava = item, photo, region
         elif refresh:
-            shown[1].paste(frame.crop(region).convert('RGB'))
+            for box in ([region] if refresh is True else refresh):
+                box = (max(box[0], region[0]), max(box[1], region[1]), min(box[2], region[2]), min(box[3], region[3]))
+                if box[0] < box[2] and box[1] < box[3]:
+                    put_patch(shown[1], frame.crop(box), box[0] - region[0], box[1] - region[1])
         item = self.screenshot_lava[0]
         if tuple(self.canvas.coords(item)) != place:
             self.canvas.coords(item, *place)
@@ -2159,9 +2216,11 @@ class WindowControls(InputRouting):
             else:
                 source = cached[2]
             # A dragged picture is shown over the page by itself (show_screenshot_held). The page
-            # stays RGBA: Tk is given only the parts that changed, their alpha ignored.
-            frame = self.draw_screenshot_notice(gallery.draw(source, self.ui_font, visible=True, held_picture=False),
-                                                visible=True, uniform=bool(spread), inset=shift)
+            # stays RGBA: Tk is given only the parts that changed, their alpha ignored. It is
+            # drawn in place: the page shown, drawn over again where it changed.
+            page = gallery.draw(source, self.ui_font, visible=True, held_picture=False, in_place=True)
+            redrawn = gallery.redrawn
+            frame = self.draw_screenshot_notice(page, visible=True, uniform=bool(spread), inset=shift)
             previous = getattr(self, 'screenshot_gallery_frame', None)
             state = id(self.screenshot_viewport), id(self.ui_font), gallery.surface_state, gallery.overlay_active
             lava = self.screenshot_lava_region(gallery, size)
@@ -2169,7 +2228,12 @@ class WindowControls(InputRouting):
             if previous is not None and previous[0] is gallery and previous[1].size == size and previous[2] is self.image_ref:
                 refresh_lava = False
                 dialog = gallery.dialog_rect
-                if previous[3] == state and dialog is None:
+                if previous[1] is frame:
+                    # The page shown was drawn over again: it changed only in the parts it
+                    # lists, compared with the pixels they had, and only where they differ.
+                    damages = (page_damage(redrawn, frame) if redrawn is not None and previous[3] == state
+                               else [(0, 0, *frame.size)])
+                elif previous[3] == state and dialog is None:
                     # Only the thumbnail strip, the animated delete button, its hover label, the
                     # controls lit by the focus and a held or burning picture (where it was and
                     # where it is) can change.
@@ -2231,13 +2295,15 @@ class WindowControls(InputRouting):
                     # at 3440x1440, instead of 48).
                     self.image_ref.paste(frame)
                     damages, refresh_lava = [], True
+                lava_damages = []
                 for damage in damages:
                     if damage[0] < lava[2] and lava[0] < damage[2] and damage[1] < lava[3] and lava[1] < damage[3]:
-                        refresh_lava = True
+                        lava_damages.append(damage)
                         if (lava[0] <= damage[0] and lava[1] <= damage[1] and damage[2] <= lava[2]
                                 and damage[3] <= lava[3] and getattr(self, 'screenshot_lava', None) is not None):
                             continue   # only the lava's own item shows it
                     put_patch(self.image_ref, frame.crop(damage), *damage[:2])
+                refresh_lava = refresh_lava or lava_damages
                 self.keep_photo_at(position)
             else:
                 self.image_ref = ImageTk.PhotoImage(frame.convert('RGB'))
@@ -2267,10 +2333,11 @@ class WindowControls(InputRouting):
                 source = source_cache[2]
             browser = game_menu.save_browser
             # The page stays RGBA: Tk is given only the parts that changed, their alpha ignored.
-            frame = self.draw_screenshot_notice(
-                browser.draw(source, self.ui_font, visible=True,
-                                            background_key=id(self.screenshot_viewport)),
-                visible=True, uniform=size != fitted)
+            # Drawn in place: the page shown, drawn over again where the focus or the scroll moved.
+            page = browser.draw(source, self.ui_font, visible=True, background_key=id(self.screenshot_viewport),
+                                in_place=True)
+            redrawn = browser.redrawn
+            frame = self.draw_screenshot_notice(page, visible=True, uniform=size != fitted)
             modal = browser.editing or browser.confirmation
             state = (id(self.screenshot_viewport), id(self.ui_font), browser.mode, browser.selected,
                      id(browser.slots), id(browser.current), browser.error, browser.status,
@@ -2281,8 +2348,14 @@ class WindowControls(InputRouting):
             previous = getattr(self, 'save_menu_frame', None)
             if (previous is not None and previous[0] is game_menu and previous[1].size == frame.size
                     and previous[2] is self.image_ref):
-                rects = [(0, 0, *frame.size)]
-                if previous[3] == state:
+                damages = []
+                if previous[1] is page and redrawn is not None:
+                    # The page shown was drawn over again: it changed only in the parts it
+                    # lists, compared with the pixels they had, and only where they differ.
+                    damages = page_damage(redrawn, frame)
+                shown = previous[1] is frame and redrawn is not None
+                rects = [] if shown else [(0, 0, *frame.size)]
+                if not shown and previous[3] == state:
                     # Only what the pointer or the keys light up: the dialog, or the tabs, the
                     # footer and the list (compared alone, not the whole window). A list that did
                     # not scroll changed only in the rows the focus left and reached.
@@ -2303,10 +2376,10 @@ class WindowControls(InputRouting):
                         continue
                     # alpha_only: the page is opaque, so a difference's alpha is zero everywhere.
                     damage = ImageChops.difference(previous[1].crop(rect), frame.crop(rect)).getbbox(alpha_only=False)
-                    if damage is None:
-                        continue
-                    damage = (damage[0] + rect[0], damage[1] + rect[1],
-                              damage[2] + rect[0], damage[3] + rect[1])
+                    if damage is not None:
+                        damages.append((damage[0] + rect[0], damage[1] + rect[1],
+                                        damage[2] + rect[0], damage[3] + rect[1]))
+                for damage in damages:
                     put_patch(self.image_ref, frame.crop(damage), *damage[:2])
                 self.save_menu_frame = (game_menu, frame, self.image_ref, state, listing)
                 self.keep_photo_at(position)

@@ -447,6 +447,9 @@ class ScreenshotGallery:
         self.burn_fits = {}   # the burning picture at its last sizes
         self.modal_cache, self.art_revision = {}, 0
         self.surface_cache = {}
+        # The last page drawn in place (see draw), visible or not: (surface_key, page, what
+        # it shows that the surface does not); and the parts the last drawing changed in it.
+        self.kept_pages, self.redrawn = {}, None
         self.backdrops = {}   # id of a picture under the page -> (it, it darkened)
         self.icon_cache = {}
         self.icon_seconds = 0.0
@@ -530,17 +533,24 @@ class ScreenshotGallery:
         """Where the list last drawn for the window (list_drawn) can differ from one drawn
         for the list_state ``before``: when only the focus moved, the cells it left and
         reached (page units); None for anywhere in the list."""
-        after = self.list_drawn
+        moved = self.focus_moves(before, self.list_drawn)
+        return None if moved is None else [self.cell_rect(index) for index in moved]
+
+    @staticmethod
+    def focus_moves(before, after):
+        """The pictures (by index) whose outline differs between lists drawn for the
+        list_states ``before`` and ``after`` when only the focus moved; None when more did."""
         if (not isinstance(before, tuple) or not isinstance(after, tuple) or len(before) != len(after)
                 or before[:9] != after[:9] or before[10:] != after[10:]):
             return None
-        cells = []
-        for focus in {before[9], after[9]}:
-            if isinstance(focus, int) and focus >= 100:
-                left, top, right, bottom = self.row_rect(focus - 100)
-                cells.append((max(self.LIST[0], left - 1), max(self.LIST[1], top - 1),
-                              min(self.LIST[2], right + 1), min(self.LIST[3], bottom + 1)))
-        return cells
+        return [focus - 100 for focus in {before[9], after[9]} if isinstance(focus, int) and focus >= 100]
+
+    def cell_rect(self, index):
+        """A picture's cell in the list, its date included, cut to the list (page units):
+        a unit around its slot, which is three units from the next one's."""
+        left, top, right, bottom = self.row_rect(index)
+        return (max(self.LIST[0], left - 1), max(self.LIST[1], top - 1),
+                min(self.LIST[2], right + 1), min(self.LIST[3], bottom + 1))
 
     @property
     def lit_rects(self):
@@ -741,6 +751,7 @@ class ScreenshotGallery:
         self.burn_fits.clear()
         self.modal_cache.clear()
         self.surface_cache.clear()
+        self.kept_pages.clear()
         self.backdrops.clear()
         self.icon_cache.clear()
 
@@ -1081,9 +1092,18 @@ class ScreenshotGallery:
             self.held_cache = sprite, outline, picture
         return self.held_cache[2], (left - 1, top - 1)
 
-    def draw(self, viewport, font, *, visible=False, background_key=None, held_picture=True):
+    def draw(self, viewport, font, *, visible=False, background_key=None, held_picture=True, in_place=False):
         """The page. held_picture False leaves out the picture being dragged, for a
-        presenter that shows it with held_overlay."""
+        presenter that shows it with held_overlay.
+
+        ``in_place`` is for a caller that shows each page before it asks for the next (the
+        window): while no picture is held or burning, a page drawn over the same surface as
+        the last one drawn so is that same picture, drawn over again where the focus, the
+        list, the delete button or its label changed, and ``redrawn`` lists those parts as
+        (box in pixels, the pixels it had or None where all of it changed). It is None when
+        the page is a new picture. Copying the window-sized surface for each control or
+        picture the pointer reached took about 2.5 ms at 3440x1440.
+        """
         modal = self.choosing or self.deleting
         layout = self.wide_layout(*viewport.size, 510 if visible else 512)
         if layout != (self.spread, self.shift):
@@ -1111,8 +1131,14 @@ class ScreenshotGallery:
         cached = self.modal_cache.get(key) if modal else None
         if not modal:
             self.modal_cache.clear()
-        image = (cached.copy() if cached is not None else surface[0].copy() if surface is not None
-                 else self.backdrop(viewport).copy())
+        # Drawn in place only over its own surface, with every picture in sight read.
+        in_place = in_place and not modal and not self.overlay_active and list_state is not None
+        kept = self.kept_pages.get(visible) if in_place and surface is not None else None
+        if kept is not None and kept[0] != surface_key:
+            kept = None
+        self.redrawn = None
+        image = (kept[1] if kept is not None else cached.copy() if cached is not None
+                 else surface[0].copy() if surface is not None else self.backdrop(viewport).copy())
         draw = ImageDraw.Draw(image)
         sx, sy = viewport.width / (510 if visible else 512), viewport.height / 384
         if self.spread:
@@ -1227,16 +1253,15 @@ class ScreenshotGallery:
                 framed_left[0] = (pos[0] - border + origin[0]) / sx + int(visible) - self.shift - dialog
             return result.value[1]
 
-        def draw_list():
+        def list_cells(clip, indices):
+            """Draw these pictures and their dates, cut to ``clip`` (pixels), over the list's ground."""
             nonlocal image, draw, origin
-            box(self.LIST, c('#181818'), None)
             base, base_draw = image, draw
-            clip = (*point(*self.LIST[:2]), *point(*self.LIST[2:]))
             origin = clip[:2]
             image = Image.new('RGBA', (clip[2] - clip[0], clip[3] - clip[1]), c('#181818'))
             draw = ImageDraw.Draw(image)
             first = len(shown)
-            for index in self.visible_indices:
+            for index in indices:
                 entry = self.entries[index]
                 rect = self.row_rect(index)
                 height = 50
@@ -1250,6 +1275,10 @@ class ScreenshotGallery:
                              for left, top, right, bottom in shown[first:]]
             base.paste(image, clip[:2])
             image, draw, origin = base, base_draw, (0, 0)
+
+        def draw_list():
+            box(self.LIST, c('#181818'), None)
+            list_cells((*point(*self.LIST[:2]), *point(*self.LIST[2:])), self.visible_indices)
             if self.max_scroll:
                 height = self.LIST[3] - self.LIST[1]
                 thumb = max(16, height * height / (math.ceil(len(self.entries) / self.COLUMNS) * self.row_height))
@@ -1258,11 +1287,14 @@ class ScreenshotGallery:
                 box((bar, self.LIST[1], bar + 2, self.LIST[3]), c('#303030'), None)
                 box((bar, top, bar + 2, top + thumb), c('#858585'), None)
 
-        def draw_delete(clear=True):
+        def delete_ground():
             highlighted = self.hovered == 13 or self.focus == 13 and self.keyboard_navigation
+            return (c('#422622') if self.deleting or self.dragging and self.hovered == 13 else
+                    c('#2b1d1b') if highlighted else c('#181818'))
+
+        def draw_delete(clear=True):
             if clear:
-                box(self.DELETE, c('#422622') if self.deleting or self.dragging and self.hovered == 13 else
-                    c('#2b1d1b') if highlighted else c('#181818'), None)
+                box(self.DELETE, delete_ground(), None)
             theme = menu_theme.current().name
             icon = self.reads.request(self.lava_key, lambda: lava_delete_frames(theme), -5)
             if icon is not None and not icon.error:
@@ -1376,6 +1408,72 @@ class ScreenshotGallery:
                 return self.OPEN_FOLDER
             return None
 
+        def lit_rect(index):
+            """The rectangle lit_button draws for ``index``, or None."""
+            return {15: self.REFRESH, **dict(enumerate(self.SCALES)), 4: self.INCLUDE_UI, 10: self.FOOTER[0],
+                    11: self.FOOTER[1], 12: self.FOOTER[2], 18: self.OPEN_FOLDER}.get(index)
+
+        def keep():
+            # What the page shows over its surface: the list, the control lit, the delete
+            # button's label and its ground and lava.
+            if in_place:
+                self.kept_pages[visible] = surface_key, image, (
+                    list_state, self.focus, self.hovered == 13, (delete_ground(), self.icon_frame))
+            return image
+
+        if kept is not None:
+            # The page last drawn in place over this surface, drawn over again where what it
+            # shows changed, each part with the theme's sign as the page has it.
+            parts = self.redrawn = []
+
+            def again(place, paint, *args, sign=True, avoid=(), compare=True):
+                place = (max(0, place[0]), max(0, place[1]), min(image.width, place[2]), min(image.height, place[3]))
+                if place[0] < place[2] and place[1] < place[3]:
+                    before = image.crop(place) if compare else None
+                    paint(*args)
+                    if sign:
+                        menu_theme.watermark(image, self.PANEL, point, avoid, place)
+                    parts.append((place, before))
+
+            drawn_list, lit_focus, hinted, ground = kept[2]
+            if list_state != drawn_list:
+                listed = (*point(*self.LIST[:2]), *point(*self.LIST[2:]))   # where the pictures are drawn
+                moved = None if self.scrolling else self.focus_moves(drawn_list, list_state)
+                cut = []
+                for index in (moved or ()):
+                    cell = drawn_box(self.cell_rect(index))
+                    cell = (max(cell[0], listed[0]), max(cell[1], listed[1]),
+                            min(cell[2], listed[2]), min(cell[3], listed[3]))
+                    if index in self.visible_indices and cell[0] < cell[2] and cell[1] < cell[3]:
+                        again(cell, list_cells, cell, (index,), avoid=shown)
+                        cut.append(cell)
+                if moved is None:
+                    # A list that moves changes all over: sent without comparing.
+                    again(drawn_box(self.LIST), draw_list, avoid=shown, compare=not self.scrolling)
+                    cut = [drawn_box(self.LIST)]
+                if not self.scrolling:
+                    # The surface takes the list as it is now, as the surface path below does.
+                    for part in (cut if surface[1] == drawn_list else [drawn_box(self.LIST)]):
+                        surface[0].paste(image.crop(part), part[:2])
+                    self.surface_cache[surface_key] = surface[0], list_state, surface[2]
+            if self.focus != lit_focus:
+                for index in (lit_focus, self.focus):
+                    if lit_rect(index) is not None:
+                        again(drawn_box(lit_rect(index)), lit_button, index)
+            if (self.hovered == 13) != hinted:
+                label = drawn_box(self.hint_rect)
+                if hinted:   # the surface is kept without it
+                    again(label, lambda: image.paste(surface[0].crop(label), label[:2]), sign=False)
+                else:
+                    again(label, draw_hint)
+            if (delete_ground(), self.icon_frame) != ground:
+                again(drawn_box(self.DELETE), draw_delete, sign=False)   # drawn over the sign
+            if visible:   # the window compares only around it
+                self.held_rect = None
+                self.list_drawn = list_state
+                self.modal_drawn = None
+            return keep()
+
         if surface is not None:
             # The surface has the list as it was drawn for its list_state, the theme's sign
             # included: on the whole panel the sign took most of a frame's time at 3440x1440.
@@ -1402,7 +1500,7 @@ class ScreenshotGallery:
                 self.held_rect = held[0] if held else None
                 self.list_drawn = list_state if list_state is not None else object()
                 self.modal_drawn = None
-            return image
+            return keep()
 
         if cached is None:
             if not menu_theme.panel_scaled(image, self.PANEL, point, wide):
@@ -1513,4 +1611,4 @@ class ScreenshotGallery:
             self.held_rect = held[0] if held else None
             self.list_drawn = list_state if list_state is not None else object()
             self.modal_drawn = key if modal else None
-        return image
+        return keep()
