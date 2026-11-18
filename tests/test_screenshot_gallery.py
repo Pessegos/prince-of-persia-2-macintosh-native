@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 import random
 from tempfile import TemporaryDirectory
@@ -685,11 +686,14 @@ class ScreenshotGalleryTests(unittest.TestCase):
         # The page was drawn again for the deletion, for the folder's listing, then for the next
         # picture once it was read, all while the dropped picture burned.
         paths = [self.png(f'{index}.png', ('red', 'green', 'blue')[index]) for index in range(3)]
+        for index, path in enumerate(paths):   # written in the same instant, they could share a time
+            os.utime(path, ns=(1_700_000_000_000_000_000 + index * 10**9,) * 2)
         gallery = self.gallery()
         source, font = Image.new('RGBA', (512, 384)), self.font()
         gallery.draw(source, font)
         self.drain(gallery)
         newest = gallery.entries[0]
+        self.assertEqual(newest.path, paths[2])
         following = gallery.entries[1]
         self.assertIsNone(gallery.reads.cache.get(gallery.image_key(following)))
         gallery.confirm_delete(newest)
