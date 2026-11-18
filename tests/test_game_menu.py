@@ -387,6 +387,26 @@ class GameMenuSceneTests(unittest.TestCase):
             time.sleep(0.002)
         return gallery
 
+    def displayed_screenshots(self):
+        """The page as the window shows it: its photo, and a dragged picture's own item over it."""
+        scene = self.scene
+        image = ImageTk.getimage(scene.image_ref).convert('RGB')
+        held = getattr(scene, 'screenshot_held', None)
+        if held is not None:
+            page = scene.canvas.coords(scene.canvas.find_all()[0])
+            x, y = scene.canvas.coords(held[0])
+            image.paste(ImageTk.getimage(held[1]).convert('RGB'), (round(x - page[0]), round(y - page[1])))
+        return image
+
+    def expected_screenshots(self):
+        """The whole page drawn at once, a dragged picture included."""
+        scene = self.scene
+        gallery = scene.game_menu.screenshot_gallery
+        frame = scene.screenshot_gallery_frame[1]
+        return scene.draw_screenshot_notice(
+            gallery.draw(scene.screenshot_gallery_source[2], scene.ui_font, visible=True), visible=True,
+            uniform=bool(gallery.spread), inset=gallery.shift).convert('RGB') if frame is not None else None
+
     def test_screenshot_gallery_capture_selects_new_png_and_preserves_live_game(self):
         scene = self.scene
         with TemporaryDirectory() as directory:
@@ -460,7 +480,7 @@ class GameMenuSceneTests(unittest.TestCase):
                         scene.dev_key_press(event)
                         scene.dev_key_release(event)
                         actual = ImageTk.getimage(scene.image_ref).convert('RGB')
-                        self.assertEqual(actual.tobytes(), scene.screenshot_gallery_frame[1].tobytes())
+                        self.assertEqual(actual.tobytes(), scene.screenshot_gallery_frame[1].convert('RGB').tobytes())
                     gameplay.assert_not_called()
                     configure.assert_not_called()
                 self.assertIs(scene.image_ref, photo)
@@ -487,20 +507,20 @@ class GameMenuSceneTests(unittest.TestCase):
                             scene.schedule_screenshot_gallery()
                             self.settle_screenshot_gallery()
                             actual = ImageTk.getimage(scene.image_ref).convert('RGB')
-                            self.assertEqual(actual.tobytes(), scene.screenshot_gallery_frame[1].tobytes())
+                            self.assertEqual(actual.tobytes(), scene.screenshot_gallery_frame[1].convert('RGB').tobytes())
                         # The delete button sits under the picture; a wide window's page puts it at its right edge.
                         delete = gallery.DELETE
                         gallery.hover((delete[0] + delete[2]) / 2, (delete[1] + delete[3]) / 2)
                         scene.redraw_screenshot_gallery()
                         actual = ImageTk.getimage(scene.image_ref).convert('RGB')
-                        self.assertEqual(actual.tobytes(), scene.screenshot_gallery_frame[1].tobytes())
+                        self.assertEqual(actual.tobytes(), scene.screenshot_gallery_frame[1].convert('RGB').tobytes())
                         gallery.scroll_target, gallery.velocity = gallery.scroll, 0
                         for _ in range(3):
                             before = actual
                             gallery.animate(1 / 12)
                             scene.redraw_screenshot_gallery()
                             actual = ImageTk.getimage(scene.image_ref).convert('RGB')
-                            self.assertEqual(actual.tobytes(), scene.screenshot_gallery_frame[1].tobytes())
+                            self.assertEqual(actual.tobytes(), scene.screenshot_gallery_frame[1].convert('RGB').tobytes())
                             changed = ImageChops.difference(before, actual).getbbox()
                             self.assertIsNotNone(changed)
                             # Only the animated lava in the delete button changes.
@@ -533,25 +553,26 @@ class GameMenuSceneTests(unittest.TestCase):
                         drop = (delete[0] + delete[2]) // 2, (delete[1] + delete[3]) // 2
                         for x, y in ((72, 100), (250, 160), (400, 230), drop):
                             scene.dev_hover(SimpleNamespace(x=x, y=y))
-                            actual = ImageTk.getimage(scene.image_ref).convert('RGB')
-                            self.assertEqual(actual.tobytes(), scene.screenshot_gallery_frame[1].tobytes())
-                        # Moving the held picture compares only around it, never the whole frame.
+                            # The window, the dragged picture's own item included, shows the whole page.
+                            self.assertEqual(self.displayed_screenshots().tobytes(), self.expected_screenshots().tobytes())
+                        # A step that only carries the picture moves its item and redraws nothing:
+                        # redrawing the page for each step made dragging slow in a large window.
                         scene.dev_hover(SimpleNamespace(x=250, y=160))
-                        compared = []
-                        difference = ImageChops.difference
-                        with patch('pop2.window_controls.ImageChops.difference',
-                                   side_effect=lambda a, b: compared.append(a.size) or difference(a, b)):
+                        item, held_photo = scene.screenshot_held[:2]
+                        page = ImageTk.getimage(scene.image_ref).tobytes()
+                        before = scene.canvas.coords(item)
+                        with patch.object(gallery, 'draw', side_effect=AssertionError('Redrew the page')),                                 patch.object(scene.canvas, 'configure', side_effect=AssertionError('Configured the canvas')):
                             scene.dev_hover(SimpleNamespace(x=260, y=170))
-                        frame = scene.screenshot_gallery_frame[1]
-                        self.assertTrue(compared)
-                        self.assertNotIn(frame.size, compared)
-                        actual = ImageTk.getimage(scene.image_ref).convert('RGB')
-                        self.assertEqual(actual.tobytes(), frame.tobytes())
+                        self.assertNotEqual(scene.canvas.coords(item), before)
+                        self.assertEqual(scene.screenshot_held[:2], (item, held_photo))
+                        self.assertEqual(ImageTk.getimage(scene.image_ref).tobytes(), page)
+                        self.assertEqual(self.displayed_screenshots().tobytes(), self.expected_screenshots().tobytes())
                         scene.dev_hover(SimpleNamespace(x=drop[0], y=drop[1]))
                         scene.dev_release(SimpleNamespace(x=drop[0], y=drop[1], num=1))
                         self.assertTrue(gallery.deleting)
                         self.assertEqual(gallery.focus, 60)
                         self.assertTrue(path.exists())
+                        self.assertIsNone(scene.screenshot_held)                 # dropped: its item is gone
                         self.press('Escape')
                         self.assertFalse(gallery.deleting)
                         self.assertTrue(path.exists())
@@ -568,7 +589,7 @@ class GameMenuSceneTests(unittest.TestCase):
                     gallery.animate(1 / 60)
                     scene.redraw_screenshot_gallery()
                     actual = ImageTk.getimage(scene.image_ref).convert('RGB')
-                    self.assertEqual(actual.tobytes(), scene.screenshot_gallery_frame[1].tobytes())
+                    self.assertEqual(actual.tobytes(), scene.screenshot_gallery_frame[1].convert('RGB').tobytes())
                 self.assertFalse(gallery.overlay_active)
                 self.assertEqual((scene.player_x, scene.action, scene.combat.world_frame), game)
 
@@ -717,7 +738,7 @@ class GameMenuSceneTests(unittest.TestCase):
                         patch.object(scene.canvas, 'winfo_width', return_value=width), \
                         patch.object(scene.canvas, 'winfo_height', return_value=height):
                     scene.present_viewport()
-                    frame = scene.screenshot_gallery_frame[1]
+                    frame = scene.screenshot_gallery_frame[1].convert('RGB')
                     wide = width * 384 / height - 510 >= 136
                     self.assertEqual(bool(gallery.spread), wide)
                     self.assertEqual(frame.size, (width, height) if wide else fit_viewport(width, height)[0])

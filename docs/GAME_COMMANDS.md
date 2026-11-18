@@ -146,6 +146,16 @@ for the last PNG in the folder, does not advance gameplay and is discarded when
 the gallery closes. The normal click/keyboard delete path is still available.
 The lava remains visible and animated even before the first capture or after the
 last PNG is deleted. Clicking it with no selected screenshot is a harmless no-op.
+While a thumbnail is dragged, the window shows it in a canvas item of its own over
+the page (`ScreenshotGallery.held_overlay`), so a step of the pointer only moves
+that item. Redrawing and comparing the whole page for each step took about 25 ms
+at 3440x1440 (5 ms in a 1020x768 window); a step now takes well under 1 ms at any
+size. The page is redrawn only when the drag starts, reaches or leaves the lava,
+or the lava's own frame changes, and the page's picture stays RGBA: only the parts
+sent to Tk are converted. The cursor and the page's canvas coordinates are set
+only when they change, since Tk repaints the whole canvas or item even for an
+unchanged value. The held picture now lies over the "Take Screenshots with F8"
+hint where the two meet, at the page's lower right.
 Damaged, missing or oversized images report an unavailable preview without
 closing the menu. Decoding is limited to PNGs of at most 32 million pixels / 128 MiB.
 

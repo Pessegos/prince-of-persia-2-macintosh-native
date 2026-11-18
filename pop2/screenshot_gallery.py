@@ -401,6 +401,7 @@ class ScreenshotGallery:
         self.burn_target = None
         self.burn_cue = False
         self.held_rect = None
+        self.held_cache = None   # the dragged picture as held_overlay last framed it
         self.hovered = None
         self.keyboard_navigation = False
         self.draft, self.caret, self.anchor = '', 0, 0
@@ -883,7 +884,57 @@ class ScreenshotGallery:
             self.confirm_delete()
         return 'changed'
 
-    def draw(self, viewport, font, *, visible=False, background_key=None):
+    def fitted_held(self, raw, entry, size):
+        """A held or burning picture at its size on the page; grey while it is still being read."""
+        fit_key = 'held', entry, size
+        if fit_key not in self.image_cache:
+            sprite = (ImageOps.contain(raw, size, Image.Resampling.NEAREST).convert('RGBA') if raw is not None
+                      else Image.new('RGBA', size, c('#999999')))
+            remember(self.image_cache, fit_key, sprite, 48)
+        return self.image_cache[fit_key]
+
+    def held_sprite(self, sx, sy, point):
+        """The picture being dragged, fitted to its box, and its top left corner in pixels."""
+        entry = self.drag_target
+        result = self.reads.request(self.image_key(entry, True), lambda: read_capture(entry, (510, 384)))
+        raw = result.value[0] if result is not None and not result.error else None
+        x, y = self.drag_point
+        x, y = max(30, min(self.PANEL[2] - 12, x)), max(24, min(358, y - 12))
+        sprite = self.fitted_held(raw, entry, (max(1, round(56 * sx)), max(1, round(42 * sy))))
+        left, top = point(x, y)
+        return sprite, left - sprite.width // 2, top - sprite.height // 2
+
+    def held_overlay(self, size, *, visible=True):
+        """The picture being dragged, framed as draw puts it over the page, for a presenter
+        that moves it by itself: (picture, (left, top)) in the pixels of a page of this
+        size, or None. Redrawing the whole page for each step of the pointer was what
+        made dragging slow in a large window."""
+        if not self.dragging or self.choosing or self.deleting:
+            return None
+        layout = self.wide_layout(*size, 510 if visible else 512)
+        if layout != (self.spread, self.shift):
+            self.lay_out(*layout)
+        sx, sy = size[0] / (510 if visible else 512), size[1] / 384
+        if self.spread:
+            sx = sy
+
+        def point(x, y):
+            return round((x - int(visible) + self.shift) * sx), round(y * sy)
+
+        sprite, left, top = self.held_sprite(sx, sy, point)
+        outline = max(1, round(sx))
+        if self.held_cache is None or self.held_cache[0] is not sprite or self.held_cache[1] != outline:
+            # The picture is opaque, and its gold frame covers the pixel around it.
+            picture = Image.new('RGB', (sprite.width + 2, sprite.height + 2))
+            picture.paste(sprite, (1, 1), sprite)
+            ImageDraw.Draw(picture).rectangle((0, 0, sprite.width + 1, sprite.height + 1), outline=c('#f4d873'),
+                                              width=outline)
+            self.held_cache = sprite, outline, picture
+        return self.held_cache[2], (left - 1, top - 1)
+
+    def draw(self, viewport, font, *, visible=False, background_key=None, held_picture=True):
+        """The page. held_picture False leaves out the picture being dragged, for a
+        presenter that shows it with held_overlay."""
         modal = self.choosing or self.deleting
         layout = self.wide_layout(*viewport.size, 510 if visible else 512)
         if layout != (self.spread, self.shift):
@@ -1081,60 +1132,49 @@ class ScreenshotGallery:
             if modal or not self.overlay_active:
                 return
             if self.dragging:
-                entry = self.drag_target
-                result = self.reads.request(self.image_key(entry, True), lambda: read_capture(entry, (510, 384)))
-                raw = result.value[0] if result is not None and not result.error else None
-                width, height = 56, 42
-                x, y = self.drag_point
-                x, y = max(30, min(self.PANEL[2] - 12, x)), max(24, min(358, y - 12))
-                progress = 0
-            else:
-                raw = self.burn_image
-                # The picture falls to the lava and burns away from its foot, in the game's steps.
-                step = math.floor(self.burn_seconds * 12 + 1e-9)
-                progress = min(1, step / 12 / self.BURN_SECONDS)
-                fall = min(1, progress / self.BURN_LANDING)
-                sinking = max(0, progress - self.BURN_LANDING) / (1 - self.BURN_LANDING)
-                scale = 1 - 0.45 * fall
-                width, height = max(1, round(56 * scale)), max(1, round(42 * scale))
-                x = self.DELETE[0] + 21
-                # It falls until its foot meets the pool's middle, then sinks into it as it burns.
-                y = (self.DELETE[1] - 24 + (24 + self.BURN_ENTRY - height / 2) * fall * fall
-                     + self.BURN_SINK * height * sinking)
-            size = max(1, round(width * sx)), max(1, round(height * sy))
-            fit_key = 'held', self.drag_target if self.dragging else self.burn_target, size
-            if fit_key not in self.image_cache:
-                sprite = (ImageOps.contain(raw, size, Image.Resampling.NEAREST).convert('RGBA') if raw is not None
-                          else Image.new('RGBA', size, c('#999999')))
-                remember(self.image_cache, fit_key, sprite, 48)
-            sprite = self.image_cache[fit_key]
+                if not held_picture:
+                    return   # the presenter shows it by itself: see held_overlay
+                sprite, left, top = self.held_sprite(sx, sy, point)
+                image.paste(sprite, (left, top), sprite)
+                outline = max(1, round(sx))
+                draw.rectangle((left - 1, top - 1, left + sprite.width, top + sprite.height), outline=gold,
+                               width=outline)
+                held.append((left - 1 - outline, top - 1 - outline,
+                             left + sprite.width + outline + 1, top + sprite.height + outline + 1))
+                return
+            raw = self.burn_image
+            # The picture falls to the lava and burns away from its foot, in the game's steps.
+            step = math.floor(self.burn_seconds * 12 + 1e-9)
+            progress = min(1, step / 12 / self.BURN_SECONDS)
+            fall = min(1, progress / self.BURN_LANDING)
+            sinking = max(0, progress - self.BURN_LANDING) / (1 - self.BURN_LANDING)
+            scale = 1 - 0.45 * fall
+            width, height = max(1, round(56 * scale)), max(1, round(42 * scale))
+            x = self.DELETE[0] + 21
+            # It falls until its foot meets the pool's middle, then sinks into it as it burns.
+            y = (self.DELETE[1] - 24 + (24 + self.BURN_ENTRY - height / 2) * fall * fall
+                 + self.BURN_SINK * height * sinking)
+            sprite = self.fitted_held(raw, self.burn_target, (max(1, round(width * sx)), max(1, round(height * sy))))
             left, top = point(x, y)
             left, top = left - sprite.width // 2, top - sprite.height // 2
-            if not self.dragging:
-                block = max(1, round(min(sx, sy)))
-                # Alight once it meets the lava: the fire stays a little above the lava's
-                # line as it sinks, and the last of it burns as it goes under.
-                burnt = 0 if progress < self.BURN_LANDING else min(1, 0.12 + 0.88 * sinking)
-                sprite, sparks = burn(sprite, burnt, step, block)
-                # Where it enters the lava: in front of the pool's far half, the near half
-                # stays in front of it.
-                lava = point(0, self.DELETE[1] + self.BURN_ENTRY)[1]
-                sprite = sprite.crop((0, 0, sprite.width, max(0, min(sprite.height, lava - top))))
-                rise = min((spark_y for _x, spark_y, _colour in sparks), default=0)
-                held.append((left - block, top + min(0, rise) - block,
-                                  left + sprite.width + 2 * block, max(top + sprite.height, lava) + block))
-                for spark_x, spark_y, colour in sparks:
-                    if top + spark_y < lava:
-                        draw.rectangle((left + spark_x, top + spark_y,
-                                        left + spark_x + block - 1, top + spark_y + block - 1), fill=colour)
+            block = max(1, round(min(sx, sy)))
+            # Alight once it meets the lava: the fire stays a little above the lava's
+            # line as it sinks, and the last of it burns as it goes under.
+            burnt = 0 if progress < self.BURN_LANDING else min(1, 0.12 + 0.88 * sinking)
+            sprite, sparks = burn(sprite, burnt, step, block)
+            # Where it enters the lava: in front of the pool's far half, the near half
+            # stays in front of it.
+            lava = point(0, self.DELETE[1] + self.BURN_ENTRY)[1]
+            sprite = sprite.crop((0, 0, sprite.width, max(0, min(sprite.height, lava - top))))
+            rise = min((spark_y for _x, spark_y, _colour in sparks), default=0)
+            held.append((left - block, top + min(0, rise) - block,
+                              left + sprite.width + 2 * block, max(top + sprite.height, lava) + block))
+            for spark_x, spark_y, colour in sparks:
+                if top + spark_y < lava:
+                    draw.rectangle((left + spark_x, top + spark_y,
+                                    left + spark_x + block - 1, top + spark_y + block - 1), fill=colour)
             if sprite.height:
                 image.paste(sprite, (left, top), sprite)
-                if self.dragging:
-                    outline = max(1, round(sx))
-                    draw.rectangle((left - 1, top - 1, left + sprite.width, top + sprite.height), outline=gold,
-                                   width=outline)
-                    held.append((left - 1 - outline, top - 1 - outline,
-                                 left + sprite.width + outline + 1, top + sprite.height + outline + 1))
 
         if surface is not None:
             draw_list()

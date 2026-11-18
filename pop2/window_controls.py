@@ -486,6 +486,7 @@ class WindowControls(InputRouting):
 
     def dispose_screenshot_gallery(self):
         self.screenshot_scroll_dragging = False
+        self.hide_screenshot_held()
         gallery = getattr(getattr(self, 'game_menu', None), 'screenshot_gallery', None)
         if gallery is not None:
             gallery.close()
@@ -1678,7 +1679,7 @@ class WindowControls(InputRouting):
         if viewer is not None and viewer.drag is not None:
             point = self.dev_pointer(event)
             if point is not None and viewer.move_drag(point[0]):
-                self.canvas.configure(cursor='fleur')
+                self.set_canvas_cursor('fleur')
                 self.redraw_cutscene_gallery()
             return 'break'
         if getattr(self, 'cutscene_replay', None) is not None:
@@ -1686,9 +1687,13 @@ class WindowControls(InputRouting):
         gallery = getattr(getattr(self, 'game_menu', None), 'screenshot_gallery', None)
         if gallery is not None and gallery.drag_target is not None:
             point = self.dev_pointer(event)
+            before = gallery.dragging, gallery.hovered
             if gallery.move_drag(*(point if point is not None else (-1, -1))):
-                self.canvas.configure(cursor='hand2' if gallery.hovered == 13 else 'fleur')
-                self.redraw_screenshot_gallery()
+                self.set_canvas_cursor('hand2' if gallery.hovered == 13 else 'fleur')
+                # A step that only carries the picture moves its own canvas item;
+                # starting, or reaching or leaving the delete button, redraws the page.
+                if before != (True, gallery.hovered) or not self.move_screenshot_held(gallery):
+                    self.redraw_screenshot_gallery()
                 self.schedule_screenshot_gallery()
             return 'break'
         if getattr(self, 'screenshot_scroll_dragging', False) and self.game_menu is not None:
@@ -1750,6 +1755,67 @@ class WindowControls(InputRouting):
                 cursor = 'hand2' if menu.save_browser.hovered == 25 else ''
                 if self.canvas.cget('cursor') != cursor:
                     self.canvas.configure(cursor=cursor)
+
+    def set_canvas_cursor(self, cursor):
+        # Configuring the canvas, even with the same cursor, repaints all of it:
+        # at 3440x1440, on every step of a drag.
+        if self.canvas.cget('cursor') != cursor:
+            self.canvas.configure(cursor=cursor)
+
+    def screenshot_gallery_placement(self, gallery, width, height):
+        """Where the screenshots page goes in a window: the game's picture (size, position),
+        then the page's, which is wider in a wide window."""
+        size, position = fit_viewport(width, height)
+        if gallery.wide_layout(width, height)[0]:
+            # The wide page fills the window; the game's picture stays centred behind it.
+            return size, position, *fit_menu_viewport(width, height)
+        return size, position, size, position
+
+    def show_screenshot_held(self, gallery, size, position):
+        """Show the picture being dragged in a canvas item of its own over the page,
+        or take it away when nothing is dragged."""
+        held = gallery.held_overlay(size) if gallery is not None else None
+        if held is None:
+            self.hide_screenshot_held()
+            return
+        picture, (x, y) = held
+        place = float(position[0] + x), float(position[1] + y)
+        shown = getattr(self, 'screenshot_held', None)
+        if shown is None or shown[2] is not picture:
+            photo = ImageTk.PhotoImage(picture, master=self.canvas)
+            if shown is None:
+                item = self.canvas.create_image(*place, image=photo, anchor='nw')
+            else:
+                item = shown[0]
+                self.canvas.itemconfigure(item, image=photo)
+            self.screenshot_held = item, photo, picture
+        item = self.screenshot_held[0]
+        if tuple(self.canvas.coords(item)) != place:
+            self.canvas.coords(item, *place)
+
+    def hide_screenshot_held(self):
+        shown = getattr(self, 'screenshot_held', None)
+        self.screenshot_held = None
+        if shown is not None:
+            try:
+                self.canvas.delete(shown[0])
+            except tk.TclError:
+                pass
+
+    def move_screenshot_held(self, gallery):
+        """Carry the dragged picture to the pointer without redrawing the page under it;
+        false when the page on screen is not the one it was shown over."""
+        presented = getattr(self, 'screenshot_gallery_frame', None)
+        if presented is None or presented[0] is not gallery or getattr(self, 'screenshot_held', None) is None:
+            return False
+        width, height = self.canvas.winfo_width(), self.canvas.winfo_height()
+        if width <= 1 or height <= 1:
+            width, height = VISIBLE_SIZE[0] * 2, VISIBLE_SIZE[1] * 2
+        size, position = self.screenshot_gallery_placement(gallery, width, height)[2:]
+        if (size, position) != presented[5]:
+            return False
+        self.show_screenshot_held(gallery, size, position)
+        return True
 
     def redraw_dev_menu(self):
         # F3 pauses the world; pointer changes only need the frozen clean viewport.
@@ -1947,19 +2013,18 @@ class WindowControls(InputRouting):
         game_menu = getattr(self, 'game_menu', None)
         gallery = getattr(game_menu, 'screenshot_gallery', None) if getattr(game_menu, 'page', None) == 'screenshots' else None
         if gallery is not None:
-            fitted, origin = size, position
+            fitted, origin, size, position = self.screenshot_gallery_placement(gallery, width, height)
             spread, shift = gallery.wide_layout(width, height)
-            if spread:
-                # The wide page fills the window; the game's picture stays centred behind it.
-                size, position = fit_menu_viewport(width, height)
             cached = getattr(self, 'screenshot_gallery_source', None)
             if cached is None or cached[0] is not self.screenshot_viewport or cached[1] != size:
                 source = self.menu_backdrop(fitted, origin, size, position)
                 self.screenshot_gallery_source = self.screenshot_viewport, size, source
             else:
                 source = cached[2]
-            frame = self.draw_screenshot_notice(gallery.draw(source, self.ui_font, visible=True), visible=True,
-                                                uniform=bool(spread), inset=shift).convert('RGB')
+            # A dragged picture is shown over the page by itself (show_screenshot_held). The page
+            # stays RGBA: only the parts sent to Tk are converted, not the whole window's picture.
+            frame = self.draw_screenshot_notice(gallery.draw(source, self.ui_font, visible=True, held_picture=False),
+                                                visible=True, uniform=bool(spread), inset=shift)
             previous = getattr(self, 'screenshot_gallery_frame', None)
             state = id(self.screenshot_viewport), id(self.ui_font), gallery.surface_state, gallery.overlay_active
             if previous is not None and previous[0] is gallery and previous[1].size == size and previous[2] is self.image_ref:
@@ -1980,26 +2045,33 @@ class WindowControls(InputRouting):
                             local = (0, 0, min(region[2], frame.width) - region[0],
                                      min(region[3], frame.height) - region[1])
                         else:
-                            local = ImageChops.difference(previous[1].crop(region), frame.crop(region)).getbbox()
+                            # alpha_only: the page is opaque, so a difference's alpha is zero everywhere.
+                            local = ImageChops.difference(previous[1].crop(region),
+                                                          frame.crop(region)).getbbox(alpha_only=False)
                         if local:
                             damages.append((local[0] + region[0], local[1] + region[1],
                                             local[2] + region[0], local[3] + region[1]))
                 else:
-                    damage = ImageChops.difference(previous[1], frame).getbbox()
+                    damage = ImageChops.difference(previous[1], frame).getbbox(alpha_only=False)
                     damages = [damage] if damage else []
                 for damage in damages:
-                    patch = ImageTk.PhotoImage(frame.crop(damage))
+                    patch = ImageTk.PhotoImage(frame.crop(damage).convert('RGB'))
                     self.image_ref.tk.call(str(self.image_ref), 'copy', str(patch), '-to', damage[0], damage[1])
-                self.canvas.coords(self.canvas.find_all()[0], *position)
+                item = self.canvas.find_all()[0]
+                if tuple(self.canvas.coords(item)) != tuple(map(float, position)):
+                    # Even the same coordinates make Tk repaint the whole item.
+                    self.canvas.coords(item, *position)
             else:
-                self.image_ref = ImageTk.PhotoImage(frame)
+                self.image_ref = ImageTk.PhotoImage(frame.convert('RGB'))
                 if self.canvas.find_all():
                     self.canvas.itemconfigure(self.canvas.find_all()[0], image=self.image_ref)
                     self.canvas.coords(self.canvas.find_all()[0], *position)
                 else:
                     self.canvas.create_image(*position, image=self.image_ref, anchor='nw')
-            self.screenshot_gallery_frame = gallery, frame, self.image_ref, state, gallery.held_rect
+            self.screenshot_gallery_frame = gallery, frame, self.image_ref, state, gallery.held_rect, (size, position)
+            self.show_screenshot_held(gallery, size, position)
             return
+        self.hide_screenshot_held()
         self.screenshot_gallery_frame = self.screenshot_gallery_source = None
         if getattr(game_menu, 'page', None) == 'saves':
             fitted, origin = size, position
