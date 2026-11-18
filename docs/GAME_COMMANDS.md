@@ -103,6 +103,31 @@ letterboxing. Closing a menu consumes held keys until release. An activation
 key cannot repeat into a newly opened confirmation, and focus loss leaves
 the game paused even if the menu was opened while running.
 
+Passing the pointer over a menu's options costs about as much in a large
+window as in a small one. The game menu, its options and controls, its
+dialogs, the copy challenge and Developer Tools are drawn at the game's
+resolution. For each option the pointer reached, the window made a new photo
+of its whole size, which Tk then painted again in full: about 35 ms at
+3440x1440, against 19 ms in a 1020x768 window. Now only the bands of rows that
+changed are enlarged, exactly as the whole page's enlargement shows them
+(`nearest_axes`, `changed_bands`), and written into the window's photo
+(`WindowControls.patch_native_menu`). A step takes 8-12 ms at either size,
+most of it spent drawing the game under the menu again. Small patches go to Tk
+as data with no alpha (`put_patch`). Copying a patch from another photo made Tk
+check the alpha of the whole photo, about 2 ms at 3440x1440 for each patch. The
+photo is moved only when its place changes (`keep_photo_at`), since even
+unchanged coordinates make Tk paint all of it.
+
+The saves and screenshots pages are drawn at the window's resolution. They kept
+a cached page for each focus, so each button, save or picture the pointer
+reached drew the whole page again and compared the whole window. They now keep
+one cached page, draw over it the controls the focus lights, and compare only
+those controls and the list rows or cells the focus left and reached. The saves
+list is pasted rather than composited, since it starts from its own opaque
+ground. At 3440x1440 a step over the saves page took about 63 ms and now takes
+about 7. A step over the screenshots page took 15-45 ms and now takes about 9.
+In a 1020x768 window both take 2-4 ms.
+
 Master mute sets both SDL channel volumes to zero without stopping their
 playback clocks. This preserves the playback-dependent death prompt timing.
 Disabling ambient music cancels only ambient requests/playback; death cues

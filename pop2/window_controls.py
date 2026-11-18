@@ -1,11 +1,13 @@
 """Tk window controls and modal input for the scene host."""
 
+import functools
 import math
 import sys
 import time
 import tkinter as tk
 from types import SimpleNamespace
 
+import numpy
 from PIL import Image, ImageChops, ImageTk
 
 from pop2.app_window import create_root
@@ -25,6 +27,57 @@ RESUME_COMMAND_KEYS = frozenset({
     'Super_L', 'Super_R', 'Win_L', 'Win_R',
 })
 EXTERNAL_CAPTURE_KEYS = frozenset({'F9', 'F10'})
+
+
+@functools.lru_cache(maxsize=8)
+def nearest_axes(source_size, size):
+    """For each column and row of a picture of ``source_size`` enlarged to ``size``
+    (Image.resize, NEAREST), the source column and row it shows. Enlarging only a part
+    with a source box rounds differently, but these give the whole enlargement's pixels."""
+    def axis(count, length):
+        ramp = Image.frombytes('I', (count, 1), numpy.arange(count, dtype='<i4').tobytes())
+        return numpy.asarray(ramp.resize((length, 1), Image.Resampling.NEAREST)).reshape(-1)
+
+    return axis(source_size[0], size[0]), axis(source_size[1], size[1])
+
+
+def packed_pixels(image):
+    """An RGBA picture's pixels as one 32-bit number each, by rows and columns: compared
+    and gathered several times faster than their four channels."""
+    return numpy.asarray(image).view(numpy.uint32)[..., 0]
+
+
+def changed_bands(before, after, gap=8):
+    """The boxes (left, top, right, bottom) around what changed between two pictures of
+    the same size (arrays, packed or by channel), one for each band of rows that changed,
+    bands closer than ``gap`` rows joined: an option the pointer left and the one it
+    reached, far apart, are two small boxes rather than one over everything between them."""
+    changed = before != after
+    if changed.ndim == 3:
+        changed = changed.any(axis=2)
+    rows = numpy.flatnonzero(changed.any(axis=1))
+    if not rows.size:
+        return []
+    breaks = numpy.flatnonzero(numpy.diff(rows) > gap)
+    bands = []
+    for first, last in zip(numpy.concatenate(([rows[0]], rows[breaks + 1])), numpy.concatenate((rows[breaks], [rows[-1]]))):
+        columns = numpy.flatnonzero(changed[first:last + 1].any(axis=0))
+        bands.append((int(columns[0]), int(first), int(columns[-1]) + 1, int(last) + 1))
+    return bands
+
+
+def put_patch(photo, image, x, y):
+    """Write an opaque ``image`` into the Tk ``photo`` at (x, y). Copied from another photo,
+    it makes Tk look over the alpha of all of ``photo`` (about 2 ms at 3440x1440); given as
+    data with no alpha it spares that, but Tk reads such data about twice as slowly, so
+    only the smaller patches go as data."""
+    if image.width * image.height * 20 < photo.width() * photo.height():
+        rgb = image if image.mode == 'RGB' else image.convert('RGB')
+        photo.tk.call(str(photo), 'put', b'P6 %d %d 255 ' % rgb.size + rgb.tobytes(), '-format', 'ppm',
+                      '-to', x, y)
+    else:
+        patch = ImageTk.PhotoImage(image)
+        photo.tk.call(str(photo), 'copy', str(patch), '-to', x, y, '-compositingrule', 'set')
 
 
 def window_is_foreground(root):
@@ -2037,6 +2090,8 @@ class WindowControls(InputRouting):
         if width <= 1 or height <= 1:
             width, height = VISIBLE_SIZE[0] * 2, VISIBLE_SIZE[1] * 2
         size, position = fit_viewport(width, height)
+        # Kept only while the window shows menus drawn at the game's resolution (see patch_native_menu).
+        native_menu, self.native_menu_frame = getattr(self, 'native_menu_frame', None), None
         if (sys.platform == "win32" and getattr(self, "fullscreen", False)
                 and not getattr(self, "paused", False)
                 and getattr(self, "game_menu", None) is None
@@ -2081,12 +2136,13 @@ class WindowControls(InputRouting):
                 refresh_lava = False
                 dialog = gallery.dialog_rect
                 if previous[3] == state and dialog is None:
-                    # Only the thumbnail strip, the animated delete button, its hover label and a
-                    # held or burning picture (where it was and where it is) can change.
+                    # Only the thumbnail strip, the animated delete button, its hover label, the
+                    # controls lit by the focus and a held or burning picture (where it was and
+                    # where it is) can change.
                     damages = []
                     regions = [(*region[:2], region[2] + 1, region[3] + 1)
-                               for region in (gallery.pixel_rect(rect, size)
-                                              for rect in (gallery.LIST, gallery.DELETE, gallery.hint_rect))]
+                               for region in (gallery.pixel_rect(rect, size) for rect in
+                                              (gallery.LIST, gallery.DELETE, gallery.hint_rect, *gallery.lit_rects))]
                     regions += [rect for rect in (previous[4], gallery.held_rect) if rect is not None]
                     for index, region in enumerate(regions):
                         region = (max(0, region[0]), max(0, region[1]),
@@ -2095,6 +2151,21 @@ class WindowControls(InputRouting):
                             continue
                         if index == 0 and previous[6] == gallery.list_drawn:
                             continue   # drawn from the same thumbnails, scroll and selection
+                        cells = gallery.list_changes(previous[6]) if index == 0 and not gallery.scrolling else None
+                        if cells is not None:
+                            # Only the focus moved in the list: compare the cells it left and reached.
+                            for cell in cells:
+                                cell = gallery.pixel_rect(cell, size)
+                                cell = (max(region[0], cell[0]), max(region[1], cell[1]),
+                                        min(region[2], cell[2] + 1), min(region[3], cell[3] + 1))
+                                if cell[0] >= cell[2] or cell[1] >= cell[3]:
+                                    continue
+                                local = ImageChops.difference(previous[1].crop(cell),
+                                                              frame.crop(cell)).getbbox(alpha_only=False)
+                                if local:
+                                    damages.append((local[0] + cell[0], local[1] + cell[1],
+                                                    local[2] + cell[0], local[3] + cell[1]))
+                            continue
                         if index == 0 and gallery.scrolling:
                             # A moving list changes all over: send it without comparing.
                             local = (0, 0, min(region[2], frame.width) - region[0],
@@ -2132,12 +2203,8 @@ class WindowControls(InputRouting):
                         if (lava[0] <= damage[0] and lava[1] <= damage[1] and damage[2] <= lava[2]
                                 and damage[3] <= lava[3] and getattr(self, 'screenshot_lava', None) is not None):
                             continue   # only the lava's own item shows it
-                    patch = ImageTk.PhotoImage(frame.crop(damage).convert('RGB'))
-                    self.image_ref.tk.call(str(self.image_ref), 'copy', str(patch), '-to', damage[0], damage[1])
-                item = self.canvas.find_all()[0]
-                if tuple(self.canvas.coords(item)) != tuple(map(float, position)):
-                    # Even the same coordinates make Tk repaint the whole item.
-                    self.canvas.coords(item, *position)
+                    put_patch(self.image_ref, frame.crop(damage).convert('RGB'), *damage[:2])
+                self.keep_photo_at(position)
             else:
                 self.image_ref = ImageTk.PhotoImage(frame.convert('RGB'))
                 if self.canvas.find_all():
@@ -2165,31 +2232,50 @@ class WindowControls(InputRouting):
             else:
                 source = source_cache[2]
             browser = game_menu.save_browser
+            # The page stays RGBA: only the parts sent to Tk are converted.
             frame = self.draw_screenshot_notice(
                 browser.draw(source, self.ui_font, visible=True,
                                             background_key=id(self.screenshot_viewport)),
-                visible=True, uniform=size != fitted).convert('RGB')
+                visible=True, uniform=size != fitted)
+            modal = browser.editing or browser.confirmation
             state = (id(self.screenshot_viewport), id(self.ui_font), browser.mode, browser.selected,
                      id(browser.slots), id(browser.current), browser.error, browser.status,
                      browser.save_available, browser.editing, browser.confirmation,
-                     None if browser.editing or browser.confirmation else browser.focus,
+                     None if modal else browser.focus == 25,
                      getattr(self, 'screenshot_toast', None), browser.active_path, browser.hovered == 25)
+            listing = browser.focus, browser.scroll
             previous = getattr(self, 'save_menu_frame', None)
             if (previous is not None and previous[0] is game_menu and previous[1].size == frame.size
                     and previous[2] is self.image_ref):
-                rect = (0, 0, *frame.size)
+                rects = [(0, 0, *frame.size)]
                 if previous[3] == state:
-                    dialog = browser.DIALOG
-                    rect = browser.pixel_rect((*dialog[:2], dialog[2] + 1, dialog[3] + 1)
-                                              if browser.editing or browser.confirmation else browser.LIST, size)
-                damage = ImageChops.difference(previous[1].crop(rect), frame.crop(rect)).getbbox()
-                if damage is not None:
+                    # Only what the pointer or the keys light up: the dialog, or the tabs, the
+                    # footer and the list (compared alone, not the whole window). A list that did
+                    # not scroll changed only in the rows the focus left and reached.
+                    parts = [browser.DIALOG] if modal else [*browser.TABS, *browser.footer_rects]
+                    if not modal and previous[4][1] != browser.scroll:
+                        parts.append(browser.LIST)
+                    elif not modal:
+                        listed = browser.LIST
+                        for focus in {previous[4][0], browser.focus} if previous[4][0] != browser.focus else ():
+                            if isinstance(focus, int) and focus >= 100:
+                                row = browser.row_rect(focus - 100)
+                                parts.append((row[0], max(listed[1], row[1]), row[2], min(listed[3], row[3])))
+                    rects = [browser.pixel_rect((*rect[:2], rect[2] + 1, rect[3] + 1), size) for rect in parts
+                             if rect[1] < rect[3]]
+                for rect in rects:
+                    rect = (max(0, rect[0]), max(0, rect[1]), min(frame.width, rect[2]), min(frame.height, rect[3]))
+                    if rect[0] >= rect[2] or rect[1] >= rect[3]:
+                        continue
+                    # alpha_only: the page is opaque, so a difference's alpha is zero everywhere.
+                    damage = ImageChops.difference(previous[1].crop(rect), frame.crop(rect)).getbbox(alpha_only=False)
+                    if damage is None:
+                        continue
                     damage = (damage[0] + rect[0], damage[1] + rect[1],
                               damage[2] + rect[0], damage[3] + rect[1])
-                    patch = ImageTk.PhotoImage(frame.crop(damage))
-                    self.image_ref.tk.call(str(self.image_ref), 'copy', str(patch), '-to', damage[0], damage[1])
-                self.save_menu_frame = (game_menu, frame, self.image_ref, state)
-                self.canvas.coords(self.canvas.find_all()[0], *position)
+                    put_patch(self.image_ref, frame.crop(damage).convert('RGB'), *damage[:2])
+                self.save_menu_frame = (game_menu, frame, self.image_ref, state, listing)
+                self.keep_photo_at(position)
                 return
         else:
             self.save_menu_frame = None
@@ -2198,6 +2284,10 @@ class WindowControls(InputRouting):
             source = self.native_viewport.crop(VISIBLE_VIEWPORT)
             if menu is not None and menu.preview_enabled:
                 source = source.convert('RGB')  # cheaper here than on the enlarged frame
+            elif game_menu is not None or menu is not None or getattr(self, 'copy_challenge', None) is not None:
+                if self.patch_native_menu(native_menu, source, size, position):
+                    return
+                native_menu = source   # remembered below, with the photo made from it
             frame = source.resize(size, Image.Resampling.NEAREST)
         menu = getattr(self, 'dev_menu', None)
         if menu is not None and menu.preview_enabled:
@@ -2221,17 +2311,17 @@ class WindowControls(InputRouting):
                     patch = frame.crop(damage)
                     # The remembered frame stays exactly what the window shows.
                     shown.paste(patch, damage[:2])
-                    patch = ImageTk.PhotoImage(patch)
-                    self.image_ref.tk.call(str(self.image_ref), 'copy', str(patch),
-                                           '-to', damage[0], damage[1])
+                    put_patch(self.image_ref, patch, *damage[:2])
                 self.dev_map_frame = (menu, shown, self.image_ref, native, entry)
-                self.canvas.coords(self.canvas.find_all()[0], *position)
+                self.keep_photo_at(position)
                 return
         else:
             self.dev_map_frame = None
         self.image_ref = ImageTk.PhotoImage(frame)
+        if native_menu is source:
+            self.native_menu_frame = self.image_ref, source, size, None
         if getattr(game_menu, 'page', None) == 'saves':
-            self.save_menu_frame = (game_menu, frame, self.image_ref, state)
+            self.save_menu_frame = (game_menu, frame, self.image_ref, state, listing)
         if menu is not None and menu.preview_enabled:
             self.dev_map_frame = (menu, frame, self.image_ref, native, entry)
         if self.canvas.find_all():
@@ -2239,6 +2329,40 @@ class WindowControls(InputRouting):
             self.canvas.coords(self.canvas.find_all()[0], *position)
         else:
             self.canvas.create_image(*position, image=self.image_ref, anchor="nw")
+
+    def patch_native_menu(self, previous, source, size, position):
+        """Show again a menu drawn at the game's resolution (the game menu, its options
+        and controls, the tools): only the pixels that changed go into the window's photo,
+        enlarged as the whole page is. A new photo of the whole window for each option the
+        pointer passed, which Tk then painted again in full, took about 30 ms at 3440x1440."""
+        if (previous is None or previous[0] is not self.image_ref or previous[2] != size
+                or previous[1].size != source.size or 'RGBA' != previous[1].mode or 'RGBA' != source.mode):
+            return False
+        pixels = previous[3]   # the shown page's packed pixels, once they were needed
+        changed = ImageChops.difference(previous[1], source).getbbox(alpha_only=False)
+        if changed is not None:
+            columns, rows = nearest_axes(source.size, size)
+            before = packed_pixels(previous[1]) if pixels is None else pixels
+            pixels = packed_pixels(source)
+            x, y = changed[:2]
+            within = numpy.s_[changed[1]:changed[3], changed[0]:changed[2]]
+            for left, top, right, bottom in changed_bands(before[within], pixels[within]):
+                # The window's columns and rows that show the changed ones.
+                left, right = (int(edge) for edge in numpy.searchsorted(columns, (left + x, right + x)))
+                top, bottom = (int(edge) for edge in numpy.searchsorted(rows, (top + y, bottom + y)))
+                part = pixels.take(rows[top:bottom], 0).take(columns[left:right], 1)
+                put_patch(self.image_ref, Image.fromarray(part.view(numpy.uint8).reshape(*part.shape, 4)), left, top)
+        self.native_menu_frame = self.image_ref, source, size, pixels
+        self.keep_photo_at(position)
+        return True
+
+    def keep_photo_at(self, position):
+        """Place the window's photo, whose pixels were patched, at ``position``. Even the same
+        coordinates make Tk paint all of it again (about 6 ms at 3440x1440), so it moves
+        only when its place changed."""
+        item = self.canvas.find_all()[0]
+        if tuple(self.canvas.coords(item)) != tuple(map(float, position)):
+            self.canvas.coords(item, *position)
 
     def menu_backdrop(self, fitted, origin, size, position):
         """The game's picture behind a menu page drawn at the window's resolution.

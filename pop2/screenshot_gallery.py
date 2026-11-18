@@ -494,8 +494,9 @@ class ScreenshotGallery:
     @property
     def surface_state(self):
         main_image = self.reads.cache.get(self.image_key(self.entry)) if self.entry else None
+        # Not the focus: a frame drawn over the surface lights its controls itself (see lit_button).
         return (self.folder, id(self.entries), self.selected, self.scale, self.include_ui,
-                self.error, self.status, -1 if self.choosing or self.deleting else min(self.focus, 100),
+                self.error, self.status, -1 if self.choosing or self.deleting else 0,
                 id(main_image), not self.entries and self.applied_scan == self.scan_key, self.choosing, self.deleting,
                 self.focus == 13 and self.keyboard_navigation, id(self.reads.cache.get(self.lava_key)))
 
@@ -524,6 +525,27 @@ class ScreenshotGallery:
             kept = viewport, dimmed(viewport)
             remember(self.backdrops, id(viewport), kept, 3)
         return kept[1]
+
+    def list_changes(self, before):
+        """Where the list last drawn for the window (list_drawn) can differ from one drawn
+        for the list_state ``before``: when only the focus moved, the cells it left and
+        reached (page units); None for anywhere in the list."""
+        after = self.list_drawn
+        if (not isinstance(before, tuple) or not isinstance(after, tuple) or len(before) != len(after)
+                or before[:9] != after[:9] or before[10:] != after[10:]):
+            return None
+        cells = []
+        for focus in {before[9], after[9]}:
+            if isinstance(focus, int) and focus >= 100:
+                left, top, right, bottom = self.row_rect(focus - 100)
+                cells.append((max(self.LIST[0], left - 1), max(self.LIST[1], top - 1),
+                              min(self.LIST[2], right + 1), min(self.LIST[3], bottom + 1)))
+        return cells
+
+    @property
+    def lit_rects(self):
+        """The controls that light up with the focus, drawn over the page's surface (lit_button)."""
+        return (self.REFRESH, *self.SCALES, self.INCLUDE_UI, *self.FOOTER, self.OPEN_FOLDER)
 
     @property
     def hint_rect(self):
@@ -1327,6 +1349,33 @@ class ScreenshotGallery:
             if draw_hint():
                 menu_theme.watermark(image, self.PANEL, point, (), drawn_box(self.hint_rect))
 
+        def lit_button(index):
+            """Draw the control that lights up when ``index`` has the focus; its rectangle,
+            or None for a focus that lights none of them."""
+            if index == 15:
+                button(self.REFRESH, 'Refresh', 15)
+                return self.REFRESH
+            if index is not None and 0 <= index < len(self.SCALES):
+                button(self.SCALES[index], f'{index + 1}x', index, active=self.scale == index + 1)
+                return self.SCALES[index]
+            if index == 4:
+                check = self.INCLUDE_UI[0] + 8
+                box(self.INCLUDE_UI, c('#222222'), gold if self.focus == 4 else c('#626262'))
+                box((check, 54, check + 8, 62), cyan if self.include_ui else c('#181818'))
+                if self.include_ui:
+                    draw.line([point(check + 1, 58), point(check + 3, 60), point(check + 7, 55)],
+                              fill=c('#181818'), width=max(1, round(sx)))
+                text('With menus', check + 14, 54, 88)
+                return self.INCLUDE_UI
+            if index in (10, 11, 12):
+                button(self.FOOTER[index - 10], ('Close', 'Change folder', 'Capture PNG')[index - 10], index,
+                       active=index == 12, scale=0.6)
+                return self.FOOTER[index - 10]
+            if index == 18:
+                button(self.OPEN_FOLDER, 'Open folder', 18, scale=0.6)
+                return self.OPEN_FOLDER
+            return None
+
         if surface is not None:
             # The surface has the list as it was drawn for its list_state, the theme's sign
             # included: on the whole panel the sign took most of a frame's time at 3440x1440.
@@ -1338,7 +1387,14 @@ class ScreenshotGallery:
                     # The surface takes the list as it is now (nothing else is drawn over it),
                     # so that the next frames, a dragged picture's included, need not draw it.
                     surface[0].paste(image.crop(listed), listed[:2])
-                    self.surface_cache[surface_key] = surface[0], list_state
+                    self.surface_cache[surface_key] = surface[0], list_state, surface[2]
+            if self.focus != surface[2]:
+                # The surface keeps the controls lit as they were when it was drawn: the one
+                # lit then and the one lit now are drawn again, with the sign over them.
+                for index in (surface[2], self.focus):
+                    rect = lit_button(index)
+                    if rect is not None:
+                        menu_theme.watermark(image, self.PANEL, point, (), drawn_box(rect))
             hint_and_sign()
             draw_delete()
             draw_held_image()
@@ -1353,18 +1409,12 @@ class ScreenshotGallery:
                 box(self.PANEL, c('#181818'), c('#858585'))
             text('Screenshots', 36, 26, 250, gold, 1)
             text(f'{len(self.entries)} PNG', self.REFRESH[0] - 12, 29, 70, muted, right=True)
-            button(self.REFRESH, 'Refresh', 15)
+            lit_button(15)
             text('Size', 36, 54, 44, muted)
-            for i, rect in enumerate(self.SCALES):
-                button(rect, f'{i + 1}x', i, active=self.scale == i + 1)
+            for i in range(len(self.SCALES)):
+                lit_button(i)
             text(f'{510 * self.scale} x {384 * self.scale}', 238, 54, 114, muted, 0.6)
-            check = self.INCLUDE_UI[0] + 8
-            box(self.INCLUDE_UI, c('#222222'), gold if self.focus == 4 else c('#626262'))
-            box((check, 54, check + 8, 62), cyan if self.include_ui else c('#181818'))
-            if self.include_ui:
-                draw.line([point(check + 1, 58), point(check + 3, 60), point(check + 7, 55)],
-                          fill=c('#181818'), width=max(1, round(sx)))
-            text('With menus', check + 14, 54, 88)
+            lit_button(4)
             text(str(self.folder).replace('\\', '/'), 36, 75, right - 36, muted, 0.45, tail=True)
             draw_list()
             message = self.error or self.status
@@ -1384,9 +1434,8 @@ class ScreenshotGallery:
                      (self.PREVIEW[0] + self.PREVIEW[2]) / 2 - 118, (self.PREVIEW[1] + self.PREVIEW[3]) / 2 - 4,
                      240, muted)
             draw_delete()
-            for i, (rect, label) in enumerate(zip(self.FOOTER, ('Close', 'Change folder', 'Capture PNG'))):
-                button(rect, label, 10 + i, active=i == 2, scale=0.6)
-            button(self.OPEN_FOLDER, 'Open folder', 18, scale=0.6)
+            for index in (10, 11, 12, 18):
+                lit_button(index)
             if message:
                 # In the place of the details line, starting where the picture's name does.
                 under = (self.PREVIEW[0] if framed_left[0] is None else framed_left[0]), self.PREVIEW[3]
@@ -1401,7 +1450,7 @@ class ScreenshotGallery:
                 draw = ImageDraw.Draw(image)
                 remember(self.modal_cache, key, image.copy(), 3)
             else:
-                remember(self.surface_cache, surface_key, (image.copy(), list_state), 2)
+                remember(self.surface_cache, surface_key, (image.copy(), list_state, self.focus), 2)
                 hint_and_sign()   # the surface is kept without it
         dialog = self.dialog_shift if modal else 0
         if wide is not None:

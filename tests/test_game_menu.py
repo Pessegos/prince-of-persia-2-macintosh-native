@@ -15,6 +15,7 @@ from pop2.game_menu import GameMenu
 from pop2.game_ui import PLAYFIELD_VIEWPORT, fit_viewport, viewport_point
 from pop2.preferences import load_preferences
 from pop2.screenshots import ScreenshotSettings
+from pop2.window_controls import put_patch
 
 from tests.desktop import exclusive_desktop
 
@@ -741,6 +742,65 @@ class GameMenuSceneTests(unittest.TestCase):
                 self.assertEqual(self.displayed_screenshots().tobytes(), self.expected_screenshots(fresh=True).tobytes())
                 self.assertIs(scene.image_ref, photo)
 
+    def test_passing_over_the_screenshots_page_s_controls_draws_and_compares_only_them(self):
+        # The page's surface was kept for each focus: each control or picture the pointer
+        # reached drew the whole page again and compared all of it (up to 45 ms at 3440x1440).
+        from pop2 import menu_theme
+
+        scene = self.scene
+        self.addCleanup(menu_theme.use, menu_theme.current())
+        with TemporaryDirectory() as directory:
+            folder = Path(directory)
+            for index in range(6):
+                Image.new('RGB', (510, 384), (index * 40, 90, 160)).save(folder / f'{index}.png')
+            scene.screenshot_settings = ScreenshotSettings(folder, 1)
+            self.press('F2')
+            gallery = self.settle_screenshot_gallery()
+            compared = []
+            difference = ImageChops.difference
+
+            def counted(first, second):
+                compared.append(first.size)
+                return difference(first, second)
+
+            with patch.object(scene, 'dev_pointer', side_effect=lambda event: (event.x, event.y)), \
+                    patch.object(scene.canvas, 'winfo_width', return_value=3440), \
+                    patch.object(scene.canvas, 'winfo_height', return_value=1440):
+                scene.redraw_screenshot_gallery()
+                targets = {}
+                for y in range(0, 384, 3):
+                    for x in range(-200, 900, 4):
+                        index = gallery.hit(x, y)
+                        if index is not None and (index in (0, 1, 2, 3, 4, 10, 11, 12, 15, 18) or 100 <= index < 103):
+                            targets.setdefault(index, (x, y))
+                self.assertEqual(set(targets), {0, 1, 2, 3, 4, 10, 11, 12, 15, 18, 100, 101, 102})
+                # From a picture to the controls and back, from one control to the next.
+                route = [targets[index] for index in (100, 15, 1, 4, 102, 10, 18, 12, 101, 3, 0)] + [(250, 160)]
+                frame = 3440 * 1440
+                for theme in menu_theme.THEMES.values():
+                    with self.subTest(theme=theme.name):
+                        menu_theme.use(theme)
+                        # A level's theme is chosen as the game is drawn, before the page opens:
+                        # here the page is shown again from the start in this one.
+                        for cache in (gallery.surface_cache, gallery.modal_cache, gallery.backdrops):
+                            cache.clear()
+                        scene.screenshot_gallery_frame = None
+                        scene.redraw_screenshot_gallery()
+                        photo = scene.image_ref
+                        surfaces = [surface[0] for surface in gallery.surface_cache.values()]
+                        for x, y in route:
+                            compared.clear()
+                            with patch('pop2.window_controls.ImageChops.difference', side_effect=counted):
+                                scene.dev_hover(SimpleNamespace(x=x, y=y))
+                            self.assertTrue(all(width * height * 40 < frame for width, height in compared),
+                                            (x, y, compared))
+                            self.assertEqual(self.displayed_screenshots().tobytes(),
+                                             self.expected_screenshots(fresh=True).tobytes(), (x, y))
+                        self.assertIs(scene.image_ref, photo)
+                        # The surface was not drawn again: only the list took the pictures' outlines.
+                        self.assertTrue(all(any(surface is kept[0] for kept in gallery.surface_cache.values())
+                                            for surface in surfaces))
+
     def test_gallery_drag_escape_leave_and_close_cancel_without_deleting(self):
         scene = self.scene
         with TemporaryDirectory() as directory:
@@ -933,6 +993,41 @@ class GameMenuSceneTests(unittest.TestCase):
                         self.assertEqual(page.hit(*point), index, (device, control))
                 page.device = 'keyboard'
 
+    def test_passing_over_options_drawn_at_the_game_s_resolution_sends_only_what_changed(self):
+        # Each option the pointer reached on the game menu, its options or its controls made
+        # a new photo of the whole window, which Tk then painted again in full: about 35 ms
+        # at 3440x1440, against 19 ms in a small window.
+        scene = self.scene
+        for width, height in ((3440, 1440), (1020, 768), (800, 900)):
+            size, _origin = fit_viewport(width, height)
+            with self.subTest(window=(width, height)), \
+                    patch.object(scene, 'dev_pointer', side_effect=lambda event: (event.x, event.y)), \
+                    patch.object(scene.canvas, 'winfo_width', return_value=width), \
+                    patch.object(scene.canvas, 'winfo_height', return_value=height):
+                if scene.game_menu is not None:
+                    scene.close_game_menu()
+                self.press('F1')
+                menu = scene.game_menu
+                for page in ('menu', 'options', 'controls'):
+                    if page == 'controls':
+                        scene.open_controls_page()
+                    else:
+                        menu.page, menu.focus = page, 0
+                    points = [(x, y) for y in range(8, 384, 6) for x in range(8, 512, 12) if menu.hover(x, y)]
+                    self.assertGreater(len(points), 3, page)
+                    scene.render()
+                    photo = scene.image_ref
+                    with patch('pop2.window_controls.put_patch', wraps=put_patch) as made:
+                        for x, y in points[::max(1, len(points) // 10)] + [(-1, -1)]:
+                            scene.dev_hover(SimpleNamespace(x=x, y=y))
+                            shown = ImageTk.getimage(scene.image_ref).convert('RGB')
+                            expected = scene.native_viewport.crop((1, 0, 511, 384)).resize(size, Image.Resampling.NEAREST)
+                            self.assertEqual(shown.tobytes(), expected.convert('RGB').tobytes(), (page, x, y))
+                    self.assertIs(scene.image_ref, photo)
+                    sent = [call.args[1].size for call in made.call_args_list]
+                    self.assertTrue(sent, page)
+                    self.assertTrue(all(w * h * 8 < size[0] * size[1] for w, h in sent), (page, sent))
+
     def test_save_dialog_and_scroll_update_pixels_without_redrawing_gameplay(self):
         scene = self.scene
         scene.apply_game_action('save')
@@ -951,7 +1046,7 @@ class GameMenuSceneTests(unittest.TestCase):
                     browser.edit_text(character, character)
                     scene.apply_game_action('changed')
                     actual = ImageTk.getimage(scene.image_ref).convert('RGB')
-                    self.assertEqual(actual.tobytes(), scene.save_menu_frame[1].tobytes())
+                    self.assertEqual(actual.tobytes(), scene.save_menu_frame[1].convert('RGB').tobytes())
                 browser.key('Escape')
                 browser.slots = browser.slots * 20
                 scene.redraw_save_menu()
@@ -960,7 +1055,7 @@ class GameMenuSceneTests(unittest.TestCase):
                     browser.animate(1 / 120)
                     scene.redraw_save_menu()
                     actual = ImageTk.getimage(scene.image_ref).convert('RGB')
-                    self.assertEqual(actual.tobytes(), scene.save_menu_frame[1].tobytes())
+                    self.assertEqual(actual.tobytes(), scene.save_menu_frame[1].convert('RGB').tobytes())
                 gameplay_render.assert_not_called()
                 configure.assert_not_called()
             self.assertIs(scene.image_ref, photo)

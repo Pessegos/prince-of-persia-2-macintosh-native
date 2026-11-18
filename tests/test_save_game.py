@@ -994,14 +994,82 @@ class SaveSceneTests(unittest.TestCase):
                     self.assertTrue(browser.hover(left + 20, top + 10))
                     scene.redraw_save_menu()
                     hovered = ImageTk.getimage(photo).convert('RGB')
-                    self.assertIsNone(ImageChops.difference(hovered, scene.save_menu_frame[1]).getbbox())
+                    self.assertIsNone(ImageChops.difference(hovered, scene.save_menu_frame[1].convert('RGB')).getbbox())
                     self.assertFalse(browser.hover(left + 112, top + 10))
                     self.assertTrue(browser.hover(*point))
                     scene.redraw_save_menu()
                     actual = ImageTk.getimage(photo).convert('RGB')
-                    self.assertIsNone(ImageChops.difference(actual, scene.save_menu_frame[1]).getbbox())
+                    self.assertIsNone(ImageChops.difference(actual, scene.save_menu_frame[1].convert('RGB')).getbbox())
                     self.assertNotEqual(actual.tobytes(), hovered.tobytes())
                 self.assertIs(scene.image_ref, photo)
+
+    def test_passing_over_the_saves_page_s_buttons_draws_and_compares_only_them(self):
+        # The page was kept for each focus: each button or save the pointer reached drew all
+        # of it again and compared the whole window (about 60 ms at 3440x1440), then the
+        # whole list.
+        from PIL import ImageChops, ImageTk
+        from pop2 import menu_theme
+
+        scene = self.scene
+        self.addCleanup(menu_theme.use, menu_theme.current())
+        for index, name in enumerate(('My journey', 'Second', 'Third')):
+            scene.save_game_to(self.path.with_name(f'{index}.pop2save'), name)
+        scene.open_save_browser()
+        browser = scene.game_menu.save_browser
+        compared = []
+        difference = ImageChops.difference
+
+        def counted(first, second):
+            compared.append(first.size)
+            return difference(first, second)
+
+        def fresh():
+            caches = browser.list_base_cache, browser.modal_cache
+            browser.list_base_cache, browser.modal_cache = {}, {}
+            try:
+                return browser.draw(scene.save_menu_source[2], scene.ui_font, visible=True,
+                                    background_key=id(scene.screenshot_viewport)).convert('RGB')
+            finally:
+                browser.list_base_cache, browser.modal_cache = caches
+
+        with patch.object(scene, 'dev_pointer', side_effect=lambda event: (event.x, event.y)), \
+                patch.object(scene.canvas, 'winfo_width', return_value=3440), \
+                patch.object(scene.canvas, 'winfo_height', return_value=1440):
+            scene.redraw_save_menu()
+            targets = {}
+            for y in range(0, 384, 3):
+                for x in range(-200, 900, 4):
+                    index = browser.hit(x, y)
+                    if index is not None and (index in (0, 1, 26, 27, 28, 29) or 100 <= index < 103):
+                        targets.setdefault(index, (x, y))
+            self.assertEqual(set(targets), {0, 1, 26, 27, 28, 29, 100, 101, 102})
+            route = [targets[index] for index in (100, 0, 28, 101, 27, 29, 1, 102, 26)] + [(-1, -1)]
+            left, top, right, bottom = browser.pixel_rect(browser.LIST, (3440, 1440))
+            listed = (right - left) * (bottom - top)
+            for theme in menu_theme.THEMES.values():
+                with self.subTest(theme=theme.name):
+                    menu_theme.use(theme)
+                    # A level's theme is chosen as the game is drawn, before the page opens:
+                    # here the page is shown again from the start in this one.
+                    scene.save_menu_frame = None
+                    scene.redraw_save_menu()
+                    photo = scene.image_ref
+                    bases, steps = dict(browser.list_base_cache), 0
+                    for x, y in route:
+                        compared.clear()
+                        with patch('pop2.window_controls.ImageChops.difference', side_effect=counted):
+                            scene.dev_hover(SimpleNamespace(x=x, y=y))
+                        # A list that did not scroll is compared only in the rows the focus left
+                        # and reached, each a fifth of it.
+                        self.assertTrue(all(width * height * 3 < listed for width, height in compared), (x, y, compared))
+                        steps += bool(compared)
+                        shown = ImageTk.getimage(scene.image_ref).convert('RGB')
+                        self.assertIsNone(ImageChops.difference(shown, fresh()).getbbox(), (x, y))
+                    self.assertIs(scene.image_ref, photo)
+                    self.assertGreater(steps, len(route) // 2)
+                    # The page under the list and the buttons was not drawn again.
+                    self.assertEqual(browser.list_base_cache.keys(), bases.keys())
+                    self.assertTrue(all(browser.list_base_cache[key] is base for key, base in bases.items()))
 
     def test_old_snapshot_preview_is_a_resume_image_and_keeps_the_file_untouched(self):
         scene = self.scene

@@ -191,9 +191,10 @@ nothing. Three things a page must take care of:
   on the saves and screenshots pages) must call `watermark` again after that
   repaint. It may pass that part as `within`, in the image's own pixels: the
   sign's shades are no background colours, so the rest of a page that has
-  the sign would not change. The screenshots page does so for its list and
-  the delete button's label; the spider's fur over its whole panel took most
-  of a frame's time at 3440x1440.
+  the sign would not change. The screenshots page does so for its list, the
+  delete button's label and the controls the focus lights, which it draws
+  again over a page kept whatever has the focus; the spider's fur over its
+  whole panel took most of a frame's time at 3440x1440.
 - A page with pictures passes their rectangles in `avoid`, in the image's own
   pixels. A slot still waiting for its picture has a background colour, and
   the sign would otherwise show there and vanish when the picture arrives.

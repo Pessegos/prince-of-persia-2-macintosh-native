@@ -472,7 +472,9 @@ class SaveBrowser:
                self.error, self.status, self.save_available, self.editing, self.active_path,
                self.hovered == 25, menu_theme.current().name)
         cached = self.modal_cache.get(key) if modal else None
-        list_key = key[:8] + key[9:] + (self.focus,)
+        # Not the focus: the list, the tabs and the footer are drawn on every frame (only
+        # the Rename highlight is the page's own).
+        list_key = key[:8] + key[9:] + (self.focus == 25,)
         list_base = self.list_base_cache.get(list_key) if not modal else None
         if not modal:
             self.modal_cache.clear()
@@ -550,14 +552,27 @@ class SaveBrowser:
             else:
                 text(label, rect[0] + 10, rect[1] + 7, white if enabled else muted, rect[2] - rect[0] - 20)
 
+        def draw_buttons():
+            # The tabs and the footer light up with the pointer: drawn on every frame, over a
+            # page kept whatever has the focus, so that passing over them draws no page again.
+            for index, (rect, label) in enumerate(zip(self.TABS, ('Save', 'Load'))):
+                button(rect, label, index, active=self.mode == label.lower())
+            for index, (rect, label) in zip((28, 26, 27, 29), zip(self.footer_rects,
+                    ('Back', 'Delete', 'Overwrite' if self.mode == 'save' else 'Load game', 'New save'))):
+                enabled = (self.entry.exists if index == 26 else self.primary_enabled if index == 27
+                           else self.save_available if index == 29 else True)
+                button(rect, label, index, enabled, active=index == 29 and enabled)
+
         def draw_list():
             nonlocal image, draw, origin
             rectangle(self.LIST, fill=c('#181818'))
-            # Allocate only the clipped list, not another full-window layer.
+            # Allocate only the clipped list, not another full-window layer. It starts with
+            # the list's own ground, which the rows cover, so it is pasted rather than
+            # composited (about 2 ms a frame at 3440x1440).
             background = image
             clip = (*point(*self.LIST[:2]), *point(*self.LIST[2:]))
             origin = clip[:2]
-            image = Image.new('RGBA', (clip[2] - clip[0], clip[3] - clip[1]))
+            image = Image.new('RGBA', (clip[2] - clip[0], clip[3] - clip[1]), c('#181818'))
             draw = ImageDraw.Draw(image)
             for row, slot in enumerate(self.items):
                 rect = self.row_rect(row)
@@ -575,7 +590,7 @@ class SaveBrowser:
                     text('Current', rect[0] + 8, rect[1] + 25, cyan, 42, True)
                 text(slot.error or slot.date, rect[2] - 8, rect[1] + 25,
                      muted, (120 if current else 164) + grown, True, align='right')
-            background.alpha_composite(image, origin)
+            background.paste(image, origin)
             image, origin = background, (0, 0)
             draw = ImageDraw.Draw(image)
             if not self.items:
@@ -588,6 +603,7 @@ class SaveBrowser:
                 rectangle((225 + grown, top, 227 + grown, top + thumb), fill=c('#858585'))
 
         if list_base is not None:
+            draw_buttons()
             draw_list()
             menu_theme.watermark(image, self.PANEL, point)   # the list was repainted over it
             return image
@@ -598,8 +614,6 @@ class SaveBrowser:
             text('Saved Games', 40, 29, gold)
             text(f'{len(self.slots)} {"save" if len(self.slots) == 1 else "saves"}', right, 32,
                  muted, 82, True, align='right')
-            for index, (rect, label) in enumerate(zip(self.TABS, ('Save', 'Load'))):
-                button(rect, label, index, active=self.mode == label.lower())
             line(((40, 88), (right, 88)), c('#404040'))
             draw_list()
             slot = self.detail
@@ -686,11 +700,7 @@ class SaveBrowser:
                     text(f'Life {slot.capacity}', 472, 309, muted, 64, True, align='right')
                 text(message or slot.date, name_x, 309, message_color,
                      name_width - 70 if slot.capacity is not None else name_width, True)
-            for index, (rect, label) in zip((28, 26, 27, 29), zip(self.footer_rects,
-                    ('Back', 'Delete', 'Overwrite' if self.mode == 'save' else 'Load game', 'New save'))):
-                enabled = (self.entry.exists if index == 26 else self.primary_enabled if index == 27
-                           else self.save_available if index == 29 else True)
-                button(rect, label, index, enabled, active=index == 29 and enabled)
+            draw_buttons()
             if not modal:
                 remember(self.list_base_cache, list_key, image.copy(), 3)
         if self.confirmation or self.editing:

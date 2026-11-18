@@ -99,6 +99,32 @@ class PresentationTests(unittest.TestCase):
         self.assertEqual(viewport_point(origin[0] + size[0] / 2, size[1] / 2,
                                         3440, 1440), (256, 192))
 
+    def test_a_menu_s_changed_pixels_are_enlarged_as_the_whole_page_is(self):
+        # Enlarging only a part (Image.resize with a source box) rounds differently: about
+        # half the parts tried showed pixels the whole enlargement does not.
+        import numpy
+        from pop2.window_controls import nearest_axes
+
+        source = Image.effect_noise((510, 384), 70).convert('RGB')
+        pixels = numpy.asarray(source)
+        for size in ((1912, 1440), (1020, 768), (800, 602), (1366, 1029), (511, 385), (510, 384), (2867, 2160)):
+            with self.subTest(size=size):
+                columns, rows = nearest_axes(source.size, size)
+                whole = numpy.asarray(source.resize(size, Image.Resampling.NEAREST))
+                self.assertTrue((pixels[rows][:, columns] == whole).all())
+
+    def test_options_far_apart_are_compared_and_sent_as_separate_bands(self):
+        import numpy
+        from pop2.window_controls import changed_bands
+
+        before = numpy.zeros((384, 510, 3), numpy.uint8)
+        after = before.copy()
+        self.assertEqual(changed_bands(before, after), [])
+        after[100:112, 40:300] = 255    # the option the pointer left
+        after[118:121, 60:90] = 9       # close enough to join it
+        after[300:312, 200:470] = 255   # the option it reached
+        self.assertEqual(changed_bands(before, after), [(40, 100, 300, 121), (200, 300, 470, 312)])
+
 
 class SaveRenamePointerTests(unittest.TestCase):
     def test_name_hover_uses_hand_cursor_and_clears_tooltip_on_window_leave(self):
