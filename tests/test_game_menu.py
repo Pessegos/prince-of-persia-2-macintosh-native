@@ -407,15 +407,15 @@ class GameMenuSceneTests(unittest.TestCase):
         scene = self.scene
         gallery = scene.game_menu.screenshot_gallery
         frame = scene.screenshot_gallery_frame[1]
-        surfaces = gallery.surface_cache
+        caches = gallery.surface_cache, gallery.modal_cache, gallery.backdrops
         if fresh:
-            gallery.surface_cache = {}
+            gallery.surface_cache, gallery.modal_cache, gallery.backdrops = {}, {}, {}
         try:
             return scene.draw_screenshot_notice(
                 gallery.draw(scene.screenshot_gallery_source[2], scene.ui_font, visible=True), visible=True,
                 uniform=bool(gallery.spread), inset=gallery.shift).convert('RGB') if frame is not None else None
         finally:
-            gallery.surface_cache = surfaces
+            gallery.surface_cache, gallery.modal_cache, gallery.backdrops = caches
 
     def test_screenshot_gallery_capture_selects_new_png_and_preserves_live_game(self):
         scene = self.scene
@@ -653,6 +653,50 @@ class GameMenuSceneTests(unittest.TestCase):
                 self.assertEqual(self.displayed_screenshots().tobytes(), self.expected_screenshots(fresh=True).tobytes())
             self.press('F2')
             self.assertIsNone(scene.screenshot_lava)   # closing the page takes its item away
+
+    def test_the_delete_confirmation_compares_only_its_dialog_while_it_is_open(self):
+        # Opening the confirmation compared the whole page, though a dialog darkens all of
+        # it, and so did each pointer step over its buttons (16-20 ms at 3440x1440).
+        scene = self.scene
+        with TemporaryDirectory() as directory:
+            folder = Path(directory)
+            for index in range(3):
+                Image.new('RGB', (510, 384), (index * 60, 90, 160)).save(folder / f'{index}.png')
+            scene.screenshot_settings = ScreenshotSettings(folder, 1)
+            self.press('F2')
+            gallery = self.settle_screenshot_gallery()
+            compared = []
+            difference = ImageChops.difference
+
+            def counted(first, second):
+                compared.append(first.size)
+                return difference(first, second)
+
+            with patch.object(scene, 'dev_pointer', side_effect=lambda event: (event.x, event.y)), \
+                    patch.object(scene.canvas, 'winfo_width', return_value=3440), \
+                    patch.object(scene.canvas, 'winfo_height', return_value=1440), \
+                    patch('pop2.window_controls.ImageChops.difference', side_effect=counted):
+                scene.redraw_screenshot_gallery()
+                photo = scene.image_ref
+                compared.clear()
+                self.press('Delete')
+                self.assertTrue(gallery.deleting)
+                self.assertEqual(compared, [])   # all of the page darkens: nothing to compare
+                self.assertEqual(self.displayed_screenshots().tobytes(), self.expected_screenshots(fresh=True).tobytes())
+                dialog = gallery.pixel_rect(gallery.dialog_rect, (3440, 1440))
+                area = (dialog[2] - dialog[0] + 20) * (dialog[3] - dialog[1] + 20)
+                cancel, confirm = gallery.CONFIRM_BUTTONS
+                for x, y in (((cancel[0] + cancel[2]) / 2, 238), ((confirm[0] + confirm[2]) / 2, 238), (250, 150)):
+                    compared.clear()
+                    scene.dev_hover(SimpleNamespace(x=x + gallery.dialog_shift, y=y))
+                    self.assertTrue(compared)
+                    self.assertTrue(all(width * height <= area for width, height in compared), (compared, area))
+                    self.assertEqual(self.displayed_screenshots().tobytes(),
+                                     self.expected_screenshots(fresh=True).tobytes())
+                self.press('Escape')
+                self.assertFalse(gallery.deleting)
+                self.assertEqual(self.displayed_screenshots().tobytes(), self.expected_screenshots(fresh=True).tobytes())
+                self.assertIs(scene.image_ref, photo)
 
     def test_gallery_drag_escape_leave_and_close_cancel_without_deleting(self):
         scene = self.scene

@@ -29,6 +29,9 @@ class ScreenshotGalleryTests(unittest.TestCase):
         gallery = ScreenshotGallery(folder or self.folder)
         self.galleries.append(gallery)
         self.addCleanup(gallery.close)
+        # A picture still being read (a confirmation reads ahead the one it will show)
+        # would keep Windows from removing the folder after the test.
+        self.addCleanup(self.drain, gallery)
         self.drain(gallery)
         return gallery
 
@@ -665,6 +668,78 @@ class ScreenshotGalleryTests(unittest.TestCase):
             far = frame.getpixel(at(entry - 6))                                  # the far lava, behind it
             self.assertNotEqual(far, (255, 128, 0, 255))
             self.assertIn(far[:3], {(0, 0, 255), (0, 0, 85), *EMBER})              # the picture, charred or alight
+
+    def test_darkening_through_a_table_matches_compositing_black_over_the_page(self):
+        # The page under a dialog, and the game's picture under the page, are darkened by
+        # a table when opaque: compositing took 25 ms at 3440x1440.
+        random.seed(5)
+        opaque = Image.effect_noise((300, 200), 90).convert('RGB').convert('RGBA')
+        opaque.paste((250, 20, 140, 255), (40, 30, 120, 90))
+        clear = opaque.copy()
+        clear.putalpha(Image.effect_noise((300, 200), 90))   # alpha of every level
+        for image in (opaque, clear):
+            expected = Image.alpha_composite(image, Image.new('RGBA', image.size, (0, 0, 0, 150)))
+            self.assertEqual(screenshot_gallery.dimmed(image).tobytes(), expected.tobytes())
+
+    def test_confirmed_deletion_lists_at_once_and_reads_ahead_the_next_picture(self):
+        # The page was drawn again for the deletion, for the folder's listing, then for the next
+        # picture once it was read, all while the dropped picture burned.
+        paths = [self.png(f'{index}.png', ('red', 'green', 'blue')[index]) for index in range(3)]
+        gallery = self.gallery()
+        source, font = Image.new('RGBA', (512, 384)), self.font()
+        gallery.draw(source, font)
+        self.drain(gallery)
+        newest = gallery.entries[0]
+        following = gallery.entries[1]
+        self.assertIsNone(gallery.reads.cache.get(gallery.image_key(following)))
+        gallery.confirm_delete(newest)
+        key = gallery.image_key(following)
+        self.assertTrue(key in gallery.reads.pending or key in gallery.reads.cache)
+        self.assertIn(key, gallery.reads.wanted)
+        revision = gallery.art_revision
+        self.drain(gallery)
+        gallery.draw(source, font)
+        self.assertEqual(gallery.art_revision, revision)   # the page under the dialog does not show it
+        self.assertIsNotNone(gallery.reads.cache.get(key))
+        gallery.delete_capture()
+        deadline = time.monotonic() + 5
+        while gallery.deleting and time.monotonic() < deadline:
+            gallery.poll()
+            time.sleep(0.001)
+        self.assertFalse(paths[2].exists())
+        listed = gallery.entries
+        self.assertEqual([entry.path for entry in listed], [paths[1], paths[0]])
+        self.assertEqual(gallery.entry, following)
+        self.drain(gallery)   # the folder's own listing brings nothing new
+        self.assertIs(gallery.entries, listed)
+        self.assertEqual(gallery.entry, following)
+
+    def test_a_page_s_first_frame_is_its_later_ones_in_every_theme(self):
+        # The spider's fur was laid over the delete button's ground in the first frame
+        # only: every later one draws the button over the sign.
+        self.png()
+        gallery = self.gallery()
+        source, font = Image.new('RGBA', (1434, 1080), '#0d1117'), self.font()
+        self.addCleanup(menu_theme.use, None)
+        for theme in menu_theme.THEMES.values():
+            menu_theme.use(theme)
+            with self.subTest(theme=theme.name):
+                gallery.draw(source, font, visible=True)
+                self.drain(gallery)
+                gallery.surface_cache.clear()
+                first = gallery.draw(source, font, visible=True).tobytes()
+                self.assertEqual(gallery.draw(source, font, visible=True).tobytes(), first)
+
+    def test_a_burn_asks_for_a_new_frame_only_on_its_steps(self):
+        self.png()
+        gallery = self.gallery()
+        gallery.burn_seconds, gallery.burn_target = 0.0, gallery.entry
+        gallery.burn_image = Image.new('RGBA', (20, 15), 'red')
+        frames = [gallery.animate(1 / 60) for _ in range(round(gallery.BURN_SECONDS * 60) + 3)]
+        self.assertIsNone(gallery.burn_seconds)
+        self.assertFalse(gallery.animation_running)   # no lava frames in this test
+        # Twelve steps a second: the eleven after the first and the burn's end, not 60 frames.
+        self.assertEqual(sum(frames), 12)
 
     def test_dropping_confirms_original_capture_and_burns_only_after_success(self):
         original = self.png('original.png')

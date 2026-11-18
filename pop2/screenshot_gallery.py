@@ -42,6 +42,23 @@ class ReadResult:
     error: str = ''
 
 
+_DIM_LEVELS = None
+
+
+def dimmed(image):
+    """Black at 150 alpha over a picture: the game's picture under the page, and the
+    page under a dialog. An opaque picture goes through a table of the very levels
+    compositing gives, four times sooner (6 ms instead of 25 at 3440x1440)."""
+    global _DIM_LEVELS
+    if image.mode != 'RGBA' or image.getchannel('A').getextrema()[0] < 255:
+        return Image.alpha_composite(image, Image.new('RGBA', image.size, (0, 0, 0, 150)))
+    if _DIM_LEVELS is None:
+        ramp = Image.frombytes('RGBA', (256, 1), bytes(v for level in range(256) for v in (level,) * 3 + (255,)))
+        levels = Image.alpha_composite(ramp, Image.new('RGBA', ramp.size, (0, 0, 0, 150))).getchannel('R')
+        _DIM_LEVELS = list(levels.tobytes()) * 3 + list(range(256))
+    return image.point(_DIM_LEVELS)
+
+
 def scan_captures(folder):
     if not folder.exists():
         return ()
@@ -240,6 +257,7 @@ class GalleryReads:
         self.shared = shared   # a dict kept between pages (SHARED_READS), or None
         self.closed, self.serial, self.thread = False, 0, None
         self.wanted = None
+        self.arrived = set()
         # The page's thumbnails are read by a few workers of their own: PNG
         # decoding leaves Python's lock, so the page fills a few times sooner.
         self.thumbs, self.thumb_threads = PriorityQueue(), []
@@ -295,11 +313,13 @@ class GalleryReads:
 
     def poll(self):
         changed = False
+        self.arrived = set()   # the keys this poll brought
         while True:
             try:
                 key, result = self.results.get_nowait()
             except Empty:
                 return changed
+            self.arrived.add(key)
             self.pending.discard(key)
             if result is None:
                 changed = True
@@ -403,6 +423,7 @@ class ScreenshotGallery:
         self.choosing = self.deleting = False
         self.delete_target = None
         self.delete_from_drop, self.delete_art = False, None
+        self.following = None    # the picture a confirmed deletion will show
         self.drag_target = self.drag_origin = self.drag_point = None
         self.dragging = False
         self.burn_seconds, self.burn_image = None, None
@@ -411,6 +432,7 @@ class ScreenshotGallery:
         self.held_rect = None
         self.held_cache = None   # the dragged picture as held_overlay last framed it
         self.list_drawn = None   # list_state of the last visible page: the window compares the list only when it changes
+        self.modal_drawn = None  # what the last visible dialog was drawn over: the window then compares only the dialog
         self.hovered = None
         self.keyboard_navigation = False
         self.draft, self.caret, self.anchor = '', 0, 0
@@ -420,6 +442,7 @@ class ScreenshotGallery:
         self.text_cache, self.image_cache = {}, {}
         self.modal_cache, self.art_revision = {}, 0
         self.surface_cache = {}
+        self.backdrops = {}   # id of a picture under the page -> (it, it darkened)
         self.icon_cache = {}
         self.icon_seconds = 0.0
         self.icon_frame = 0
@@ -468,7 +491,7 @@ class ScreenshotGallery:
         main_image = self.reads.cache.get(self.image_key(self.entry)) if self.entry else None
         return (self.folder, id(self.entries), self.selected, self.scale, self.include_ui,
                 self.error, self.status, -1 if self.choosing or self.deleting else min(self.focus, 100),
-                id(main_image), self.applied_scan == self.scan_key, self.choosing, self.deleting,
+                id(main_image), not self.entries and self.applied_scan == self.scan_key, self.choosing, self.deleting,
                 self.focus == 13 and self.keyboard_navigation, id(self.reads.cache.get(self.lava_key)))
 
     def list_state(self, viewport, visible, font):
@@ -482,6 +505,20 @@ class ScreenshotGallery:
             results.append(id(result))
         return (viewport.size, visible, id(font), menu_theme.current().name, self.spread, self.shift,
                 id(self.entries), self.scroll, self.selected, self.focus, tuple(results))
+
+    @property
+    def dialog_rect(self):
+        """The open dialog's panel, where it is drawn on the page (in page units), or None."""
+        rect = (48, 44, 464, 338) if self.choosing else (80, 121, 432, 270) if self.deleting else None
+        return None if rect is None else (rect[0] + self.dialog_shift, rect[1], rect[2] + self.dialog_shift, rect[3])
+
+    def backdrop(self, viewport):
+        """The picture under the page, darkened, as every drawing from scratch starts."""
+        kept = self.backdrops.get(id(viewport))
+        if kept is None or kept[0] is not viewport:
+            kept = viewport, dimmed(viewport)
+            remember(self.backdrops, id(viewport), kept, 3)
+        return kept[1]
 
     @property
     def hint_rect(self):
@@ -499,7 +536,9 @@ class ScreenshotGallery:
 
     def poll(self):
         changed = self.reads.poll()
-        if changed:
+        following = self.image_key(self.following) if self.deleting and self.following is not None else None
+        if changed and not self.reads.arrived <= {following}:
+            # Not for the picture read ahead of a deletion: the page under the dialog does not show it.
             self.art_revision += 1
         result = self.reads.cache.get(self.commit_key)
         if result is not None:
@@ -524,6 +563,11 @@ class ScreenshotGallery:
                 self.burn_seconds, self.burn_image = 0.0, self.delete_art
                 self.burn_target = target
             self.delete_from_drop, self.delete_art = False, None
+            if not result.error and target is not None:
+                # As the folder's next listing will show it, so that the page is drawn again once,
+                # not twice while the picture burns.
+                self.apply_listing(tuple(item for item in self.entries if item != target),
+                                   self.entry.path if self.entry and self.entry != target else None)
             self.refresh()
         result = self.reads.cache.get(self.open_key)
         if result is not None:
@@ -533,18 +577,14 @@ class ScreenshotGallery:
         result = self.reads.cache.get(self.scan_key)
         if result is not None and self.applied_scan != self.scan_key:
             self.applied_scan = self.scan_key
-            self.entries = result.value or ()
+            self.apply_listing(result.value or (), self.preferred_path)
             if not result.error:
                 LAST_SCANS.pop(self.folder, None)
                 if len(LAST_SCANS) >= 4:
                     del LAST_SCANS[next(iter(LAST_SCANS))]
                 LAST_SCANS[self.folder] = self.entries
-            self.selected = next((i for i, item in enumerate(self.entries)
-                                  if item.path == self.preferred_path), 0)
             if result.error:
                 self.error = 'Could not read this folder.'
-            self.scroll = self.scroll_target = self.velocity = 0
-            self.ensure_visible(immediate=True)
         result = self.reads.cache.get(self.folder_key)
         if result is not None and self.applied_folder != self.folder_key:
             self.applied_folder = self.folder_key
@@ -552,6 +592,14 @@ class ScreenshotGallery:
             if result.error:
                 self.folder_error = 'Could not read this folder.'
         return changed
+
+    def apply_listing(self, entries, preferred_path):
+        """Show a listing of the folder, keeping the selected picture where it is still there."""
+        if tuple(entries) != self.entries:
+            self.entries = tuple(entries)   # an equal listing keeps the page's cached surface
+        self.selected = next((i for i, item in enumerate(self.entries) if item.path == preferred_path), 0)
+        self.scroll = self.scroll_target = self.velocity = 0
+        self.ensure_visible(immediate=True)
 
     def browse(self, folder):
         self.hovered = None
@@ -604,6 +652,14 @@ class ScreenshotGallery:
             result = self.reads.cache.get(self.image_key(entry, True))
             self.delete_art = result.value[0] if result is not None and not result.error else None
             self.deleting, self.focus = True, 60
+            survivors = [item for item in self.entries if item != entry]
+            following = self.following = (self.entry if self.entry is not None and self.entry != entry
+                                          else survivors[0] if survivors else None)
+            if following is not None:   # the large picture after the deletion, read before it is shown
+                key = self.image_key(following)
+                if self.reads.wanted is not None:
+                    self.reads.wanted = self.reads.wanted | {key}
+                self.reads.request(key, lambda: read_capture(following, (2040, 1536)), -5)
 
     def begin_drag(self, x, y):
         self.cancel_drag()
@@ -656,6 +712,7 @@ class ScreenshotGallery:
         self.image_cache.clear()
         self.modal_cache.clear()
         self.surface_cache.clear()
+        self.backdrops.clear()
         self.icon_cache.clear()
 
     @property
@@ -692,15 +749,19 @@ class ScreenshotGallery:
     def animate(self, seconds):
         if self.choosing or self.deleting:
             return False
-        icon_changed = self.burn_seconds is not None
+        icon_changed = False
         if self.burn_seconds is not None:
             heard = self.burn_heard(self.burn_seconds)
+            step = math.floor(self.burn_seconds * 12 + 1e-9)
             self.burn_seconds += max(0, seconds)
             if not heard and self.burn_heard(self.burn_seconds):
                 self.burn_cue = True   # the scene plays the fire's sound and clears it
             if self.burn_seconds >= self.BURN_SECONDS:
                 self.burn_seconds, self.burn_image = None, None
                 self.burn_target = None
+                icon_changed = True
+            else:   # drawn in the game's steps, as draw_held_image counts them
+                icon_changed = math.floor(self.burn_seconds * 12 + 1e-9) != step
         if self.animation_running:
             self.icon_seconds += max(0, seconds)
             frame = math.floor(self.icon_seconds * 12 + 1e-9) % len(self.reads.cache[self.lava_key].value)
@@ -974,6 +1035,8 @@ class ScreenshotGallery:
             wanted.add(self.image_key(self.drag_target, True))
         if self.entry:
             wanted.add(self.image_key(self.entry))
+        if self.deleting and self.following is not None:
+            wanted.add(self.image_key(self.following))
         self.reads.wanted = frozenset(wanted)
         surface_key = (viewport.size, visible, id(font), background_key or id(viewport), self.surface_state,
                        menu_theme.current().name)
@@ -986,8 +1049,8 @@ class ScreenshotGallery:
         cached = self.modal_cache.get(key) if modal else None
         if not modal:
             self.modal_cache.clear()
-        image = cached.copy() if cached is not None else surface[0].copy() if surface is not None else Image.alpha_composite(
-            viewport, Image.new('RGBA', viewport.size, (0, 0, 0, 150)))
+        image = (cached.copy() if cached is not None else surface[0].copy() if surface is not None
+                 else self.backdrop(viewport).copy())
         draw = ImageDraw.Draw(image)
         sx, sy = viewport.width / (510 if visible else 512), viewport.height / 384
         if self.spread:
@@ -1237,6 +1300,7 @@ class ScreenshotGallery:
             if visible:   # the window compares only around it
                 self.held_rect = held[0] if held else None
                 self.list_drawn = list_state if list_state is not None else object()
+                self.modal_drawn = None
             return image
 
         if cached is None:
@@ -1284,8 +1348,11 @@ class ScreenshotGallery:
                 box((under[0], under[1] + 14, self.DELETE[0] - 6, under[1] + 26), c('#181818'), None)
                 text(message, under[0], under[1] + 18, self.DELETE[0] - 8 - under[0], message_color, 0.55, flush=True)
             menu_theme.watermark(image, self.PANEL, point, shown)
+            # Over the sign, as every later frame draws it: the spider's fur showed on the
+            # button's ground in this first frame only, for the twelfth of a second until the lava moved.
+            draw_delete()
             if modal:
-                image = Image.alpha_composite(image, Image.new('RGBA', image.size, (0, 0, 0, 150)))
+                image = dimmed(image)
                 draw = ImageDraw.Draw(image)
                 remember(self.modal_cache, key, image.copy(), 3)
             else:
@@ -1351,4 +1418,5 @@ class ScreenshotGallery:
         if visible:
             self.held_rect = held[0] if held else None
             self.list_drawn = list_state if list_state is not None else object()
+            self.modal_drawn = key if modal else None
         return image

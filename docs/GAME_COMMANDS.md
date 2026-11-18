@@ -172,6 +172,23 @@ In the ruins and spider themes the sign now stays off the large picture, as the
 first drawing of the page always kept it: the later frames used to lay it over
 the picture's pixels that had the page's colours, and over the empty preview
 while a picture was still being read.
+The delete confirmation and the burn after it are quicker too. A drawing of the
+page from scratch starts from the game's picture darkened once for the page
+(`ScreenshotGallery.backdrop`), and a dialog darkens the page through a table of
+the levels compositing gives (`dimmed`). Opening or closing a dialog changes all
+of the page, so the window puts it into its photo without comparing it; while a
+dialog stays open over the same page, only the dialog is compared. A confirmed
+deletion takes the picture out of the list at once, and the folder's listing
+that follows changes nothing when it brings nothing new; the large picture the
+page shows next is read while the confirmation is open. The burn asks for a new
+frame on its twelve steps a second rather than sixty, and falls inside the
+lava's own canvas item. At 3440x1440, opening the confirmation took 127 ms and
+takes about 55; a pointer step over it 16-20 ms, now about 7-11; the deletion
+with the redrawing it brought while the picture burned, 106 + 85 + 66 ms, now
+about 45 in all. Most of what is left is Tk preparing a whole 3440x1440 photo
+for the screen when all of the page darkens or lightens (about 25-30 ms). In
+the spider theme the lava's ground no longer shows the fur in a page's first
+frame only, for the twelfth of a second until the lava moved.
 Damaged, missing or oversized images report an unavailable preview without
 closing the menu. Decoding is limited to PNGs of at most 32 million pixels / 128 MiB.
 

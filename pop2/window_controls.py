@@ -1805,8 +1805,11 @@ class WindowControls(InputRouting):
 
     @staticmethod
     def screenshot_lava_region(gallery, size):
-        """The delete button and its hover label, in the pixels of the page's picture."""
-        rects = [gallery.pixel_rect(rect, size) for rect in (gallery.DELETE, gallery.hint_rect)]
+        """The delete button, its hover label and where a dropped picture falls into the
+        lava and burns, in the pixels of the page's picture."""
+        delete = gallery.DELETE
+        fall = (delete[0] - 8, delete[1] - 48, delete[2] + 8, delete[3] + 2)
+        rects = [gallery.pixel_rect(rect, size) for rect in (delete, gallery.hint_rect, fall)]
         return (max(0, min(rect[0] for rect in rects)), max(0, min(rect[1] for rect in rects)),
                 min(size[0], max(rect[2] for rect in rects) + 1), min(size[1], max(rect[3] for rect in rects) + 1))
 
@@ -2073,7 +2076,8 @@ class WindowControls(InputRouting):
             refresh_lava = True
             if previous is not None and previous[0] is gallery and previous[1].size == size and previous[2] is self.image_ref:
                 refresh_lava = False
-                if previous[3] == state and not (gallery.choosing or gallery.deleting):
+                dialog = gallery.dialog_rect
+                if previous[3] == state and dialog is None:
                     # Only the thumbnail strip, the animated delete button, its hover label and a
                     # held or burning picture (where it was and where it is) can change.
                     damages = []
@@ -2099,9 +2103,26 @@ class WindowControls(InputRouting):
                         if local:
                             damages.append((local[0] + region[0], local[1] + region[1],
                                             local[2] + region[0], local[3] + region[1]))
+                elif previous[3] == state and previous[7] is not None and previous[7] == gallery.modal_drawn:
+                    # The dialog is drawn again over the same darkened page: only it can change.
+                    region = gallery.pixel_rect((dialog[0] - 2, dialog[1] - 2, dialog[2] + 2, dialog[3] + 2), size)
+                    region = (max(0, region[0]), max(0, region[1]), min(frame.width, region[2] + 1),
+                              min(frame.height, region[3] + 1))
+                    local = ImageChops.difference(previous[1].crop(region), frame.crop(region)).getbbox(alpha_only=False)
+                    damages = [(local[0] + region[0], local[1] + region[1], local[2] + region[0],
+                                local[3] + region[1])] if local else []
+                elif (previous[7] is None) != (dialog is None):
+                    # A dialog opening or closing darkens or lightens all of the page: no need to compare.
+                    damages = [(0, 0, *frame.size)]
                 else:
                     damage = ImageChops.difference(previous[1], frame).getbbox(alpha_only=False)
                     damages = [damage] if damage else []
+                if damages and (damages[0][2] - damages[0][0]) * (damages[0][3] - damages[0][1]) * 3 >= frame.width * frame.height * 2:
+                    # Most of the page: put it into the photo directly. A patch of it would be copied
+                    # in twice, and Tk prepares the shown photo's pixels each time (32 ms in all
+                    # at 3440x1440, instead of 48).
+                    self.image_ref.paste(frame)
+                    damages, refresh_lava = [], True
                 for damage in damages:
                     if damage[0] < lava[2] and lava[0] < damage[2] and damage[1] < lava[3] and lava[1] < damage[3]:
                         refresh_lava = True
@@ -2122,7 +2143,7 @@ class WindowControls(InputRouting):
                 else:
                     self.canvas.create_image(*position, image=self.image_ref, anchor='nw')
             self.screenshot_gallery_frame = (gallery, frame, self.image_ref, state, gallery.held_rect, (size, position),
-                                             gallery.list_drawn)
+                                             gallery.list_drawn, gallery.modal_drawn)
             self.show_screenshot_lava(frame, lava, position, refresh_lava)
             self.show_screenshot_held(gallery, size, position)
             return
