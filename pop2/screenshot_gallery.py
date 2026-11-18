@@ -372,6 +372,9 @@ class ScreenshotGallery:
     BURN_SINK = 0.6      # how much of its height sinks under the lava while it burns
     BURN_ENTRY = 10      # the line, from the lava button's top, where the picture enters the lava
     BURN_LEAD = 6 / 60   # the fire sound starts six video frames (60 fps) before the picture alights
+    # The burning picture's frames a second: three to each of the game's steps. In those steps
+    # alone its fall was five places; at the window's rate (60) it was too fluid beside the game.
+    BURN_FPS = 36
     WIDE_COLUMNS = 4   # thumbnails across on the wide page
     WIDE_DROP = 28     # how much taller the wide page is
 
@@ -756,14 +759,15 @@ class ScreenshotGallery:
 
     def next_change(self):
         """Seconds until the lava's next frame or the burn's, whichever comes first; None when
-        neither runs. The window waits that long. The burn's frames are its sixtieths of a second,
-        which hold the fire's steps and its sound: caught by ticks of their own, the steps took
+        neither runs. The window waits that long. The burn's frames (BURN_FPS) hold the fire's
+        steps, and its sound has a wait of its own: caught by ticks of their own, the steps took
         70 or 88 ms in turn rather than 83."""
         waits = []
         if self.burn_seconds is not None and not (self.choosing or self.deleting):
             if self.burn_clock == 'waiting':
                 return 0
-            waits.append((math.floor(self.burn_seconds * 60 + 1e-9) + 1) / 60 - self.burn_seconds)
+            fps = self.BURN_FPS
+            waits.append((math.floor(self.burn_seconds * fps + 1e-9) + 1) / fps - self.burn_seconds)
             if not self.burn_heard(self.burn_seconds):
                 waits.append(self.burn_cue_seconds - self.burn_seconds)
         if self.animation_running:
@@ -776,7 +780,7 @@ class ScreenshotGallery:
         icon_changed = False
         if self.burn_seconds is not None:
             heard = self.burn_heard(self.burn_seconds)
-            step = math.floor(self.burn_seconds * 12 + 1e-9)
+            frame = math.floor(self.burn_seconds * self.BURN_FPS + 1e-9)
             burning = max(0, seconds)
             if self.burn_clock == 'waiting':
                 # Its clock starts with its first frame. The one that closes the confirmation
@@ -793,9 +797,9 @@ class ScreenshotGallery:
                 self.burn_target, self.burn_clock = None, None
                 self.burn_fits.clear()
                 icon_changed = True
-            else:   # the picture moves on each frame (see draw_held_image), its fire on the steps
-                icon_changed = (self.burn_clock == 'waiting' or burning > 0
-                                or math.floor(self.burn_seconds * 12 + 1e-9) != step)
+            else:   # drawn on its BURN_FPS frames, which hold the fire's steps (see draw_held_image)
+                icon_changed = (self.burn_clock == 'waiting'
+                                or math.floor(self.burn_seconds * self.BURN_FPS + 1e-9) != frame)
         if self.animation_running:
             self.icon_seconds += max(0, seconds)
             frame = math.floor(self.icon_seconds * 12 + 1e-9) % len(self.reads.cache[self.lava_key].value)
@@ -1279,12 +1283,11 @@ class ScreenshotGallery:
             raw = self.burn_image
             if self.burn_clock == 'waiting':
                 self.burn_clock = 'drawn'   # its clock starts now: see animate
-            # The picture falls to the lava and burns away from its foot. It moves at the
-            # window's rate, as it moved while it was held: in the game's steps alone its fall
-            # was five places. Its fire still flickers and sparks in those steps.
+            # The picture falls to the lava and burns away from its foot. It moves on its
+            # BURN_FPS frames; its fire flickers and sparks in the game's steps.
             step = math.floor(self.burn_seconds * 12 + 1e-9)
             progress = min(1, step / 12 / self.BURN_SECONDS)
-            moved = min(1, self.burn_seconds / self.BURN_SECONDS)
+            moved = min(1, math.floor(self.burn_seconds * self.BURN_FPS + 1e-9) / self.BURN_FPS / self.BURN_SECONDS)
             fall = min(1, moved / self.BURN_LANDING)
             sinking = max(0, moved - self.BURN_LANDING) / (1 - self.BURN_LANDING)
             scale = 1 - 0.45 * fall

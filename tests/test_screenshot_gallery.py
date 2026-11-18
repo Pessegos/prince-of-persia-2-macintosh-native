@@ -735,8 +735,10 @@ class ScreenshotGalleryTests(unittest.TestCase):
                 first = gallery.draw(source, font, visible=True).tobytes()
                 self.assertEqual(gallery.draw(source, font, visible=True).tobytes(), first)
 
-    def test_a_burning_picture_moves_on_every_frame_and_its_fire_on_the_game_s_steps(self):
-        # In the game's steps alone, the picture's fall to the lava was five places.
+    def test_a_burning_picture_moves_36_times_a_second_and_its_fire_on_the_game_s_steps(self):
+        # In the game's steps alone the picture's fall to the lava was five places; at the
+        # window's rate (60) it was too fluid beside the game. Three frames to each step.
+        self.assertEqual(ScreenshotGallery.BURN_FPS, 36)
         self.png()
         gallery = self.gallery()
         gallery.burn_seconds, gallery.burn_target = 0.0, gallery.entry
@@ -745,19 +747,20 @@ class ScreenshotGalleryTests(unittest.TestCase):
         while gallery.burn_seconds is not None and len(frames) < 100:
             frames.append(gallery.animate(1 / 60))
         self.assertFalse(gallery.animation_running)   # no lava frames in this test
-        self.assertTrue(all(frames))                  # each of the burn's frames is drawn
-        self.assertIn(len(frames), (60, 61))
+        self.assertEqual(sum(frames), 36)             # the 35 after the first and the burn's end
         source, font = Image.new('RGBA', (1434, 1080)), self.font()
         drawn = {}
-        for seconds in (0.10, 0.14, 0.50, 0.53):   # two frames in each of two of the fire's steps
+        # Two moments in one frame, then the next frames, of two of the fire's steps.
+        for seconds in (0.0835, 0.11, 0.14, 0.50, 0.53):
             gallery.burn_seconds, gallery.burn_image = seconds, Image.effect_noise((40, 30), 60).convert('RGBA')
             gallery.draw(source, font, visible=True)
-            drawn[seconds] = gallery.held_rect, gallery.draw(source, font, visible=True).crop(gallery.held_rect)
+            page = gallery.draw(source, font, visible=True)
+            drawn[seconds] = gallery.held_rect, page.crop(gallery.held_rect).tobytes()
         gallery.burn_seconds = None
-        self.assertNotEqual(drawn[0.10][0], drawn[0.14][0])   # falling between the fire's steps
+        self.assertEqual([math.floor(seconds * 12) for seconds in drawn], [1, 1, 1, 6, 6])
+        self.assertEqual(drawn[0.0835], drawn[0.11])          # the same frame
+        self.assertNotEqual(drawn[0.11][0], drawn[0.14][0])   # falling within one of the fire's steps
         self.assertNotEqual(drawn[0.50][0], drawn[0.53][0])   # and sinking
-        steps = [math.floor(seconds * 12) for seconds in drawn]
-        self.assertEqual(steps, [1, 1, 6, 6])
 
     def test_a_burn_s_clock_starts_with_its_first_frame(self):
         # The frame that closes the confirmation is the page's costliest; counting the time it
@@ -781,8 +784,10 @@ class ScreenshotGalleryTests(unittest.TestCase):
         self.assertAlmostEqual(gallery.burn_seconds, 1 / 60)
         gallery.animate(0.05)                         # then the burn keeps the clock
         self.assertAlmostEqual(gallery.burn_seconds, 1 / 60 + 0.05)
-        # The window next looks at the burn's next step, or at the lava's frame if sooner.
-        self.assertTrue(0 < gallery.next_change() <= 1 / 12 - gallery.burn_seconds + 1e-9)
+        # The window next looks at the burn's next frame, or at the lava's if sooner.
+        fps = gallery.BURN_FPS
+        self.assertTrue(0 < gallery.next_change() <= (math.floor(gallery.burn_seconds * fps) + 1) / fps
+                        - gallery.burn_seconds + 1e-9)
 
     def test_dropping_confirms_original_capture_and_burns_only_after_success(self):
         original = self.png('original.png')
