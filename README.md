@@ -20,13 +20,12 @@ I'm trying to stay as close to the original as possible, while still making some
 - [Gameplay Status](#gameplay-status)
 - [Features & Improvements](#features--improvements)
   - [Game Menu (F1)](#game-menu-f1)
-  - [Menu Themes](#menu-themes)
+  - [Port & Themes](#port--themes)
   - [Save & Load](#save--load)
-  - [Controls & Controllers](#controls--controllers)
+  - [Controls](#controls)
   - [Screenshot Gallery (F2)](#screenshot-gallery-f2)
-  - [Cutscene Viewer (Alt+C)](#cutscene-viewer-altc)
+  - [Cutscene Viewer)](#cutscene-viewer)
   - [Developer Tools (F3)](#developer-tools-f3)
-  - [Cutscene Pausing](#cutscene-pausing)
   - [Overlapping Sound Effects](#overlapping-sound-effects)
   - [Ledge Masking](#ledge-masking)
   - [Lava Overhaul](#lava-overhaul)
@@ -46,7 +45,9 @@ I'm trying to stay as close to the original as possible, while still making some
 
 Levels 1-9 are playable from start to finish, including the horse cutscene leading into Level 10.
 
-Levels 10-13 are now in the game too. They can already be explored, with some of their mechanics working, but there's still quite a bit left to do before they're fully playable.
+Levels 10-13 can be played through too, but they're not as polished as the earlier levels yet.
+
+Level 14 is in the game as well and can be reached and explored, but it still needs a lot more work.
 
 <br/>
 
@@ -65,36 +66,19 @@ It brings together the game commands, saves, controls, Cutscene Viewer and Hall 
   <img src="docs/github readme/macintosh-game.png" alt="Original Macintosh Game menu" width="350">
 </p>
 
-### Windows Port (F1)
-
-<img src="docs/github readme/menus/f1-palace.png" alt="Reworked F1 game menu with the palace theme" width="700">
-
-### Options (Alt+P)
-
-Sound, display and game settings now have their own page. This includes separate switches for game sounds, menu sounds and ambient music, along with fullscreen, cave ambience and copy protection.
-
-The menus also have soft sounds for navigation and selection, with a little musical cue when a new cutscene is revealed. Menu sounds can be switched off independently of the game's audio.
-
-<img src="docs/github readme/menus/options.png" alt="Options page with Sound, Display and Game settings" width="700">
-
 <br/>
 
-## Menu Themes
+### Port & Themes
 
-I reworked the menus to make them feel more at home in the game. Their colours and frames now follow the environment: palace stonework, sand, rough cavern rock, crumbling ruins and the temple's red columns.
-
-The same look carries through the game menu, controls, saves, Screenshot Gallery and Cutscene Viewer, including their smaller dialogs. Everything keeps the game's pixel art style, from the lettering to the frames and animations.
+I wanted the menus to feel like part of the game itself, so I gave them different pixel art themes inspired by each area, from the palace and desert to the caverns, ruins and temple. The frames, textures and colours change depending on where you are, and the themes carry over to the other menus too.
 
 <img src="docs/github readme/menus/menu-themes.gif" alt="The F1 menu in its palace, desert, cavern, ruins and temple themes" width="700">
 
-<details>
-<summary>Show final-level menu themes — spoilers</summary>
+### Options
 
-The final level has its own chessboard and spider themes, which change with the room.
+Here you can adjust the sound and display settings, enable extras like Cave Ambience, or disable the original copy protection. I also added sounds for navigating the menus, which can be turned off separately from the game's audio.
 
-<img src="docs/github readme/menus/menu-themes-final.gif" alt="The F1 menu in the final level's chessboard and spider themes" width="700">
-
-</details>
+<img src="docs/github readme/menus/options.png" alt="Options page with Sound, Display and Game settings" width="700">
 
 <br/>
 
@@ -110,23 +94,18 @@ In widescreen windows, the page makes room for a larger preview, with the save's
 
 <br/>
 
-## Controls & Controllers
+## Controls
 
-It now supports customizable keybindings and controllers through the F1 menu (or Alt+K).
+Keys and controller buttons can be changed through the F1 menu (or Alt+K).
 
-Each action can have up to two keys assigned, and controllers can be used both in-game and throughout the menus. I've tested it with an Xbox controller, but PlayStation controllers should work too, although I haven't tested them myself.
+Each action can have up to two keys, and controllers work both in-game and throughout the menus. I've tested it with an Xbox controller, but PlayStation controllers should work too, although I haven't tested them myself.
 
-I tried to make the controller designs fit the game's pixel art style, taking inspiration from the palace in Level 1, with different designs depending on which controller is connected. For the keyboard, I went with a classic 90s look.<br/>I'm pretty happy with how they turned out!
+I tried to make the controller designs fit the game's pixel art style, taking inspiration from the palace in Level 1, with different designs depending on which controller is connected. For the keyboard, I went with a classic 90s look.<br/>
+I'm pretty happy with how they turned out!
 
-### Keyboard
+### Keyboard & Controllers
 
-<img src="docs/github readme/menus/controls-keyboard.png" alt="Controls page - Keyboard" width="700">
-
-### Controller
-
-<img src="docs/github readme/menus/controls-xbox.png" alt="Controls page - Xbox controller" width="700">
-<img src="docs/github readme/menus/controls-playstation.png" alt="Controls page - PlayStation controller" width="700">
-
+<img src="docs/github readme/menus/controls.gif" alt="Controls page: the keyboard, then the Xbox controller, then a DualSense connected in its place" width="700">
 
 ### Changing Keys and Buttons
 
@@ -137,19 +116,7 @@ I tried to make the controller designs fit the game's pixel art style, taking in
 
 <br/>
 
-## Screenshot Gallery (F2)
-
-The F2 menu lets you browse and manage your screenshots directly in-game, with previews, resolution and folder options. In widescreen windows, it shows four columns of thumbnails and a larger preview.
-
-You can even delete screenshots by tossing them into the lava. The picture now falls into the pool and burns away as it sinks, with a fire sound to go with it.
-
-Pressing F8 takes a clean PNG screenshot without menus or overlays, while Shift+F8 captures the screen as it appears, including menus and paused scenes. A small notification also appears whenever a screenshot is saved.
-
-<img src="docs/github readme/menus/screenshots-burn.gif" alt="Taking a screenshot with F8, browsing the widescreen Screenshot Gallery, capturing it with its menus and tossing that picture into the lava, where it burns away" width="850">
-
-<br/>
-
-## Cutscene Viewer (Alt+C)
+## Cutscene Viewer
 
 The Cutscene Viewer lets you revisit the story through a gallery of illustrated chapter covers. The opening chapters are available from the start, and the rest unlock as you reach them in the game. The collection is kept with each save.
 
@@ -157,7 +124,21 @@ New chapters reveal their covers and titles in a pixelated animation, with a bri
 
 Click a chapter to watch it, or browse with the keyboard or controller. Replaying a cutscene leaves your current game where it was.
 
+Cutscenes can also be paused and resumed at any time with Esc, whether you're replaying them here or watching them during the game.
+
 <img src="docs/github readme/menus/cutscene-reveal.gif" alt="Cutscene Viewer at the level 1 harbor: the introduction's three chapters reveal their covers and titles one after another, The Palace Escape plays and pauses, and the shelf scrolls to the later chapters, still under their veils" width="850">
+
+<br/>
+
+## Screenshot Gallery (F2)
+
+The F2 menu lets you browse and manage your screenshots directly in-game, with previews, resolution and folder options. In widescreen windows, it shows four columns of thumbnails and a larger preview.
+
+You can even delete screenshots by tossing them into the lava, Minecraft style. The picture falls into the pool and burns away as it sinks, with a fire sound to go with it.
+
+Pressing F8 takes a clean PNG screenshot without menus or overlays, while Shift+F8 captures the screen as it appears, including menus and paused scenes. A small notification appears whenever a screenshot is saved.
+
+<img src="docs/github readme/menus/screenshots-burn.gif" alt="Taking a screenshot with F8, browsing the widescreen Screenshot Gallery, capturing it with its menus and tossing that picture into the lava, where it burns away" width="850">
 
 <br/>
 
@@ -165,10 +146,7 @@ Click a chapter to watch it, or browse with the keyboard or controller. Replayin
 
 The F3 Developer Tools menu was originally made to help me with playtesting during development, rather than as a feature for players.
 
-But I think it turned out so well that I might just include it in the final release as an optional feature.
-The idea would be to add it to the cheat mode, like the original Macintosh has. Where you hold down the 1, 2 and 3 keys at the same time when starting the game and get the message "You are worthy of the powers of Jaffar!".
-
-<img src="docs/github readme/menus/developer-tools.png" alt="Developer Tools with the cavern theme, map and Cutscene Viewer entries" width="700">
+But I think it turned out so well that I might include it in the final release as an optional feature, hidden behind a cheat mode like the original Macintosh one: hold down the 1, 2 and 3 keys while the game starts, and you get the message "You are worthy of the powers of Jaffar!".
 
 ### Game Map
 
@@ -178,15 +156,7 @@ An interactive map that allows browsing through levels and teleporting directly 
 
 ### Cutscene Viewer
 
-The developer version of the Cutscene Viewer makes every chapter available for testing, without changing the collection in the current game.
-
-<br/>
-
-## Cutscene Pausing
-
-Cutscenes can now be paused and resumed at any time.
-
-<img src="docs/github readme/cutscene-pause.png" alt="Paused cutscene" width="700">
+The developer version of the Cutscene Viewer makes every chapter already available for testing, without changing the collection in the current game.
 
 <br/>
 
