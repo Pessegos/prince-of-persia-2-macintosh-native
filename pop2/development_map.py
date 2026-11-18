@@ -1,5 +1,6 @@
 """Clean level scenery and spatial room selection for the F3 map."""
 
+import copy
 from collections import deque
 from dataclasses import dataclass, field
 import random
@@ -184,9 +185,19 @@ def clean_room_frames(renderer, terrain, positions, enemies=None):
             world.configure_torches(renderer.cavern_program.get('torches', {}))
         finally:
             random.setstate(seed)
+    # Level seven's upper entrance is a start too (entered after leaving
+    # level six at column >= 6): its room is drawn with that entrance in
+    # use, the door open like the other start's (its first closing frame).
+    alternate = (renderer.cavern_program or {}).get('alternate_entry')
+    upper = None
+    if alternate is not None and alternate['room'] in positions:
+        upper = copy.deepcopy(world) if world is not None else CavernState()
+        upper.configure_entry(alternate, alternate['room'])
+        upper.alternate_entry = True
     scenery = {}
     for room in positions:
-        art = renderer.room(room, world)
+        state = upper if upper is not None and room == alternate['room'] else world
+        art = renderer.room(room, state)
         frame = art.background.copy()
         parent = next((previous for previous in scenery
                        if room in (terrain.neighbor(previous, direction)

@@ -74,7 +74,46 @@ class LevelSevenTests(unittest.TestCase):
 
         level_map = build_development_map(GameResources.load().level(7))
         self.assertEqual(level_map.start, 'Room 32')
+        self.assertEqual(level_map.starts, {'Room 4', 'Room 32'})
         self.assertEqual(len(level_map.positions), 32)
+
+    def test_the_level_map_draws_both_starts_with_their_doors_open(self):
+        # Room 4's upper entrance is a start too: like room 32's, its door is
+        # drawn at its first closing frame (open), not shut.
+        from PIL import Image, ImageChops
+
+        from pop2.caverns import cavern_room
+        from pop2.development_map import build_development_map
+        from pop2.game_session import GameResources
+
+        def picture(room, frame, alternate=False):
+            art = cavern_room(room, entry_frame=frame, animated=True, level_number=7,
+                              alternate_entry=alternate, retouched=True)
+            return Image.alpha_composite(art.background, art.foreground).convert('RGB')
+
+        frames = build_development_map(GameResources.load().level(7), include_enemies=False).source_frames
+        for label, room, alternate in (('Room 4', 3, True), ('Room 32', 31, False)):
+            with self.subTest(label):
+                opened, shut = picture(room, 0, alternate), picture(room, 2, alternate)
+                door = ImageChops.difference(opened, shut).getbbox()
+                self.assertIsNotNone(door)
+                shown = frames[label].convert('RGB').crop(door)
+                self.assertIsNone(ImageChops.difference(shown, opened.crop(door)).getbbox())
+
+    def test_a_development_warp_to_either_start_begins_the_level_there(self):
+        # Both entrances start the level afresh, the door closing behind him.
+        scene = self.scene
+        for label, room, alternate in (('Room 4', 3, True), ('Room 32', 31, False), ('Room 4', 3, True)):
+            with self.subTest(label):
+                scene.jump_to_screen(label)
+                caverns = scene.game.caverns
+                self.assertEqual((scene.room_id, caverns.entry_room), (room, room))
+                self.assertEqual(caverns.alternate_entry, alternate)
+                self.assertEqual(scene.game.ruins_entry, 2 if alternate else 1)
+                self.assertEqual(caverns.entry_frame, 0)
+        self.tick(20)
+        self.assertEqual((scene.room_id, scene.terrain_motion.row), (3, 2))
+        self.assertGreater(scene.game.caverns.entry_frame, 0)
 
 
 @unittest.skipUnless((ASSET_DIR / 'ruins_level7.json').is_file(), 'Imported level-seven resources required')

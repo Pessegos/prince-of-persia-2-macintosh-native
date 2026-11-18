@@ -556,12 +556,14 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         if not self.in_animation_tick:
             self.schedule_next_animation()
 
-    def load_level(self, number, keep_music=False):
+    def load_level(self, number, keep_music=False, ruins_entry=None):
         self.palette_flash = None
         # Prepare the complete destination before replacing a running session.
         previous = getattr(self, 'game', None)
-        # Only the level-six exit chooses level seven's entrance.
-        entry = (previous.ruins_entry if previous is not None and previous.level.number == 6
+        # Only the level-six exit chooses level seven's entrance (or a
+        # development warp to one of its two starts: `ruins_entry`).
+        entry = (ruins_entry if ruins_entry is not None and number == 7
+                 else previous.ruins_entry if previous is not None and previous.level.number == 6
                  and number == 7 else 1)
         game = GameSession.load(self.resources, number, self.terrain_enabled, ruins_entry=entry)
         if previous is not None:
@@ -3307,6 +3309,13 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
     def jump_to_screen(self, label):
         screens = self.dev_screens()
         room = screens[label]
+        if self.game.level.number == 7:
+            # Both entrances are starts (2:5eda): the level begins afresh
+            # at the chosen one, its door closing behind the Prince.
+            upper = self.resources.level(7).with_ruins_entry(2).start_room
+            lower = self.resources.level(7).with_ruins_entry(1).start_room
+            if room in (upper, lower):
+                return self.load_level(7, ruins_entry=2 if room == upper else 1)
         if room == self.level_map.start_room:
             if not self.game.level.window_escape:
                 return self.load_level(self.game.level.number)
