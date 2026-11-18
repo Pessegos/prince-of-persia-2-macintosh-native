@@ -388,24 +388,34 @@ class GameMenuSceneTests(unittest.TestCase):
         return gallery
 
     def displayed_screenshots(self):
-        """The page as the window shows it: its photo, and a dragged picture's own item over it."""
+        """The page as the window shows it: its photo, the delete button's own item over it
+        and a dragged picture's item over both, in the canvas's order."""
         scene = self.scene
         image = ImageTk.getimage(scene.image_ref).convert('RGB')
-        held = getattr(scene, 'screenshot_held', None)
-        if held is not None:
-            page = scene.canvas.coords(scene.canvas.find_all()[0])
-            x, y = scene.canvas.coords(held[0])
-            image.paste(ImageTk.getimage(held[1]).convert('RGB'), (round(x - page[0]), round(y - page[1])))
+        page = scene.canvas.coords(scene.canvas.find_all()[0])
+        shown = [shown for shown in (getattr(scene, 'screenshot_lava', None), getattr(scene, 'screenshot_held', None))
+                 if shown is not None]
+        self.assertEqual([item for item in scene.canvas.find_all()[1:]], [shown[0] for shown in shown])
+        for item, photo, *_rest in shown:
+            x, y = scene.canvas.coords(item)
+            image.paste(ImageTk.getimage(photo).convert('RGB'), (round(x - page[0]), round(y - page[1])))
         return image
 
-    def expected_screenshots(self):
-        """The whole page drawn at once, a dragged picture included."""
+    def expected_screenshots(self, fresh=False):
+        """The whole page drawn at once, a dragged picture included; ``fresh`` draws it from
+        scratch rather than over the page's cached surface."""
         scene = self.scene
         gallery = scene.game_menu.screenshot_gallery
         frame = scene.screenshot_gallery_frame[1]
-        return scene.draw_screenshot_notice(
-            gallery.draw(scene.screenshot_gallery_source[2], scene.ui_font, visible=True), visible=True,
-            uniform=bool(gallery.spread), inset=gallery.shift).convert('RGB') if frame is not None else None
+        surfaces = gallery.surface_cache
+        if fresh:
+            gallery.surface_cache = {}
+        try:
+            return scene.draw_screenshot_notice(
+                gallery.draw(scene.screenshot_gallery_source[2], scene.ui_font, visible=True), visible=True,
+                uniform=bool(gallery.spread), inset=gallery.shift).convert('RGB') if frame is not None else None
+        finally:
+            gallery.surface_cache = surfaces
 
     def test_screenshot_gallery_capture_selects_new_png_and_preserves_live_game(self):
         scene = self.scene
@@ -479,7 +489,7 @@ class GameMenuSceneTests(unittest.TestCase):
                         event = SimpleNamespace(keysym='space' if char == ' ' else char, char=char, state=0)
                         scene.dev_key_press(event)
                         scene.dev_key_release(event)
-                        actual = ImageTk.getimage(scene.image_ref).convert('RGB')
+                        actual = self.displayed_screenshots()
                         self.assertEqual(actual.tobytes(), scene.screenshot_gallery_frame[1].convert('RGB').tobytes())
                     gameplay.assert_not_called()
                     configure.assert_not_called()
@@ -506,20 +516,20 @@ class GameMenuSceneTests(unittest.TestCase):
                             scene.redraw_screenshot_gallery()
                             scene.schedule_screenshot_gallery()
                             self.settle_screenshot_gallery()
-                            actual = ImageTk.getimage(scene.image_ref).convert('RGB')
+                            actual = self.displayed_screenshots()
                             self.assertEqual(actual.tobytes(), scene.screenshot_gallery_frame[1].convert('RGB').tobytes())
                         # The delete button sits under the picture; a wide window's page puts it at its right edge.
                         delete = gallery.DELETE
                         gallery.hover((delete[0] + delete[2]) / 2, (delete[1] + delete[3]) / 2)
                         scene.redraw_screenshot_gallery()
-                        actual = ImageTk.getimage(scene.image_ref).convert('RGB')
+                        actual = self.displayed_screenshots()
                         self.assertEqual(actual.tobytes(), scene.screenshot_gallery_frame[1].convert('RGB').tobytes())
                         gallery.scroll_target, gallery.velocity = gallery.scroll, 0
                         for _ in range(3):
                             before = actual
                             gallery.animate(1 / 12)
                             scene.redraw_screenshot_gallery()
-                            actual = ImageTk.getimage(scene.image_ref).convert('RGB')
+                            actual = self.displayed_screenshots()
                             self.assertEqual(actual.tobytes(), scene.screenshot_gallery_frame[1].convert('RGB').tobytes())
                             changed = ImageChops.difference(before, actual).getbbox()
                             self.assertIsNotNone(changed)
@@ -588,10 +598,61 @@ class GameMenuSceneTests(unittest.TestCase):
                 for _ in range(round(gallery.BURN_SECONDS * 60) + 6):   # past the burn's end
                     gallery.animate(1 / 60)
                     scene.redraw_screenshot_gallery()
-                    actual = ImageTk.getimage(scene.image_ref).convert('RGB')
+                    actual = self.displayed_screenshots()
                     self.assertEqual(actual.tobytes(), scene.screenshot_gallery_frame[1].convert('RGB').tobytes())
                 self.assertFalse(gallery.overlay_active)
                 self.assertEqual((scene.player_x, scene.action, scene.combat.world_frame), game)
+
+    def test_reaching_the_lava_with_a_picture_changes_only_the_lava_s_own_item(self):
+        # Reaching or leaving the lava with a dragged picture drew the whole page again and
+        # compared all of it (50-90 ms at 3440x1440); each of the lava's frames was copied
+        # into the page's photo, and Tk then looked over all of that photo again.
+        scene = self.scene
+        with TemporaryDirectory() as directory:
+            folder = Path(directory)
+            for index in range(5):
+                Image.new('RGB', (510, 384), (index * 40, 90, 160)).save(folder / f'{index}.png')
+            scene.screenshot_settings = ScreenshotSettings(folder, 1)
+            self.press('F2')
+            gallery = self.settle_screenshot_gallery()
+            with patch.object(scene, 'dev_pointer', side_effect=lambda event: (event.x, event.y)), \
+                    patch.object(scene.canvas, 'winfo_width', return_value=3440), \
+                    patch.object(scene.canvas, 'winfo_height', return_value=1440):
+                scene.redraw_screenshot_gallery()
+                scene.dev_click(SimpleNamespace(x=70, y=100, num=1))
+                scene.dev_hover(SimpleNamespace(x=300, y=200))
+                delete = gallery.DELETE
+                lava = SimpleNamespace(x=(delete[0] + delete[2]) / 2, y=(delete[1] + delete[3]) / 2)
+                photo, page = scene.image_ref, ImageTk.getimage(scene.image_ref).tobytes()
+                surfaces = list(gallery.surface_cache.values())
+                shown = self.displayed_screenshots()
+                for step, over in (('enter', True), ('tick', True), ('leave', False), ('tick', False)):
+                    with self.subTest(step=step, over=over):
+                        button = ImageTk.getimage(scene.screenshot_lava[1]).tobytes()
+                        if step == 'tick':
+                            gallery.animate(1 / 12)
+                            scene.redraw_screenshot_gallery()
+                        else:
+                            scene.dev_hover(lava if over else SimpleNamespace(x=300, y=200))
+                        self.assertEqual(gallery.hovered, 13 if over else None)
+                        # The label and the fill come and go, the lava moves (under the held picture
+                        # while it is over it): all of that in the button's own item.
+                        self.assertNotEqual(ImageTk.getimage(scene.screenshot_lava[1]).tobytes(), button)
+                        before, shown = shown, self.displayed_screenshots()
+                        if step != 'tick':
+                            self.assertNotEqual(shown.tobytes(), before.tobytes())
+                        self.assertEqual(shown.tobytes(), self.expected_screenshots(fresh=True).tobytes())
+                        # The page's photo is as it was, and its cached surface was not drawn again.
+                        self.assertIs(scene.image_ref, photo)
+                        self.assertEqual(ImageTk.getimage(scene.image_ref).tobytes(), page)
+                        self.assertTrue(all(any(surface is kept for kept in gallery.surface_cache.values())
+                                            for surface in surfaces))
+                gallery.cancel_drag()
+                scene.redraw_screenshot_gallery()
+                self.assertIsNone(scene.screenshot_held)
+                self.assertEqual(self.displayed_screenshots().tobytes(), self.expected_screenshots(fresh=True).tobytes())
+            self.press('F2')
+            self.assertIsNone(scene.screenshot_lava)   # closing the page takes its item away
 
     def test_gallery_drag_escape_leave_and_close_cancel_without_deleting(self):
         scene = self.scene

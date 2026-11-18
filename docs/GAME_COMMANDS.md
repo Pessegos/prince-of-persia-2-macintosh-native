@@ -156,6 +156,22 @@ sent to Tk are converted. The cursor and the page's canvas coordinates are set
 only when they change, since Tk repaints the whole canvas or item even for an
 unchanged value. The held picture now lies over the "Take Screenshots with F8"
 hint where the two meet, at the page's lower right.
+The delete button and its "Delete screenshot" label are shown in a small canvas
+item of their own, just over the page and under a held picture. Each copy into
+the page's photo made Tk look over all of that photo again, about 2 ms at
+3440x1440, and the lava changes twelve times a second. The label is drawn on
+each frame instead of being kept in the page's cached surface, so reaching or
+leaving the lava with a picture redraws no page: it took 50-90 ms at 3440x1440,
+depending on the theme, and now takes about 5 ms; a frame of the lava took 9-35
+ms and now takes about 4. The cached surface takes the thumbnail list as last
+drawn once the list is still, with what it was drawn from
+(`ScreenshotGallery.list_state`: thumbnails, scroll, selection and focus), so a
+frame whose list has not changed neither draws nor compares it, and the theme's
+sign is laid again only over what was drawn again.
+In the ruins and spider themes the sign now stays off the large picture, as the
+first drawing of the page always kept it: the later frames used to lay it over
+the picture's pixels that had the page's colours, and over the empty preview
+while a picture was still being read.
 Damaged, missing or oversized images report an unavailable preview without
 closing the menu. Decoding is limited to PNGs of at most 32 million pixels / 128 MiB.
 

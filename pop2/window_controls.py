@@ -487,6 +487,7 @@ class WindowControls(InputRouting):
     def dispose_screenshot_gallery(self):
         self.screenshot_scroll_dragging = False
         self.hide_screenshot_held()
+        self.hide_screenshot_lava()
         gallery = getattr(getattr(self, 'game_menu', None), 'screenshot_gallery', None)
         if gallery is not None:
             gallery.close()
@@ -1802,6 +1803,47 @@ class WindowControls(InputRouting):
             except tk.TclError:
                 pass
 
+    @staticmethod
+    def screenshot_lava_region(gallery, size):
+        """The delete button and its hover label, in the pixels of the page's picture."""
+        rects = [gallery.pixel_rect(rect, size) for rect in (gallery.DELETE, gallery.hint_rect)]
+        return (max(0, min(rect[0] for rect in rects)), max(0, min(rect[1] for rect in rects)),
+                min(size[0], max(rect[2] for rect in rects) + 1), min(size[1], max(rect[3] for rect in rects) + 1))
+
+    def show_screenshot_lava(self, frame, region, position, refresh):
+        """Show the page's delete button and its label in a small canvas item of their own,
+        just over the page. The lava changes twelve times a second and the label comes and
+        goes with the pointer: each copy into the page's photo made Tk look over all of
+        that photo again (2 ms at 3440x1440); in this one it looks over only these pixels."""
+        shown = getattr(self, 'screenshot_lava', None)
+        if region[0] >= region[2] or region[1] >= region[3]:
+            self.hide_screenshot_lava()
+            return
+        place = float(position[0] + region[0]), float(position[1] + region[1])
+        if shown is None or shown[2] != region:
+            photo = ImageTk.PhotoImage(frame.crop(region).convert('RGB'), master=self.canvas)
+            if shown is None:
+                item = self.canvas.create_image(*place, image=photo, anchor='nw')
+                self.canvas.tag_raise(item, self.canvas.find_all()[0])   # under the held picture
+            else:
+                item = shown[0]
+                self.canvas.itemconfigure(item, image=photo)
+            self.screenshot_lava = item, photo, region
+        elif refresh:
+            shown[1].paste(frame.crop(region).convert('RGB'))
+        item = self.screenshot_lava[0]
+        if tuple(self.canvas.coords(item)) != place:
+            self.canvas.coords(item, *place)
+
+    def hide_screenshot_lava(self):
+        shown = getattr(self, 'screenshot_lava', None)
+        self.screenshot_lava = None
+        if shown is not None:
+            try:
+                self.canvas.delete(shown[0])
+            except tk.TclError:
+                pass
+
     def move_screenshot_held(self, gallery):
         """Carry the dragged picture to the pointer without redrawing the page under it;
         false when the page on screen is not the one it was shown over."""
@@ -2027,19 +2069,25 @@ class WindowControls(InputRouting):
                                                 visible=True, uniform=bool(spread), inset=shift)
             previous = getattr(self, 'screenshot_gallery_frame', None)
             state = id(self.screenshot_viewport), id(self.ui_font), gallery.surface_state, gallery.overlay_active
+            lava = self.screenshot_lava_region(gallery, size)
+            refresh_lava = True
             if previous is not None and previous[0] is gallery and previous[1].size == size and previous[2] is self.image_ref:
+                refresh_lava = False
                 if previous[3] == state and not (gallery.choosing or gallery.deleting):
-                    # Only the thumbnail strip, the animated delete button and a held or
-                    # burning picture (where it was and where it is) can change.
+                    # Only the thumbnail strip, the animated delete button, its hover label and a
+                    # held or burning picture (where it was and where it is) can change.
                     damages = []
                     regions = [(*region[:2], region[2] + 1, region[3] + 1)
-                               for region in (gallery.pixel_rect(rect, size) for rect in (gallery.LIST, gallery.DELETE))]
+                               for region in (gallery.pixel_rect(rect, size)
+                                              for rect in (gallery.LIST, gallery.DELETE, gallery.hint_rect))]
                     regions += [rect for rect in (previous[4], gallery.held_rect) if rect is not None]
                     for index, region in enumerate(regions):
                         region = (max(0, region[0]), max(0, region[1]),
                                   min(frame.width, region[2]), min(frame.height, region[3]))
                         if region[0] >= region[2] or region[1] >= region[3]:
                             continue
+                        if index == 0 and previous[6] == gallery.list_drawn:
+                            continue   # drawn from the same thumbnails, scroll and selection
                         if index == 0 and gallery.scrolling:
                             # A moving list changes all over: send it without comparing.
                             local = (0, 0, min(region[2], frame.width) - region[0],
@@ -2055,6 +2103,11 @@ class WindowControls(InputRouting):
                     damage = ImageChops.difference(previous[1], frame).getbbox(alpha_only=False)
                     damages = [damage] if damage else []
                 for damage in damages:
+                    if damage[0] < lava[2] and lava[0] < damage[2] and damage[1] < lava[3] and lava[1] < damage[3]:
+                        refresh_lava = True
+                        if (lava[0] <= damage[0] and lava[1] <= damage[1] and damage[2] <= lava[2]
+                                and damage[3] <= lava[3] and getattr(self, 'screenshot_lava', None) is not None):
+                            continue   # only the lava's own item shows it
                     patch = ImageTk.PhotoImage(frame.crop(damage).convert('RGB'))
                     self.image_ref.tk.call(str(self.image_ref), 'copy', str(patch), '-to', damage[0], damage[1])
                 item = self.canvas.find_all()[0]
@@ -2068,10 +2121,13 @@ class WindowControls(InputRouting):
                     self.canvas.coords(self.canvas.find_all()[0], *position)
                 else:
                     self.canvas.create_image(*position, image=self.image_ref, anchor='nw')
-            self.screenshot_gallery_frame = gallery, frame, self.image_ref, state, gallery.held_rect, (size, position)
+            self.screenshot_gallery_frame = (gallery, frame, self.image_ref, state, gallery.held_rect, (size, position),
+                                             gallery.list_drawn)
+            self.show_screenshot_lava(frame, lava, position, refresh_lava)
             self.show_screenshot_held(gallery, size, position)
             return
         self.hide_screenshot_held()
+        self.hide_screenshot_lava()
         self.screenshot_gallery_frame = self.screenshot_gallery_source = None
         if getattr(game_menu, 'page', None) == 'saves':
             fitted, origin = size, position

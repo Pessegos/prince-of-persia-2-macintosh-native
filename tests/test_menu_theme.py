@@ -581,6 +581,29 @@ class MenuThemeTest(unittest.TestCase):
         # Other frames are drawn smaller instead: none of their pixels is loose.
         self.assertEqual(*menu_theme._frame_place(rect, CAVERNS, True, menu_theme._LIMIT))
 
+    def test_the_sign_over_a_part_drawn_again_matches_signing_the_whole_page(self):
+        # The screenshots page draws its list again over a surface that has the sign
+        # already, and signs only that part: its shades are no background colours, so
+        # signing the whole page would change nothing else.
+        self.addCleanup(menu_theme.use, None)
+        for theme in (theme for theme in THEMES.values() if theme.mark is not None):
+            menu_theme.use(theme)
+            with self.subTest(theme=theme.name):
+                def point(x, y):
+                    return round(x * 2.5), round(y * 2.5)
+
+                panel, row = (menu_theme._rgb(theme.colour(role)) + (255,) for role in ('panel', 'row'))
+                page = Image.new('RGBA', (1280, 960), panel)
+                page.paste(row, (200, 300, 1100, 420))
+                menu_theme.watermark(page, (20, 12, 492, 328), point)
+                part, avoid = (150, 250, 700, 800), [(300, 500, 360, 560)]
+                page.paste(row, part)   # drawn again, without the sign
+                whole, limited = page.copy(), page.copy()
+                menu_theme.watermark(whole, (20, 12, 492, 328), point, avoid)
+                menu_theme.watermark(limited, (20, 12, 492, 328), point, avoid, part)
+                self.assertNotEqual(limited.tobytes(), page.tobytes())   # the sign is back on the part
+                self.assertEqual(limited.tobytes(), whole.tobytes())
+
     def test_sign_caches_keep_only_recent_window_sizes(self):
         menu_theme.use(RUINS)
         self.addCleanup(menu_theme.use, None)

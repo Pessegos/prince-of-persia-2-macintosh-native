@@ -948,7 +948,7 @@ _marks = {}
 _spots = {}     # where each sign has its pixels
 
 
-def watermark(image, rect, point=None, avoid=()):
+def watermark(image, rect, point=None, avoid=(), within=None):
     """Leave the theme's sign on a finished page, faintly, behind its text.
 
     Only the page's own background colours change, each to a slightly darker
@@ -957,6 +957,9 @@ def watermark(image, rect, point=None, avoid=()):
     game's resolution and enlarged without smoothing. ``avoid`` lists the
     rectangles where pictures go, in the image's own pixels: a slot still waiting for its picture has a
     background colour, and the sign must not show there and then vanish.
+    ``within``, a box in the image's pixels, limits the sign to the part of a
+    page that was drawn again over a page that already had it: the sign's
+    darker shades are not background colours, so the rest would not change.
     """
     theme = _current
     if theme.mark is None:
@@ -989,6 +992,18 @@ def watermark(image, rect, point=None, avoid=()):
                 _marks.clear()
             _marks[key] = mask.resize(key[1:], Image.Resampling.NEAREST)
         mask = _marks[key]
+    width = mask.width
+    if within is not None:
+        part = (max(box[0], within[0]), max(box[1], within[1]), min(box[2], within[2]), min(box[3], within[3]))
+        if part[0] >= part[2] or part[1] >= part[3]:
+            return
+        # The same sign, cut to the part: its spots are counted from the part's corner.
+        key = key, part[0] - box[0], part[1] - box[1], part[2] - box[0], part[3] - box[1]
+        if key not in _spots:
+            if len(_spots) > 24:
+                _spots.clear()
+            _spots[key] = numpy.flatnonzero(numpy.asarray(mask)[key[2]:key[4], key[1]:key[3]]).astype(numpy.int32)
+        box, width = part, part[2] - part[0]
     # Only the sign's own pixels are looked at: these pages are redrawn on every key.
     if key not in _spots:
         if len(_spots) > 24:
@@ -996,7 +1011,7 @@ def watermark(image, rect, point=None, avoid=()):
         _spots[key] = numpy.flatnonzero(numpy.asarray(mask)).astype(numpy.int32)
     spots = _spots[key]
     if avoid:
-        rows, columns = numpy.divmod(spots, mask.width)
+        rows, columns = numpy.divmod(spots, width)
         keep = numpy.ones(len(spots), dtype=bool)
         for left, top, right, bottom in avoid:
             keep &= ~((rows >= top - box[1]) & (rows <= bottom - box[1])

@@ -269,6 +269,14 @@ class GalleryReads:
                 self.thread.start()
         return None
 
+    def peek(self, key):
+        """A result already read, kept as recently used as request keeps it, or None:
+        it starts no read."""
+        result = self.cache.pop(key, None)
+        if result is not None:
+            self.cache[key] = result
+        return result
+
     def work(self, jobs=None):
         jobs = self.jobs if jobs is None else jobs
         while not self.closed:
@@ -402,6 +410,7 @@ class ScreenshotGallery:
         self.burn_cue = False
         self.held_rect = None
         self.held_cache = None   # the dragged picture as held_overlay last framed it
+        self.list_drawn = None   # list_state of the last visible page: the window compares the list only when it changes
         self.hovered = None
         self.keyboard_navigation = False
         self.draft, self.caret, self.anchor = '', 0, 0
@@ -460,8 +469,25 @@ class ScreenshotGallery:
         return (self.folder, id(self.entries), self.selected, self.scale, self.include_ui,
                 self.error, self.status, -1 if self.choosing or self.deleting else min(self.focus, 100),
                 id(main_image), self.applied_scan == self.scan_key, self.choosing, self.deleting,
-                self.hovered == 13, self.focus == 13 and self.keyboard_navigation,
-                id(self.reads.cache.get(self.lava_key)))
+                self.focus == 13 and self.keyboard_navigation, id(self.reads.cache.get(self.lava_key)))
+
+    def list_state(self, viewport, visible, font):
+        """All that the thumbnail list's pixels depend on, or None while a thumbnail in
+        sight is still to be read: drawing the list is what asks for it."""
+        results = []
+        for index in self.visible_indices:
+            result = self.reads.peek(self.image_key(self.entries[index], True))
+            if result is None:
+                return None
+            results.append(id(result))
+        return (viewport.size, visible, id(font), menu_theme.current().name, self.spread, self.shift,
+                id(self.entries), self.scroll, self.selected, self.focus, tuple(results))
+
+    @property
+    def hint_rect(self):
+        """The delete button's hover label, in page units. It is drawn on every frame,
+        not kept in the page's cached surface, so reaching the lava redraws no page."""
+        return self.DELETE[2] - 124, self.DELETE[1] - 18, self.DELETE[2], self.DELETE[1] - 3
 
     def refresh(self, selected_path=None):
         self.cancel_drag()
@@ -952,6 +978,7 @@ class ScreenshotGallery:
         surface_key = (viewport.size, visible, id(font), background_key or id(viewport), self.surface_state,
                        menu_theme.current().name)
         surface = self.surface_cache.get(surface_key) if not modal else None
+        list_state = None if modal else self.list_state(viewport, visible, font)
         key = (viewport.size, visible, id(font), background_key or id(viewport), id(self.entries),
                self.selected, self.scroll, self.scale, self.include_ui, self.error, self.status,
                self.art_revision, self.choosing, self.deleting, self.icon_frame,
@@ -959,7 +986,7 @@ class ScreenshotGallery:
         cached = self.modal_cache.get(key) if modal else None
         if not modal:
             self.modal_cache.clear()
-        image = cached.copy() if cached is not None else surface.copy() if surface is not None else Image.alpha_composite(
+        image = cached.copy() if cached is not None else surface[0].copy() if surface is not None else Image.alpha_composite(
             viewport, Image.new('RGBA', viewport.size, (0, 0, 0, 150)))
         draw = ImageDraw.Draw(image)
         sx, sy = viewport.width / (510 if visible else 512), viewport.height / 384
@@ -1126,6 +1153,14 @@ class ScreenshotGallery:
             else:
                 text('Del', self.DELETE[0] + 8, self.DELETE[1] + 8, 30, white, 0.6)
 
+        def draw_hint():
+            if modal or self.hovered != 13:
+                return False
+            hint = self.hint_rect
+            box(hint, c('#303030'), c('#858585'))
+            text('Delete screenshot', hint[0] + 6, hint[1] + 4, 112, white, 0.6)
+            return True
+
         held = []   # where the held or burning picture is drawn, in pixels
 
         def draw_held_image():
@@ -1176,13 +1211,32 @@ class ScreenshotGallery:
             if sprite.height:
                 image.paste(sprite, (left, top), sprite)
 
+        def drawn_box(rect):   # the pixels that box covers for rect
+            return (*point(*rect[:2]), *(edge + 1 for edge in point(*rect[2:])))
+
+        def hint_and_sign():
+            # The label lies over the large picture: the theme's sign shows in it all the same.
+            if draw_hint():
+                menu_theme.watermark(image, self.PANEL, point, (), drawn_box(self.hint_rect))
+
         if surface is not None:
-            draw_list()
-            menu_theme.watermark(image, self.PANEL, point, shown)   # the list was repainted over it
+            # The surface has the list as it was drawn for its list_state, the theme's sign
+            # included: on the whole panel the sign took most of a frame's time at 3440x1440.
+            if list_state is None or list_state != surface[1]:
+                draw_list()
+                listed = drawn_box(self.LIST)
+                menu_theme.watermark(image, self.PANEL, point, shown, listed)
+                if list_state is not None and not self.scrolling:
+                    # The surface takes the list as it is now (nothing else is drawn over it),
+                    # so that the next frames, a dragged picture's included, need not draw it.
+                    surface[0].paste(image.crop(listed), listed[:2])
+                    self.surface_cache[surface_key] = surface[0], list_state
+            hint_and_sign()
             draw_delete()
             draw_held_image()
             if visible:   # the window compares only around it
                 self.held_rect = held[0] if held else None
+                self.list_drawn = list_state if list_state is not None else object()
             return image
 
         if cached is None:
@@ -1229,17 +1283,14 @@ class ScreenshotGallery:
                 under = (self.PREVIEW[0] if framed_left[0] is None else framed_left[0]), self.PREVIEW[3]
                 box((under[0], under[1] + 14, self.DELETE[0] - 6, under[1] + 26), c('#181818'), None)
                 text(message, under[0], under[1] + 18, self.DELETE[0] - 8 - under[0], message_color, 0.55, flush=True)
-            if not modal and self.hovered == 13:
-                edge = self.DELETE[2]
-                box((edge - 124, self.DELETE[1] - 18, edge, self.DELETE[1] - 3), c('#303030'), c('#858585'))
-                text('Delete screenshot', edge - 118, self.DELETE[1] - 14, 112, white, 0.6)
             menu_theme.watermark(image, self.PANEL, point, shown)
             if modal:
                 image = Image.alpha_composite(image, Image.new('RGBA', image.size, (0, 0, 0, 150)))
                 draw = ImageDraw.Draw(image)
                 remember(self.modal_cache, key, image.copy(), 3)
             else:
-                remember(self.surface_cache, surface_key, image.copy(), 2)
+                remember(self.surface_cache, surface_key, (image.copy(), list_state), 2)
+                hint_and_sign()   # the surface is kept without it
         dialog = self.dialog_shift if modal else 0
         if wide is not None:
             wide = (wide[0] - dialog, 0, wide[2] - dialog, 383)
@@ -1299,4 +1350,5 @@ class ScreenshotGallery:
         draw_held_image()
         if visible:
             self.held_rect = held[0] if held else None
+            self.list_drawn = list_state if list_state is not None else object()
         return image

@@ -189,7 +189,11 @@ nothing. Three things a page must take care of:
 
 - A page that keeps a copy of itself and repaints only part of it (the list
   on the saves and screenshots pages) must call `watermark` again after that
-  repaint.
+  repaint. It may pass that part as `within`, in the image's own pixels: the
+  sign's shades are no background colours, so the rest of a page that has
+  the sign would not change. The screenshots page does so for its list and
+  the delete button's label; the spider's fur over its whole panel took most
+  of a frame's time at 3440x1440.
 - A page with pictures passes their rectangles in `avoid`, in the image's own
   pixels. A slot still waiting for its picture has a background colour, and
   the sign would otherwise show there and vanish when the picture arrives.
