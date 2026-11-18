@@ -189,10 +189,13 @@ about 45 in all. Most of what is left is Tk preparing a whole 3440x1440 photo
 for the screen when all of the page darkens or lightens (about 25-30 ms). In
 the spider theme the lava's ground no longer shows the fur in a page's first
 frame only, for the twelfth of a second until the lava moved.
-The burn keeps an even beat as well. Its twelve steps were caught by a tick 60
-times a second, so they lasted 70 or 88 ms in turn; the window now waits for the
-burn's next step, the lava's next frame or the fire's sound, whichever comes
-first, and each step lasts its 83 ms. The burn's clock starts with its first
+The burn keeps an even beat as well. The picture falls and sinks 36 times a
+second (`BURN_FPS`), three frames to each of the game's twelve steps, in which
+its fire flickers and sparks: in those steps alone the fall was five places,
+and at the window's 60 the user found it too fluid beside the game. Its steps
+were caught by a tick 60 times a second, so they lasted 70 or 88 ms in turn;
+the window now waits for the burn's next frame, the lava's next frame or the
+fire's sound, whichever comes first, and each step lasts its 83 ms. The burn's clock starts with its first
 frame: that frame, which closes the confirmation, takes the longest to reach
 the screen, and the time it took cut the picture's first place above the lava
 to under half its twelfth of a second.
