@@ -1331,7 +1331,8 @@ class WindowControls(InputRouting):
                                                   focus=100 + selected if load or active_index is not None else 29,
                                                   save_available=self.can_save_game(), current=current,
                                                   active_path=active_path,
-                                                  preview_provider=self.save_slot_preview)
+                                                  preview_provider=self.save_slot_preview,
+                                                  ground_cache=self.save_page_grounds())
         self.game_menu.save_browser.ensure_visible(immediate=True)
         self.pause_resume_keys.update(self.window_keys_down)
         # From F1 the game is not drawn again under the page (as a page reached from F1).
@@ -2385,16 +2386,7 @@ class WindowControls(InputRouting):
         self.hide_screenshot_lava()
         self.screenshot_gallery_frame = self.screenshot_gallery_source = None
         if getattr(game_menu, 'page', None) == 'saves':
-            fitted, origin = size, position
-            if game_menu.save_browser.wide_layout(width, height)[0]:
-                # The wide page fills the window; the game's picture stays centred behind it.
-                size, position = fit_menu_viewport(width, height)
-            source_cache = getattr(self, 'save_menu_source', None)
-            if source_cache is None or source_cache[0] is not self.screenshot_viewport or source_cache[1] != size:
-                source = self.menu_backdrop(fitted, origin, size, position)
-                self.save_menu_source = (self.screenshot_viewport, size, source)
-            else:
-                source = source_cache[2]
+            fitted, size, position, source = self.save_page_source(width, height)
             browser = game_menu.save_browser
             # The page stays RGBA: Tk is given only the parts that changed, their alpha ignored.
             # Drawn in place: the page shown, drawn over again where the focus or the scroll moved.
@@ -2457,7 +2449,8 @@ class WindowControls(InputRouting):
                 return
         else:
             self.save_menu_frame = None
-            self.save_menu_source = None
+            if game_menu is None:
+                self.save_menu_source = self.save_grounds = None   # kept while the menu is open
             menu = getattr(self, 'dev_menu', None)
             source = self.native_viewport.crop(VISIBLE_VIEWPORT)
             if menu is not None and menu.preview_enabled:
@@ -2583,6 +2576,31 @@ class WindowControls(InputRouting):
         self.place_photo(photo, size, position)
         holder.destroy()
         return shown
+
+    def save_page_source(self, width, height):
+        """The picture the saves page is drawn over in a window of this size: (the game's
+        picture's size, the page's size, its place, the picture). It is kept while the menu
+        is open: the saves pages it opens, and F1's warm-up, draw over the same one."""
+        from pop2.save_slots import SaveBrowser
+
+        size, position = fit_viewport(width, height)
+        fitted, origin = size, position
+        if SaveBrowser.wide_layout(width, height)[0]:
+            # The wide page fills the window; the game's picture stays centred behind it.
+            size, position = fit_menu_viewport(width, height)
+        kept = getattr(self, 'save_menu_source', None)
+        if kept is None or kept[0] is not self.screenshot_viewport or kept[1] != size:
+            kept = self.save_menu_source = (self.screenshot_viewport, size,
+                                            self.menu_backdrop(fitted, origin, size, position))
+        return fitted, size, position, kept[2]
+
+    def save_page_grounds(self):
+        """The saves pages' grounds over the picture under the menu (SaveBrowser.ground_cache),
+        kept while the menu is open and shows that picture."""
+        kept = getattr(self, 'save_grounds', None)
+        if kept is None or kept[0] is not self.screenshot_viewport:
+            kept = self.save_grounds = self.screenshot_viewport, {}
+        return kept[1]
 
     def prepare_page_photo(self, picture):
         """Keep a photo of ``picture``'s size, the pixels Tk prepares for the window

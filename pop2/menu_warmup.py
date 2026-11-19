@@ -7,9 +7,10 @@ paused, so this work is done then instead, one small step at a time between
 Tk's events: a key pressed meanwhile waits at most one step. It stops as soon
 as F1 gives way to another page or the menu closes. It fills the caches those
 pages already keep (the theme's frames, SHARED_READS, LAST_SCANS, the saves
-read by list_slots and the viewer's covers), and draws the Cutscene Viewer's
-page over the paused game and its shelf of cards, with the shelf's photo,
-which the viewer opened from this F1 shows as they are (take_cutscene_shelf).
+read by list_slots and the viewer's covers). It draws the saves pages' ground
+over the paused game, which they take up (save_page_grounds), and the Cutscene
+Viewer's page over it and its shelf of cards, with the shelf's photo, which
+the viewer opened from this F1 shows as they are (take_cutscene_shelf).
 Last, it makes a photo of the wide pages' size, which the first of them writes
 into (prepare_page_photo).
 """
@@ -85,6 +86,13 @@ def warm_steps(scene):
         yield
         browser.draw(native, font)
         done.add(('saves', theme.name, size))
+        yield
+    if hasattr(scene, 'save_page_source'):
+        # The page's ground over this pause's picture, which the saves pages take up.
+        source = scene.save_page_source(width, height)[3]
+        yield
+        SaveBrowser((), ground_cache=scene.save_page_grounds()).draw(
+            source, font, visible=True, background_key=id(scene.screenshot_viewport))
         yield
 
     size = fit_menu_viewport(width, height)[0]

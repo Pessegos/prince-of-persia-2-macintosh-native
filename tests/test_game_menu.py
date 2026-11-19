@@ -415,6 +415,49 @@ class GameMenuSceneTests(unittest.TestCase):
                     # The running game keeps no photo of the wide pages' size.
                     self.assertNotIn(size, scene.spare_photos())
 
+    def test_saves_pages_from_f1_take_the_picture_and_ground_its_warm_up_drew(self):
+        # Each saves page opened from F1 made the picture under it again and darkened it:
+        # about 16 ms at 3440x1440.
+        from pop2 import menu_theme
+
+        scene = self.scene
+        dimmed = menu_theme.dimmed
+
+        def small_only(image, alpha):
+            if image.width > 512:
+                raise AssertionError('the picture was darkened again')
+            return dimmed(image, alpha)
+
+        with patch('pop2.save_slots.list_slots', return_value=()), \
+                patch.object(scene.canvas, 'winfo_width', return_value=1400), \
+                patch.object(scene.canvas, 'winfo_height', return_value=800):
+            self.press('F1')
+            deadline = time.monotonic() + 20
+            while scene.menu_warmup_after_id is not None and time.monotonic() < deadline:
+                scene.root.update()
+                time.sleep(0.002)
+            self.assertIsNone(scene.menu_warmup_after_id)
+            for action in ('save', 'open', 'save'):
+                with self.subTest(action=action):
+                    with patch('pop2.menu_theme.dimmed', small_only), \
+                            patch.object(type(scene), 'menu_backdrop', side_effect=AssertionError('made again')):
+                        scene.apply_game_action(action)
+                    self.assertEqual(scene.game_menu.page, 'saves')
+                    shown = ImageTk.getimage(scene.image_ref).convert('RGB').tobytes()
+                    # The same as the page drawn from nothing.
+                    browser = scene.game_menu.save_browser
+                    browser.ground_cache = None
+                    browser.list_base_cache.clear()
+                    browser.kept_pages.clear()
+                    scene.save_menu_source = scene.save_menu_frame = None
+                    scene.present_viewport()
+                    self.assertEqual(ImageTk.getimage(scene.image_ref).convert('RGB').tobytes(), shown)
+                    self.press('Escape')
+                    self.assertEqual(scene.game_menu.page, 'menu')
+            scene.close_game_menu()
+            self.assertIsNone(scene.save_menu_source)
+            self.assertIsNone(scene.save_grounds)
+
     def test_f2_capture_works_during_intro_with_developer_tools_unavailable(self):
         scene = self.scene
         scene.start_intro()

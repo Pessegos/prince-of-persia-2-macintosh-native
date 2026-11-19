@@ -129,6 +129,12 @@ class SaveBrowser:
     kept_pages: dict = field(default_factory=dict, repr=False, compare=False)
     # The same for a dialog: (what it shows but its buttons, the page, which buttons were lit).
     kept_dialogs: dict = field(default_factory=dict, repr=False, compare=False)
+    # The page's grounds (the picture darkened, the panel framed over it), given by the
+    # window: shared by the pages it opens, and F1's warm-up, over the same picture, which
+    # draw's background_key names (the window gives a new one for another picture).
+    # Darkening a picture of the window's size took about 10 ms at 3440x1440. None: each
+    # ground is drawn.
+    ground_cache: dict | None = field(default=None, repr=False, compare=False)
     redrawn: list | None = field(default=None, repr=False, compare=False)
     # The wide layout, set by draw from the picture it is given: how many
     # units wider than the classic page the panel is, and where it starts.
@@ -531,9 +537,7 @@ class SaveBrowser:
             self.kept_dialogs.clear()
         image = (kept[1] if kept is not None else kept_dialog[1] if kept_dialog is not None else
                  cached.copy() if cached is not None else
-                 list_base.copy() if list_base is not None else
-                 menu_theme.dimmed(viewport, 150))
-        draw = ImageDraw.Draw(image)
+                 list_base.copy() if list_base is not None else None)
         gold, white, muted, cyan = c('#f4d873'), c('#eeeeee'), c('#999999'), c('#77c9dc')
         sx, sy = viewport.width / (510 if visible else 512), viewport.height / 384
         if self.spread:
@@ -546,6 +550,25 @@ class SaveBrowser:
         def rectangle(rect, **colors):
             draw.rectangle((*point(*rect[:2]), *point(*rect[2:])),
                            width=max(1, round(min(sx, sy))), **colors)
+
+        if image is None:
+            # The ground: the picture darkened, the panel framed over it; kept (ground_cache)
+            # for a picture that background_key names.
+            grounds = self.ground_cache if background_key is not None else None
+            ground_key = (viewport.size, visible, background_key, self.spread, self.shift, key[-1])
+            ground = grounds.get(ground_key) if grounds is not None else None
+            if ground is not None:
+                image = ground.copy()
+            else:
+                image = menu_theme.dimmed(viewport, 150)
+                draw = ImageDraw.Draw(image)
+                if not menu_theme.panel_scaled(image, self.PANEL, point, wide):
+                    rectangle(self.PANEL, fill=c('#181818'), outline=c('#858585'))
+                if grounds is not None:
+                    if len(grounds) >= 4:
+                        grounds.clear()
+                    grounds[ground_key] = image.copy()
+        draw = ImageDraw.Draw(image)
 
         def line(points, color, width=1):
             draw.line([point(x, y) for x, y in points], fill=color,
@@ -817,9 +840,7 @@ class SaveBrowser:
             return image
 
         if cached is None and list_base is None:
-            if not menu_theme.panel_scaled(image, self.PANEL, point, wide):
-                rectangle(self.PANEL, fill=c('#181818'), outline=c('#858585'))
-            text('Saved Games', 40, 29, gold)
+            text('Saved Games', 40, 29, gold)   # over the ground, which has the panel
             text(f'{len(self.slots)} {"save" if len(self.slots) == 1 else "saves"}', right, 32,
                  muted, 82, True, align='right')
             line(((40, 88), (right, 88)), c('#404040'))

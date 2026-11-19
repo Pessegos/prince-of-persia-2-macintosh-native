@@ -440,6 +440,35 @@ class SaveBrowserTests(unittest.TestCase):
                     full = browser.draw(source, font)
                     self.assertEqual(cached.tobytes(), full.tobytes())
 
+    def test_pages_sharing_a_ground_draw_what_each_draws_by_itself(self):
+        # The saves pages a menu opens, and F1's warm-up, share the ground over its picture.
+        from pop2 import menu_theme
+
+        self.addCleanup(menu_theme.use, menu_theme.current())
+        font = SimpleNamespace(glyphs=dict.fromkeys(range(128)), text=lambda value, color:
+            Image.new('RGBA', (max(1, len(value)) * 7, 11), color))
+        entries = tuple(SaveSlot(self.folder / str(i), f'Save {i}', True, level=i % 3 + 1,
+                                date='20 Oct 2026  12:00') for i in range(4))
+        for theme in (menu_theme.NEUTRAL, menu_theme.PALACE, menu_theme.SPIDER):
+            menu_theme.use(theme)
+            for size in ((1434, 1080), (3440, 1440)):
+                source = Image.radial_gradient('L').resize(size).convert('RGBA')
+                grounds = {}
+                SaveBrowser((), ground_cache=grounds).draw(source, font, visible=True, background_key=7)
+                self.assertEqual(len(grounds), 1)
+                for mode, confirmation in (('save', None), ('load', None), ('load', 'load'), ('save', 'delete')):
+                    with self.subTest(theme=theme.name, size=size, mode=mode, confirmation=confirmation):
+                        shared = SaveBrowser(entries, mode, 1, ground_cache=grounds)
+                        alone = SaveBrowser(entries, mode, 1)
+                        shared.confirmation = alone.confirmation = confirmation
+                        with patch('pop2.menu_theme.dimmed', wraps=menu_theme.dimmed) as darkened:
+                            page = shared.draw(source, font, visible=True, background_key=7, in_place=True)
+                        # Only a dialog darkens the page under it.
+                        self.assertEqual(darkened.call_count, int(confirmation is not None))
+                        expected = alone.draw(source, font, visible=True, background_key=7, in_place=True)
+                        self.assertEqual(page.tobytes(), expected.tobytes())
+                self.assertEqual(len(grounds), 1)
+
     def test_wide_page_two_line_name_keeps_quill_highlight_and_tip_clear_of_the_details(self):
         # The tip used to sit under the name, over the save's first detail line,
         # and the highlight stopped above the second line's underline.
