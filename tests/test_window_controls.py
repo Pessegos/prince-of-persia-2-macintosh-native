@@ -137,7 +137,8 @@ class PresentationTests(unittest.TestCase):
             with self.subTest(size=(width, height)):
                 host.canvas.winfo_width.return_value = width
                 host.canvas.winfo_height.return_value = height
-                with patch("pop2.window_controls.ImageTk.PhotoImage", side_effect=lambda frame: frame):
+                with patch("pop2.window_controls.ImageTk.PhotoImage", side_effect=lambda frame: frame), \
+                        patch("pop2.window_controls.photo_holder"):
                     host.present_viewport()
                 size, origin = fit_viewport(width, height)
                 self.assertEqual(host.image_ref.size, size)

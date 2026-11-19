@@ -413,11 +413,7 @@ class CutsceneControls:
                 # their complete frame; the parent photo can predate a scroll.
                 self.image_ref.paste(frame)
         else:
-            self.image_ref = ImageTk.PhotoImage(frame)
-            if self.canvas.find_all():
-                self.canvas.itemconfigure(self.canvas.find_all()[0], image=self.image_ref)
-            else:
-                self.canvas.create_image(*position, image=self.image_ref, anchor='nw')
+            self.show_photo(frame, position)
         item = self.canvas.find_all()[0]
         if tuple(self.canvas.coords(item)) != tuple(position):
             # Even identical "coords" assignments invalidate the whole Tk

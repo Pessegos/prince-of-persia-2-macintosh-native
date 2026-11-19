@@ -307,6 +307,26 @@ class GameMenuSceneTests(unittest.TestCase):
                     self.assertEqual(scene.paused, paused)
                     self.assertEqual(shown.call_count, 1)
 
+    def test_the_running_game_in_a_window_takes_turns_between_two_photos(self):
+        # A new photo for each frame made Tk prepare all of its pixels for the display again:
+        # about 7 ms more at 1920x1440 than writing them into a photo kept prepared.
+        scene = self.scene
+        with patch.object(scene.canvas, 'winfo_width', return_value=1400), \
+                patch.object(scene.canvas, 'winfo_height', return_value=800):
+            scene.render()
+            scene.render()
+            photos = {id(scene.image_ref)}
+            with patch('pop2.window_controls.ImageTk.PhotoImage', side_effect=AssertionError('a new photo')):
+                for _ in range(4):
+                    self.tick()
+                    photos.add(id(scene.image_ref))
+                    shown = ImageTk.getimage(scene.image_ref).convert('RGB')
+                    size, _origin = fit_viewport(1400, 800)
+                    expected = scene.native_viewport.crop((1, 0, 511, 384)).resize(size, Image.Resampling.NEAREST)
+                    self.assertEqual(shown.tobytes(), expected.convert('RGB').tobytes())
+            self.assertEqual(len(photos), 2)
+            self.assertEqual(list(scene.spare_photos()), [size])   # the running game keeps one size
+
     def test_pages_reached_from_f1_and_back_do_not_draw_the_game_again(self):
         # The game under F1 is paused: the saves, Hall of Fame, Controls and Cutscene Viewer
         # pages and the way back to F1 drew all of it again first.
@@ -333,22 +353,37 @@ class GameMenuSceneTests(unittest.TestCase):
         with patch('pop2.save_slots.list_slots', return_value=()), \
                 patch('pop2.hall_of_fame.load_hall', return_value=()), \
                 patch.object(scene.canvas, 'winfo_width', return_value=1400), \
-                patch.object(scene.canvas, 'winfo_height', return_value=900):
+                patch.object(scene.canvas, 'winfo_height', return_value=800):
             self.press('F1')
+            wide = []
             for page, opening, key in pages:
                 with self.subTest(page=page):
+                    menu_photo = scene.image_ref
                     with game_drawn():
                         opening()
                     self.assertEqual(scene.game_menu.page, page)
+                    page_photo = scene.image_ref
+                    if page not in ('hall', 'controls'):
+                        # A wide page is shown in a photo of its own, kept for the next one.
+                        wide.append(page_photo)
+                        self.assertIsNot(page_photo, menu_photo)
+                        self.assertIs(page_photo, wide[0])
                     drawn = shown()
                     scene.render()   # the same as the window drawn again, game and all
                     self.assertEqual(shown(), drawn)
-                    with game_drawn():
+                    menu_photo = scene.image_ref if page_photo is menu_photo else menu_photo
+                    # Back to F1: its own photo again, as it was under a wide page, written
+                    # into only where it changed (writing all of it took about 35 ms at 3440x1440).
+                    with game_drawn(), \
+                            patch.object(ImageTk.PhotoImage, 'paste', side_effect=AssertionError('all written')), \
+                            patch('pop2.window_controls.ImageTk.PhotoImage', side_effect=AssertionError('a new photo')):
                         self.press(key)
                     self.assertEqual(scene.game_menu.page, 'menu')
+                    self.assertIs(scene.image_ref, menu_photo)
                     drawn = shown()
                     scene.render()
                     self.assertEqual(shown(), drawn)
+            self.assertEqual(len(wide), 3)   # the saves pages and the Cutscene Viewer
 
     def test_f2_capture_works_during_intro_with_developer_tools_unavailable(self):
         scene = self.scene

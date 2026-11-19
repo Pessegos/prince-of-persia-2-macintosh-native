@@ -121,6 +121,14 @@ def page_damage(redrawn, frame):
     return boxes
 
 
+def photo_holder(master, photo):
+    """A label never placed, so never shown, that keeps the pixels Tk prepared to show
+    ``photo`` while no item shows it: Tk lets them go at its next idle moment otherwise,
+    and showing the photo again then prepared all of them again (about 30 ms at 3440x1440).
+    Destroy it once the photo is shown again or no longer needed."""
+    return tk.Label(master, image=photo)
+
+
 def put_patch(photo, image, x, y):
     """Write an opaque ``image`` (a picture, or an array of rows of RGB or RGBA bytes, alpha
     ignored) into the Tk ``photo`` at (x, y), by Tk's own function (pop2.tk_photo): about
@@ -2241,6 +2249,8 @@ class WindowControls(InputRouting):
         size, position = fit_viewport(width, height)
         # Kept only while the window shows menus drawn at the game's resolution (see patch_native_menu).
         native_menu, self.native_menu_frame = getattr(self, 'native_menu_frame', None), None
+        # What the photo shown holds, should another take its place (show_photo keeps it).
+        self.leaving_menu_frame = native_menu
         if (sys.platform == "win32" and getattr(self, "fullscreen", False)
                 and not getattr(self, "paused", False)
                 and getattr(self, "game_menu", None) is None
@@ -2250,6 +2260,7 @@ class WindowControls(InputRouting):
 
             if getattr(self, "bitmap_presenter", None) is None:
                 self.bitmap_presenter = CanvasBitmap(self.canvas)
+                self.drop_spare_photos()
                 for item in self.canvas.find_all():
                     self.canvas.itemconfigure(item, image="")
                 self.image_ref = None
@@ -2364,12 +2375,7 @@ class WindowControls(InputRouting):
                 refresh_lava = refresh_lava or lava_damages
                 self.keep_photo_at(position)
             else:
-                self.image_ref = ImageTk.PhotoImage(frame.convert('RGB'))
-                if self.canvas.find_all():
-                    self.canvas.itemconfigure(self.canvas.find_all()[0], image=self.image_ref)
-                    self.canvas.coords(self.canvas.find_all()[0], *position)
-                else:
-                    self.canvas.create_image(*position, image=self.image_ref, anchor='nw')
+                self.show_photo(frame.convert('RGB'), position)
             self.screenshot_gallery_frame = (gallery, frame, self.image_ref, state, gallery.held_rect, (size, position),
                                              gallery.list_drawn, gallery.modal_drawn)
             self.show_screenshot_lava(frame, lava, position, refresh_lava)
@@ -2459,6 +2465,9 @@ class WindowControls(InputRouting):
             elif (game_menu is not None or menu is not None or getattr(self, 'copy_challenge', None) is not None
                   or getattr(self, 'paused', False)):
                 # A still picture: drawn again, only what changed is sent (a paused game too).
+                if native_menu is None:
+                    # Back from a wide page: the menu's own photo, as it was under that page.
+                    native_menu = self.menu_photo_back(size, position)
                 if self.patch_native_menu(native_menu, source, size, position):
                     return
                 native_menu = source   # remembered below, with the photo made from it
@@ -2491,18 +2500,89 @@ class WindowControls(InputRouting):
                 return
         else:
             self.dev_map_frame = None
-        self.image_ref = ImageTk.PhotoImage(frame)
+        self.show_photo(frame, position)
         if native_menu is source:
             self.native_menu_frame = self.image_ref, source, size, None
         if getattr(game_menu, 'page', None) == 'saves':
             self.save_menu_frame = (game_menu, frame, self.image_ref, state, listing)
         if menu is not None and menu.preview_enabled:
             self.dev_map_frame = (menu, frame, self.image_ref, native, entry)
-        if self.canvas.find_all():
-            self.canvas.itemconfigure(self.canvas.find_all()[0], image=self.image_ref)
-            self.canvas.coords(self.canvas.find_all()[0], *position)
+
+    def spare_photos(self):
+        """The photos kept, by size, while the window shows another, each with the label
+        that keeps Tk's pixels prepared for the display and what it shows: a menu drawn at
+        the game's resolution (as native_menu_frame), or None."""
+        spares = getattr(self, 'kept_photos', None)
+        if spares is None:
+            spares = self.kept_photos = {}
+        return spares
+
+    def drop_spare_photos(self, keep=None):
+        """Let go of the photos kept, but for the one of the size ``keep``."""
+        spares = self.spare_photos()
+        for size in [size for size in spares if size != keep]:
+            spares.pop(size)[1].destroy()
+
+    def keep_photo(self, photo, size, shown=None):
+        """Keep the window's photo of ``size``, about to give way to another, with Tk's pixels
+        prepared for it; ``shown`` is what it shows (see spare_photos). One of each size is
+        kept, two sizes at most."""
+        spares = self.spare_photos()
+        previous = spares.pop(size, None)
+        if previous is not None:
+            previous[1].destroy()
+        spares[size] = photo, photo_holder(self.canvas, photo), shown
+        while len(spares) > 2:
+            spares.pop(next(iter(spares)))[1].destroy()
+
+    def place_photo(self, photo, size, position):
+        """Show ``photo``, of ``size``, at ``position``; the photo it replaces is kept
+        (keep_photo)."""
+        items = self.canvas.find_all()
+        old = (getattr(self, 'image_ref', None), getattr(self, 'image_ref_size', None)) if items else (None, None)
+        if items:
+            self.canvas.itemconfigure(items[0], image=photo)
+            self.canvas.coords(items[0], *position)
         else:
-            self.canvas.create_image(*position, image=self.image_ref, anchor="nw")
+            self.canvas.create_image(*position, image=photo, anchor='nw')
+        self.image_ref, self.image_ref_size = photo, size
+        if old[0] is not None and old[0] is not photo and old[1] is not None:
+            leaving = getattr(self, 'leaving_menu_frame', None)
+            self.keep_photo(*old, leaving if leaving is not None and leaving[0] is old[0] else None)
+
+    def show_photo(self, frame, position):
+        """Show all of ``frame`` as the window's photo at ``position``.
+
+        Tk prepares a photo's pixels for the display again for each new photo shown, about
+        7 ms more than writing them into one it shows at 1920x1440, 12 at 3440x1440. The
+        photo shown before is kept, prepared (keep_photo), and takes the next picture of its
+        size: a wide page (saves, screenshots, the Cutscene Viewer) and F1 under it each keep
+        theirs, and the running game in a window has two in turn."""
+        spare = self.spare_photos().pop(frame.size, None)
+        if spare is not None:
+            photo, holder = spare[:2]
+            photo.paste(frame)
+        else:
+            photo, holder = ImageTk.PhotoImage(frame), None
+        self.place_photo(photo, frame.size, position)
+        if holder is not None:
+            holder.destroy()   # the window's own item keeps the pixels prepared now
+        if getattr(self, 'game_menu', None) is None and getattr(self, 'dev_menu', None) is None:
+            self.drop_spare_photos(keep=frame.size)   # the running game needs no other size
+
+    def menu_photo_back(self, size, position):
+        """Show again the kept photo of ``size`` of a menu drawn at the game's resolution, as
+        it was when a wide page took its place: what it shows (native_menu_frame), for only
+        what changed since to be written into it, or None when no such photo is kept.
+        Writing all of it, in a new photo, took about 35 ms at 3440x1440."""
+        spares = self.spare_photos()
+        spare = spares.get(size)
+        if spare is None or spare[2] is None or not self.canvas.find_all():
+            return None
+        photo, holder, shown = spares.pop(size)
+        self.place_photo(photo, size, position)
+        holder.destroy()
+        return shown
 
     def patch_native_menu(self, previous, source, size, position):
         """Show again a menu drawn at the game's resolution (the game menu, its options
