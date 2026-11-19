@@ -136,6 +136,14 @@ def main(argv=None):
             from pop2.worker_app import main as worker
 
             worker(argv)
+    elif argv[:1] == ['--prepare']:
+        # A launcher's windowless import (pop2.prepare_game); without it the
+        # game starts and offers its own game-files window as before.
+        from pop2.prepare_game import prepare
+
+        code = prepare(argv[1:])
+        if code:
+            raise SystemExit(code)
     elif argv == ['--smoke-test']:
         smoke_test()
     elif len(argv) == 2 and argv[0] == '--smoke-import':

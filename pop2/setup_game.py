@@ -19,21 +19,10 @@ from tkinter import filedialog, ttk
 import webbrowser
 
 from pop2.app_window import create_root
-from pop2.asset_import import AssetImport, ImportCancelled, ImportFailed
+from pop2.asset_import import STAGES, AssetImport, ImportCancelled, ImportFailed, overall
 from pop2.import_advice import ISSUES_URL, describe_missing, os_problem, preflight, problem
 from pop2.preferences import load_preferences, remember
 
-# The stages the import reports (tools.extract_assets, then the installation
-# by AssetImport), as listed here, with their shares of the progress bar:
-# drawing the level scenery takes most of an import.
-STAGES = (
-    ('image', 'Reading the game image', 3),
-    ('scenery', 'Drawing the level scenery', 70),
-    ('music', 'Preparing the music and sounds', 8),
-    ('scenes', 'Preparing the cutscenes', 12),
-    ('demo', 'Preparing the demo and credits', 3),
-    ('install', 'Installing the files', 4),
-)
 IMAGE_TYPES = ("Game images", "*.iso *.hfs *.hfv *.dsk *.img *.dmg")
 SUPPORTED = "Supported images: .iso, .hfs, .hfv, .dsk, .img and uncompressed .dmg"
 # Problems whose technical detail helps a report (the others say it all).
@@ -336,11 +325,7 @@ class GameSetup:
 
     def overall(self):
         """The import's progress, 0-100, from its stages' shares."""
-        share = 0.0
-        for key, _label, weight in STAGES:
-            done, total = self.stages.get(key, (0, 0))
-            share += weight * (min(done, total) / total if total else 0.0)
-        return 100 * share / sum(weight for *_rest, weight in STAGES)
+        return overall(self.stages)
 
     def stage_state(self, key):
         if key not in self.stages:

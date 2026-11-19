@@ -13,6 +13,29 @@ from pop2.process_job import terminate_tree
 from pop2.child_process import SINGLE_THREAD_BLAS, worker_command, worker_environment
 
 
+# The stages the import reports (tools.extract_assets, then the installation
+# by AssetImport), as listed by the game-files window, with their shares of
+# its progress bar: drawing the level scenery takes most of an import.
+STAGES = (
+    ('image', 'Reading the game image', 3),
+    ('scenery', 'Drawing the level scenery', 70),
+    ('music', 'Preparing the music and sounds', 8),
+    ('scenes', 'Preparing the cutscenes', 12),
+    ('demo', 'Preparing the demo and credits', 3),
+    ('install', 'Installing the files', 4),
+)
+
+
+def overall(stages):
+    """The import's progress, 0-100, from `stages` ({stage: (done, total)})
+    weighted by their STAGES shares."""
+    share = 0.0
+    for key, _label, weight in STAGES:
+        done, total = stages.get(key, (0, 0))
+        share += weight * (min(done, total) / total if total else 0.0)
+    return 100 * share / sum(weight for *_rest, weight in STAGES)
+
+
 class ImportCancelled(Exception):
     pass
 
