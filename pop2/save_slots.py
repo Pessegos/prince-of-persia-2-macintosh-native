@@ -127,6 +127,8 @@ class SaveBrowser:
     # The last page drawn in place (see draw) for each kind of picture, visible or not:
     # (list_key, page, focus, scroll); and the parts the last drawing changed in it.
     kept_pages: dict = field(default_factory=dict, repr=False, compare=False)
+    # The same for a dialog: (what it shows but its buttons, the page, which buttons were lit).
+    kept_dialogs: dict = field(default_factory=dict, repr=False, compare=False)
     redrawn: list | None = field(default=None, repr=False, compare=False)
     # The wide layout, set by draw from the picture it is given: how many
     # units wider than the classic page the panel is, and where it starts.
@@ -497,6 +499,16 @@ class SaveBrowser:
                self.error, self.status, self.save_available, self.editing, self.active_path,
                menu_theme.current().name)
         cached = self.modal_cache.get(key) if modal else None
+        # A dialog changes with the pointer and the keys only in its buttons: the page last
+        # drawn in place with it is drawn over again in those. Copying the darkened page and
+        # laying the dialog over it again took about 5 ms a step at 3440x1440.
+        dialog_key = (key, self.confirmation, self.editing, self.entry.name, self.draft, self.caret,
+                      self.anchor, self.focus == 32) if modal else None
+        lit_buttons = tuple(self.focus == index or bool(self.editing) and self.hovered == index
+                            for index in (30, 31)) if modal else None
+        kept_dialog = self.kept_dialogs.get(visible) if in_place and modal else None
+        if kept_dialog is not None and kept_dialog[0] != dialog_key:
+            kept_dialog = None
         # Not the focus: the list, the tabs, the footer and the save's name with its Rename
         # highlight and tip are drawn on every frame. The highlight was the page's own: the
         # window's page and the game's resolution's, each with and without it, outgrew the
@@ -511,7 +523,9 @@ class SaveBrowser:
         self.redrawn = None
         if not modal:
             self.modal_cache.clear()
-        image = (kept[1] if kept is not None else cached.copy() if cached is not None else
+            self.kept_dialogs.clear()
+        image = (kept[1] if kept is not None else kept_dialog[1] if kept_dialog is not None else
+                 cached.copy() if cached is not None else
                  list_base.copy() if list_base is not None else
                  Image.alpha_composite(viewport, Image.new('RGBA', viewport.size, (0, 0, 0, 150))))
         draw = ImageDraw.Draw(image)
@@ -776,6 +790,26 @@ class SaveBrowser:
             menu_theme.watermark(image, self.PANEL, point)   # the list was repainted over it
             return keep()
 
+        def dialog_button(index):
+            label = ('Cancel', ('Save' if self.editing == 'create' else 'Rename') if self.editing else
+                     {'save': 'Replace', 'load': 'Load', 'delete': 'Delete'}[self.confirmation])[index]
+            button(self.CONFIRM[index], label, 30 + index, index == 0 or not self.editing or bool(self.draft.strip()),
+                   centered=True)
+
+        if kept_dialog is not None:
+            # The dialog last drawn in place, its buttons that the pointer or the keys lit or
+            # left drawn again over themselves (a button covers its box).
+            parts = self.redrawn = []
+            for index, (was, now) in enumerate(zip(kept_dialog[2], lit_buttons)):
+                box = drawn(self.CONFIRM[index])
+                box = (max(0, box[0]), max(0, box[1]), min(image.width, box[2]), min(image.height, box[3]))
+                if was != now and box[0] < box[2] and box[1] < box[3]:
+                    before = image.crop(box)
+                    dialog_button(index)
+                    parts.append((box, before))
+            self.kept_dialogs[visible] = dialog_key, image, lit_buttons
+            return image
+
         if cached is None:
             if not menu_theme.panel_scaled(image, self.PANEL, point, wide):
                 rectangle(self.PANEL, fill=c('#181818'), outline=c('#858585'))
@@ -847,11 +881,10 @@ class SaveBrowser:
                 text(self.entry.name, edge, 171, white, 312, ellipsize=True)
                 text('Current progress will be lost.' if self.confirmation == 'load' else
                      'This cannot be undone.', edge, 195, muted, 312, True)
-            for index, (rect, label) in enumerate(zip(self.CONFIRM, ('Cancel',
-                    ('Save' if self.editing == 'create' else 'Rename') if self.editing else
-                    {'save': 'Replace', 'load': 'Load', 'delete': 'Delete'}[self.confirmation]))):
-                button(rect, label, 30 + index, index == 0 or not self.editing or bool(self.draft.strip()),
-                       centered=True)
+            for index in range(len(self.CONFIRM)):
+                dialog_button(index)
+            if in_place:
+                self.kept_dialogs[visible] = dialog_key, image, lit_buttons
             return image
         menu_theme.watermark(image, self.PANEL, point)
         return keep()

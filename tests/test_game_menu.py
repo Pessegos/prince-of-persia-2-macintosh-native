@@ -700,7 +700,9 @@ class GameMenuSceneTests(unittest.TestCase):
 
     def test_the_delete_confirmation_compares_only_its_dialog_while_it_is_open(self):
         # Opening the confirmation compared the whole page, though a dialog darkens all of
-        # it, and so did each pointer step over its buttons (16-20 ms at 3440x1440).
+        # it, and so did each pointer step over its buttons (16-20 ms at 3440x1440). Then a
+        # step compared the dialog alone; now the dialog is drawn in place, and the window
+        # looks only at the buttons drawn again.
         scene = self.scene
         with TemporaryDirectory() as directory:
             folder = Path(directory)
@@ -733,8 +735,11 @@ class GameMenuSceneTests(unittest.TestCase):
                 for x, y in (((cancel[0] + cancel[2]) / 2, 238), ((confirm[0] + confirm[2]) / 2, 238), (250, 150)):
                     compared.clear()
                     scene.dev_hover(SimpleNamespace(x=x + gallery.dialog_shift, y=y))
-                    self.assertTrue(compared)
-                    self.assertTrue(all(width * height <= area for width, height in compared), (compared, area))
+                    self.assertEqual(compared, [])
+                    self.assertIsNotNone(gallery.redrawn)
+                    self.assertTrue(all((box[2] - box[0]) * (box[3] - box[1]) * 8 <= area and dialog[0] <= box[0]
+                                        and dialog[1] <= box[1] and box[2] <= dialog[2] + 1 and box[3] <= dialog[3] + 1
+                                        for box, _before in gallery.redrawn), (gallery.redrawn, dialog))
                     self.assertEqual(self.displayed_screenshots().tobytes(),
                                      self.expected_screenshots(fresh=True).tobytes())
                 self.press('Escape')
@@ -914,6 +919,92 @@ class GameMenuSceneTests(unittest.TestCase):
                         check(('after the burn', x, y))
                     # All but the first frames after a new list or a burn were drawn in place.
                     self.assertGreater(sum(in_place), len(in_place) * 3 // 4, in_place)
+
+    def test_the_screenshots_dialogs_drawn_in_place_redraw_only_what_the_pointer_lit(self):
+        # The delete confirmation and the folder chooser are drawn over the page shown where
+        # the pointer or the keys lit or left a button or a folder: neither the rest of the
+        # dialog nor the darkened page under it is drawn again.
+        from pop2 import menu_theme
+
+        scene = self.scene
+        self.addCleanup(menu_theme.use, menu_theme.current())
+        with TemporaryDirectory() as directory:
+            folder = Path(directory)
+            for name in ('Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon', 'Zeta', 'Eta', 'Theta'):
+                (folder / name).mkdir()
+            for index in range(4):
+                Image.new('RGB', (510, 384), (index * 40, 90, 160)).save(folder / f'{index:02}.png')
+            scene.screenshot_settings = ScreenshotSettings(folder, 1)
+            self.press('F2')
+            gallery = self.settle_screenshot_gallery()
+
+            def check(label, lit=True):
+                if lit:   # drawn over the same page, in no more than a button and two folders
+                    self.assertIs(scene.screenshot_gallery_frame[1], page, label)
+                    self.assertTrue(gallery.redrawn, label)
+                    self.assertLessEqual(len(gallery.redrawn), 3, label)
+                    for box, _before in gallery.redrawn:   # a button, or a folder's row, which is wide
+                        self.assertLess(box[3] - box[1], height // 8, (label, box))
+                        self.assertLess((box[2] - box[0]) * (box[3] - box[1]) * 20, width * height, (label, box))
+                self.assertEqual(self.displayed_screenshots().tobytes(),
+                                 self.expected_screenshots(fresh=True).tobytes(), label)
+
+            def centre(rect):
+                return SimpleNamespace(x=(rect[0] + rect[2]) / 2 + gallery.dialog_shift, y=(rect[1] + rect[3]) / 2)
+
+            def row(index):
+                return SimpleNamespace(x=200 + gallery.dialog_shift, y=gallery.FOLDER_LIST[1] + 20 * index + 10)
+
+            for width, height, theme in ((3440, 1440, 'spider'), (1020, 768, 'ruins')):
+                with self.subTest(window=(width, height), theme=theme), \
+                        patch.object(scene, 'dev_pointer', side_effect=lambda event: (event.x, event.y)), \
+                        patch.object(scene.canvas, 'winfo_width', return_value=width), \
+                        patch.object(scene.canvas, 'winfo_height', return_value=height):
+                    menu_theme.use(menu_theme.THEMES[theme])
+                    scene.screenshot_gallery_frame = None
+                    scene.redraw_screenshot_gallery()
+                    scene.schedule_screenshot_gallery()
+                    self.settle_screenshot_gallery()
+                    gallery.confirm_delete()
+                    scene.redraw_screenshot_gallery()
+                    self.settle_screenshot_gallery()
+                    scene.redraw_screenshot_gallery()
+                    page = scene.screenshot_gallery_frame[1]
+                    check('confirmation opened', lit=False)
+                    cancel, delete = gallery.CONFIRM_BUTTONS
+                    for name, event in (('delete', centre(delete)), ('cancel', centre(cancel)),
+                                        ('delete again', centre(delete))):
+                        scene.dev_hover(event)
+                        check(name)
+                    gallery.key('Escape')
+                    scene.redraw_screenshot_gallery()
+                    self.assertFalse(gallery.deleting)
+                    gallery.choose_folder()
+                    scene.redraw_screenshot_gallery()
+                    scene.schedule_screenshot_gallery()
+                    for _ in range(200):   # the folders read, then shown
+                        self.settle_screenshot_gallery()
+                        pending = scene.screenshot_gallery_after_id
+                        if gallery.folders or pending is None:
+                            break
+                        script, _kind = scene.root.tk.call('after', 'info', pending)
+                        scene.root.tk.call('after', 'cancel', pending)
+                        scene.root.tk.call(script)
+                        time.sleep(0.005)
+                    self.assertEqual(len(gallery.folders), 8)
+                    scene.redraw_screenshot_gallery()
+                    page = scene.screenshot_gallery_frame[1]
+                    check('chooser opened', lit=False)
+                    use, up = gallery.FOLDER_BUTTONS[1], gallery.FOLDER_TOOLS[2]
+                    for name, event in (('first folder', row(0)), ('second folder', row(1)), ('Use folder', centre(use)),
+                                        ('Up', centre(up)), ('third folder', row(2))):
+                        scene.dev_hover(event)
+                        check(name)
+                    gallery.key('Escape')
+                    scene.redraw_screenshot_gallery()
+                    scene.schedule_screenshot_gallery()
+                    self.settle_screenshot_gallery()
+                    self.assertFalse(gallery.choosing)
 
     def test_gallery_drag_escape_leave_and_close_cancel_without_deleting(self):
         scene = self.scene

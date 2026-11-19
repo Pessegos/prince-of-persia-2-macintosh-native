@@ -450,6 +450,9 @@ class ScreenshotGallery:
         # The last page drawn in place (see draw), visible or not: (surface_key, page, what
         # it shows that the surface does not); and the parts the last drawing changed in it.
         self.kept_pages, self.redrawn = {}, None
+        # The same for a dialog: (what it shows but what the pointer and the keys light, the
+        # page, what they lit).
+        self.kept_dialogs = {}
         self.backdrops = {}   # id of a picture under the page -> (it, it darkened)
         self.icon_cache = {}
         self.icon_seconds = 0.0
@@ -752,6 +755,7 @@ class ScreenshotGallery:
         self.modal_cache.clear()
         self.surface_cache.clear()
         self.kept_pages.clear()
+        self.kept_dialogs.clear()
         self.backdrops.clear()
         self.icon_cache.clear()
 
@@ -1131,13 +1135,30 @@ class ScreenshotGallery:
         cached = self.modal_cache.get(key) if modal else None
         if not modal:
             self.modal_cache.clear()
+            self.kept_dialogs.clear()
+        # A dialog changes with the pointer and the keys only in its buttons and the folders
+        # it lists: the page last drawn in place with it is drawn over again in those. Copying
+        # the darkened page and laying the dialog over it again took about 5 ms at 3440x1440,
+        # the folder chooser's about 10.
+        target = self.delete_target or self.entry
+        if self.choosing:
+            dialog_key = (key, self.draft, self.caret, self.anchor, self.focus == 40, tuple(self.folders),
+                          self.folder_offset, self.folder_error, self.applied_folder == self.folder_key,
+                          self.commit_key is not None)
+        else:
+            dialog_key = (key, target.path if target is not None else None) if self.deleting else None
+        kept_dialog = self.kept_dialogs.get(visible) if in_place and dialog_key is not None else None
+        if kept_dialog is not None and kept_dialog[0] != dialog_key:
+            kept_dialog = None
+        dialog_in_place = in_place and dialog_key is not None
         # Drawn in place only over its own surface, with every picture in sight read.
         in_place = in_place and not modal and not self.overlay_active and list_state is not None
         kept = self.kept_pages.get(visible) if in_place and surface is not None else None
         if kept is not None and kept[0] != surface_key:
             kept = None
         self.redrawn = None
-        image = (kept[1] if kept is not None else cached.copy() if cached is not None
+        image = (kept[1] if kept is not None else kept_dialog[1] if kept_dialog is not None
+                 else cached.copy() if cached is not None
                  else surface[0].copy() if surface is not None else self.backdrop(viewport).copy())
         draw = ImageDraw.Draw(image)
         sx, sy = viewport.width / (510 if visible else 512), viewport.height / 384
@@ -1502,6 +1523,82 @@ class ScreenshotGallery:
                 self.modal_drawn = None
             return keep()
 
+        def confirm_button(index):
+            button(self.CONFIRM_BUTTONS[index - 60], ('Cancel', 'Delete')[index - 60], index, scale=1, centered=True)
+
+        def folder_button(index):
+            if index < 45:
+                button(self.FOLDER_TOOLS[index - 41], ('Default', 'Home', 'Up', 'Drives')[index - 41], index,
+                       centered=True)
+            else:
+                button(self.FOLDER_BUTTONS[index - 45], ('Cancel', 'Working...' if self.commit_key is not None
+                       else 'Use folder')[index - 45], index, active=index == 46, centered=True)
+
+        def dialog_button(index):   # its rectangle
+            return (self.CONFIRM_BUTTONS[index - 60] if index >= 60 else
+                    self.FOLDER_TOOLS[index - 41] if index < 45 else self.FOLDER_BUTTONS[index - 45])
+
+        def folder_row(index):   # the box a listed folder's row covers, in page units
+            y = 156 + (index - self.folder_offset) * 20
+            return 65, y + 1, 447, y + 19
+
+        def folder_list():
+            box(self.FOLDER_LIST, c('#0c0c0c'))
+            for i in range(self.folder_offset, min(len(self.folders), self.folder_offset + 6)):
+                y = 156 + (i - self.folder_offset) * 20
+                if self.focus == 1000 + i or self.hovered == 1000 + i:
+                    box(folder_row(i), c('#253033'), None)
+                box((72, y + 7, 80, y + 14), c('#999999'), None)
+                box((72, y + 5, 76, y + 7), c('#999999'), None)
+                text(self.folders[i].name or str(self.folders[i]).replace('\\', '/'), 86, y + 6, 354)
+            if not self.folders:
+                text('Unavailable' if self.folder_error else ('Reading folders...' if self.applied_folder != self.folder_key
+                     else 'No subfolders'), 78, 202, 356, muted)
+            if len(self.folders) > 6:
+                height = max(6, 122 * 6 / len(self.folders))
+                top = 157 + (122 - height) * self.folder_offset / (len(self.folders) - 6)
+                box((444, 157, 447, 279), c('#303030'), None)
+                box((444, top, 447, top + height), c('#858585'), None)
+
+        def dialog_lit():
+            '''What the pointer and the keys light in the dialog: its buttons, and the folders listed.'''
+            if self.choosing:
+                return (frozenset(index for index in range(41, 47) if self.focus == index or self.hovered == index),
+                        frozenset(i for i in range(self.folder_offset, min(len(self.folders), self.folder_offset + 6))
+                                  if self.focus == 1000 + i or self.hovered == 1000 + i))
+            return frozenset(index for index in (60, 61) if self.focus == index), frozenset()
+
+        if kept_dialog is not None:
+            # The dialog last drawn in place: the buttons the pointer or the keys lit or left
+            # drawn again over themselves (a button covers its box), and the folder list again
+            # where its rows changed.
+            dialog = self.dialog_shift
+            parts = self.redrawn = []
+
+            def clipped(place):
+                place = (max(0, place[0]), max(0, place[1]), min(image.width, place[2]), min(image.height, place[3]))
+                return place if place[0] < place[2] and place[1] < place[3] else None
+
+            buttons_lit, rows_lit = lit = dialog_lit()
+            rows = [clipped(drawn_box(folder_row(i))) for i in sorted(rows_lit ^ kept_dialog[2][1])]
+            rows = [place for place in rows if place is not None]
+            if rows:
+                befores = [image.crop(place) for place in rows]
+                folder_list()
+                parts += zip(rows, befores)
+            for index in sorted(buttons_lit ^ kept_dialog[2][0]):
+                place = clipped(drawn_box(dialog_button(index)))
+                if place is not None:
+                    before = image.crop(place)
+                    (confirm_button if index >= 60 else folder_button)(index)
+                    parts.append((place, before))
+            self.kept_dialogs[visible] = dialog_key, image, lit
+            if visible:
+                self.held_rect = None
+                self.list_drawn = object()
+                self.modal_drawn = key
+            return image
+
         if cached is None:
             if not menu_theme.panel_scaled(image, self.PANEL, point, wide):
                 box(self.PANEL, c('#181818'), c('#858585'))
@@ -1575,28 +1672,14 @@ class ScreenshotGallery:
             if self.focus == 40:
                 x = 70 + glyph(display_path[:self.caret]).width * path_x - offset
                 draw.line([point(x, 94), point(x, 109)], fill=cyan, width=max(1, round(sx)))
-            for i, (rect, label) in enumerate(zip(self.FOLDER_TOOLS, ('Default', 'Home', 'Up', 'Drives'))):
-                button(rect, label, 41 + i, centered=True)
-            box(self.FOLDER_LIST, c('#0c0c0c'))
-            for i in range(self.folder_offset, min(len(self.folders), self.folder_offset + 6)):
-                y = 156 + (i - self.folder_offset) * 20
-                if self.focus == 1000 + i or self.hovered == 1000 + i:
-                    box((65, y + 1, 447, y + 19), c('#253033'), None)
-                box((72, y + 7, 80, y + 14), c('#999999'), None)
-                box((72, y + 5, 76, y + 7), c('#999999'), None)
-                text(self.folders[i].name or str(self.folders[i]).replace('\\', '/'), 86, y + 6, 354)
-            if not self.folders:
-                text('Unavailable' if self.folder_error else ('Reading folders...' if self.applied_folder != self.folder_key
-                     else 'No subfolders'), 78, 202, 356, muted)
-            if len(self.folders) > 6:
-                height = max(6, 122 * 6 / len(self.folders))
-                top = 157 + (122 - height) * self.folder_offset / (len(self.folders) - 6)
-                box((444, 157, 447, 279), c('#303030'), None)
-                box((444, top, 447, top + height), c('#858585'), None)
+            for index in range(41, 45):
+                folder_button(index)
+            folder_list()
             text(self.folder_error, 64, 283, 384, c('#ff9b9b'), 0.6)
-            for i, (rect, label) in enumerate(zip(self.FOLDER_BUTTONS,
-                    ('Cancel', 'Working...' if self.commit_key is not None else 'Use folder'))):
-                button(rect, label, 45 + i, active=i == 1, centered=True)
+            for index in (45, 46):
+                folder_button(index)
+            if dialog_in_place:
+                self.kept_dialogs[visible] = dialog_key, image, dialog_lit()
         elif self.deleting:
             if not menu_theme.panel_scaled(image, (80, 121, 432, 270), point, wide):
                 box((80, 121, 432, 270), c('#181818'), c('#858585'))
@@ -1604,8 +1687,10 @@ class ScreenshotGallery:
             target = self.delete_target or self.entry
             text(target.path.name.replace('_', ' ') if target is not None else 'Unavailable', 100, 174, 312)
             text('This cannot be undone.', 100, 197, 312, muted)
-            for i, (rect, label) in enumerate(zip(self.CONFIRM_BUTTONS, ('Cancel', 'Delete'))):
-                button(rect, label, 60 + i, scale=1, centered=True)
+            for index in (60, 61):
+                confirm_button(index)
+            if dialog_in_place:
+                self.kept_dialogs[visible] = dialog_key, image, dialog_lit()
         draw_held_image()
         if visible:
             self.held_rect = held[0] if held else None

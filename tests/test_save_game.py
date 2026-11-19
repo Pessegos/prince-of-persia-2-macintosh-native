@@ -1177,6 +1177,89 @@ class SaveSceneTests(unittest.TestCase):
                 self.assertIs(scene.image_ref, photo)
                 self.assertIsInstance(scene.save_menu_frame[1], Image.Image)
 
+    def test_a_saves_dialog_drawn_in_place_redraws_only_the_buttons_lit_or_left(self):
+        # A confirmation or the name's dialog is drawn over the page shown where the pointer
+        # or the keys lit or left a button: neither the rest of the dialog nor the darkened
+        # page under it is drawn again, and the page shows what a fresh drawing shows.
+        from PIL import ImageChops, ImageTk
+        from pop2 import menu_theme
+
+        scene = self.scene
+        self.addCleanup(menu_theme.use, menu_theme.current())
+        for index in range(3):
+            scene.save_game_to(self.path.with_name(f'{index}.pop2save'), f'Journey {index}')
+        scene.open_save_browser()
+        browser = scene.game_menu.save_browser
+
+        def check(label, lit=True):
+            if lit:   # drawn over the same page, in no more than the two buttons
+                self.assertIs(scene.save_menu_frame[1], page, label)
+                self.assertIsNotNone(browser.redrawn, label)
+                self.assertTrue(browser.redrawn, label)
+                self.assertLessEqual(len(browser.redrawn), 2, label)
+                for box, _before in browser.redrawn:
+                    self.assertLess((box[2] - box[0]) * (box[3] - box[1]) * 30, width * height, (label, box))
+            caches = browser.list_base_cache, browser.modal_cache
+            browser.list_base_cache, browser.modal_cache = {}, {}
+            try:
+                fresh = browser.draw(scene.save_menu_source[2], scene.ui_font, visible=True,
+                                     background_key=id(scene.screenshot_viewport))
+            finally:
+                browser.list_base_cache, browser.modal_cache = caches
+            expected = scene.draw_screenshot_notice(fresh, visible=True, uniform=bool(browser.spread)).convert('RGB')
+            shown = ImageTk.getimage(scene.image_ref).convert('RGB')
+            self.assertIsNone(ImageChops.difference(shown, expected).getbbox(), label)
+
+        def centre(rect):
+            return SimpleNamespace(x=(rect[0] + rect[2]) / 2, y=(rect[1] + rect[3]) / 2)
+
+        for width, height, theme in ((3440, 1440, 'spider'), (1020, 768, 'ruins')):
+            menu_theme.use(menu_theme.THEMES[theme])
+            with self.subTest(window=(width, height), theme=theme), \
+                    patch.object(scene, 'dev_pointer', side_effect=lambda event: (event.x, event.y)), \
+                    patch.object(scene.canvas, 'winfo_width', return_value=width), \
+                    patch.object(scene.canvas, 'winfo_height', return_value=height):
+                browser.confirmation = browser.editing = None
+                browser.selected, browser.focus = 0, 26
+                scene.save_menu_frame = None
+                scene.redraw_save_menu()
+                self.assertEqual(browser.activate(), 'changed')
+                self.assertEqual(browser.confirmation, 'delete')
+                scene.redraw_save_menu()
+                page = scene.save_menu_frame[1]
+                check('confirmation opened', lit=False)
+                cancel, delete = browser.CONFIRM
+                for name, event in (('delete', centre(delete)), ('cancel', centre(cancel)),
+                                    ('delete again', centre(delete))):
+                    scene.dev_hover(event)
+                    check(name)
+                browser.key('Tab')
+                scene.redraw_save_menu()
+                check('Tab')
+                browser.key('Escape')
+                scene.redraw_save_menu()
+                check('confirmation closed', lit=False)
+                # The name's dialog lights a button the pointer is over as well as the focus.
+                browser.focus = 25
+                browser.activate()
+                self.assertEqual(browser.editing, 'rename')
+                scene.redraw_save_menu()
+                browser.key('Tab')   # from the name, whose caret is gone, to Cancel
+                scene.redraw_save_menu()
+                page = scene.save_menu_frame[1]
+                check('name dialog', lit=False)
+                rename = browser.CONFIRM[1]
+                for name, event in (('rename', centre(rename)), ('away', SimpleNamespace(x=5, y=5)),
+                                    ('rename again', centre(rename))):   # Cancel has the focus
+                    scene.dev_hover(event)
+                    check(name)
+                browser.focus = 32
+                browser.key('a', char='b')   # the name changed: the dialog is drawn afresh
+                scene.redraw_save_menu()
+                check('typed', lit=False)
+                browser.key('Escape')
+                scene.redraw_save_menu()
+
     def test_old_snapshot_preview_is_a_resume_image_and_keeps_the_file_untouched(self):
         scene = self.scene
         write_save(self.path, capture(scene.game))

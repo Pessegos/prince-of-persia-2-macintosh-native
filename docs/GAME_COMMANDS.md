@@ -205,6 +205,21 @@ and the other tab (eight themes, four window sizes), 7040 pages drawn in
 place, the window's and the game's resolution's, were the same as the pages
 drawn afresh.
 
+The dialogs over those pages are drawn in place too (`kept_dialogs`): the
+saves page's confirmations and its name dialog, the screenshots page's delete
+confirmation and its folder chooser. A dialog that shows the same as the last
+one drawn so but for what the pointer or the keys light is that same picture,
+with the buttons they lit or left drawn again over themselves, and the folder
+list again where a folder's row did; `redrawn` lists those boxes alone. A new
+name, caret, folder list or target draws the dialog afresh, as before. Each
+step had copied the darkened page and laid the dialog over it again. At
+3440x1440 a step between a confirmation's buttons took about 10 ms and takes
+1.6 (saves) or 1.9 (screenshots); over the folder chooser about 20, now 2.1.
+At 1020x768 they take about 1 ms. Over random pointer steps, keys, typing,
+wheel and the other tab (eight themes, four window sizes), 1600 pages drawn
+in place, the window's and the game's resolution's, were the same as the
+pages drawn afresh.
+
 The pointer's shape is the window's own cursor, not the canvas's
 (`WindowControls.set_window_cursor`): the hand over a chapter, a save's name or
 a room of the map, the hand or the cross of a dragged picture, the arrow, and
@@ -233,7 +248,7 @@ within the session; they are not yet persisted to disk.
 
 Regression coverage: `tests.test_game_menu`, `tests.test_audio`,
 `tests.test_development_menu`, `tests.test_window_controls`,
-`tests.test_tk_pointer` and `tests.test_rebirth`. Menu-model and audio tests run without game assets;
+`tests.test_tk_pointer`, `tests.test_save_game` and `tests.test_rebirth`. Menu-model and audio tests run without game assets;
 scene tests exercise imported resources and actual Tk event bindings.
 
 ## Screenshot Gallery
