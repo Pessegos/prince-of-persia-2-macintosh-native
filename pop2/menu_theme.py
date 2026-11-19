@@ -426,18 +426,55 @@ def panel_scaled(image, rect, point, limit=None):
     if key not in _frames:
         if len(_frames) > 24:
             _frames.clear()
-        _frames[key] = _frame_picture(theme.name, size).resize(scaled, Image.Resampling.NEAREST)
-    picture = _frames[key]
+        _frames[key] = _scaled_parts(_frame_picture(theme.name, size), scaled)
+    box = (0, 0, *scaled)
     if shown != whole:
         cut_left, cut_top = point(shown[0], shown[1])
         cut_right, cut_bottom = point(shown[2] + 1, shown[3] + 1)
-        picture = picture.crop((cut_left - left, cut_top - top, cut_right - left, cut_bottom - top))
+        box = (cut_left - left, cut_top - top, cut_right - left, cut_bottom - top)
         left, top = cut_left, cut_top
-    image.paste(picture, (left, top), picture)
+    for x, y, part, clear in _frames[key]:
+        inside = (max(box[0], x), max(box[1], y), min(box[2], x + part.width), min(box[3], y + part.height))
+        if inside[0] >= inside[2] or inside[1] >= inside[3]:
+            continue
+        if inside != (x, y, x + part.width, y + part.height):
+            part = part.crop((inside[0] - x, inside[1] - y, inside[2] - x, inside[3] - y))
+        image.paste(part, (left + inside[0] - box[0], top + inside[1] - box[1]), part if clear else None)
     return True
 
 
 _frames = {}
+
+
+def _scaled_parts(native, scaled):
+    """The frame picture ``native`` enlarged to ``scaled`` without smoothing, in parts laid
+    into the page: (x, y, picture, laid by its transparency). The box inside that only
+    opaque pixels fill (the panel's fill, with the frame's opaque parts) goes in as it is;
+    only the four bands round it are laid by their transparency. Laying all of a
+    window-wide panel by its transparency took about 12 ms at 3440x1440, copying it 0.3."""
+    picture = native.resize(scaled, Image.Resampling.NEAREST)
+    alpha = numpy.asarray(native.getchannel('A'))
+    height, width = alpha.shape
+    # The smallest inset from every side inside which the native picture is opaque.
+    low, high = 0, (min(width, height) + 1) // 2
+    while low < high:
+        inset = (low + high) // 2
+        if alpha[inset:height - inset, inset:width - inset].min() == 255:
+            high = inset
+        else:
+            low = inset + 1
+    # The enlarged pixels that show that box, one fewer on each side for rounding.
+    across, down = (int(low * picture.width / width) + 1, int(low * picture.height / height) + 1) if low else (0, 0)
+    solid = (across, down, picture.width - across, picture.height - down)
+    if (solid[0] >= solid[2] or solid[1] >= solid[3]
+            or numpy.asarray(picture.getchannel('A').crop(solid)).min() != 255):
+        return ((0, 0, picture, True),)
+    parts = [(solid[0], solid[1], picture.crop(solid), False)]
+    for band in ((0, 0, picture.width, solid[1]), (0, solid[3], picture.width, picture.height),
+                 (0, solid[1], solid[0], solid[3]), (solid[2], solid[1], picture.width, solid[3])):
+        if band[0] < band[2] and band[1] < band[3]:
+            parts.append((band[0], band[1], picture.crop(band), True))
+    return tuple(parts)
 
 
 def _edge_columns(width, height, y, margin):

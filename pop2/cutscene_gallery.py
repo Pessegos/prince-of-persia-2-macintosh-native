@@ -680,8 +680,9 @@ class CutsceneGallery:
                self.focus, self.hovered if self.hovered in (1, 2) else None, self.error, self.collection.error,
                theme.name)
         if self.background_cache is None or self.background_cache[0] != key:
-            base = Image.alpha_composite(viewport.convert('RGBA'), Image.new(
-                'RGBA', viewport.size, (0, 0, 0, max(145, theme.dim) if theme.frame else 145)))
+            # As alpha_composite lays black over it, in less than half the time (dimmed).
+            base = menu_theme.dimmed(viewport if viewport.mode == 'RGBA' else viewport.convert('RGBA'),
+                                     max(145, theme.dim) if theme.frame else 145)
             draw = ImageDraw.Draw(base)
             limit = (ox, 0, math.floor(viewport.width / sx) + ox - 1, 383)
             if not menu_theme.panel_scaled(base, tuple(round(value) for value in self.PANEL), point, limit):

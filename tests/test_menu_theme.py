@@ -303,6 +303,52 @@ class MenuThemeTest(unittest.TestCase):
             self.assertGreaterEqual(outer[2] - theme.frame_width, GameMenu.PANEL[2])
             self.assertLessEqual(outer[0] + theme.frame_width, GameMenu.PANEL[0])
 
+    def test_a_window_wide_panel_is_copied_and_only_its_frame_laid_by_transparency(self):
+        # All of the enlarged frame was laid by its transparency: about 12-19 ms at 3440x1440
+        # for a page's panel, copying its opaque inside 0.3.
+        from PIL import ImageChops
+
+        masked = []
+        paste = Image.Image.paste
+
+        def counted(image, im, box=None, mask=None):
+            if mask is not None and hasattr(im, 'size'):
+                masked.append(im.size[0] * im.size[1])
+            return paste(image, im, box, mask)
+
+        for theme in THEMES.values():
+            if theme.frame is None:
+                continue
+            menu_theme.use(theme)
+            for (width, height), rect, limit in (
+                    ((3440, 1440), (1, 0, 900, 383), (0, 0, 916, 383)),
+                    ((1920, 1080), (20, 14, 492, 370), None),
+                    ((1366, 768), (48, 44, 464, 338), None),
+                    ((3440, 1440), (5, 5, 505, 379), (1, 0, 510, 383))):
+                with self.subTest(theme=theme.name, size=(width, height), rect=rect):
+                    scale = height / 384
+
+                    def point(x, y):
+                        return round((x - 1) * scale), round(y * scale)
+
+                    # The panel as all of it laid by its transparency.
+                    whole, shown = menu_theme._frame_place(rect, theme, True, limit or menu_theme._SCREEN)
+                    left, top = point(whole[0], whole[1])
+                    right, bottom = point(whole[2] + 1, whole[3] + 1)
+                    picture = menu_theme._frame_picture(
+                        theme.name, (whole[2] - whole[0] + 1, whole[3] - whole[1] + 1)).resize(
+                        (right - left, bottom - top), Image.Resampling.NEAREST)
+                    cut = (*point(shown[0], shown[1]), *point(shown[2] + 1, shown[3] + 1))
+                    picture = picture.crop((cut[0] - left, cut[1] - top, cut[2] - left, cut[3] - top))
+                    expected = Image.new('RGBA', (width, height), (30, 90, 160, 255))
+                    expected.paste(picture, cut[:2], picture)
+                    image = Image.new('RGBA', (width, height), (30, 90, 160, 255))
+                    masked.clear()
+                    with mock.patch.object(Image.Image, 'paste', counted):
+                        self.assertTrue(menu_theme.panel_scaled(image, rect, point, limit))
+                    self.assertIsNone(ImageChops.difference(image, expected).getbbox())
+                    self.assertLess(sum(masked), picture.width * picture.height / 4)
+
     def test_window_resolution_pages_get_the_frame_enlarged_without_smoothing(self):
         def point(x, y):
             return x * 3, y * 3
