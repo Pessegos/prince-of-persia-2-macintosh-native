@@ -59,6 +59,7 @@ class PresentationTests(unittest.TestCase):
         host.bitmap_presenter = presenter
         with patch("pop2.window_controls.sys.platform", "win32"), \
                 patch("pop2.bitmap_presenter.CanvasBitmap") as bitmap, \
+                patch("pop2.window_controls.photo_holder") as holder, \
                 patch("pop2.window_controls.ImageTk.PhotoImage", side_effect=lambda frame: frame):
             host.present_viewport()
             presenter.close.assert_called_once_with()
@@ -68,8 +69,13 @@ class PresentationTests(unittest.TestCase):
 
             host.paused = False
             host.game_menu = None
+            photo = host.image_ref
             host.present_viewport()
             bitmap.return_value.present.assert_called_once()
+            # The menu's photo is kept, prepared, for the next menu over the game.
+            self.assertIsNone(host.image_ref)
+            self.assertIs(host.spare_photos()[photo.size][0], photo)
+            holder.assert_called_once_with(host.canvas, photo)
 
     def fullscreen_host(self, **state):
         host = WindowControls()

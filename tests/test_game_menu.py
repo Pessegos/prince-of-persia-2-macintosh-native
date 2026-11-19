@@ -12,7 +12,7 @@ from unittest.mock import Mock, patch
 from PIL import Image, ImageChops, ImageDraw, ImageTk
 
 from pop2.game_menu import GameMenu
-from pop2.game_ui import PLAYFIELD_VIEWPORT, fit_menu_viewport, fit_viewport, viewport_point
+from pop2.game_ui import PLAYFIELD_VIEWPORT, VISIBLE_VIEWPORT, fit_menu_viewport, fit_viewport, viewport_point
 from pop2.preferences import load_preferences
 from pop2.screenshots import ScreenshotSettings
 from pop2.window_controls import put_patch
@@ -392,6 +392,46 @@ class GameMenuSceneTests(unittest.TestCase):
                     scene.render()
                     self.assertEqual(shown(), drawn)
             self.assertEqual(len(wide), 3)   # the saves pages and the Cutscene Viewer
+
+    def test_a_menu_over_the_fullscreen_game_writes_into_the_photo_the_last_one_left(self):
+        # In fullscreen the game is drawn without a photo, and each F1 made a new one, all of
+        # whose pixels Tk prepared for the window: about 34 ms at 3440x1440. The photo the last
+        # menu left is kept, with what it showed: the next one writes into it what changed.
+        from tests.test_terrain import RooftopSceneTests
+        from pop2 import window_controls
+
+        scene = self.scene
+        scene.fullscreen = True
+        room, row = scene.room_id, scene.terrain_motion.row
+        size = fit_viewport(1400, 800)[0]
+        with patch.object(scene.canvas, 'winfo_width', return_value=1400), \
+                patch.object(scene.canvas, 'winfo_height', return_value=800):
+            RooftopSceneTests.place(self, room, row, 450)    # beside the panel, which hides the middle
+            self.tick()
+            self.press('F1')
+            photo = scene.image_ref
+            self.press('Escape')
+            self.assertIsNotNone(scene.bitmap_presenter)
+            self.assertIsNone(scene.image_ref)
+            RooftopSceneTests.place(self, room, row, 490)   # the game moved on
+            self.tick()
+            written = []
+            put = window_controls.put_patch
+
+            def put_patch(target, image, x, y):
+                written.append(image.shape[0] * image.shape[1] if hasattr(image, 'shape') else image.width * image.height)
+                put(target, image, x, y)
+
+            with patch('pop2.window_controls.ImageTk.PhotoImage', side_effect=AssertionError('a new photo')), \
+                    patch.object(ImageTk.PhotoImage, 'paste', side_effect=AssertionError('all of it written')), \
+                    patch.object(window_controls, 'put_patch', put_patch):
+                self.press('F1')
+            self.assertIsNone(scene.bitmap_presenter)
+            self.assertIs(scene.image_ref, photo)
+            self.assertTrue(0 < sum(written) < size[0] * size[1] // 2)
+            expected = scene.native_viewport.crop(VISIBLE_VIEWPORT).resize(size, Image.Resampling.NEAREST)
+            self.assertEqual(ImageTk.getimage(photo).convert('RGB').tobytes(), expected.convert('RGB').tobytes())
+            scene.close_game_menu()
 
     def test_the_first_wide_page_from_f1_writes_into_the_photo_its_warm_up_made(self):
         # Its first opening made a new photo of the whole window: about 12 ms more at 3440x1440.

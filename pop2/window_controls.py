@@ -2261,7 +2261,16 @@ class WindowControls(InputRouting):
 
             if getattr(self, "bitmap_presenter", None) is None:
                 self.bitmap_presenter = CanvasBitmap(self.canvas)
-                self.drop_spare_photos()
+                # The game's own picture needs no photo. The one shown last, of the game's size
+                # (a menu's, or the paused game's), is kept with the pixels Tk prepared for it
+                # and what it shows: the next menu over the game writes into it only what
+                # changed. A new photo took about 22 ms at 3440x1440, writing all of one 15.
+                photo = getattr(self, 'image_ref', None)
+                if (photo is not None and getattr(self, 'image_ref_size', None) == size
+                        and self.canvas.find_all()):
+                    self.keep_photo(photo, size, native_menu if native_menu is not None
+                                    and native_menu[0] is photo else None)
+                self.drop_spare_photos(keep=size)
                 for item in self.canvas.find_all():
                     self.canvas.itemconfigure(item, image="")
                 self.image_ref = None
