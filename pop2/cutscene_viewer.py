@@ -467,7 +467,11 @@ class CutsceneControls:
                 # their complete frame; the parent photo can predate a scroll.
                 self.image_ref.paste(frame)
         else:
-            self.show_photo(frame, position)
+            # The page's photo is not written where the strip lies over it, or, new, stays
+            # blank there: Tk prepares only the rest for the window.
+            self.show_photo(frame, position, hidden=None if getattr(self, 'screenshot_toast', None) else (
+                round((gallery.STRIP[0] - 1) * sx), round(gallery.STRIP[1] * sy),
+                round((gallery.STRIP[2] - 1) * sx), round(gallery.STRIP[3] * sy)))
         item = self.canvas.find_all()[0]
         if tuple(self.canvas.coords(item)) != tuple(position):
             # Even identical "coords" assignments invalidate the whole Tk

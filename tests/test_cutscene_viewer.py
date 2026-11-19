@@ -1364,6 +1364,41 @@ class ViewerSceneTests(unittest.TestCase):
                         self.assertLess(box[3] - box[1], 1080 // 20)  # a line of the page, not the page
                 self.assertIsNone(ImageChops.difference(self.displayed_gallery(), fresh()).getbbox())
 
+    def test_the_page_is_not_written_where_its_shelf_lies_over_it(self):
+        # The page's photo was written whole, and Tk prepared all of it for the window, though
+        # the strip hides a third of it: at 3440x1440 the viewer opened about 20 ms later.
+        from pop2 import window_controls
+
+        scene = self.scene
+        scene.canvas.winfo_width = lambda: 1920
+        scene.canvas.winfo_height = lambda: 1080
+        written = []
+        put = window_controls.put_patch
+
+        def put_patch(target, image, x, y):
+            if target is scene.image_ref:
+                written.append(image.width * image.height)
+            put(target, image, x, y)
+
+        with patch.object(window_controls, 'put_patch', put_patch):
+            gallery = self.open_viewer()
+        photo, strip = scene.image_ref, scene._cutscene_gallery_strip
+        x, y = scene.canvas.coords(scene.canvas.find_all()[0])
+        left, top, right, bottom = (round(a - b) for a, b in zip(strip.region, (x, y, x, y)))
+        self.assertTrue(strip.shown)
+        self.assertEqual(sum(written), photo.width() * photo.height() - (right - left) * (bottom - top))
+
+        def blank(x, y):
+            return photo.tk.getboolean(photo.tk.call(str(photo), 'transparency', 'get', x, y))
+
+        self.assertTrue(blank(left + 3, top + 3))           # a new photo, left blank there
+        self.assertFalse(blank(left - 1, top - 1))
+        source = scene.cutscene_gallery_source((photo.width(), photo.height()), keep=False)
+        expected = CutsceneGallery(scene.cutscene_collection, scene.cutscene_preview).draw(
+            source, scene.ui_font, visible=True).convert('RGB')
+        self.assertEqual(gallery.index, 0)
+        self.assertIsNone(ImageChops.difference(self.displayed_gallery(), expected).getbbox())
+
     def test_pointer_drag_does_not_play_or_select_and_leave_cancels_the_drag(self):
         scene = self.scene
         gallery = self.open_viewer()

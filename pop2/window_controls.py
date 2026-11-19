@@ -2543,8 +2543,11 @@ class WindowControls(InputRouting):
             leaving = getattr(self, 'leaving_menu_frame', None)
             self.keep_photo(*old, leaving if leaving is not None and leaving[0] is old[0] else None)
 
-    def show_photo(self, frame, position):
-        """Show all of ``frame`` as the window's photo at ``position``.
+    def show_photo(self, frame, position, hidden=None):
+        """Show all of ``frame`` as the window's photo at ``position``; but for ``hidden``, a
+        box of it that a widget over the window hides (the Cutscene Viewer's shelf), which is
+        not written, and in a new photo stays blank: Tk prepares only the pixels written for
+        the display (about 5 ns each), and the photo is shown before they are.
 
         Tk prepares a photo's pixels for the display again for each new photo shown, about
         7 ms more than writing them into one it shows at 1920x1440, 12 at 3440x1440. The
@@ -2552,12 +2555,23 @@ class WindowControls(InputRouting):
         size: a wide page (saves, screenshots, the Cutscene Viewer) and F1 under it each keep
         theirs, and the running game in a window has two in turn."""
         spare = self.spare_photos().pop(frame.size, None)
-        if spare is not None:
-            photo, holder = spare[:2]
-            photo.paste(frame)
+        photo, holder = spare[:2] if spare is not None else (None, None)
+        if hidden is None:
+            if photo is None:
+                photo = ImageTk.PhotoImage(frame)
+            else:
+                photo.paste(frame)
+            self.place_photo(photo, frame.size, position)
         else:
-            photo, holder = ImageTk.PhotoImage(frame), None
-        self.place_photo(photo, frame.size, position)
+            if photo is None:
+                photo = ImageTk.PhotoImage('RGB', frame.size)
+            self.place_photo(photo, frame.size, position)
+            left, top, right, bottom = hidden
+            width, height = frame.size
+            for box in ((0, 0, width, top), (0, bottom, width, height), (0, top, left, bottom),
+                        (right, top, width, bottom)):
+                if box[0] < box[2] and box[1] < box[3]:
+                    put_patch(photo, frame.crop(box), *box[:2])
         if holder is not None:
             holder.destroy()   # the window's own item keeps the pixels prepared now
         if getattr(self, 'game_menu', None) is None and getattr(self, 'dev_menu', None) is None:

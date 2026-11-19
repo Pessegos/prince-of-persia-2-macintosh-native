@@ -9,7 +9,7 @@ import time
 import unittest
 from unittest.mock import Mock, patch
 
-from PIL import Image, ImageChops, ImageTk
+from PIL import Image, ImageChops, ImageDraw, ImageTk
 
 from pop2.game_menu import GameMenu
 from pop2.game_ui import PLAYFIELD_VIEWPORT, fit_menu_viewport, fit_viewport, viewport_point
@@ -333,7 +333,15 @@ class GameMenuSceneTests(unittest.TestCase):
         scene = self.scene
 
         def shown():
-            return ImageTk.getimage(scene.image_ref).convert('RGB').tobytes()
+            image = ImageTk.getimage(scene.image_ref).convert('RGB')
+            strip = getattr(scene, '_cutscene_gallery_strip', None)
+            if strip is not None and strip.shown:
+                # The Cutscene Viewer's shelf, a widget of its own, lies over the page's photo
+                # there: a page shown at once leaves that part unwritten.
+                x, y = scene.canvas.coords(scene.canvas.find_all()[0])
+                left, top, right, bottom = strip.region
+                ImageDraw.Draw(image).rectangle((left - x, top - y, right - x - 1, bottom - y - 1), fill=0)
+            return image.tobytes()
 
         render = type(scene).render
 
