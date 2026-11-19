@@ -6,18 +6,19 @@ from pop2.sequence_runtime import SequenceState
 from pop2.terrain import TerrainMotion, floor_y
 
 
-# IsDeadPos 4:47a0-48de for the opponents: pose 185 for every actor; type 2
+# IsDeadPos 4:47a0-48de: pose 185 for every actor; type 2
 # adds 228 in set 0 (4:4846-485c) and 248 and 251-256 in any other set
 # (4:4864-4896: the temple's birdhead corpses, SEQS 191-194, are 252-255);
 # type 10 213, type 4 206/207 and type 11 273.
 _TYPE_2_SET_0_DEAD = frozenset((185, 228))
 _TYPE_2_OTHER_DEAD = frozenset((185, 248, 251, 252, 253, 254, 255, 256))
-_OTHER_DEAD = {10: frozenset((185, 213)), 4: frozenset((185, 206, 207)),
+PRINCE_DEAD_POSES = frozenset((185, 242, 243, 266, 271))
+_OTHER_DEAD = {0: PRINCE_DEAD_POSES, 10: frozenset((185, 213)), 4: frozenset((185, 206, 207)),
                11: frozenset((185, 273))}
 
 
 def is_dead_pose(actor_type, opponent_set, pose):
-    """IsDeadPos 4:47a0 for an opponent (the Prince's branch 4:47e2 aside)."""
+    """IsDeadPos 4:47a0, excluding the Prince's level-five mode-10 exception."""
     if actor_type == 2:
         return pose in (_TYPE_2_SET_0_DEAD if opponent_set == 0 else _TYPE_2_OTHER_DEAD)
     return pose in _OTHER_DEAD.get(actor_type, (185,))
@@ -118,8 +119,9 @@ class GuardRoomRecord:
                 actor.runtime.next_frame()
         actor.native_alive = not dead
         actor.death_registered = dead
-        # Imported room records clear the pending-cue word (6:2e20).
-        actor.death_song_frames, actor.death_song_pending = -1, False
+        # InitOpps 6:2e18-2e20 restores settled corpses with ALIVE 7 and
+        # clears the pending cue. The port's counter saturates at six.
+        actor.death_song_frames, actor.death_song_pending = (6 if dead else -1), False
         if laugh is not None:
             # 6:2d7e: the room-11 Jaffar laughs as the room is entered.
             state.sound_events.append(laugh)

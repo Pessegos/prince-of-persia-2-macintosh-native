@@ -776,13 +776,24 @@ class LevelMap:
             return 11, 10 * direction
         return (11 if current_floor and behind_floor else 23), 0
 
-    def forced_opponent_tumble(self, room, row, state, record):
+    def forced_opponent_tumble(self, room, row, state, record, *, supporting_column=None):
         # DoOppTumbleSeq 4:0160-0198: rooftop rooms 16/19, or an empty
         # tile BEHIND a left-facing guard (GetCellsBehind, 4:3a48).
-        column = character_column(floor_contact_x(state.target_x, state.facing, record))
+        column = (character_column(floor_contact_x(state.target_x, state.facing, record))
+                  if supporting_column is None else supporting_column)
         direction = 1 if state.facing else -1
         return room in (15, 18) or (not state.facing and
                                    self.tile(room, column - direction, row).kind in EMPTY_TILES)
+
+    def opponent_death_gate_x(self, room, row, state, column):
+        # CheckStab 6:55da-5636 checks the cell east of a dying left-facing
+        # opponent's cached foot, then the foot cell. A gate at any phase
+        # supplies an anchor 31 pixels to its left.
+        if not state.facing:
+            for gate in (column + 1, column):
+                if self.tile(room, gate, row).kind == 4:
+                    return self.barrier_x(room, gate) - 31
+        return None
 
     def align_flat_death(self, room, row, state, record):
         # CheckStab 6:5524-5558 and corpse alignment 6:04aa-055a, after

@@ -124,6 +124,19 @@ class TerrainTests(unittest.TestCase):
         state.target_x += 10
         self.assertIsNone(self.map.fatal_hit_fall_offset(0, 1, state, record, column))
 
+    def test_fatal_guard_hit_prefers_the_gate_behind_across_a_room_link(self):
+        level = bytearray(self.level)
+        terrain = LevelMap(level)
+        self.assertEqual(terrain.neighbor(1, 'right'), 3)
+        struct.pack_into('>H', level, 1 * 60 + 19 * 2, 4)
+        struct.pack_into('>H', level, 3 * 60 + 10 * 2, 4)
+        state = SequenceState(227, facing=0, actor_type=2)
+        self.assertEqual(terrain.opponent_death_gate_x(1, 1, state, 9), 501)
+        struct.pack_into('>H', level, 3 * 60 + 10 * 2, 1)
+        self.assertEqual(terrain.opponent_death_gate_x(1, 1, state, 9), 450)
+        state.facing = 1
+        self.assertIsNone(terrain.opponent_death_gate_x(1, 1, state, 9))
+
     def test_shift_clearance_uses_links_not_screen_edges(self):
         self.assertGreaterEqual(self.map.step_clearance(3, 1, 25, -1), 42)
         self.assertEqual(self.map.step_clearance(3, 1, 395, 1), 13)

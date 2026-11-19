@@ -142,6 +142,26 @@ class PressurePlateTests(unittest.TestCase):
         self.assertEqual(self.plates.active[0, 15], 2)
         self.assertEqual(self.plates.timer(self.terrain, 1), 5)
 
+    def test_gate_close_checks_both_the_settled_pose_and_native_death_count(self):
+        for opponent_set, pose, count, native_alive, blocked in (
+                (7, 185, 2, False, True), (7, 185, 1, False, False),
+                (7, 182, 5, False, False), (7, 185, -1, True, False),
+                (7, 252, 6, False, True), (0, 252, 6, False, False),
+                (7, 228, 6, False, False), (0, 228, 6, False, True)):
+            with self.subTest(opponent_set=opponent_set, pose=pose, count=count):
+                self.setUp()
+                struct.pack_into('>H', self.level, 0x21a4, opponent_set)
+                self.set_tile(0, 14, 6, 1)
+                self.plates.active[0, 15] = 2
+                state = SequenceState(85, action=pose, target_x=250, facing=1,
+                                      actor_type=2, animation_state=1)
+                self.plates.press(self.terrain, TerrainMotion(0, 1), state,
+                                  SimpleNamespace(offset_x=0, aux=0x40), alive=False,
+                                  native_alive=native_alive, death_count=count)
+                self.assertEqual(self.plates.active[0, 15], 2 if blocked else 4)
+                self.assertTrue(self.terrain.tile(0, 4, 1).foreground & 0x2000)
+                self.assertEqual(self.plates.timer(self.terrain, 1), 5 if native_alive else 31)
+
     def test_living_offscreen_presser_opens_permanently_without_latching_the_plate(self):
         self.set_tile(0, 14, 5, 1)
         state = SequenceState(227, action=171, target_x=250, facing=1,

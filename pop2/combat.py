@@ -8,7 +8,7 @@ from pop2.enemy_profiles import (
     ADVANCE_CHANCE, BLOCK_CHANCE, PARRY_BLOCK_CHANCE, COUNTER_CHANCE,
     STRIKE_CHANCE, HIT_PAUSE, QuickDrawRandom,
 )
-from pop2.coordinates import NATIVE_X_ORIGIN, native_room, scene_x
+from pop2.coordinates import NATIVE_X_ORIGIN, TILE_WIDTH, native_room, scene_x
 from pop2.bridge import (bridge_checked, bridge_column, bridge_engage, bridge_gate_open,
                          bridge_tension)
 from pop2.enemy_alerts import alert_path_mode
@@ -2237,7 +2237,7 @@ class CombatEncounter:
             select_sequence(guard, corpse)
             guard.runtime.next_frame()
 
-    def _opponent_tumble(self, target):
+    def _opponent_tumble(self, target, *, supporting_column=None):
         terrain, art = getattr(self, "terrain", None), getattr(self, "guard_art", None)
         if terrain is None or art is None:
             return False
@@ -2250,8 +2250,10 @@ class CombatEncounter:
         state = view.state
         record = (art.record(state) if state.actor_type == 6
                   else art.frames[guard_frame_index(state.action)])
+        if supporting_column is not None:
+            supporting_column += (state.target_x - target.state.target_x) // TILE_WIDTH
         if state.level_kind == 5 and terrain.forced_opponent_tumble(
-                room, target.row, state, record):
+                room, target.row, state, record, supporting_column=supporting_column):
             return True
         if self.level is None:
             return False
@@ -2264,7 +2266,8 @@ class CombatEncounter:
         # +0x1c, not life or slot occupancy. Rnd(3) includes zero and three.
         dead_count = sum(other.death_registered for other in guards)
         candidate = self.rng.randrange(4) <= dead_count
-        column = character_column(floor_contact_x(state.target_x, state.facing, record))
+        column = (character_column(floor_contact_x(state.target_x, state.facing, record))
+                  if supporting_column is None else supporting_column)
         if not candidate and dead_count:
             candidate = any(
                 other.row == target.row
@@ -2351,9 +2354,18 @@ class CombatEncounter:
                 select_sequence(figure, SHIMMER_SEQUENCE)
         if not target.alive:
             sequence, offset = 85, -17 if target.state.actor_type == 2 else 0
+            tumble_column = None
+            if (fall_offset is None and name == 'guard' and target.skeleton is None
+                    and terrain is not None and column is not None):
+                gate_x = terrain.opponent_death_gate_x(target.room, target.row,
+                                                       target.state, column)
+                if gate_x is not None:
+                    target.state.target_x = gate_x
+                    # The gate adjustment changes X without reloading the foot cell.
+                    tumble_column = column
             if fall_offset is not None:
                 sequence, offset = 81, fall_offset
-            elif name == "guard" and self._opponent_tumble(target):
+            elif name == "guard" and self._opponent_tumble(target, supporting_column=tumble_column):
                 # CheckStab 6:56ba-56d4 selects the native tumble, not 85.
                 sequence, offset = 185, -12
             if target.skeleton is not None and fall_offset is None:

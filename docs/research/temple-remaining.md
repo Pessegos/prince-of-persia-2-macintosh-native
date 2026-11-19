@@ -99,8 +99,9 @@ supplied life. Each defect found gets its own trace, fix and regression.
   (life 11 -> 3). A one-hour search from there reached 18 of the route's
   20 room waypoints. In native room 26 (row 1) a birdhead stands between
   the Prince and the closed right gate (26:19) and takes three more points;
-  he then dies at room 28's blades with one left. The user suspects a
-  room-26 fault there; to be looked at before searching again.
+  he then dies at room 28's blades with one left. The separate
+  [room-26 gate bug](temple-room26-gate.md) found in the user's recordings
+  has been fixed and replayed from the fight setup.
 
 ### 3. Level 12: the landing beside the flaming sword
 

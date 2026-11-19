@@ -60,6 +60,7 @@ class GuardRecordTests(unittest.TestCase):
             GuardRoomRecord(22, 0, 3, False, 12).restore(actor, slot)
             self.assertEqual((actor.life, actor.native_alive, actor.death_registered), (0, False, True))
             self.assertEqual(actor.state.action, 228 if slot % 2 else 185)
+            self.assertEqual((actor.death_song_frames, actor.death_song_pending), (6, False))
         actor = self.actor()
         actor.state.level_kind = 6
         GuardRoomRecord(22, 0, 3, False, 12).restore(actor, 1)

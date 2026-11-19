@@ -7,9 +7,7 @@ import struct
 from pop2.cavern_state import CavernState
 from pop2.coordinates import port_room
 from pop2.opponent_generation import character_column
-
-
-DEAD_POSES = frozenset((185, 242, 243, 271, 266))
+from pop2.opponent_records import PRINCE_DEAD_POSES as DEAD_POSES
 
 
 @dataclass(frozen=True)

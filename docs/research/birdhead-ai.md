@@ -71,8 +71,9 @@ one list, {185, 228, 252-255}, for everything. A temple record in pose 228
 therefore reloaded dead, and one in 248, 251 or 256 reloaded alive. The
 new `is_dead_pose(actor_type, opponent_set, pose)` covers the opponents'
 cases: type 2 by set, type 10 213, type 4 206/207 and type 11 273, plus
-185 for all types. The Prince's branch (4:47e2) is not included. Record
-reloads and the tumble scan (4:025a) use it.
+185 for all types. Record reloads and the tumble scan (4:025a) use it.
+The later [room-26 gate fix](temple-room26-gate.md) adds the Prince's
+ordinary dead poses and uses the predicate for close plates.
 
 ### The physics frame table reaches pose 256 (LoadFrame 4:2b0e)
 
@@ -85,9 +86,6 @@ entries that were missing are added, so palace guards behave as before.
 
 ## Still open
 
-- Level 11's native room 26: a birdhead stands between the Prince and the
-  closed right gate (26:19), and the user suspects a fault there
-  (temple-remaining.md, item 2). It has not been examined yet.
 - The environment's own reads (LEVL `0x2186` == 2) in the AI segments are
   the Prince's or the scenery's: rocks (10:2036 from 4:3644, 4:5806 and
   6:1a3a), the jinnee trigger (6:0c3a), stairs (6:115c) and the colour

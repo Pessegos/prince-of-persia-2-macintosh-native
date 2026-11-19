@@ -9,6 +9,7 @@ from pop2.loose_floors import pressure_tile
 from pop2.darts import Darts
 from pop2.terrain import floor_contact_x
 from pop2.opponent_generation import character_column
+from pop2.opponent_records import is_dead_pose
 from pop2.mechanism_audio import GateSound
 
 # ATMGate's AddGateSound calls (5:42b4, 4360, 43dc, 4416) and StopGate
@@ -59,7 +60,7 @@ class PressurePlates:
             self.active[key] = phase
 
     def press(self, terrain, motion, state, record, alive=True, *, sword_type=None,
-              native_alive=None, displayed_room=None):
+              native_alive=None, death_count=-1, displayed_room=None):
         if state.actor_type == 1 and 29 <= state.selected_sequence_id <= 42:
             return ()
         # CheckPress 5:129a-12a2: a floating Prince presses no plate.
@@ -76,9 +77,18 @@ class PressurePlates:
         native_alive = alive if native_alive is None else native_alive
         gate_permanent = (not native_alive
                           or displayed_room is not None and motion.room != displayed_room)
+        block_gate_close = False
+        if tile.kind == 6 and not native_alive and death_count >= 2:
+            # TriggerGate 5:1e5c-1e80: IsDeadPos plus native ALIVE >= 2
+            # vetoes a closing request. PushPlate still depresses the source.
+            opponent_set = struct.unpack_from('>H', terrain.level, 0x21a4)[0]
+            block_gate_close = is_dead_pose(state.actor_type or 0, opponent_set, state.action)
+            if (state.actor_type in (0, None) and state.sequence_mode == 10 and motion.room == 2
+                    and struct.unpack_from('>H', terrain.level, 0x218a)[0] == 5):
+                block_gate_close = True
         return self.push(terrain, tile, permanent=not native_alive and state.actor_type != 4,
                          action=state.action, shut_only=shut_only, sword_type=sword_type,
-                         gate_permanent=gate_permanent)
+                         gate_permanent=gate_permanent, block_gate_close=block_gate_close)
 
     def impact(self, terrain, room, cell, kind, *, sword_type=None):
         value = struct.unpack_from('>H', terrain.level, 0x780 + room * 120 + cell * 4)[0]
@@ -87,7 +97,7 @@ class PressurePlates:
         return self.push(terrain, tile, permanent=True, impact=True, sword_type=sword_type)
 
     def push(self, terrain, tile, permanent=False, action=15, impact=False, shut_only=False,
-             *, sword_type=None, gate_permanent=False):
+             *, sword_type=None, gate_permanent=False, block_gate_close=False):
         if tile.room is None or tile.kind not in (5, 6, 34):
             return ()
         index = tile.foreground & 255
@@ -103,13 +113,14 @@ class PressurePlates:
                 if action != 185:
                     cues.append(27)
         cues.extend(self.trigger(terrain, index, tile.kind, bool(tile.foreground & 0x2000), impact,
-                                 shut_only, sword_type=sword_type, gate_permanent=gate_permanent))
+                                 shut_only, sword_type=sword_type, gate_permanent=gate_permanent,
+                                 block_gate_close=block_gate_close))
         # PushPlate writes the depression bit after traversing the entire chain.
         self.foreground[key] = tile.foreground | 0x2000
         return tuple(cues)
 
     def trigger(self, terrain, index, how, depressed=False, impact=False, shut_only=False,
-                *, sword_type=None, gate_permanent=False):
+                *, sword_type=None, gate_permanent=False, block_gate_close=False):
         # The vision changes the logical sword word before physical pickup.
         # The user's level8 exit policy additionally requires that persisted
         # pickup, as the throne checkpoint does. Other levels and the entrance
@@ -132,7 +143,7 @@ class PressurePlates:
             self.triggered.append((tile.kind, *key, how))
             if tile.kind == 4:
                 self.trigger_gate(key, tile.foreground, how, depressed, impact, shut_only,
-                                  permanent=gate_permanent)
+                                  permanent=gate_permanent, block_gate_close=block_gate_close)
             elif tile.kind == 33 and not depressed and not tile.foreground & 7:
                 # TriggerObject 5:1f8c and TriggerDart 5:49b6: a fresh plate
                 # and an idle shooter; the first mouth pose loads immediately.
@@ -158,7 +169,7 @@ class PressurePlates:
         return tuple(cues)
 
     def trigger_gate(self, key, foreground, how, depressed=False, impact=False, shut_only=False,
-                     *, permanent=False):
+                     *, permanent=False, block_gate_close=False):
         position = foreground & 255
         high = foreground & 0xff00
         phase = self.active.get(key)
@@ -195,7 +206,7 @@ class PressurePlates:
                 return
             self.foreground[key] = high | (position + 3) & 0xfc
             self.add(key, 3 if permanent else 2)
-        elif how == 6:
+        elif how == 6 and not block_gate_close:
             if phase != 4 and (phase is not None or position != 0):
                 self.add(key, 4)
 

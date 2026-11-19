@@ -95,6 +95,52 @@ class TemplePlaytestTests(unittest.TestCase):
         self.addCleanup(harness.close)
         return harness
 
+    @unittest.skipUnless((ASSET_DIR / 'temple_level11.json').is_file(), 'Imported level 11 required')
+    def test_room26_fatal_hit_and_gate_reopening(self):
+        harness = Harness(11, peaceful=False)
+        self.addCleanup(harness.close)
+        scene = harness.scene
+        room, gate = 25, (25, 19)  # Native room 26, cell 19.
+        scene.jump_to_room(room, 1, 415, 1, redraw=False)
+        prince, guard = scene.combat.player, scene.combat.guard
+        # Start after the swap, with the birdhead backed up to the gate.
+        guard.state.current_x = guard.state.target_x = 491
+        guard.state.facing = 0
+        guard.life, guard.alert_mode = 1, 3
+        for fighter in (prince, guard):
+            fighter.sword_drawn = True
+            select_sequence(fighter, 227)
+            fighter.runtime.next_frame()
+
+        for tick in range(24):
+            press(harness, 'ctrl', tick % 2 == 0)
+            harness.tick()
+            if not guard.alive:
+                break
+        press(harness, 'ctrl', False)
+        self.assertEqual(guard.life, 0)
+        with self.subTest('death sequence'):
+            frames = []
+            for _ in range(6):
+                frames.append((guard.state.target_x, guard.state.action))
+                harness.tick()
+            self.assertEqual(frames, [(467, 179), (466, 180), (463, 181),
+                                      (457, 182), (449, 183), (465, 185)])
+
+        # Place only the Prince on the opening plate across the loose slab.
+        # Both actors and scenery now run through the regular frame loop.
+        scene.jump_to_room(room, 1, 195, 0, reset_guards=False, redraw=False)
+        plates = scene.game.caverns.plates
+        cues = []
+        for _ in range(55):
+            harness.tick()
+            cues.extend(event.cue for event in plates.gate_sounds if event.source == gate)
+        with self.subTest('gate and pressure plate'):
+            self.assertTrue(scene.level_map.tile(room, 8, 1).foreground & 0x2000)
+            self.assertEqual((plates.foreground[gate] & 255, plates.active[gate]), (237, 0))
+            self.assertEqual(cues.count(273), 1)
+            self.assertNotIn(275, cues)
+
     def test_room2_standing_jump_cannot_catch_room10_after_the_down_cut(self):
         harness = self.harness(12)
         scene = harness.scene
