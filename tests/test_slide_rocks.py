@@ -97,6 +97,18 @@ class SlideRockTests(unittest.TestCase):
         self.assertTrue(SlideRocks.crushes(mob, 1, 1, 0, sequence_mode=4))
         self.assertFalse(SlideRocks.crushes(mob, 1, 2, 530))
 
+    def test_crush_sound_needs_a_moving_face_close_to_a_wall_or_gate(self):
+        rocks = SlideRocks()
+        mob = (216, 236, 1, 0, -2, 6, 1, 408)  # (216 - 18) / 51 leaves remainder 45.
+        for tile, expected in ((20, True), (4, True), (6, False)):
+            self.assertEqual(rocks.crush_impact(FakeTerrain({(1, 3, 1): tile}), mob, 1, 1), expected)
+        wall = FakeTerrain({(1, 3, 1): 20})
+        self.assertFalse(rocks.crush_impact(wall, (217, *mob[1:]), 1, 1))  # Remainder 46.
+        for control in (0, 100):
+            self.assertFalse(rocks.crush_impact(wall, (*mob[:4], control, *mob[5:]), 1, 1))
+        self.assertFalse(rocks.crush_impact(wall, mob, 2, 1))
+        self.assertFalse(rocks.crush_impact(wall, mob, 1, 2))
+
     def test_crush_admission_matches_10_16f6_with_the_saved_width(self):
         # Facing left, the front adds the saved ShapeBounds width (a5-0x3570);
         # before, the width was taken as 0.

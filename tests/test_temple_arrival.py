@@ -242,6 +242,37 @@ class LevelTenArrivalTests(unittest.TestCase):
         self.assertEqual(scene.sequence_state.action, 185)
         self.assertNotEqual(scene.native_viewport.crop((300, 250, 400, 340)).tobytes(), background)
 
+    @unittest.skipUnless((ASSET_DIR / 'audio' / 'cue-193.wav').is_file(), 'Imported crush sound required')
+    def test_sliding_wall_plays_the_crush_sound_at_impact(self):
+        from unittest.mock import Mock, call, patch
+        from pop2.audio import AudioEngine
+        from tests.test_audio import TimedPlayback
+
+        # These original plates activate the wall with the Prince in its path.
+        scene = self.scene
+        for level, room, row in ((10, 27, 2), (11, 28, 0)):
+            with self.subTest(level=level):
+                if not (ASSET_DIR / f'temple_level{level}.json').is_file():
+                    self.skipTest(f'Imported level {level} required')
+                scene.audio = None
+                scene.load_level(level)
+                scene.peaceful = True
+                scene.jump_to_room(room, row, 229, 0, redraw=False)
+                audio = scene.audio = AudioEngine(playback=object(), split_mechanisms=False)
+                playback = TimedPlayback(audio.cues)
+                audio.playback = Mock(wraps=playback)
+                impacts = []
+                with patch.object(scene, 'render'):
+                    for _ in range(160):
+                        playback.advance(.101)
+                        before = audio.playback.play_effect.call_count
+                        self.tick()
+                        if call(193) in audio.playback.play_effect.call_args_list[before:]:
+                            impacts.append((scene.game.caverns.rocks.bank[0][0], scene.combat.player.alive))
+                self.assertEqual(impacts, [(215, False)])
+                self.assertNotIn(call('mechanism', 18), audio.playback.play.call_args_list)
+                self.assertEqual(scene.game.caverns.rocks.bank[0][4], 100)
+
 
     def test_a_rock_stopping_at_spikes_impales_the_prince(self):
         # 10:1d5c's mark-1 path with face tile 2 calls 5:3cee: the spike cell

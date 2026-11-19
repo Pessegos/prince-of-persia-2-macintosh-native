@@ -158,3 +158,32 @@ in a separate native queue-building probe, not interleaved into these contact
 traces. Next work connects the stages, then follows native persistence/reset/save
 paths and the remaining trap-door caller/admission/scheduling/collision audit.
 Production code, imports/assets, campaign and README remain untouched.
+
+## Crush audio in the port
+
+The original requests effect 193 at 10:1c34 once the moving rock face reaches
+a wall or gate and the signed remainder of `(rock X - 18) / 51` is below 46.
+The Prince is still natively alive at that point. The port marks him dead
+when the rock first pins him and plays SEQS 71 from there. That earlier HP
+change exits the damage path before the sound qualifies. The audio check now
+follows the moving rock in the same room and row during this crush death.
+A cue already queued or playing is coalesced, and the ordinary wall-hit cue
+18 is suppressed while 193 plays, as requested by 10:1f08-1f24. The port
+keeps its death animation and health timing. The imported cue is a 1.050 s PCM
+sample.
+
+The port reproductions stand on the original activation plates of level 10
+room 28 and level 11 room 29, at scene X 229 facing left. Both pin at rock
+X 231. At X 217 the remainder is 46. The next moving position, X 215, starts
+cue 193 once, and results in no cue 18 when the rock stops. Both regressions
+fail on `8df2a34`, where 193 never reaches the mixer. An additional run uses
+the default SDL mixer with dummy output and confirms it starts the original
+PCM sample on a real effect channel in level 11 room 29.
+
+The native contact probe above was rerun against the preserved executable.
+A direct 10:1b04 check on each original level supplies type-0 pose 15,
+animation state 1, native X 423, ALIVE -1, facing left and width 20. The five
+rock states use X 231, 217, 216, 215 at control -2 and X 210 at control 100.
+Only X 216 and 215 request 193. The resource lookup, nonmoving handle traps,
+sound endpoints and excluded frame scheduling are the same as in the probe
+above.

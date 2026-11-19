@@ -9,6 +9,8 @@ type 6, row, original X); X is room-local, without the 207 origin.
 from dataclasses import dataclass, field
 import struct
 
+from pop2.coordinates import TILE_WIDTH
+
 SLIDE_ROCK_TILE = 25
 # The native MOB bank holds 30 records (5:2914).
 CAPACITY = 30
@@ -23,6 +25,7 @@ WIDTHS = (87, 0, 5, 91, 45, 33, 82, 82, 36, 36, 69, 57, 17, 0)
 # The three decoration strips (types 8, 8, 9): offsets from the rock.
 DECORATIONS = ((8, 79, -68), (8, 76, -37), (9, 66, -57))
 MOVING_CUE, STOP_CUE, WALL_CUE = 192, 192, 18
+CRUSH_CUE = 193
 # GetObjForePriority 3:3e24: DATA a5-0x44c2 by MOB type (object type | 0x80)
 # against 127 for the Kid and ordinary characters (a5-0x44e0). SortObjTable
 # 3:3b62 draws the higher priority first: the trailing body (6) and the
@@ -185,6 +188,14 @@ class SlideRocks:
             front = signed_word(front + width)
         lower = signed_word(mob[0] + 223)
         return sequence_mode == 4 or lower < front < lower + 25
+
+    def crush_impact(self, terrain, mob, room, row):
+        # 10:1be2-1c38 tests the moving rock's wall cell and signed remainder.
+        if mob[2] != room or mob[6] != row or mob[4] in (0, 100):
+            return False
+        face = signed_word(mob[0] - 18)
+        column = trunc_div(face)
+        return face - column * TILE_WIDTH < 46 and self.kind(terrain, room, column, row) in EDGE_WALLS
 
     @staticmethod
     def room_offsets(terrain, room):

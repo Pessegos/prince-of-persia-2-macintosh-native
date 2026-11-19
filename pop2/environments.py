@@ -1933,6 +1933,8 @@ class Temple(Caverns):
     end_song = 187
 
     def frame_start(self):
+        from pop2.slide_rocks import CRUSH_CUE, WALL_CUE
+
         super().frame_start()
         scene = self.scene
         caverns = scene.game.caverns
@@ -1961,6 +1963,7 @@ class Temple(Caverns):
         width = right - left + 2
         # The type-6 case of MakeRubble 5:2afa: motion 10:1d5c, then
         # CheckSlideRockCrush 10:16f6 against the Prince.
+        crush_playing = audio is not None and audio.sound_playing(CRUSH_CUE)
         for mob, events in caverns.rocks.update(scene.level_map, (state.action, column, row)):
             if motion is not None and player.alive:
                 self.rock_events(mob, events)
@@ -1968,11 +1971,20 @@ class Temple(Caverns):
                     and caverns.rocks.crushes(mob, motion.room + 1, row, native_x(state.target_x),
                                               state.sequence_mode, state.facing, width)):
                 self.rock_contact(mob)
+            # The port marks the Prince dead as soon as the rock pins him.
+            # Keep checking the moving face for 10:1c34's later impact cue.
+            if (motion is not None and motion.dead and scene.death.method == 13
+                    and state.source_sequence_id == 71 and state.sequence_mode == 4
+                    and not crush_playing and CRUSH_CUE not in state.sound_events
+                    and caverns.rocks.crush_impact(scene.level_map, mob, motion.room + 1, row)):
+                state.sound_events.append(CRUSH_CUE)
         for kind, cue in caverns.rocks.sounds:
             if kind == 'play':
-                state.sound_events.append(cue)
-            elif getattr(scene, 'audio', None) is not None:
-                scene.audio.stop_sound(cue)
+                # 10:1f08-1f24 skips the ordinary wall-hit sound during the crush effect.
+                if cue != WALL_CUE or not crush_playing:
+                    state.sound_events.append(cue)
+            elif audio is not None:
+                audio.stop_sound(cue)
 
     def frame_hook(self):
         super().frame_hook()
