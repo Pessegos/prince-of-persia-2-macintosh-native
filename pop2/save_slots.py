@@ -209,6 +209,18 @@ class SaveBrowser:
         return x, y, self.right, y + 22 + (self.name_rows - 1) * (11 if self.spread else 2)
 
     @property
+    def NAME_AREA(self):
+        """All that the Rename highlight and its tip change: the name's lines, their
+        underline, the highlight and the tip (above the name under the preview, below it
+        on the wide page), for the name as last drawn."""
+        x, y = self.DETAILS
+        extra = 11 * (self.name_rows - 1)
+        bottom = max(self.RENAME[3], y + 19 + extra)   # the last line's underline is at y + 16 + extra
+        if self.spread:
+            return x, y, self.right, max(bottom, y + 43 + extra)
+        return x, y - 19, self.right, bottom
+
+    @property
     def FOOTER(self):
         # The wide page keeps the buttons' sizes and moves the two actions to its right edge.
         return ((40, 328, 108, 356), (116, 328, 196, 356),
@@ -483,12 +495,16 @@ class SaveBrowser:
         key = (viewport.size, visible, id(font), background_key if background_key is not None else id(viewport),
                self.mode, self.selected, id(self.slots), id(self.current), self.scroll,
                self.error, self.status, self.save_available, self.editing, self.active_path,
-               self.hovered == 25, menu_theme.current().name)
+               menu_theme.current().name)
         cached = self.modal_cache.get(key) if modal else None
-        # Not the focus: the list, the tabs and the footer are drawn on every frame (only
-        # the Rename highlight is the page's own).
-        list_key = key[:8] + key[9:] + (self.focus == 25,)
+        # Not the focus: the list, the tabs, the footer and the save's name with its Rename
+        # highlight and tip are drawn on every frame. The highlight was the page's own: the
+        # window's page and the game's resolution's, each with and without it, outgrew the
+        # three pages kept, and each pass over the name drew both pages again (70-85 ms at
+        # 3440x1440).
+        list_key = key[:8] + key[9:]
         list_base = self.list_base_cache.get(list_key) if not modal else None
+        named = self.focus == 25, self.hovered == 25   # what the name part shows of the pointer and keys
         kept = self.kept_pages.get(visible) if in_place and list_base is not None else None
         if kept is not None and kept[0] != list_key:
             kept = None
@@ -635,83 +651,13 @@ class SaveBrowser:
                 rectangle((225 + grown, self.LIST[1], 227 + grown, self.LIST[3]), fill=c('#303030'))
                 rectangle((225 + grown, top, 227 + grown, top + thumb), fill=c('#858585'))
 
-        def keep():
-            if in_place:
-                self.kept_pages[visible] = list_key, image, self.focus, self.scroll
-            return image
-
-        if kept is not None:
-            # The page last drawn in place, drawn over again where the focus or the scroll
-            # changed, each part with the theme's sign over it.
-            parts = self.redrawn = []
-
-            def again(box, paint, *args, compare=True):
-                box = (max(0, box[0]), max(0, box[1]), min(image.width, box[2]), min(image.height, box[3]))
-                if box[0] < box[2] and box[1] < box[3]:
-                    before = image.crop(box) if compare else None
-                    paint(*args)
-                    menu_theme.watermark(image, self.PANEL, point, within=box)
-                    parts.append((box, before))
-
-            _, _, focus, scroll = kept
-            listed = (*point(*self.LIST[:2]), *point(*self.LIST[2:]))   # where the rows are drawn
-            if scroll != self.scroll:
-                again(drawn(self.LIST), draw_list, compare=False)   # a list that moved changes all over
-            for index in ((focus, self.focus) if focus != self.focus else ()):
-                if index in buttons:
-                    again(drawn(buttons[index][0]), lit, index)
-                elif scroll == self.scroll and isinstance(index, int) and 100 <= index < 100 + len(self.items):
-                    # The row by itself, cut to the list: its neighbours are 3 units away.
-                    row = drawn(self.row_rect(index - 100))
-                    clip = (max(row[0], listed[0]), max(row[1], listed[1]),
-                            min(row[2], listed[2]), min(row[3], listed[3]))
-                    if clip[0] < clip[2] and clip[1] < clip[3]:
-                        again(clip, list_rows, clip, (index - 100,))
-            return keep()
-
-        if list_base is not None:
-            draw_buttons()
-            draw_list()
-            menu_theme.watermark(image, self.PANEL, point)   # the list was repainted over it
-            return keep()
-
-        if cached is None:
-            if not menu_theme.panel_scaled(image, self.PANEL, point, wide):
-                rectangle(self.PANEL, fill=c('#181818'), outline=c('#858585'))
-            text('Saved Games', 40, 29, gold)
-            text(f'{len(self.slots)} {"save" if len(self.slots) == 1 else "saves"}', right, 32,
-                 muted, 82, True, align='right')
-            line(((40, 88), (right, 88)), c('#404040'))
-            draw_list()
-            slot = self.detail
-            source_key = ('source', slot.path, slot.modified, id(slot.document), id(slot.preview), id(self.preview_provider))
-            if source_key not in self.preview_cache:
-                try:
-                    preview = (self.preview_provider(slot) if slot.document is not None
-                        and self.preview_provider is not None and slot.preview is None else slot.preview)
-                except (OSError, ValueError):
-                    preview = None
-                remember(self.preview_cache, source_key, preview, 8)
-            preview = self.preview_cache[source_key]
-            left, top, right, bottom = self.PREVIEW
-            rectangle(self.PREVIEW, fill=c('#0c0c0c'), outline=c('#626262'))
-            if preview is not None:
-                pos = point(left + 1, top + 1)
-                edge = point(right - 1, bottom - 1)
-                size = max(1, edge[0] - pos[0]), max(1, edge[1] - pos[1])
-                fit_key = ('fit', source_key, size)
-                if fit_key not in self.preview_cache:
-                    remember(self.preview_cache, fit_key, preview.resize(size, Image.Resampling.NEAREST), 8)
-                image.paste(self.preview_cache[fit_key], pos)
-            else:
-                text(slot.error or ('No preview' if self.items else 'No saved games'), left + 28, top + 74,
-                     muted, right - left - 50)
-            can_rename = self.entry.exists and not self.entry.error
-            highlighted = can_rename and self.focus == 25 and not modal
-            column, top = self.DETAILS
-            right = self.right   # the preview's edges were unpacked into these names above
-            name_x, name_width = (column + 24, right - column - 24) if can_rename else (column, right - column)
-            name_color = cyan if highlighted else gold
+        slot = self.detail
+        can_rename = self.entry.exists and not self.entry.error
+        column, top = self.DETAILS
+        name_x, name_width = (column + 24, right - column - 24) if can_rename else (column, right - column)
+        lines_key = 'name lines', id(font), slot.name, name_width
+        name_lines = self.text_cache.get(lines_key)
+        if name_lines is None:
             name_lines = [slot.name]
             if glyphs(slot.name, gold).width * 0.7 > name_width:
                 positions = range(1, len(slot.name))
@@ -721,8 +667,14 @@ class SaveBrowser:
                     glyphs(slot.name[:i].rstrip(), gold).width,
                     glyphs(slot.name[i:].lstrip(), gold).width))
                 name_lines = [slot.name[:split].rstrip(), slot.name[split:].lstrip()]
-            self.name_rows = len(name_lines)
-            extra = 11 * (len(name_lines) - 1)   # how much lower the name's block ends
+            remember(self.text_cache, lines_key, name_lines)
+        self.name_rows = len(name_lines)   # before RENAME and NAME_AREA are read
+        extra = 11 * (len(name_lines) - 1)   # how much lower the name's block ends
+
+        def name_part():
+            """The save's name with its Rename highlight and tip, then its details."""
+            highlighted = can_rename and self.focus == 25 and not modal
+            name_color = cyan if highlighted else gold
             if highlighted:
                 rectangle(self.RENAME, fill=c('#202a2d'))
             if can_rename:
@@ -767,9 +719,98 @@ class SaveBrowser:
                     text(f'Life {slot.capacity}', 472, 309, muted, 64, True, align='right')
                 text(message or slot.date, name_x, 309, message_color,
                      name_width - 70 if slot.capacity is not None else name_width, True)
+
+        def name_over(clip):
+            """The name part drawn again over the page kept under it, cut to ``clip`` (pixels)."""
+            nonlocal image, draw, origin
+            background, origin = image, clip[:2]
+            image = list_base.crop(clip)
+            draw = ImageDraw.Draw(image)
+            name_part()
+            background.paste(image, origin)
+            image, origin = background, (0, 0)
+            draw = ImageDraw.Draw(image)
+
+        def keep():
+            if in_place:
+                self.kept_pages[visible] = list_key, image, self.focus, self.scroll, named
+            return image
+
+        if kept is not None:
+            # The page last drawn in place, drawn over again where the focus or the scroll
+            # changed, each part with the theme's sign over it.
+            parts = self.redrawn = []
+
+            def again(box, paint, *args, compare=True):
+                box = (max(0, box[0]), max(0, box[1]), min(image.width, box[2]), min(image.height, box[3]))
+                if box[0] < box[2] and box[1] < box[3]:
+                    before = image.crop(box) if compare else None
+                    paint(*args)
+                    menu_theme.watermark(image, self.PANEL, point, within=box)
+                    parts.append((box, before))
+
+            _, _, focus, scroll, shown = kept
+            listed = (*point(*self.LIST[:2]), *point(*self.LIST[2:]))   # where the rows are drawn
+            if shown != named:
+                area = drawn(self.NAME_AREA)
+                area = (max(0, area[0]), max(0, area[1]), min(image.width, area[2]), min(image.height, area[3]))
+                again(area, name_over, area)
+            if scroll != self.scroll:
+                again(drawn(self.LIST), draw_list, compare=False)   # a list that moved changes all over
+            for index in ((focus, self.focus) if focus != self.focus else ()):
+                if index in buttons:
+                    again(drawn(buttons[index][0]), lit, index)
+                elif scroll == self.scroll and isinstance(index, int) and 100 <= index < 100 + len(self.items):
+                    # The row by itself, cut to the list: its neighbours are 3 units away.
+                    row = drawn(self.row_rect(index - 100))
+                    clip = (max(row[0], listed[0]), max(row[1], listed[1]),
+                            min(row[2], listed[2]), min(row[3], listed[3]))
+                    if clip[0] < clip[2] and clip[1] < clip[3]:
+                        again(clip, list_rows, clip, (index - 100,))
+            return keep()
+
+        if list_base is not None:
+            draw_buttons()
+            draw_list()
+            name_part()
+            menu_theme.watermark(image, self.PANEL, point)   # the list was repainted over it
+            return keep()
+
+        if cached is None:
+            if not menu_theme.panel_scaled(image, self.PANEL, point, wide):
+                rectangle(self.PANEL, fill=c('#181818'), outline=c('#858585'))
+            text('Saved Games', 40, 29, gold)
+            text(f'{len(self.slots)} {"save" if len(self.slots) == 1 else "saves"}', right, 32,
+                 muted, 82, True, align='right')
+            line(((40, 88), (right, 88)), c('#404040'))
+            draw_list()
+            source_key = ('source', slot.path, slot.modified, id(slot.document), id(slot.preview), id(self.preview_provider))
+            if source_key not in self.preview_cache:
+                try:
+                    preview = (self.preview_provider(slot) if slot.document is not None
+                        and self.preview_provider is not None and slot.preview is None else slot.preview)
+                except (OSError, ValueError):
+                    preview = None
+                remember(self.preview_cache, source_key, preview, 8)
+            preview = self.preview_cache[source_key]
+            shown_left, shown_top, shown_right, shown_bottom = self.PREVIEW
+            rectangle(self.PREVIEW, fill=c('#0c0c0c'), outline=c('#626262'))
+            if preview is not None:
+                pos = point(shown_left + 1, shown_top + 1)
+                edge = point(shown_right - 1, shown_bottom - 1)
+                size = max(1, edge[0] - pos[0]), max(1, edge[1] - pos[1])
+                fit_key = ('fit', source_key, size)
+                if fit_key not in self.preview_cache:
+                    remember(self.preview_cache, fit_key, preview.resize(size, Image.Resampling.NEAREST), 8)
+                image.paste(self.preview_cache[fit_key], pos)
+            else:
+                text(slot.error or ('No preview' if self.items else 'No saved games'), shown_left + 28,
+                     shown_top + 74, muted, shown_right - shown_left - 50)
             draw_buttons()
             if not modal:
+                # Kept without the name part, which is drawn over it (it does not reach the buttons).
                 remember(self.list_base_cache, list_key, image.copy(), 3)
+            name_part()
         if self.confirmation or self.editing:
             if cached is None:
                 menu_theme.watermark(image, self.PANEL, point)   # on the page, under the dialog

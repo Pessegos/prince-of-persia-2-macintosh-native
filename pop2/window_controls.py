@@ -2342,9 +2342,9 @@ class WindowControls(InputRouting):
             state = (id(self.screenshot_viewport), id(self.ui_font), browser.mode, browser.selected,
                      id(browser.slots), id(browser.current), browser.error, browser.status,
                      browser.save_available, browser.editing, browser.confirmation,
-                     None if modal else browser.focus == 25,
-                     getattr(self, 'screenshot_toast', None), browser.active_path, browser.hovered == 25)
-            listing = browser.focus, browser.scroll
+                     getattr(self, 'screenshot_toast', None), browser.active_path)
+            # The Rename highlight and its tip change only the name's part (NAME_AREA).
+            listing = browser.focus, browser.scroll, browser.focus == 25, browser.hovered == 25
             previous = getattr(self, 'save_menu_frame', None)
             if (previous is not None and previous[0] is game_menu and previous[1].size == frame.size
                     and previous[2] is self.image_ref):
@@ -2360,6 +2360,8 @@ class WindowControls(InputRouting):
                     # footer and the list (compared alone, not the whole window). A list that did
                     # not scroll changed only in the rows the focus left and reached.
                     parts = [browser.DIALOG] if modal else [*browser.TABS, *browser.footer_rects]
+                    if not modal and previous[4][2:] != listing[2:]:
+                        parts.append(browser.NAME_AREA)
                     if not modal and previous[4][1] != browser.scroll:
                         parts.append(browser.LIST)
                     elif not modal:

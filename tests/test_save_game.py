@@ -1008,7 +1008,10 @@ class SaveSceneTests(unittest.TestCase):
         # of it again and compared the whole window (about 60 ms at 3440x1440), then the
         # whole list. After that it copied the window-sized page it kept, over which it drew
         # the buttons and the list (about 7 ms): the page shown is now drawn over where the
-        # focus changed, and a save's outline goes to Tk as its four sides.
+        # focus changed, and a save's outline goes to Tk as its four sides. The Rename
+        # highlight and its tip were the page's own: reaching or leaving the save's name drew
+        # the whole page again, the window's and the game's resolution's, and compared the
+        # whole window (70-85 ms); only the name's part is now drawn and compared.
         from PIL import Image, ImageChops, ImageTk
         from pop2 import menu_theme
         from pop2.window_controls import put_patch
@@ -1043,13 +1046,14 @@ class SaveSceneTests(unittest.TestCase):
             for y in range(0, 384, 3):
                 for x in range(-200, 900, 4):
                     index = browser.hit(x, y)
-                    if index is not None and (index in (0, 1, 26, 27, 28, 29) or 100 <= index < 103):
+                    if index is not None and (index in (0, 1, 25, 26, 27, 28, 29) or 100 <= index < 103):
                         targets.setdefault(index, (x, y))
-            self.assertEqual(set(targets), {0, 1, 26, 27, 28, 29, 100, 101, 102})
-            order = (100, 101, 102, 0, 28, 101, 27, 29, 1, 102, 26, 100)
+            self.assertEqual(set(targets), {0, 1, 25, 26, 27, 28, 29, 100, 101, 102})
+            order = (100, 101, 25, 102, 0, 28, 101, 25, 27, 29, 1, 102, 26, 25, 100)
             route = [targets[index] for index in order] + [(-1, -1)]
             left, top, right, bottom = browser.pixel_rect(browser.LIST, (3440, 1440))
             listed = (right - left) * (bottom - top)
+            named = browser.pixel_rect(browser.NAME_AREA, (3440, 1440))
             for theme in menu_theme.THEMES.values():
                 with self.subTest(theme=theme.name):
                     menu_theme.use(theme)
@@ -1073,6 +1077,19 @@ class SaveSceneTests(unittest.TestCase):
                             # From a save to another: only their outlines, by their sides.
                             self.assertTrue(sizes, (x, y))
                             self.assertTrue(all(min(size) <= 8 for size in sizes), (x, y, sizes))
+                        if 25 in order[max(0, step - 1):step + 1]:
+                            # Reaching or leaving the name: its highlight and tip, and the
+                            # outline the focus left or reached, nothing of the page between.
+                            boxes = [(*call.args[2:4], call.args[2] + call.args[1].width,
+                                      call.args[3] + call.args[1].height) for call in sent.call_args_list]
+                            self.assertTrue([box for box in boxes if box[2] > named[0] and box[3] > named[1]
+                                             and box[0] < named[2] and box[1] < named[3]], (x, y, boxes))
+                            for box in boxes:
+                                inside = (named[0] - 4 <= box[0] and named[1] - 4 <= box[1]
+                                          and box[2] <= named[2] + 4 and box[3] <= named[3] + 4)
+                                apart = (box[2] <= named[0] or box[3] <= named[1]
+                                         or box[0] >= named[2] or box[1] >= named[3])
+                                self.assertTrue(inside or apart, (x, y, box, named))
                         shown = ImageTk.getimage(scene.image_ref).convert('RGB')
                         self.assertIsNone(ImageChops.difference(shown, fresh()).getbbox(), (x, y))
                         self.assertIs(scene.save_menu_frame[1], page)
@@ -1144,6 +1161,11 @@ class SaveSceneTests(unittest.TestCase):
                 for x, y in rows[1:3]:
                     scene.dev_hover(SimpleNamespace(x=x, y=y))
                     check(('toast', x, y))
+                # The name's highlight and tip with a toast: the window compares the name's part.
+                left, top = browser.RENAME[:2]
+                for x, y in ((left + 20, top + 10), rows[0], (left + 20, top + 10), (-1, -1)):
+                    scene.dev_hover(SimpleNamespace(x=x, y=y))
+                    check(('toast, name', x, y))
                 scene.clear_screenshot_toast()
                 check('toast gone')
                 scene.show_screenshot_toast('b.png')
