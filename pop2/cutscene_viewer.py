@@ -245,7 +245,7 @@ class CutsceneControls:
             gallery.begin_reveal(index for index, chapter in enumerate(CHAPTERS) if chapter.key in fresh)
             self.cutscene_collection.revealed |= fresh
             fresh.clear()
-        self.render()
+        self.redraw_menu()   # from F1, over the game's picture kept under the menu
         if gallery.reveal:
             self.schedule_cutscene_gallery()
 

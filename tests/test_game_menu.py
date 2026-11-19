@@ -280,6 +280,76 @@ class GameMenuSceneTests(unittest.TestCase):
             self.assertEqual(self.press("F1"), "break")
         self.assertEqual(render.call_count, 1)
 
+    def test_closing_a_menu_or_opening_a_page_from_the_game_draws_the_window_once(self):
+        # Closing drew the game twice (resuming drew it, then the closing): about 30 ms more at
+        # 3440x1440. Alt+K drew the menu without its page, then the page.
+        scene = self.scene
+        steps = (('F1', lambda: self.press('F1'), lambda: self.press('F1')),
+                 ('F2', lambda: self.press('F2'), lambda: self.press('F2')),
+                 ('Alt+S', lambda: self.press('s', 0x20000), lambda: self.press('Escape')),
+                 ('Alt+K', lambda: self.press('k', 0x20000), lambda: self.press('Escape')),
+                 ('Alt+H', lambda: self.press('h', 0x20000), lambda: self.press('Escape')),
+                 ('F3', lambda: self.press('F3'), lambda: self.press('F3')))
+        for paused in (False, True):
+            for name, opening, closing in steps:
+                with self.subTest(paused=paused, menu=name):
+                    scene.set_paused(paused)
+                    with patch('pop2.save_slots.list_slots', return_value=()), \
+                            patch('pop2.hall_of_fame.load_hall', return_value=()), \
+                            patch.object(scene, 'present_viewport', wraps=scene.present_viewport) as shown:
+                        opening()
+                        self.assertTrue(scene.game_menu is not None or scene.dev_menu is not None)
+                        self.assertEqual(shown.call_count, 1)
+                        shown.reset_mock()
+                        closing()
+                    self.assertIsNone(scene.game_menu)
+                    self.assertIsNone(scene.dev_menu)
+                    self.assertEqual(scene.paused, paused)
+                    self.assertEqual(shown.call_count, 1)
+
+    def test_pages_reached_from_f1_and_back_do_not_draw_the_game_again(self):
+        # The game under F1 is paused: the saves, Hall of Fame, Controls and Cutscene Viewer
+        # pages and the way back to F1 drew all of it again first.
+        scene = self.scene
+
+        def shown():
+            return ImageTk.getimage(scene.image_ref).convert('RGB').tobytes()
+
+        render = type(scene).render
+
+        def game_drawn():
+            # The scene's own game; a save's preview draws a game of its own.
+            def guarded(this):
+                if this is scene:
+                    raise AssertionError('the game was drawn')
+                return render(this)
+            return patch.object(type(scene), 'render', guarded)
+
+        pages = (('saves', lambda: scene.apply_game_action('save'), 'Escape'),
+                 ('saves', lambda: scene.apply_game_action('open'), 'Escape'),
+                 ('hall', lambda: scene.apply_game_action('hall'), 'Escape'),
+                 ('controls', lambda: scene.apply_game_action('controls'), 'Escape'),
+                 ('cutscenes', lambda: scene.apply_game_action('cutscenes'), 'Escape'))
+        with patch('pop2.save_slots.list_slots', return_value=()), \
+                patch('pop2.hall_of_fame.load_hall', return_value=()), \
+                patch.object(scene.canvas, 'winfo_width', return_value=1400), \
+                patch.object(scene.canvas, 'winfo_height', return_value=900):
+            self.press('F1')
+            for page, opening, key in pages:
+                with self.subTest(page=page):
+                    with game_drawn():
+                        opening()
+                    self.assertEqual(scene.game_menu.page, page)
+                    drawn = shown()
+                    scene.render()   # the same as the window drawn again, game and all
+                    self.assertEqual(shown(), drawn)
+                    with game_drawn():
+                        self.press(key)
+                    self.assertEqual(scene.game_menu.page, 'menu')
+                    drawn = shown()
+                    scene.render()
+                    self.assertEqual(shown(), drawn)
+
     def test_f2_capture_works_during_intro_with_developer_tools_unavailable(self):
         scene = self.scene
         scene.start_intro()

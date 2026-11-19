@@ -3958,11 +3958,12 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         if self.game_menu is not None:
             self.refresh_game_menu()
             drawn = self.game_menu.draw(drawn, self.ui_font)
-        if drawn is viewport:
+        if drawn is viewport and menus:
             # A page drawn elsewhere (the Cutscene Viewer) leaves the picture itself, which the
-            # notice may then be drawn into.
-            self.menu_underlay = None
+            # notice may then be drawn into: it gets a copy, and the picture stays kept for the
+            # page F1 shows after it.
             menu_theme.hold(None)
+            drawn = viewport.copy()
         return self.draw_screenshot_notice(drawn)
 
 

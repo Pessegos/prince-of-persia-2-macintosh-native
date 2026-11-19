@@ -522,7 +522,9 @@ class WindowControls(InputRouting):
         self.warm_dev_maps(())
         self.clear_keys(None)
         self.update_cursor_visibility()
-        self.set_paused(self.dev_was_paused)
+        # Drawn once, below: set_paused drew the game too, then this drew it again (about
+        # 30 ms more at 3440x1440 for each closing that resumes the game).
+        self.set_paused(self.dev_was_paused, render=False)
         self.pause_resume_keys.update(self.window_keys_down)
         self.render()
 
@@ -968,7 +970,8 @@ class WindowControls(InputRouting):
                         self.game_menu.return_to_menu = False
                         self.install_screenshot_gallery()
                     self.pause_resume_keys.update(self.window_keys_down)
-                    self.redraw_menu()
+                    if render:
+                        self.redraw_menu()
             return
         already_paused = self.paused
         self.game_was_paused = self.dev_was_paused if self.dev_menu is not None else self.paused
@@ -1044,7 +1047,8 @@ class WindowControls(InputRouting):
         self.ui_hover_target = None
         self.clear_keys(None)
         self.update_cursor_visibility()
-        self.set_paused(False if resume else self.game_was_paused)
+        # Drawn once, below (see close_dev_mode).
+        self.set_paused(False if resume else self.game_was_paused, render=False)
         self.pause_resume_keys.update(self.window_keys_down)
         self.render()
 
@@ -1063,7 +1067,7 @@ class WindowControls(InputRouting):
             self.cancel_cutscene_gallery_tick()
             self.game_menu.show_page('menu')
             self.pause_resume_keys.update(self.window_keys_down)
-            self.render()
+            self.redraw_menu()
             return
         if menu is not None and menu.page == 'cutscenes' and action == 'changed':
             self.redraw_cutscene_gallery()
@@ -1135,7 +1139,7 @@ class WindowControls(InputRouting):
             if menu.back() == 'close':
                 self.close_game_menu()
             else:
-                self.render()
+                self.redraw_menu()
         elif action in ('slot_save', 'slot_load', 'slot_delete', 'slot_create', 'slot_rename'):
             self.apply_save_action(action)
         elif action == "hall":
@@ -1158,10 +1162,9 @@ class WindowControls(InputRouting):
         minutes left when Jaffar fell, the row to name (HallOfFameDialog)."""
         from pop2.hall_of_fame import HallOfFamePage, load_hall
 
-        if self.game_menu is None:
+        if self.game_menu is None or self.game_menu.page != 'hall':
+            # Drawn once, below: the page shown before its rows were read was drawn too.
             self.open_game_menu('hall', render=False)
-        elif self.game_menu.page != 'hall':
-            self.open_game_menu('hall')
         menu = self.game_menu
         if menu.page != 'hall':
             return
@@ -1169,7 +1172,7 @@ class WindowControls(InputRouting):
             menu.return_to_menu = False
         menu.hall_page = HallOfFamePage.after_victory(minutes) if minutes is not None else HallOfFamePage(load_hall())
         self.hall_after_id = None
-        self.render()
+        self.redraw_menu()
 
     def save_hall_of_fame(self):
         from pop2.hall_of_fame import save_hall
@@ -1204,7 +1207,7 @@ class WindowControls(InputRouting):
             # After a victory the presentation, already waiting, starts now.
             self.close_game_menu(resume=victory)
         else:
-            self.render()
+            self.redraw_menu()
 
     def gamepads_available(self):
         gamepads = getattr(self, 'gamepads', None)
@@ -1214,7 +1217,7 @@ class WindowControls(InputRouting):
         from pop2.controls_page import ControlsPage
 
         if self.game_menu is None:
-            self.open_game_menu('controls')
+            self.open_game_menu('controls', render=False)   # drawn once, below
         elif self.game_menu.page != 'controls':
             self.dispose_screenshot_gallery()
             self.game_menu.show_page('controls')
@@ -1231,7 +1234,7 @@ class WindowControls(InputRouting):
         menu.controls_page.input_device = getattr(self, 'last_input_device', 'keyboard')
         menu.controls_page.refresh_locks()
         self.watch_lock_lights()
-        self.render()
+        self.redraw_menu()
 
     LOCK_POLL_MS = 150
 
@@ -1274,7 +1277,7 @@ class WindowControls(InputRouting):
             remember(controller_enabled=self.controller_enabled)
             if not self.controller_enabled:
                 self.release_all_pad_inputs()
-        self.render()
+        self.redraw_menu()   # the game stays as it was under the menu
 
     def redraw_save_menu(self):
         self.refresh_game_menu()
@@ -1323,7 +1326,8 @@ class WindowControls(InputRouting):
                                                   preview_provider=self.save_slot_preview)
         self.game_menu.save_browser.ensure_visible(immediate=True)
         self.pause_resume_keys.update(self.window_keys_down)
-        self.render()
+        # From F1 the game is not drawn again under the page (as a page reached from F1).
+        self.redraw_menu()
 
     def apply_save_action(self, action):
         from pop2.save_slots import SAVE_DIRECTORY, list_slots
