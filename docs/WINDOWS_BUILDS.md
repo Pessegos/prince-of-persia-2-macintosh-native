@@ -121,8 +121,10 @@ When a milestone is ready:
 2. Create the version tag and let the workflow build/check that commit.
 3. Download the artifact and playtest that ZIP. Actions' outer artifact ZIP
    contains the actual portable ZIP and its checksum.
-4. Create a draft GitHub prerelease, attach the portable ZIP and checksum, and
-   write notes describing playable changes and known limitations.
+4. Create a draft GitHub prerelease, attach the portable ZIP and write notes
+   describing playable changes and known limitations. GitHub shows each
+   asset's SHA-256 digest, so the `.sha256` file is not attached (from v0.5);
+   use it to check that the downloaded ZIP is the build that was tested.
 5. Publish after review. Keep prior releases available and use a new version
    for a hotfix, rather than silently replacing an existing release's ZIP.
 
