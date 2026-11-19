@@ -29,7 +29,7 @@ class PhotoBlock(ctypes.Structure):
 _writers = {}   # Tcl interpreter's address -> write(name, pixels, x, y), or None
 
 
-def _tk_library(interp):
+def tk_library(interp):
     """Tk's library as this process loaded it for ``interp``, or None."""
     if str(interp.getvar('tk_version')) != '8.6':
         return None
@@ -47,7 +47,7 @@ def _tk_library(interp):
 
 
 def _writer(interp):
-    library = _tk_library(interp)
+    library = tk_library(interp)
     if library is None:
         return None
     find, put = library.Tk_FindPhoto, library.Tk_PhotoPutBlock

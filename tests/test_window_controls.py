@@ -190,19 +190,87 @@ class SaveRenamePointerTests(unittest.TestCase):
         host = WindowControls()
         host.game_menu = GameMenu(page='saves', save_browser=browser)
         host.dev_menu = None
+        host.root = FakeRoot()
         host.canvas = Mock()
-        host.canvas.cget.return_value = ''
         host.dev_pointer = Mock(return_value=(258, 280))
         host.menu_sound_target = Mock(return_value=None)
         host.redraw_save_menu = Mock()
-        host.dev_hover(None)
-        self.assertEqual(browser.hovered, 25)
-        host.canvas.configure.assert_called_with(cursor='hand2')
-        host.redraw_save_menu.assert_called_once()
-        host.dev_pointer_leave(None)
+        with patch('pop2.window_controls.refresh_pointer') as refresh:
+            host.dev_hover(None)
+            self.assertEqual(browser.hovered, 25)
+            self.assertEqual(host.root.cursor, 'hand2')
+            refresh.assert_called_once_with(host.root)
+            host.redraw_save_menu.assert_called_once()
+            host.dev_pointer_leave(None)
         self.assertIsNone(browser.hovered)
-        host.canvas.configure.assert_called_with(cursor='')
+        self.assertEqual(host.root.cursor, '')
         self.assertEqual(host.redraw_save_menu.call_count, 2)
+        host.canvas.configure.assert_not_called()
+
+
+class FakeRoot:
+    """A toplevel's cursor, as Tk keeps it."""
+    def __init__(self, cursor=''):
+        self.cursor = cursor
+        self.changes = 0
+
+    def cget(self, option):
+        assert option == 'cursor'
+        return self.cursor
+
+    def configure(self, cursor):
+        self.cursor = cursor
+        self.changes += 1
+
+
+class WindowCursorTests(unittest.TestCase):
+    def test_the_cursor_is_the_toplevels_and_the_canvas_is_never_configured(self):
+        # Configuring the canvas, even with the cursor it had, made Tk paint all of it
+        # again: about 8 ms at 3440x1440 for each option where the cursor changed.
+        host = WindowControls()
+        host.root, host.canvas = FakeRoot(), Mock()
+        with patch('pop2.window_controls.refresh_pointer') as refresh:
+            for cursor in ('hand2', 'hand2', 'fleur', '', ''):
+                host.set_window_cursor(cursor)
+                self.assertEqual(host.root.cursor, cursor)
+        self.assertEqual(host.root.changes, 3, 'set only when it changes')
+        self.assertEqual(refresh.call_count, 3, 'shown at once, not when the pointer next moves')
+        host.canvas.configure.assert_not_called()
+
+    def test_hidden_pointer_of_fullscreen_play_is_the_toplevels_too(self):
+        host = WindowControls()
+        host.root, host.canvas = FakeRoot('hand2'), Mock()
+        host.fullscreen = True
+        host.game_menu = host.dev_menu = host.copy_challenge = None
+        with patch('pop2.window_controls.refresh_pointer'):
+            host.update_cursor_visibility()
+            self.assertEqual(host.root.cursor, 'none')
+            host.game_menu = GameMenu()
+            host.update_cursor_visibility()
+            self.assertEqual(host.root.cursor, '')
+            host.fullscreen = False
+            host.game_menu = None
+            host.update_cursor_visibility()
+        self.assertEqual(host.root.cursor, '')
+        host.canvas.configure.assert_not_called()
+
+    def test_cutscene_cards_and_arrows_change_only_the_toplevels_cursor(self):
+        host = WindowControls()
+        host.root, host.canvas = FakeRoot(), Mock()
+        host.game_menu = GameMenu(page='cutscenes')
+        host.game_menu.cutscene_viewer = Mock(drag=None, hover=Mock(return_value=True))
+        host.dev_menu = host.copy_challenge = host.cutscene_replay = None
+        host.active_cutscene_gallery = Mock(return_value=host.game_menu.cutscene_viewer)
+        host.dev_pointer = Mock(return_value=(30, 200))
+        host.play_menu_sound = Mock()
+        host.redraw_cutscene_gallery = Mock()
+        with patch('pop2.window_controls.refresh_pointer'):
+            for target, cursor in ((101, 'hand2'), (None, ''), (102, 'hand2')):
+                host.menu_sound_target = Mock(return_value=target)
+                host.dev_hover(None)
+                self.assertEqual(host.root.cursor, cursor)
+        self.assertEqual(host.redraw_cutscene_gallery.call_count, 3)
+        host.canvas.configure.assert_not_called()
 
 
 class CloseShortcutTests(unittest.TestCase):

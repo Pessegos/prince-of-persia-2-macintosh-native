@@ -141,7 +141,8 @@ class MenuInputAudioTests(unittest.TestCase):
         self.host.dev_menu = self.host.copy_challenge = None
         self.host.dev_pointer = Mock()
         self.host.canvas = Mock()
-        self.host.canvas.cget.return_value = ''
+        self.host.root = Mock()
+        self.host.root.cget.return_value = ''   # the window's cursor
         self.host.window_keys_down = set()
         self.host.pause_resume_keys = set()
         self.host.render = Mock()

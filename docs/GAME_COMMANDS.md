@@ -205,6 +205,26 @@ and the other tab (eight themes, four window sizes), 7040 pages drawn in
 place, the window's and the game's resolution's, were the same as the pages
 drawn afresh.
 
+The pointer's shape is the window's own cursor, not the canvas's
+(`WindowControls.set_window_cursor`): the hand over a chapter, a save's name or
+a room of the map, the hand or the cross of a dragged picture, the arrow, and
+the hidden pointer of fullscreen play. A Tk window with no cursor of its own
+shows the one of the window around it, so the canvas, and the strip of chapters
+over it, show the toplevel's. Configuring the canvas, even with the cursor it
+had, made Tk paint all of it again: at 3440x1440 about 8 ms, at times 30-70, for
+each option the pointer reached or left where the shape changes, which the
+benches of a hidden window never saw. Changing the toplevel's costs nothing to
+paint. On Windows, Tk puts a cursor on the screen when the pointer moves, and
+every 250 ms while it rests: one given to the window under the pointer shows at
+once, the toplevel's only then. `pop2.tk_pointer.refresh_pointer` has Tk do at
+once what its pointer timer does (`Tk_PointerEvent` with the point on the
+screen); a pointer that did not move gets no event. In a transparent window
+mapped off the screen at 3440x1440, a step from a chapter to the viewer's
+arrows took 0.1 ms and 8 ms of painting, from there to a chapter 11-13 ms; both
+now paint in 0.3-4 ms. Tested where the desktop is free
+(`tests.desktop_exclusive`): a canvas without a cursor shows its toplevel's once
+Tk updates the pointer, in the Tk in use.
+
 Master mute sets both SDL channel volumes to zero without stopping their
 playback clocks. This preserves the playback-dependent death prompt timing.
 Disabling ambient music cancels only ambient requests/playback; death cues
@@ -212,8 +232,8 @@ and sound effects remain active. Both preferences survive level restarts
 within the session; they are not yet persisted to disk.
 
 Regression coverage: `tests.test_game_menu`, `tests.test_audio`,
-`tests.test_development_menu`, `tests.test_window_controls` and
-`tests.test_rebirth`. Menu-model and audio tests run without game assets;
+`tests.test_development_menu`, `tests.test_window_controls`,
+`tests.test_tk_pointer` and `tests.test_rebirth`. Menu-model and audio tests run without game assets;
 scene tests exercise imported resources and actual Tk event bindings.
 
 ## Screenshot Gallery

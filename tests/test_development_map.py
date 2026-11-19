@@ -816,10 +816,10 @@ class ImportedDevelopmentMapTests(unittest.TestCase):
         point = room_point(s.dev_menu, 'Room 28')
         with patch.object(s, 'dev_pointer', return_value=point):
             s.dev_hover(SimpleNamespace())
-            self.assertEqual(s.canvas.cget('cursor'), 'hand2')
+            self.assertEqual(str(s.root.cget('cursor')), 'hand2')
             s.dev_pointer_leave(None)
             self.assertIsNone(s.dev_menu.hovered_screen)
-            self.assertEqual(s.canvas.cget('cursor'), '')
+            self.assertEqual(str(s.root.cget('cursor')), '')
             s.dev_click(SimpleNamespace(num=1))
         self.assertEqual(s.room_id, 27)
         self.assertIsNone(s.dev_menu)

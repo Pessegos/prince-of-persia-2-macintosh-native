@@ -18,6 +18,7 @@ from pop2.game_ui import (DevelopmentMenu, VISIBLE_SIZE, VISIBLE_VIEWPORT, fit_v
 from pop2.preferences import remember
 from pop2.screenshots import ScreenshotSettings, save_screenshot
 from pop2.tk_photo import put_pixels
+from pop2.tk_pointer import refresh_pointer
 
 
 PAUSE_GAMEPLAY_KEYS = frozenset({
@@ -629,7 +630,7 @@ class WindowControls(InputRouting):
         if gallery is not None:
             gallery.close()
             try:
-                self.canvas.configure(cursor='')
+                self.set_window_cursor('')
             except tk.TclError:
                 pass
             self.game_menu.screenshot_gallery = None
@@ -683,8 +684,8 @@ class WindowControls(InputRouting):
         self.screenshot_gallery_after_id = self.root.after(12, tick)
 
     def redraw_screenshot_gallery(self):
-        if self.game_menu.screenshot_gallery.drag_target is None and self.canvas.cget('cursor'):
-            self.canvas.configure(cursor='')
+        if self.game_menu.screenshot_gallery.drag_target is None:
+            self.set_window_cursor('')
         # At the game's resolution, drawn over in place: the window draws the page it shows
         # by itself (present_viewport), and a capture with menus draws its own.
         self.native_viewport = self.draw_screenshot_notice(
@@ -921,7 +922,7 @@ class WindowControls(InputRouting):
 
     def update_cursor_visibility(self):
         visible = not self.fullscreen or self.modal_open()
-        self.canvas.configure(cursor="" if visible else "none")
+        self.set_window_cursor("" if visible else "none")
 
     def development_available(self):
         return self.level_map is not None and getattr(self, "copy_challenge", None) is None
@@ -1812,13 +1813,13 @@ class WindowControls(InputRouting):
             if action == 'cutscene_play':
                 self.play_menu_sound('click')
             self.apply_game_action(action)
-            self.canvas.configure(cursor='')
+            self.set_window_cursor('')
             return 'break'
         gallery = getattr(getattr(self, 'game_menu', None), 'screenshot_gallery', None)
         if gallery is not None and gallery.drag_target is not None and getattr(event, 'num', 1) == 1:
             point = self.dev_pointer(event)
             self.apply_game_action(gallery.release_drag(*(point if point is not None else (-1, -1))))
-            self.canvas.configure(cursor='')
+            self.set_window_cursor('')
             return 'break'
         if getattr(self, 'screenshot_scroll_dragging', False):
             self.screenshot_scroll_dragging = False
@@ -1852,7 +1853,7 @@ class WindowControls(InputRouting):
         if viewer is not None and viewer.drag is not None:
             point = self.dev_pointer(event)
             if point is not None and viewer.move_drag(point[0]):
-                self.set_canvas_cursor('fleur')
+                self.set_window_cursor('fleur')
                 self.redraw_cutscene_gallery()
             return 'break'
         if getattr(self, 'cutscene_replay', None) is not None:
@@ -1862,7 +1863,7 @@ class WindowControls(InputRouting):
             point = self.dev_pointer(event)
             before = gallery.dragging, gallery.hovered
             if gallery.move_drag(*(point if point is not None else (-1, -1))):
-                self.set_canvas_cursor('hand2' if gallery.hovered == 13 else 'fleur')
+                self.set_window_cursor('hand2' if gallery.hovered == 13 else 'fleur')
                 # A step that only carries the picture moves its own canvas item;
                 # starting, or reaching or leaving the delete button, redraws the page.
                 if before != (True, gallery.hovered) or not self.move_screenshot_held(gallery):
@@ -1916,24 +1917,23 @@ class WindowControls(InputRouting):
                 else:
                     self.redraw_menu()
             if menu is self.game_menu and menu.page == 'cutscenes':
-                cursor = 'hand2' if target is not None else ''
-                if self.canvas.cget('cursor') != cursor:
-                    self.canvas.configure(cursor=cursor)
+                self.set_window_cursor('hand2' if target is not None else '')
             if menu is self.dev_menu:
                 hovered = menu.hovered_screen if menu.map_enabled else None
-                cursor = 'hand2' if hovered is not None and not menu.dropdown else ''
-                if self.canvas.cget('cursor') != cursor:
-                    self.canvas.configure(cursor=cursor)
+                self.set_window_cursor('hand2' if hovered is not None and not menu.dropdown else '')
             elif menu.page == 'saves':
-                cursor = 'hand2' if menu.save_browser.hovered == 25 else ''
-                if self.canvas.cget('cursor') != cursor:
-                    self.canvas.configure(cursor=cursor)
+                self.set_window_cursor('hand2' if menu.save_browser.hovered == 25 else '')
 
-    def set_canvas_cursor(self, cursor):
-        # Configuring the canvas, even with the same cursor, repaints all of it:
-        # at 3440x1440, on every step of a drag.
-        if self.canvas.cget('cursor') != cursor:
-            self.canvas.configure(cursor=cursor)
+    def set_window_cursor(self, cursor):
+        """Show the pointer as ``cursor`` over the window ('' the arrow, 'none' hidden).
+        It is the toplevel's cursor, which the canvas and the windows over it show, having
+        none of their own: configuring the canvas, even with the cursor it had, made Tk
+        paint all of it again, about 8 ms at 3440x1440 (at times 30-70) for each option
+        the pointer reached or left where the cursor changes."""
+        root = self.root
+        if str(root.cget('cursor')) != cursor:
+            root.configure(cursor=cursor)
+            refresh_pointer(root)   # on the screen now, not when the pointer next moves
 
     def screenshot_gallery_placement(self, gallery, width, height):
         """Where the screenshots page goes in a window: the game's picture (size, position),
@@ -2075,23 +2075,23 @@ class WindowControls(InputRouting):
             viewer.dragged = False
             viewer.last_clicked = None
             viewer.hovered = None
-            self.canvas.configure(cursor='')
+            self.set_window_cursor('')
             self.redraw_cutscene_gallery()
         self.ui_hover_target = None
         if self.game_menu is not None and self.game_menu.page == 'saves':
             if self.game_menu.hover(-1, -1):
                 self.redraw_save_menu()
-            self.canvas.configure(cursor='')
+            self.set_window_cursor('')
         gallery = getattr(getattr(self, 'game_menu', None), 'screenshot_gallery', None)
         if gallery is not None and gallery.drag_target is not None:
             gallery.cancel_drag()
-            self.canvas.configure(cursor='')
+            self.set_window_cursor('')
             self.redraw_screenshot_gallery()
         menu = self.dev_menu
         if menu is not None and menu.preview_enabled:
             if menu.hover(-1, -1):
                 self.redraw_dev_menu()
-            self.canvas.configure(cursor='')
+            self.set_window_cursor('')
 
     def dev_scroll(self, event):
         menu = getattr(self, 'game_menu', None)

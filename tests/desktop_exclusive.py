@@ -12,7 +12,8 @@ import unittest
 from tests.desktop import EXCLUSIVE
 
 MODULES = ('tests.test_window_controls', 'tests.test_game_menu', 'tests.test_intro_scene',
-           'tests.test_bitmap_presenter', 'tests.test_window_aspect', 'tests.test_app_window')
+           'tests.test_bitmap_presenter', 'tests.test_window_aspect', 'tests.test_app_window',
+           'tests.test_tk_pointer')
 
 
 def load_tests(loader, _tests, _pattern):

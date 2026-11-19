@@ -1033,10 +1033,10 @@ class GameWindowTests(unittest.TestCase):
                         patch.object(scene.root, "attributes") as attributes:
                     scene.toggle_fullscreen()
                     self.assertTrue(scene.fullscreen)
-                    self.assertEqual(scene.canvas.cget("cursor"), "none")
+                    self.assertEqual(str(scene.root.cget("cursor")), "none")
                     scene.toggle_fullscreen()
                     self.assertFalse(scene.fullscreen)
-                    self.assertEqual(scene.canvas.cget("cursor"), "")
+                    self.assertEqual(str(scene.root.cget("cursor")), "")
                     self.assertEqual(attributes.call_args_list[0].args, ("-fullscreen", True))
                     self.assertEqual(attributes.call_args_list[1].args, ("-fullscreen", False))
                     state_call.assert_called_with(state)

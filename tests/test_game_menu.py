@@ -934,7 +934,7 @@ class GameMenuSceneTests(unittest.TestCase):
                         self.press(cancellation)
                     self.assertIsNone(gallery.drag_target)
                     self.assertFalse(gallery.dragging)
-                    self.assertEqual(scene.canvas.cget('cursor'), '')
+                    self.assertEqual(str(scene.root.cget('cursor')), '')
                     self.assertTrue(path.exists())
                     if cancellation == 'Escape':
                         self.assertIsNotNone(scene.game_menu)
@@ -1701,11 +1701,11 @@ class GameMenuSceneTests(unittest.TestCase):
         with patch.object(scene.root, "attributes"), patch.object(scene.root, "state"):
             scene.toggle_fullscreen()
         self.assertTrue(scene.fullscreen)
-        self.assertEqual(scene.canvas.cget("cursor"), "")
+        self.assertEqual(str(scene.root.cget("cursor")), "")
         self.assertEqual(scene.game_menu.page, "confirm")
         scene.dev_key_release(event)
         self.press("Escape")
-        self.assertEqual(scene.canvas.cget("cursor"), "none")
+        self.assertEqual(str(scene.root.cget("cursor")), "none")
 
     def test_focus_loss_while_in_menu_keeps_pause_after_cancel(self):
         scene = self.scene

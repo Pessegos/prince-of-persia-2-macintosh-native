@@ -367,19 +367,19 @@ class MenuSceneTests(unittest.TestCase):
     def test_fullscreen_cursor_is_visible_only_during_menu_and_alt_enter_is_not_consumed(self):
         scene = self.scene
         scene.fullscreen = True
-        scene.canvas.configure(cursor="none")
+        scene.root.configure(cursor="none")
         scene.open_dev_mode()
-        self.assertEqual(scene.canvas.cget("cursor"), "")
+        self.assertEqual(str(scene.root.cget("cursor")), "")
         for modifier in (0x20000, 0x20008):
             self.assertIsNone(scene.dev_key_press(self.event("Return", state=modifier)))
             scene.dev_key_release(self.event("Return"))
         scene.close_dev_mode()
-        self.assertEqual(scene.canvas.cget("cursor"), "none")
+        self.assertEqual(str(scene.root.cget("cursor")), "none")
         scene.open_dev_mode()
         with patch.object(scene.root, "attributes"), patch.object(scene.root, "state"):
             scene.toggle_fullscreen()
             scene.toggle_fullscreen()
-        self.assertEqual(scene.canvas.cget("cursor"), "")
+        self.assertEqual(str(scene.root.cget("cursor")), "")
         self.assertIsNotNone(scene.dev_menu)
 
     def test_mouse_uses_presented_viewport_and_ignores_black_bars(self):

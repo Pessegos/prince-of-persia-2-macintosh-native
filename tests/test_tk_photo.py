@@ -111,7 +111,7 @@ class PhotoWriteTests(unittest.TestCase):
         library = SimpleNamespace(Tk_FindPhoto=find, Tk_PhotoPutBlock=put)
         before, images = self.shown().tobytes(), set(self.root.image_names())
         with patch.dict(tk_photo._writers, clear=True), \
-                patch.object(tk_photo, '_tk_library', return_value=library):
+                patch.object(tk_photo, 'tk_library', return_value=library):
             self.assertFalse(put_pixels(self.photo, numpy.zeros((2, 2, 3), numpy.uint8), 0, 0))
             self.assertIsNone(tk_photo._writers[self.photo.tk.interpaddr()])
         self.assertEqual(self.shown().tobytes(), before)

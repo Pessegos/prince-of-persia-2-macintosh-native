@@ -323,18 +323,21 @@ class CopyProtectionTests(unittest.TestCase):
 
     def test_fullscreen_cursor_is_visible_for_copy_challenge_only(self):
         host = WindowControls()
-        host.canvas = Mock()
+        host.root = Mock()
+        host.root.cget.return_value = 'none'   # as fullscreen play left it
         host.fullscreen = True
         host.game_menu = host.dev_menu = None
         host.copy_challenge = object()
         host.copy_pointer_held = False
 
-        host.update_cursor_visibility()
-        self.assertEqual(host.canvas.configure.call_args.kwargs, {'cursor': ''})
+        with patch('pop2.window_controls.refresh_pointer'):
+            host.update_cursor_visibility()
+            self.assertEqual(host.root.configure.call_args.kwargs, {'cursor': ''})
 
-        host.copy_challenge = None
-        host.update_cursor_visibility()
-        self.assertEqual(host.canvas.configure.call_args.kwargs, {'cursor': 'none'})
+            host.root.cget.return_value = ''
+            host.copy_challenge = None
+            host.update_cursor_visibility()
+            self.assertEqual(host.root.configure.call_args.kwargs, {'cursor': 'none'})
 
     def test_copy_symbol_highlight_tracks_only_while_button_held_and_selects_on_release(self):
         class Challenge:
