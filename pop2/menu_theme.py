@@ -351,6 +351,24 @@ def panel(image, rect, clear_sides=False, limit=_LIMIT):
     image.paste(picture, shown[:2], picture)
 
 
+_dim_levels = {}     # alpha -> the level each channel takes under black at that alpha
+
+
+def dimmed(image, alpha):
+    """Black at ``alpha`` over a picture, as Image.alpha_composite lays it: the game's
+    picture under a page drawn at the window's resolution, and a page under its dialog.
+    An opaque picture goes through a table of the very levels compositing gives, two to
+    three times sooner (about 10 ms instead of 25 at 3440x1440)."""
+    if image.mode != 'RGBA' or image.getchannel('A').getextrema()[0] < 255:
+        return Image.alpha_composite(image, Image.new('RGBA', image.size, (0, 0, 0, alpha)))
+    levels = _dim_levels.get(alpha)
+    if levels is None:
+        ramp = Image.frombytes('RGBA', (256, 1), bytes(v for level in range(256) for v in (level,) * 3 + (255,)))
+        shade = Image.alpha_composite(ramp, Image.new('RGBA', ramp.size, (0, 0, 0, alpha))).getchannel('R')
+        levels = _dim_levels[alpha] = list(shade.tobytes()) * 3 + list(range(256))
+    return image.point(levels)
+
+
 _held = None        # the picture that menus are drawn over again while it stays as it is
 _grounds = {}       # its page grounds, by theme, panel and frame
 

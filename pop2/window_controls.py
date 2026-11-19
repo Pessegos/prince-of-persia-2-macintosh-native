@@ -2409,7 +2409,12 @@ class WindowControls(InputRouting):
                     damages = page_damage(redrawn, frame)
                 shown = previous[1] is frame and redrawn is not None
                 rects = [] if shown else [(0, 0, *frame.size)]
-                if not shown and previous[3] == state:
+                if not shown and bool(previous[3][9] or previous[3][10]) != bool(modal):
+                    # A dialog opening or closing darkens or lightens all of the page: sent
+                    # whole, without comparing it (about 20 ms at 3440x1440) or cutting it.
+                    rects = []
+                    self.image_ref.paste(frame)
+                elif not shown and previous[3] == state:
                     # Only what the pointer or the keys light up: the dialog, or the tabs, the
                     # footer and the list (compared alone, not the whole window). A list that did
                     # not scroll changed only in the rows the focus left and reached.

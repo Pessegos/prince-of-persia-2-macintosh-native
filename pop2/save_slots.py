@@ -515,9 +515,14 @@ class SaveBrowser:
         # three pages kept, and each pass over the name drew both pages again (70-85 ms at
         # 3440x1440).
         list_key = key[:8] + key[9:]
-        list_base = self.list_base_cache.get(list_key) if not modal else None
+        # A dialog opens over the page as it was, darkened: the one kept under the list for
+        # no dialog (list_key without what is edited). Drawing that page again from the
+        # game's picture took about 40 ms at 3440x1440.
+        list_base = (self.list_base_cache.get(list_key) if not modal else
+                     self.list_base_cache.get(list_key[:11] + (None,) + list_key[12:])
+                     if cached is None and kept_dialog is None else None)
         named = self.focus == 25, self.hovered == 25   # what the name part shows of the pointer and keys
-        kept = self.kept_pages.get(visible) if in_place and list_base is not None else None
+        kept = self.kept_pages.get(visible) if in_place and list_base is not None and not modal else None
         if kept is not None and kept[0] != list_key:
             kept = None
         self.redrawn = None
@@ -527,7 +532,7 @@ class SaveBrowser:
         image = (kept[1] if kept is not None else kept_dialog[1] if kept_dialog is not None else
                  cached.copy() if cached is not None else
                  list_base.copy() if list_base is not None else
-                 Image.alpha_composite(viewport, Image.new('RGBA', viewport.size, (0, 0, 0, 150))))
+                 menu_theme.dimmed(viewport, 150))
         draw = ImageDraw.Draw(image)
         gold, white, muted, cyan = c('#f4d873'), c('#eeeeee'), c('#999999'), c('#77c9dc')
         sx, sy = viewport.width / (510 if visible else 512), viewport.height / 384
@@ -787,8 +792,9 @@ class SaveBrowser:
             draw_buttons()
             draw_list()
             name_part()
-            menu_theme.watermark(image, self.PANEL, point)   # the list was repainted over it
-            return keep()
+            if not modal:
+                menu_theme.watermark(image, self.PANEL, point)   # the list was repainted over it
+                return keep()
 
         def dialog_button(index):
             label = ('Cancel', ('Save' if self.editing == 'create' else 'Rename') if self.editing else
@@ -810,7 +816,7 @@ class SaveBrowser:
             self.kept_dialogs[visible] = dialog_key, image, lit_buttons
             return image
 
-        if cached is None:
+        if cached is None and list_base is None:
             if not menu_theme.panel_scaled(image, self.PANEL, point, wide):
                 rectangle(self.PANEL, fill=c('#181818'), outline=c('#858585'))
             text('Saved Games', 40, 29, gold)
@@ -848,7 +854,7 @@ class SaveBrowser:
         if self.confirmation or self.editing:
             if cached is None:
                 menu_theme.watermark(image, self.PANEL, point)   # on the page, under the dialog
-                image = Image.alpha_composite(image, Image.new('RGBA', image.size, (0, 0, 0, 140)))
+                image = menu_theme.dimmed(image, 140)
                 remember(self.modal_cache, key, image.copy(), 3)
             draw = ImageDraw.Draw(image)
             if not menu_theme.panel_scaled(image, self.DIALOG, point, wide):

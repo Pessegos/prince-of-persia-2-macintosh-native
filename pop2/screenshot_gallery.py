@@ -42,23 +42,6 @@ class ReadResult:
     error: str = ''
 
 
-_DIM_LEVELS = None
-
-
-def dimmed(image):
-    """Black at 150 alpha over a picture: the game's picture under the page, and the
-    page under a dialog. An opaque picture goes through a table of the very levels
-    compositing gives, four times sooner (6 ms instead of 25 at 3440x1440)."""
-    global _DIM_LEVELS
-    if image.mode != 'RGBA' or image.getchannel('A').getextrema()[0] < 255:
-        return Image.alpha_composite(image, Image.new('RGBA', image.size, (0, 0, 0, 150)))
-    if _DIM_LEVELS is None:
-        ramp = Image.frombytes('RGBA', (256, 1), bytes(v for level in range(256) for v in (level,) * 3 + (255,)))
-        levels = Image.alpha_composite(ramp, Image.new('RGBA', ramp.size, (0, 0, 0, 150))).getchannel('R')
-        _DIM_LEVELS = list(levels.tobytes()) * 3 + list(range(256))
-    return image.point(_DIM_LEVELS)
-
-
 def scan_captures(folder):
     if not folder.exists():
         return ()
@@ -528,7 +511,7 @@ class ScreenshotGallery:
         """The picture under the page, darkened, as every drawing from scratch starts."""
         kept = self.backdrops.get(id(viewport))
         if kept is None or kept[0] is not viewport:
-            kept = viewport, dimmed(viewport)
+            kept = viewport, menu_theme.dimmed(viewport, 150)
             remember(self.backdrops, id(viewport), kept, 3)
         return kept[1]
 
@@ -1641,7 +1624,7 @@ class ScreenshotGallery:
             # button's ground in this first frame only, for the twelfth of a second until the lava moved.
             draw_delete()
             if modal:
-                image = dimmed(image)
+                image = menu_theme.dimmed(image, 150)
                 draw = ImageDraw.Draw(image)
                 remember(self.modal_cache, key, image.copy(), 3)
             else:

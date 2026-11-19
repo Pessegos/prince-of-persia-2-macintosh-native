@@ -1260,6 +1260,67 @@ class SaveSceneTests(unittest.TestCase):
                 browser.key('Escape')
                 scene.redraw_save_menu()
 
+    def test_a_saves_dialog_opens_over_the_page_kept_and_goes_to_the_window_whole(self):
+        # A dialog darkens the page kept under the list, which is not drawn again from the
+        # game's picture, and opening or closing it sends the whole window without
+        # comparing it with the page before: at 3440x1440 the two took about 80 ms of the
+        # 150 a dialog took to open.
+        from PIL import ImageChops, ImageTk
+        from pop2 import menu_theme
+
+        scene = self.scene
+        for index in range(3):
+            scene.save_game_to(self.path.with_name(f'{index}.pop2save'), f'Journey {index}')
+        scene.open_save_browser()
+        browser = scene.game_menu.save_browser
+        panels, compared = [], []
+        scaled, difference = menu_theme.panel_scaled, ImageChops.difference
+
+        def counted_panel(image, rect, *args, **options):
+            panels.append(rect)
+            return scaled(image, rect, *args, **options)
+
+        def counted_difference(first, second):
+            compared.append(first.size)
+            return difference(first, second)
+
+        def check(label):
+            caches = browser.list_base_cache, browser.modal_cache
+            browser.list_base_cache, browser.modal_cache = {}, {}
+            try:
+                fresh = browser.draw(scene.save_menu_source[2], scene.ui_font, visible=True,
+                                     background_key=id(scene.screenshot_viewport))
+            finally:
+                browser.list_base_cache, browser.modal_cache = caches
+            expected = scene.draw_screenshot_notice(fresh, visible=True, uniform=bool(browser.spread)).convert('RGB')
+            shown = ImageTk.getimage(scene.image_ref).convert('RGB')
+            self.assertIsNone(ImageChops.difference(shown, expected).getbbox(), label)
+
+        with patch.object(scene, 'dev_pointer', side_effect=lambda event: (event.x, event.y)), \
+                patch.object(scene.canvas, 'winfo_width', return_value=3440), \
+                patch.object(scene.canvas, 'winfo_height', return_value=1440):
+            scene.save_menu_frame = None
+            scene.redraw_save_menu()
+            for focus, opened in ((26, 'delete'), (25, 'rename'), (27, 'save')):
+                browser.selected, browser.focus = 0, focus
+                scene.redraw_save_menu()
+                panels.clear()
+                with patch('pop2.menu_theme.panel_scaled', counted_panel), \
+                        patch('pop2.window_controls.ImageChops.difference', counted_difference):
+                    self.assertEqual(browser.activate(), 'changed')
+                    scene.redraw_save_menu()
+                    self.assertEqual(compared, [], opened)
+                    self.assertIn(opened, (browser.confirmation, browser.editing))
+                    self.assertIn(browser.DIALOG, panels)
+                    self.assertNotIn(browser.PANEL, panels, opened)   # the page kept, darkened
+                    check(f'{opened} open')
+                    compared.clear()
+                    browser.key('Escape')
+                    scene.redraw_save_menu()
+                    self.assertFalse(browser.confirmation or browser.editing)
+                    self.assertEqual(compared, [], opened)
+                check(opened)
+
     def test_old_snapshot_preview_is_a_resume_image_and_keeps_the_file_untouched(self):
         scene = self.scene
         write_save(self.path, capture(scene.game))

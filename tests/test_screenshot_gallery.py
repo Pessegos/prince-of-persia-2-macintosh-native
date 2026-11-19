@@ -680,8 +680,9 @@ class ScreenshotGalleryTests(unittest.TestCase):
         clear = opaque.copy()
         clear.putalpha(Image.effect_noise((300, 200), 90))   # alpha of every level
         for image in (opaque, clear):
-            expected = Image.alpha_composite(image, Image.new('RGBA', image.size, (0, 0, 0, 150)))
-            self.assertEqual(screenshot_gallery.dimmed(image).tobytes(), expected.tobytes())
+            for alpha in (150, 140, 96, 1, 255):   # the pages', the saves dialog's, others
+                expected = Image.alpha_composite(image, Image.new('RGBA', image.size, (0, 0, 0, alpha)))
+                self.assertEqual(menu_theme.dimmed(image, alpha).tobytes(), expected.tobytes(), alpha)
 
     def test_confirmed_deletion_lists_at_once_and_reads_ahead_the_next_picture(self):
         # The page was drawn again for the deletion, for the folder's listing, then for the next

@@ -220,6 +220,15 @@ wheel and the other tab (eight themes, four window sizes), 1600 pages drawn
 in place, the window's and the game's resolution's, were the same as the
 pages drawn afresh.
 
+A saves dialog opens over the page kept under the list (`list_base_cache`),
+darkened, rather than over that page drawn again from the game's picture, and
+both darkenings go through a table of the levels compositing gives
+(`menu_theme.dimmed`, which the screenshots page already used). Opening or
+closing a dialog changes all of the window, which is then sent whole without
+being compared with the page before, as the screenshots page did. At
+3440x1440 a saves dialog took 140-185 ms to open and takes about 63, and 70-90
+to close, now about 45; the screenshots page's take about 75 and 41.
+
 The pointer's shape is the window's own cursor, not the canvas's
 (`WindowControls.set_window_cursor`): the hand over a chapter, a save's name or
 a room of the map, the hand or the cross of a dragged picture, the arrow, and
