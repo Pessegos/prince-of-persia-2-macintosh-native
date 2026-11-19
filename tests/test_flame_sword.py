@@ -277,6 +277,49 @@ class LevelTwelveFlameSwordTests(unittest.TestCase):
         self.tick(40)
         self.assertLess(scene.combat.player.life, 3)
 
+    def test_it_has_no_life_meter(self):
+        # DrawOppMeter 3:4b64-4b68: an actor-10 opponent clears the meter.
+        # The port drew its six flasks before.
+        sword = self.enter(290)
+        self.tick(3)
+        self.assertTrue(sword.flame_sword.native_alive)
+        self.assertGreater(sword.life, 0)
+        self.assertIsNone(self.scene.combat.health_opponent())
+
+    def test_it_does_not_wake_from_a_side_room(self):
+        # 4:14f0-151e/13b6 scan only the Kid room's records (a5-0x4fc2).
+        # Before, the side-room view put the Prince in its room, so it rose
+        # with full life as he stepped into room 12 within five columns.
+        sword = self.enter(480)
+        combat = self.scene.combat
+        sword.state.target_x = sword.state.current_x = 505
+        combat.enter_room(11, 0)
+        combat.player.state.target_x = combat.player.state.current_x = 40
+        self.assertIn(sword, combat.active_guards())
+        self.assertEqual(sword.room, 6)
+        self.tick(20)
+        self.assertEqual((sword.state.sequence_id, sword.life), (105, 0))
+        self.assertFalse(sword.flame_sword.native_alive)
+
+    def test_an_awake_sword_follows_across_the_cut_and_a_fallen_one_stays(self):
+        # CutAllOpponents 6:4582-45fa with 463c's type-10 row test (46a8):
+        # engaged, ALIVE, on the Kid's row and X >= 385 going right. Before,
+        # only actors 2 and 4 were carried.
+        for fallen in (False, True):
+            with self.subTest(fallen=fallen):
+                sword = self.enter(290)
+                combat = self.scene.combat
+                self.tick(25)
+                self.assertTrue(sword.flame_sword.native_alive)
+                if fallen:
+                    sword.flame_sword.fall(sword)
+                sword.state.target_x = sword.state.current_x = 450
+                combat.enter_room(11, 0)
+                self.assertEqual(sword.room, 6 if fallen else 11)
+                if not fallen:
+                    self.assertEqual(sword.state.target_x, 450 - 510)
+                    self.assertIn(sword, combat.guards)
+
     def test_awake_control_repairs_a_stale_inactive_flag_from_an_older_save(self):
         sword = self.enter(290)
         self.tick()

@@ -224,7 +224,9 @@ class TempleRouteTests(unittest.TestCase):
         # left of the resting sword, and the sword wakes about as late. The
         # player draws and advances east over it while it rises, so it ends
         # behind him and he runs on to room 12. Parrying it down is only the
-        # port route's choice.
+        # port route's choice. As in the video, the awake sword follows him
+        # across the cut (CutAllOpponents 6:4476, type 10 on the Kid's row,
+        # 6:46a8); it was left in room 7 before.
         route = LEVEL_12_VIDEO[:LEVEL_12_VIDEO.index('swordduel')] + ['swordpass', 'runR20']
         _reached, trace, harness = replay(12, route, draw=False, peaceful=False, life=LEVEL_12_VIDEO_LIFE)
         self.addCleanup(harness.close)
@@ -232,7 +234,9 @@ class TempleRouteTests(unittest.TestCase):
         self.assertTrue(trace[-1][-1])
         sword = next(guard for guards, _points in harness.scene.combat.room_encounters.values()
                      for guard in guards if guard.flame_sword is not None)
-        self.assertEqual(sword.room + 1, 7)
+        self.assertEqual(sword.room + 1, 12)
+        self.assertTrue(sword.flame_sword.native_alive)
+        self.assertEqual(sword.life, sword.max_life - 1)
 
     def test_level_12_is_finished_along_the_macintosh_video_route(self):
         corpse = []

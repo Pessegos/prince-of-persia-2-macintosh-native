@@ -145,3 +145,54 @@ guard-room/audio **48 OK** (6.957s), no skips. Required dependency, Ruff,
 catalogue and whitespace checks pass. No full/import suite, new native CPU
 probe, live game/emulator, physical input, shared settings/saves or resource
 write. Broader barrier/unarmed/encounter-result recovery remains open.
+
+## Room-7 follow-up: meter, side-room wake and cut (2026-11-19)
+
+The user's port video (parrying the sword east until the forced retreats
+carried the Prince into room 12) showed three faults, all reproduced in a
+hidden scene from the room-7 start at X 420 facing west:
+
+- **The meter.** The port drew six blue flasks for the sword. DrawOppMeter
+  **3:4b64-4b76** loads the selected record and jumps to the clearing tail
+  **4c9a** for actors 10, 11 and 0, so the sword never has a meter. The
+  user's Macintosh capture of level 12 shows none either.
+  `CombatEncounter.health_opponent` now returns no opponent for them.
+- **Waking from a side room.** After the sixth parry (SEQS 107, timer 480)
+  the next retreat crossed the cut. The sword, still drawn at room 7's edge,
+  was stored and restored as a resting record (pose 213 clears its timer,
+  as on re-entry), then `wake_skeletons` ran its wake test inside the side
+  room view, where the projected Prince is in the sword's room: it rose
+  with full life while he stood in room 12, and hovered at room 7's edge
+  for good. The wake loop **4:14f0-151e** counts and OpponentClose **13b6**
+  reads only the records of the Kid's room (a5-0x4fc2). The flaming sword
+  now wakes only when the Prince is in its own room. (The skeleton's wake
+  uses the same view; it was not changed here.)
+- **The cut.** Port room changes carried only actors 2 and 4. In
+  CutAllOpponents only the running-pose test (**6:44f2-4500**) is limited
+  to them; the ALIVE/engaged/direction test (**4582-45fa**) applies to
+  every actor, and its helper **463c** adds a type-10 rule (**46a8-46be**):
+  the sword follows only on the Kid's row. An awake sword past X 385 (124
+  going left) now follows the Prince into room 12 with the life it has
+  left; a fallen one stays in room 7. Re-entering room 7 still clears a
+  resting timer, so a sword left there rises again when he comes back.
+
+The forced retreat of 25 pixels after each uncountered parry (SEQS 57 and
+AddCharX(-9), GenCtrl **6:24da-2506**) and the sword's 20-pixel push-back
+(SEQS 103) then 13-pixel advances (SEQS 108) were checked and are native:
+six parries move the Prince about three columns.
+
+The route test `test_level_12s_flaming_sword_can_be_passed_as_in_the_video`
+depended on the sword staying in room 7. With the cut rule its key policy
+(seven back steps, then sheathe) let the sword strike him as he started to
+run. The Macintosh capture (02:36-02:40) shows the player back off, parry,
+sheathe while the sword is pushed back, and run east with the sword behind
+him; its flame then waits at room 12's top-left while he drops to the
+middle floor. `swordpass` now backs two steps, parries one strike and
+sheathes; the Prince reaches room 12 untouched and the sword follows him
+there with five lives. This is a key policy, not a timing claim.
+
+Verification: flame-sword 23 OK; the three new regressions fail on the
+previous `combat.py`. Combat/AI/selection/temple-route/audio/save suites
+429 run, OK, 2 skipped (the optional original-resource export check and
+the slow fresh-import test). Original CODE read offline; no new CPU probe,
+no live game.

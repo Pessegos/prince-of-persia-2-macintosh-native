@@ -72,8 +72,10 @@ def _native_alive(guard):
     return guard.alive if guard.native_alive is None else guard.native_alive
 
 
-def opponent_follows_cut(guard, direction, count, *, in_destination=False, bridge_room=False):
-    # CutAllOpponents 6:4476-4626, ordinary guards and skeletons only.
+def opponent_follows_cut(guard, direction, count, *, in_destination=False, bridge_room=False,
+                         kid_row=None):
+    # CutAllOpponents 6:4476-4626 for ordinary guards, skeletons and the
+    # flaming sword (only the running-pose test 44f2-4500 is types 2/4).
     state = guard.state
     running = (186 <= state.action <= 201 and guard.generation_flags != 0
                or 202 <= state.action <= 212 and guard.generation_flags == 1)
@@ -84,6 +86,9 @@ def opponent_follows_cut(guard, direction, count, *, in_destination=False, bridg
     if guard.skeleton is not None:
         native_alive = guard.alive or guard.skeleton.native_alive
     if not native_alive or not guard.sword_drawn or count >= 5:
+        return False
+    # 6:46a8-46be: an engaged type 10 follows only on the Kid's row.
+    if state.actor_type == 10 and kid_row is not None and guard.row != kid_row:
         return False
     if direction == 'left':
         return state.target_x < 124
@@ -601,14 +606,15 @@ class CombatEncounter:
         if direction is not None:
             for guard in previous_active:
                 view = self._project_fighter(guard, previous_room)
-                if (view is None or guard.room == room or guard.state.actor_type not in (2, 4)
+                if (view is None or guard.room == room or guard.state.actor_type not in (2, 4, 10)
                         or guard.final_jaffar
                         or removed_on_room_save(guard)
                         or len(self.guards) >= 5):
                     continue
                 if opponent_follows_cut(view, direction, len(self.guards),
                                         in_destination=self._position_room(guard) == room,
-                                        bridge_room=self._bridge_fight_room(view)):
+                                        bridge_room=self._bridge_fight_room(view),
+                                        kid_row=row):
                     self._carry_opponent(guard, room, previous_room, direction)
         for actor, view in room_records:
             if removed_on_room_save(actor):
@@ -840,6 +846,10 @@ class CombatEncounter:
                 candidates.append((guard, self._project_fighter(guard, self.player.room)))
         selected = nearest_opponent(self.player, [view for _guard, view in candidates])
         guard = next((guard for guard, view in candidates if view is selected), None)
+        # 3:4b64-4b76: actors 10 (the flaming sword), 11 and 0 have no meter;
+        # the selected one clears it (4c9a) rather than passing to another.
+        if guard is not None and guard.state.actor_type in (0, 10, 11):
+            return None
         # 3:4b7a-4ba8: no meter for a skeleton fighting on level five's bridge.
         if guard is not None and guard.state.actor_type == 4 and self._bridge_fight_room(guard):
             return None
@@ -1385,8 +1395,11 @@ class CombatEncounter:
             if guard.skeleton is not None:
                 with self._local_opponents(guard):
                     guard.skeleton.try_wake(self, guard)
-            elif guard.flame_sword is not None:
+            elif guard.flame_sword is not None and guard.room == self.player.room:
                 # FrameAdv 2:6242-624a runs 4:14c6 for a type-10 bank too.
+                # 4:14f0-151e/13b6 scan only the Kid room's records
+                # (a5-0x4fc2): a sword in a side room never wakes, even
+                # within five columns of the Prince across the cut.
                 with self._local_opponents(guard):
                     guard.flame_sword.try_wake(self, guard)
 

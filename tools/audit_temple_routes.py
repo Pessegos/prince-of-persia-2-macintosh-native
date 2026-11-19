@@ -266,8 +266,10 @@ def sword_duel(harness, limit=400):
 def sword_pass(harness, limit=200):
     """Level 12, as the Macintosh video plays it (02:33-02:36): the same leap
     as ``swordduel``, then, as soon as the resting sword starts to rise, the
-    Prince draws and advances east over it, so that it ends behind him,
-    and puts his sword away."""
+    Prince draws and advances east over it, so that it ends behind him. He
+    backs east two steps, parries its next strike (which pushes it back,
+    SEQS 103) and puts his sword away before it closes in again. The awake
+    sword follows him across the cut into room 12 (CutAllOpponents 6:4602)."""
     play(harness, [(('R',), (), 1), (('up',), (), 3), ((), ('up',), 14), ((), ('R',), 1)])
     scene = harness.scene
     for _ in range(limit):
@@ -277,7 +279,17 @@ def sword_pass(harness, limit=200):
             break  # SEQS 106: it rises.
         harness.tick()
     play(harness, [((), (), 3), (('ctrl',), (), 2), ((), ('ctrl',), 6)]
-         + [(('R',), (), 2), ((), ('R',), 6)] * 7 + [(('down',), (), 10), ((), ('down',), 1)])
+         + [(('R',), (), 2), ((), ('R',), 6)] * 2)
+    for _ in range(limit):
+        sword = next(guard for guards, _points in scene.combat.room_encounters.values()
+                     for guard in guards if guard.flame_sword is not None)
+        if sword.state.source_sequence_id == 103 or not scene.combat.player.alive:
+            break
+        on_guard = 150 <= harness.player()['action'] < 180
+        press(harness, 'up', on_guard and sword.state.action == 152)
+        harness.tick()
+    press(harness, 'up', False)
+    play(harness, [(('down',), (), 10), ((), ('down',), 1)])
 
 
 def guard_duel(reach, every, limit=600):
