@@ -42,18 +42,23 @@ LATE_DEATH_CUES = {16: 250}
 # itself (its source and licence unknown, so not distributed), put beside the
 # imported audio as this file, still replaces it.
 BURN_FILE = "menu-burn.wav"
-# The user asked first for a little quieter than recorded (0.8), then 10% louder (0.88), then 20% louder.
-BURN_VOLUME = 0.88 * 1.2
+# The user asked first for a little quieter than recorded (0.8), then 10% louder (0.88), then
+# 20% louder twice. The port's own sound is made at this volume; the user's recording is scaled.
+BURN_VOLUME = 0.88 * 1.2 * 1.2
 
 
 def at_volume(mixer, sound, volume):
     """``sound`` at ``volume``. A mixer sound's own volume stops at 1, so above
-    that its 16-bit samples are scaled instead (the fire peaks near 10% of full scale)."""
+    that its 16-bit samples are scaled instead, never past full scale: a recording
+    too loud for all of it is made only as loud as it goes without being cut off
+    (the user's fire peaks near 11% of full scale)."""
     if volume <= 1 or abs(mixer.get_init()[1]) != 16:
         sound.set_volume(min(1, volume))
         return sound
-    samples = np.frombuffer(sound.get_raw(), dtype='<i2') * volume
-    return mixer.Sound(buffer=np.clip(np.round(samples), -32768, 32767).astype('<i2').tobytes())
+    samples = np.frombuffer(sound.get_raw(), dtype='<i2').astype(float)
+    peak = abs(samples).max(initial=0)
+    gain = max(1.0, min(volume, 32767 / peak)) if peak else volume
+    return mixer.Sound(buffer=np.clip(np.round(samples * gain), -32768, 32767).astype('<i2').tobytes())
 
 
 class MixerPlayback:
@@ -97,11 +102,12 @@ class MixerPlayback:
         if burn_file.is_file():
             try:
                 burn = mixer.Sound(file=io.BytesIO(burn_file.read_bytes()))   # the file is not kept open
+                burn = at_volume(mixer, burn, BURN_VOLUME)
             except Exception:   # an unreadable file: the port's own sound instead
                 burn = None
         if burn is None:
-            burn = mixer.Sound(buffer=fire_pcm(rate, channels))
-        self.ui_sounds['burn'] = at_volume(mixer, burn, BURN_VOLUME)
+            burn = mixer.Sound(buffer=fire_pcm(rate, channels, BURN_VOLUME))
+        self.ui_sounds['burn'] = burn
         self.ui_channels['burn'] = self.ui_channels['click']
         horse_theme = scene_sound_key(25006, 0)
         if horse_theme in self.sounds:

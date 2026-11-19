@@ -194,7 +194,9 @@ def fire_samples(rate=RATE):
     return sound
 
 
-def fire_pcm(rate, channels):
-    """The mixer's interleaved 16-bit samples of the sound."""
-    samples = numpy.clip(numpy.round(fire_samples(rate) * 32767), -32768, 32767).astype('<i2')
+def fire_pcm(rate, channels, volume=1.0):
+    """The mixer's interleaved 16-bit samples of the sound, made at ``volume`` (1 as
+    measured; louder is the same sound made bigger, rounded once, never cut off: it
+    peaks near 9% of full scale)."""
+    samples = numpy.clip(numpy.round(fire_samples(rate) * (32767 * volume)), -32768, 32767).astype('<i2')
     return numpy.repeat(samples[:, None], channels, 1).tobytes()

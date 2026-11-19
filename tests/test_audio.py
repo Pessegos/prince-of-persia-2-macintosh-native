@@ -649,22 +649,31 @@ class PolyphonicCueTests(unittest.TestCase):
         burn = self.playback.ui_sounds['burn']
         self.assertIsNot(burn, self.playback.sounds[69])          # no longer the game's lava cue
         self.assertEqual(self.playback.sounds[69].get_volume(), 1)
+        import numpy
+        from pop2.fire_sound import fire_samples
+
         rate, _bits, channels = mixer.get_init()
-        # 20% louder than the 88% it had: past what a sound's own volume reaches, so in its samples.
+        # 20% louder twice than the 88% it had: past what a sound's own volume reaches, so
+        # made louder, rounded once from the synthesis (not the quiet sound's samples scaled).
         self.assertEqual(burn.get_volume(), 1)
-        self.assertLouder(burn.get_raw(), fire_pcm(rate, channels), 0.88 * 1.2)
+        self.assertLouder(burn.get_raw(), fire_pcm(rate, channels), 0.88 * 1.2 * 1.2, tolerance=1.2)
+        made = numpy.frombuffer(burn.get_raw(), dtype='<i2').reshape(-1, channels).astype(float)
+        exact = fire_samples(rate) * 32767 * 0.88 * 1.2 * 1.2
+        for channel in range(channels):
+            self.assertLessEqual(abs(made[:, channel] - exact).max(), 0.5)
+        self.assertLess(abs(made).max(), 32767 * 0.15)   # far from full scale: nothing cut off
         self.playback.play_ui('burn')
         self.assertIs(self.playback.ui_channels['click'].get_sound(), burn)
         del self.playback.ui_sounds['burn']
         self.playback.play_ui('burn')
 
-    def assertLouder(self, raw, original, gain):
+    def assertLouder(self, raw, original, gain, tolerance=0.5):
         import numpy
 
         louder, original = (numpy.frombuffer(data, dtype='<i2').astype(float) for data in (raw, original))
         self.assertEqual(len(louder), len(original))
         self.assertGreater(abs(original).max(), 0)
-        self.assertLessEqual(abs(louder - original * gain).max(), 0.5)   # rounded, never clipped here
+        self.assertLessEqual(abs(louder - original * gain).max(), tolerance)   # rounded, never clipped here
 
     def test_the_users_fire_recording_beside_the_audio_replaces_the_ports_sound(self):
         from pygame import mixer
@@ -677,9 +686,19 @@ class PolyphonicCueTests(unittest.TestCase):
         burn = playback.ui_sounds['burn']
         self.assertNotEqual(burn.get_raw(), self.playback.ui_sounds['burn'].get_raw())
         self.assertEqual(burn.get_volume(), 1)
-        self.assertLouder(burn.get_raw(), mixer.Sound(file=io.BytesIO(fire)).get_raw(), 0.88 * 1.2)
+        recorded = mixer.Sound(file=io.BytesIO(fire)).get_raw()
+        # This recording is loud (a steady 75% of full scale): it is made only as loud as it
+        # goes without being cut off, not distorted at full scale.
+        peak = max(abs(value) for value in memoryview(recorded).cast('h'))
+        self.assertGreater(peak * 0.88 * 1.2 * 1.2, 32767)
+        self.assertLouder(burn.get_raw(), recorded, 32767 / peak)
         playback.play_ui('burn')
         self.assertIs(playback.ui_channels['click'].get_sound(), burn)
+        # One that is quiet enough (like the user's, near 11%) is made louder by all of it.
+        fire = Sample(b'\x90\x70' * 1500, 8000).wav()
+        Path(self.directory.name, 'menu-burn.wav').write_bytes(fire)
+        quiet = MixerPlayback(self.directory.name, cues).ui_sounds['burn']
+        self.assertLouder(quiet.get_raw(), mixer.Sound(file=io.BytesIO(fire)).get_raw(), 0.88 * 1.2 * 1.2)
         # A file that cannot be read leaves the port's own sound.
         Path(self.directory.name, 'menu-burn.wav').write_bytes(b'not a wave')
         playback = MixerPlayback(self.directory.name, cues)
