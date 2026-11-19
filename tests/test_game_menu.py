@@ -1,3 +1,4 @@
+from datetime import datetime
 from types import SimpleNamespace
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -550,12 +551,16 @@ class GameMenuSceneTests(unittest.TestCase):
             settle()
             photo, _, prepared = scene.spare_photos()[size]
             self.assertEqual(prepared.browser.mode, 'save')
-            for opening in ('from the warm-up', 'again, from the page left'):
+            for minute, opening in enumerate(('from the warm-up', 'again, from the page left')):
                 with self.subTest(opening=opening):
                     written.clear()
+                    # Chosen a while after F1 opened: the game to save is captured at another time.
+                    later = SimpleNamespace(now=lambda zone=None, minute=minute: datetime(2099, 1, 1, 0, minute,
+                                                                                          tzinfo=zone))
                     with patch('pop2.window_controls.ImageTk.PhotoImage', side_effect=AssertionError('a new photo')), \
                             patch.object(ImageTk.PhotoImage, 'paste', side_effect=AssertionError('all of it written')), \
-                            patch.object(window_controls, 'put_patch', put_patch):
+                            patch.object(window_controls, 'put_patch', put_patch), \
+                            patch('pop2.save_game.datetime', later):
                         scene.apply_game_action('save')
                     self.assertEqual(scene.game_menu.page, 'saves')
                     self.assertIs(scene.game_menu.save_browser, prepared.browser)

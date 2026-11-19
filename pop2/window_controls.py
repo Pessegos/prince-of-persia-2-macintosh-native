@@ -144,9 +144,14 @@ class SavePageShown(NamedTuple):
 
 def same_save_page(kept, browser):
     """Whether the browser ``kept`` shows the page that ``browser``, just made, would: the
-    same saves (the same ones read), the same game to save and the same state."""
+    same saves (the same ones read), the same game to save and the same state. The game
+    to save is compared but for the moment it was captured (created_at, to the second),
+    which the page does not show: saving captures it again."""
+    def game(slot):
+        return {key: value for key, value in slot.document.items() if key != 'created_at'}
+
     return (len(kept.slots) == len(browser.slots) and all(a is b for a, b in zip(kept.slots, browser.slots))
-            and kept == browser and (browser.current is None or kept.current.document == browser.current.document))
+            and kept == browser and (browser.current is None or game(kept.current) == game(browser.current)))
 
 
 def put_patch(photo, image, x, y):
