@@ -1362,11 +1362,14 @@ class GameMenuSceneTests(unittest.TestCase):
         self.press("n", 0x20000)
         with patch.object(scene, "restart_opening") as new, \
                 patch.object(scene, "restart_level") as restart:
-            for key, state in (("F1", 0), ("F2", 0), ("F3", 0), ("F5", 0), ("n", 0x20000),
+            for key, state in (("F1", 0), ("F2", 0), ("F3", 0), ("F5", 0),
                                ("r", 0x20000), ("v", 0x20000), ("t", 0x20000)):
                 self.assertEqual(self.press(key, state), "break")
                 self.assertEqual(scene.game_menu.page, "confirm")
                 self.assertIsNone(scene.dev_menu)
+            # Its own shortcut, Alt+N, closes it unanswered, as the other menus' shortcuts do.
+            self.assertEqual(self.press("n", 0x20000), "break")
+            self.assertIsNone(scene.game_menu)
             new.assert_not_called()
             restart.assert_not_called()
 
@@ -1523,6 +1526,51 @@ class GameMenuSceneTests(unittest.TestCase):
         self.press("h", 0x20000)
         self.assertEqual(scene.game_menu.page, "hall")
         self.assertFalse(scene.game_menu.return_to_menu)
+
+    def test_a_menu_s_shortcut_pressed_again_closes_it(self):
+        # As F1, F2 and F3 do. It used to open the same page again over itself.
+        self.keep_preferences_here()
+        scene = self.scene
+        for key, page in (('p', 'options'), ('k', 'controls'), ('c', 'cutscenes'), ('h', 'hall'),
+                          ('v', 'about'), ('n', 'confirm'), ('s', 'saves'), ('o', 'saves'), ('L', 'saves')):
+            for paused in (False, True):
+                with self.subTest(key=key, paused=paused):
+                    scene.set_paused(paused)
+                    self.press(key, 0x20000)
+                    self.assertEqual(scene.game_menu.page, page)
+                    self.assertTrue(scene.paused)
+                    with patch.object(scene, 'restart_opening') as new_game:
+                        self.assertEqual(self.press(key, 0x20000), 'break')
+                    new_game.assert_not_called()
+                    self.assertIsNone(scene.game_menu)
+                    self.assertEqual(scene.paused, paused)
+        scene.set_paused(False)
+        # Reached from F1 the same: the shortcut closes the whole menu.
+        self.press('F1')
+        scene.game_menu.focus = next(i for i, item in enumerate(scene.game_menu.items)
+                                     if item.action == 'options')
+        self.press('Return')
+        self.assertTrue(scene.game_menu.return_to_menu)
+        self.press('p', 0x20000)
+        self.assertIsNone(scene.game_menu)
+        self.assertFalse(scene.paused)
+        # Another page's shortcut still goes there; loading and saving are each their own.
+        self.press('p', 0x20000)
+        self.press('k', 0x20000)
+        self.assertEqual(scene.game_menu.page, 'controls')
+        self.press('o', 0x20000)
+        self.assertEqual(scene.game_menu.save_browser.mode, 'load')
+        self.press('s', 0x20000)
+        self.assertEqual((scene.game_menu.page, scene.game_menu.save_browser.mode), ('saves', 'save'))
+        self.press('o', 0x20000)
+        self.assertEqual((scene.game_menu.page, scene.game_menu.save_browser.mode), ('saves', 'load'))
+        # Held down, it does not close what it opened.
+        scene.dev_key_press(self.event('p', 0x20000))
+        scene.dev_key_press(self.event('p', 0x20000))
+        self.assertEqual(scene.game_menu.page, 'options')
+        scene.dev_key_release(self.event('p', 0x20000))
+        self.press('p', 0x20000)
+        self.assertIsNone(scene.game_menu)
 
     def test_cave_ambience_starts_off_and_its_shortcut_works_when_paused(self):
         self.keep_preferences_here()

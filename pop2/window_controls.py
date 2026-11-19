@@ -28,6 +28,10 @@ RESUME_COMMAND_KEYS = frozenset({
     'Super_L', 'Super_R', 'Win_L', 'Win_R',
 })
 EXTERNAL_CAPTURE_KEYS = frozenset({'F9', 'F10'})
+# The page each Alt shortcut opens. Pressed again while its page is on show, the
+# shortcut closes the menu, as F1, F2 and F3 close theirs.
+SHORTCUT_PAGES = {'confirm_new': 'confirm', 'save': 'saves', 'open': 'saves', 'options': 'options',
+                  'controls': 'controls', 'cutscenes': 'cutscenes', 'hall': 'hall', 'about': 'about'}
 
 
 @functools.lru_cache(maxsize=8)
@@ -976,6 +980,28 @@ class WindowControls(InputRouting):
             self.open_game_menu("screenshots")
         return "break"
 
+    def shortcut_page_shown(self, command):
+        """Whether the page the Alt shortcut ``command`` opens is on show (Alt+S the
+        saves page saving, Alt+O and Alt+L the same page loading)."""
+        menu = getattr(self, 'game_menu', None)
+        if menu is None or menu.page != SHORTCUT_PAGES.get(command):
+            return False
+        if menu.page == 'saves':
+            browser = menu.save_browser
+            return browser is not None and browser.mode == ('load' if command == 'open' else 'save')
+        return True
+
+    def close_shortcut_page(self):
+        """The shortcut of the page on show closes the menu, wherever the page was
+        opened from, as F2 closes the screenshots page."""
+        menu = self.game_menu
+        if menu.page == 'hall':
+            # Its own Close: after a victory, the presentation waiting for it starts.
+            menu.return_to_menu = False
+            self.close_hall_of_fame()
+        else:
+            self.close_game_menu()
+
     def close_game_menu(self, resume=False):
         if self.game_menu is None:
             return
@@ -1540,7 +1566,10 @@ class WindowControls(InputRouting):
         if command is not None:
             confirming_save = (self.game_menu is not None and self.game_menu.page == 'saves'
                                and self.game_menu.save_browser.confirmation is not None)
-            if not repeated and not confirming_save and (self.game_menu is None or self.game_menu.page != "confirm"):
+            if not repeated and not confirming_save and self.shortcut_page_shown(command):
+                self.close_shortcut_page()
+                self.pause_resume_keys.add(event.keysym)
+            elif not repeated and not confirming_save and (self.game_menu is None or self.game_menu.page != "confirm"):
                 if command == "restart" and self.gameplay_controls_available():
                     self.apply_game_action(command, preserve_controls=True)
                 else:
