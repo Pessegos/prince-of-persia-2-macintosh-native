@@ -36,6 +36,13 @@ class CutsceneGallery:
     image_cache: dict = field(default_factory=dict, repr=False)
     background_cache: tuple | None = field(default=None, repr=False)
     grid_cache: tuple | None = field(default=None, repr=False)
+    # A shelf drawn last may be drawn over where the selection moved; a copy that shares it
+    # (a capture's) draws its own instead.
+    grid_in_place: bool = field(default=True, repr=False)
+    # The ground without its message, where that lies: (all else it shows, box, pixels);
+    # and, when the ground was drawn again only there, (the key of the ground it came from, box).
+    ground_band: tuple | None = field(default=None, repr=False)
+    ground_redrawn: tuple | None = field(default=None, repr=False)
     card_cache: dict = field(default_factory=dict, repr=False)
     layout_size: tuple | None = field(default=None, repr=False)
     # Chapters unlocked since the viewer was last open, as index -> seconds
@@ -370,7 +377,7 @@ class CutsceneGallery:
         self.focus = target
         return self.activate()
 
-    def caption(self, image, font, value, rect, color, scale, sx, sy, *, wrap=False):
+    def caption(self, image, font, value, rect, color, scale, sx, sy, *, wrap=False, origin=(0, 0)):
         def glyph(value):
             key = id(font), value, color
             if key not in self.text_cache:
@@ -407,7 +414,7 @@ class CutsceneGallery:
                     max(1, round(g.height * scale_y * sy))), Image.Resampling.NEAREST)
             g = self.text_cache[key]
             x = round((rect[0] + rect[2]) / 2 * sx - g.width / 2)
-            image.alpha_composite(g, (x, round(y * sy)))
+            image.alpha_composite(g, (x - origin[0], round(y * sy) - origin[1]))
             y += height
 
     def card_image(self, index, font, sx, sy):
@@ -660,7 +667,13 @@ class CutsceneGallery:
         return ((x, y, x + width, y + stroke), (x, y + height - stroke, x + width, y + height),
                 (x, y, x + stroke, y + height), (x + width - stroke, y, x + width, y + height))
 
-    def draw(self, viewport, font, *, visible=False, background_key=None):
+    def prepare(self, viewport, font, *, visible=False, background_key=None):
+        """Bring the page's ground and its shelf of cards up to date for ``viewport``, as
+        draw() lays them; gives back the scale. When only the selected chapter has moved,
+        the shelf drawn last is drawn over where it changed, the card reached and the one
+        left (listed in ``reveal_patches`` for a presenter's copy of the shelf), and the
+        ground only where its message lies (``ground_redrawn``): at 3440x1440, drawing them
+        whole and showing them took about 80 ms of each step."""
         self.layout(viewport.size, visible=visible)
         sx = sy = viewport.height / 384
         ox = int(visible)
@@ -680,27 +693,59 @@ class CutsceneGallery:
                self.focus, self.hovered if self.hovered in (1, 2) else None, self.error, self.collection.error,
                theme.name)
         if self.background_cache is None or self.background_cache[0] != key:
-            # As alpha_composite lays black over it, in less than half the time (dimmed).
-            base = menu_theme.dimmed(viewport if viewport.mode == 'RGBA' else viewport.convert('RGBA'),
-                                     max(145, theme.dim) if theme.frame else 145)
-            draw = ImageDraw.Draw(base)
-            limit = (ox, 0, math.floor(viewport.width / sx) + ox - 1, 383)
-            if not menu_theme.panel_scaled(base, tuple(round(value) for value in self.PANEL), point, limit):
-                draw.rectangle(bounds(self.PANEL), fill=c('#181818'), outline=c('#8c7954'), width=stroke)
-            title = 'Cutscene Viewer - Dev Tools' if self.developer else 'Cutscene Viewer'
-            self.caption(base, font, title,
-                         (self.STRIP[0] - ox, 19, self.STRIP[2] - ox, 51), c('#f4d873'), 1, sx, sy)
             message = self.error or self.collection.error or (
                 'Continue the story to unlock this chapter.' if not self.unlocked else '')
-            self.caption(base, font, message, (self.TRACK[0] - ox, 350, self.TRACK[2] - ox, 362),
-                         c('#ff9b9b') if self.error else c('#999999'), .45, sx, sy)
-            self.background_cache = key, base.convert('RGB')
-        image = self.background_cache[1].copy()
+            colour = c('#ff9b9b') if self.error else c('#999999')
+            line = (self.TRACK[0] - ox, 350, self.TRACK[2] - ox, 362)
+            # All the ground shows but its message, which lies within box.
+            plain_key = key[:4] + key[5:8] + key[10:]
+            box = (max(0, math.floor(line[0] * sx) - 1), max(0, math.floor(line[1] * sy) - 1),
+                   min(viewport.width, math.ceil(line[2] * sx) + 1),
+                   min(viewport.height, math.ceil(line[3] * sy) + 1))
+            kept, band = self.background_cache, self.ground_band
+            if kept is not None and band is not None and band[0] == plain_key and band[1] == box:
+                # The same ground with another message: only its line is drawn again.
+                part = band[2].copy()
+                self.caption(part, font, message, line, colour, .45, sx, sy, origin=box[:2])
+                image = kept[1].copy()
+                image.paste(part.convert('RGB'), box[:2])
+                self.ground_redrawn = kept[0], box
+                self.background_cache = key, image
+            else:
+                # As alpha_composite lays black over it, in less than half the time (dimmed).
+                base = menu_theme.dimmed(viewport if viewport.mode == 'RGBA' else viewport.convert('RGBA'),
+                                         max(145, theme.dim) if theme.frame else 145)
+                draw = ImageDraw.Draw(base)
+                limit = (ox, 0, math.floor(viewport.width / sx) + ox - 1, 383)
+                if not menu_theme.panel_scaled(base, tuple(round(value) for value in self.PANEL), point, limit):
+                    draw.rectangle(bounds(self.PANEL), fill=c('#181818'), outline=c('#8c7954'), width=stroke)
+                title = 'Cutscene Viewer - Dev Tools' if self.developer else 'Cutscene Viewer'
+                self.caption(base, font, title,
+                             (self.STRIP[0] - ox, 19, self.STRIP[2] - ox, 51), c('#f4d873'), 1, sx, sy)
+                self.ground_band = plain_key, box, base.crop(box)
+                self.caption(base, font, message, line, colour, .45, sx, sy)
+                self.ground_redrawn = None
+                self.background_cache = key, base.convert('RGB')
         region = bounds(self.STRIP)
         width, height = region[2] - region[0], region[3] - region[1]
         grid_key = (viewport.size, visible, id(font), self.index,
                     tuple(sorted(self.collection.seen)), self.chapters, self.developer, theme.name)
-        if self.grid_cache is None or self.grid_cache[0] != grid_key:
+        kept = self.grid_cache
+        if (kept is not None and kept[0] != grid_key and self.grid_in_place and not self.reveal
+                and not self.reveal_drawn and kept[0][:3] + kept[0][4:] == grid_key[:3] + grid_key[4:]):
+            # Only the selection moved: the card it reached and the one it left are drawn over.
+            grid = kept[1]
+            for index in sorted({kept[0][3], self.index}):
+                if not 0 <= index < len(self.chapters):
+                    continue
+                rect = self.card_rect(index, offset=0)
+                position = (round((rect[0] - self.STRIP[0] + self.GRID_PADDING) * sx),
+                            round((rect[1] - self.STRIP[1]) * sy))
+                card = self.card_image(index, font, sx, sy)
+                grid.paste(card, position)
+                self.reveal_patches[index] = (*position, card, False)
+            self.grid_cache = grid_key, grid
+        elif kept is None or kept[0] != grid_key:
             grid = Image.new('RGB', (width + round((self.max_scroll + 2 * self.GRID_PADDING) * sx), height), c('#181818'))
             for index in range(len(self.chapters)):
                 rect = self.card_rect(index, offset=0)
@@ -711,6 +756,21 @@ class CutsceneGallery:
             self.reveal_drawn, self.reveal_patches = {index: self.reveal_frame(index) for index in self.reveal}, {}
         else:
             self.refresh_reveal(font, sx, sy)
+        if len(self.text_cache) > 600:
+            self.text_cache.clear()
+        if len(self.image_cache) > 60:
+            self.image_cache.clear()
+        if len(self.card_cache) > 90:
+            self.card_cache.clear()
+        return sx, sy
+
+    def draw(self, viewport, font, *, visible=False, background_key=None):
+        sx, sy = self.prepare(viewport, font, visible=visible, background_key=background_key)
+        ox = int(visible)
+        region = (round((self.STRIP[0] - ox) * sx), round(self.STRIP[1] * sy),
+                  round((self.STRIP[2] - ox) * sx), round(self.STRIP[3] * sy))
+        width, height = region[2] - region[0], region[3] - region[1]
+        image = self.background_cache[1].copy()
         left = round(self.display_scroll * sx) + round(self.GRID_PADDING * sx)
         strip = self.grid_cache[1].crop((left, 0, left + width, height))
         if border := self.hover_border(sx):
@@ -719,12 +779,6 @@ class CutsceneGallery:
                 draw.rectangle((x1 - left, y1, x2 - left - 1, y2 - 1), fill=c('#c6b58c'))
         image.paste(strip, region[:2])
         self.draw_scroll_controls(image, sx, sy, ox=ox)
-        if len(self.text_cache) > 600:
-            self.text_cache.clear()
-        if len(self.image_cache) > 60:
-            self.image_cache.clear()
-        if len(self.card_cache) > 90:
-            self.card_cache.clear()
         return image
 
     def draw_scroll_controls(self, image, sx, sy, *, ox=0, origin=(0, 0)):

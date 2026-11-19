@@ -1309,6 +1309,61 @@ class ViewerSceneTests(unittest.TestCase):
             background_key=id(scene.screenshot_viewport)).convert('RGB')
         self.assertIsNone(ImageChops.difference(self.displayed_gallery(), expected).getbbox())
 
+    def test_moving_the_selection_draws_over_its_two_cards_and_the_message_only(self):
+        # Each step drew the shelf and the page whole and gave both to Tk again: about 80 ms
+        # at 3440x1440. The shelf and its photo are now drawn over at the card reached and
+        # the one left, and the page's photo only where its message changes.
+        from copy import copy
+        from PIL import ImageTk
+        from pop2 import window_controls
+
+        scene = self.scene
+        scene.canvas.winfo_width = lambda: 1920
+        scene.canvas.winfo_height = lambda: 1080
+        gallery = self.open_viewer()       # the introduction's three chapters are open, then locked ones
+        scene.present_viewport()
+        photo, grid, page = scene._cutscene_gallery_strip.photo, gallery.grid_cache[1], scene.image_ref
+        written = []
+        put = window_controls.put_patch
+
+        def put_patch(target, image, x, y):
+            written.append((target, (x, y, x + image.width, y + image.height)))
+            put(target, image, x, y)
+
+        def fresh():
+            other = copy(gallery)
+            other.text_cache, other.image_cache, other.card_cache, other.reveal_patches = {}, {}, {}, {}
+            other.background_cache = other.grid_cache = other.ground_band = None
+            other.grid_in_place = False
+            return other.draw(scene.cutscene_gallery_source((1920, 1080), keep=False), scene.ui_font,
+                              visible=True, background_key=id(scene.screenshot_viewport)).convert('RGB')
+
+        # Right reaches an open chapter, Down a locked one (its message appears), Right and Left
+        # other locked ones, Up an open one again (the message goes).
+        for key, locked in (('Right', False), ('Down', True), ('Right', True), ('Left', True), ('Up', False),
+                            ('Home', False)):
+            written.clear()
+            with self.subTest(key=key), \
+                    patch.object(scene, 'cutscene_gallery_frame', side_effect=AssertionError('composed the page')), \
+                    patch.object(ImageTk, 'PhotoImage', side_effect=AssertionError('a new photo')), \
+                    patch.object(page, 'paste', side_effect=AssertionError('the whole page written')), \
+                    patch.object(window_controls, 'put_patch', put_patch):
+                index = gallery.index
+                scene.dev_key_press(SimpleNamespace(keysym=key, state=0))
+                scene.dev_key_release(SimpleNamespace(keysym=key, state=0))
+                self.assertNotEqual(gallery.index, index)
+                self.assertEqual(gallery.unlocked, not locked)
+                self.assertIs(scene._cutscene_gallery_strip.photo, photo)
+                self.assertIs(gallery.grid_cache[1], grid)
+                cards = [box for target, box in written if target is photo]
+                self.assertEqual(len(cards), 2)                       # the card reached and the one left
+                for box in cards:
+                    self.assertLess((box[2] - box[0]) * (box[3] - box[1]), grid.width * grid.height // 8)
+                for target, box in written:
+                    if target is page:
+                        self.assertLess(box[3] - box[1], 1080 // 20)  # a line of the page, not the page
+                self.assertIsNone(ImageChops.difference(self.displayed_gallery(), fresh()).getbbox())
+
     def test_pointer_drag_does_not_play_or_select_and_leave_cancels_the_drag(self):
         scene = self.scene
         gallery = self.open_viewer()

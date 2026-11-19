@@ -361,6 +361,7 @@ class CutsceneControls:
             gallery = copy(gallery)
             for name in ('text_cache', 'image_cache', 'card_cache'):
                 setattr(gallery, name, getattr(gallery, name).copy())
+            gallery.grid_in_place = False   # the live viewer's shelf is not its to draw over
         frame = self.draw_screenshot_notice(gallery.draw(self.cutscene_gallery_source(size, keep=not capture),
             self.ui_font, visible=True, background_key=id(self.screenshot_viewport)), visible=True, uniform=True)
         return frame if frame.mode == 'RGB' else frame.convert('RGB')
@@ -384,6 +385,7 @@ class CutsceneControls:
     def present_cutscene_gallery(self, size, position):
         from PIL import ImageTk
         from pop2.cutscene_strip import CutsceneStrip
+        from pop2.window_controls import put_patch
 
         gallery = self.active_cutscene_gallery()
         if gallery is None:
@@ -403,12 +405,23 @@ class CutsceneControls:
         # date here, and below copy just those cards into the retained photo.
         gallery.refresh_reveal(self.ui_font, size[1] / 384, size[1] / 384)
         look = appearance()
-        fast = (previous is not None and previous[0] is gallery and previous[1].size == size
-                and previous[2] is self.image_ref and previous[5] == look
-                and gallery.background_cache is not None and gallery.grid_cache is not None
-                and previous[3][0] == gallery.background_cache[0]
-                and previous[4][3] == gallery.grid_cache[0]
-                and getattr(self, 'screenshot_toast', None) is None)
+        shown = (previous is not None and previous[0] is gallery and previous[1].size == size
+                 and previous[2] is self.image_ref and getattr(self, 'screenshot_toast', None) is None
+                 and gallery.background_cache is not None and gallery.grid_cache is not None)
+        fast = (shown and previous[5] == look and previous[3][0] == gallery.background_cache[0]
+                and previous[4][3] == gallery.grid_cache[0])
+        message = None
+        if shown and not fast and previous[5][:2] + previous[5][4:] == look[:2] + look[4:]:
+            # Only the selection moved: the shelf is drawn over at the card reached and the one
+            # left, and so is its photo below, and the page's photo only where its message
+            # changed. Under the strip, the page's photo is not seen (as while it scrolls).
+            gallery.prepare(self.cutscene_gallery_source(size), self.ui_font, visible=True,
+                            background_key=id(self.screenshot_viewport))
+            redrawn = gallery.ground_redrawn
+            if previous[3][0] == gallery.background_cache[0]:
+                fast = True
+            elif redrawn is not None and redrawn[0] == previous[3][0]:
+                fast, message = True, redrawn[1]
         # Stable scroll frames use only retained Tk pixels. Rebuilding the
         # complete PIL viewport here spent most of the animation's frame budget.
         frame = None if fast else self.cutscene_gallery_frame(size)
@@ -431,25 +444,15 @@ class CutsceneControls:
                     # A card still being revealed is shown over the strip until it settles.
                     strip.overlay((x, y), card)
                     continue
-                card_photo = ImageTk.PhotoImage(card)
-                grid_photo[1].tk.call(str(grid_photo[1]), 'copy', str(card_photo), '-to', x, y,
-                                      '-compositingrule', 'set')
+                put_patch(grid_photo[1], card, x, y)
                 strip.drop_overlay((x, y))
         if (previous is not None and previous[0] is gallery and previous[1].size == size
                 and previous[2] is self.image_ref):
-            def upload(region, pixels):
-                cached_patch = getattr(self, '_cutscene_gallery_patch', None)
-                if cached_patch is not None and cached_patch[0] == pixels.size:
-                    patch = cached_patch[1]
-                    patch.paste(pixels)
-                else:
-                    patch = ImageTk.PhotoImage(pixels)
-                    self._cutscene_gallery_patch = pixels.size, patch
-                self.image_ref.tk.call(str(self.image_ref), 'copy', str(patch), '-to', region[0], region[1],
-                                       '-compositingrule', 'set')
-
             if fast:
-                if previous[4] != moving:
+                if message is not None:
+                    put_patch(self.image_ref, gallery.background_cache[1].crop(message), *message[:2])
+                # The shelf shown (moving[3]) does not change the scroll's controls.
+                if previous[4][:3] + previous[4][4:] != moving[:3] + moving[4:]:
                     regions = [gallery.TRACK]
                     if previous[4][1:3] != moving[1:3]:
                         regions += [gallery.PREVIOUS, gallery.NEXT]
@@ -458,9 +461,9 @@ class CutsceneControls:
                                   round((rect[2] - 1) * sx) + 1, round(rect[3] * sy) + 1)
                         pixels = gallery.background_cache[1].crop(region)
                         gallery.draw_scroll_controls(pixels, sx, sy, ox=1, origin=region[:2])
-                        upload(region, pixels)
+                        put_patch(self.image_ref, pixels, *region[:2])
             else:
-                # Selection, resize and toast changes are infrequent. Repaint
+                # Resize, toast and error changes are infrequent. Repaint
                 # their complete frame; the parent photo can predate a scroll.
                 self.image_ref.paste(frame)
         else:
@@ -492,7 +495,6 @@ class CutsceneControls:
         if strip is not None:
             strip.hide()
         self._cutscene_gallery_frame = None
-        self._cutscene_gallery_patch = None
 
     def release_cutscene_gallery(self):
         """Take the viewer's strip off the window and drop the pictures kept for it."""
@@ -500,7 +502,6 @@ class CutsceneControls:
         self.drop_cutscene_shelf_holder()
         self._cutscene_gallery_frame = None
         self._cutscene_gallery_source = None
-        self._cutscene_gallery_patch = None
         self._cutscene_gallery_grid_photo = None
         self.cutscene_viewer_ground = self.cutscene_viewer_shelf = None
 
