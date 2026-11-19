@@ -1045,6 +1045,29 @@ class ViewerSceneTests(unittest.TestCase):
             scene.close_game_menu()
             self.assertIsNone(scene._cutscene_gallery_strip)
 
+    def test_alt_c_again_in_fullscreen_takes_the_strip_off_the_running_game(self):
+        # The running game in fullscreen is drawn by CanvasBitmap, which never reached the
+        # viewer's code: its strip of covers, a canvas of its own, stayed over the game.
+        scene = self.scene
+        scene.fullscreen = True
+        event = lambda: SimpleNamespace(keysym='c', state=0x20000)
+        with patch('pop2.window_controls.sys.platform', 'win32'), \
+                patch('pop2.bitmap_presenter.CanvasBitmap') as bitmap:
+            for _ in range(2):
+                scene.dev_key_press(event())
+                scene.dev_key_release(event())
+                strip = scene._cutscene_gallery_strip
+                self.assertEqual(scene.game_menu.page, 'cutscenes')
+                self.assertTrue(strip.shown)
+                scene.dev_key_press(event())
+                scene.dev_key_release(event())
+                self.assertIsNone(scene.game_menu)
+                self.assertFalse(scene.paused)
+                self.assertIsNone(scene._cutscene_gallery_strip)
+                self.assertFalse(strip.canvas.winfo_exists())
+                self.assertIsNone(scene._cutscene_gallery_grid_photo)
+            bitmap.return_value.present.assert_called()
+
     def test_strip_leave_preserves_a_held_drag_and_parent_photo_is_not_copied_during_motion(self):
         scene = self.scene
         gallery = self.open_viewer()

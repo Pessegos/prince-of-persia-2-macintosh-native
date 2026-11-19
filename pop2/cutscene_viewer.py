@@ -339,11 +339,7 @@ class CutsceneControls:
 
         gallery = self.active_cutscene_gallery()
         if gallery is None:
-            self.dispose_cutscene_strip()
-            self._cutscene_gallery_frame = None
-            self._cutscene_gallery_source = None
-            self._cutscene_gallery_patch = None
-            self._cutscene_gallery_grid_photo = None
+            self.release_cutscene_gallery()
             return False
         previous = getattr(self, '_cutscene_gallery_frame', None)
 
@@ -440,6 +436,14 @@ class CutsceneControls:
         self._cutscene_gallery_frame = (gallery, previous[1] if fast else frame,
                                        self.image_ref, state, moving, appearance())
         return True
+
+    def release_cutscene_gallery(self):
+        """Take the viewer's strip off the window and drop the pictures kept for it."""
+        self.dispose_cutscene_strip()
+        self._cutscene_gallery_frame = None
+        self._cutscene_gallery_source = None
+        self._cutscene_gallery_patch = None
+        self._cutscene_gallery_grid_photo = None
 
     def dispose_cutscene_strip(self):
         strip = getattr(self, '_cutscene_gallery_strip', None)

@@ -1034,6 +1034,9 @@ class WindowControls(InputRouting):
             self.stop_cutscene_replay(render=False)
         if hasattr(self, 'cancel_cutscene_gallery_tick'):
             self.cancel_cutscene_gallery_tick()
+            # Here, not left to the next drawing: in fullscreen the running game is drawn by
+            # CanvasBitmap, and the strip (a canvas of its own) stayed over it.
+            self.release_cutscene_gallery()
         self.dispose_screenshot_gallery()
         self.game_menu = None
         self.save_scroll_dragging = False
