@@ -5,9 +5,11 @@ paint the theme's frame, read the newest screenshots, decode the saves'
 previews and fit the chapters' covers. While the F1 menu is open the game is
 paused, so this work is done then instead, one small step at a time between
 Tk's events: a key pressed meanwhile waits at most one step. It stops as soon
-as F1 gives way to another page or the menu closes. Nothing it draws is shown;
-it only fills the caches those pages already keep (the theme's frames,
-SHARED_READS, LAST_SCANS, the saves read by list_slots and the viewer's covers).
+as F1 gives way to another page or the menu closes. It fills the caches those
+pages already keep (the theme's frames, SHARED_READS, LAST_SCANS, the saves
+read by list_slots and the viewer's covers), and draws the Cutscene Viewer's
+page over the paused game and its shelf of cards, with the shelf's photo,
+which the viewer opened from this F1 shows as they are (take_cutscene_shelf).
 """
 
 import logging
@@ -83,9 +85,10 @@ def warm_steps(scene):
         done.add(('saves', theme.name, size))
         yield
 
-    # The Cutscene Viewer: its chapters' covers fitted to their cards, then its frame.
+    # The Cutscene Viewer: its chapters' covers fitted to their cards, then its page over this
+    # pause's picture, its shelf of cards and the shelf's photo, which the viewer takes up.
     size = fit_menu_viewport(width, height)[0]
-    if ('cutscenes', theme.name, size) in done or not hasattr(scene, 'cutscene_preview'):
+    if not hasattr(scene, 'cutscene_preview'):
         return
     from pop2.cutscene_gallery import CutsceneGallery
     from pop2.cutscenes import CHAPTERS, chapter_available
@@ -94,20 +97,27 @@ def warm_steps(scene):
     if caches is None:
         caches = scene.cutscene_viewer_caches = {'text_cache': {}, 'image_cache': {}, 'card_cache': {}}
     viewer = CutsceneGallery(scene.cutscene_collection, scene.cutscene_preview, **caches)
-    for index, chapter in enumerate(CHAPTERS):
-        if chapter_available(chapter):
-            try:
-                scene.cutscene_preview(index)
-            except (OSError, ValueError, KeyError, RuntimeError):
-                pass
+    if ('cutscenes', theme.name, size) not in done:
+        for index, chapter in enumerate(CHAPTERS):
+            if chapter_available(chapter):
+                try:
+                    scene.cutscene_preview(index)
+                except (OSError, ValueError, KeyError, RuntimeError):
+                    pass
+                yield
+        viewer.layout(size, visible=True)
+        scale = size[1] / 384
+        for index in range(len(viewer.chapters)):
+            viewer.card_image(index, font, scale, scale)
             yield
-    viewer.layout(size, visible=True)
-    scale = size[1] / 384
-    for index in range(len(viewer.chapters)):
-        viewer.card_image(index, font, scale, scale)
-        yield
-    viewer.draw(Image.new('RGBA', size, '#080808'), font, visible=True)
+    scene.take_cutscene_shelf(viewer)
+    viewer.draw(scene.cutscene_gallery_source(size), font, visible=True,
+                background_key=id(scene.screenshot_viewport))
+    scene.cutscene_viewer_ground = scene.screenshot_viewport, viewer.background_cache
+    scene.keep_cutscene_shelf(viewer)
     done.add(('cutscenes', theme.name, size))
+    yield
+    scene.prepare_cutscene_shelf_photo()
 
 
 def schedule_menu_warmup(scene):

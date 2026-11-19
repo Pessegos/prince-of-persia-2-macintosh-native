@@ -710,6 +710,53 @@ class ViewerSceneTests(unittest.TestCase):
             scene.present_viewport()
         self.assertEqual(self.displayed_gallery().tobytes(), before.tobytes())
 
+    def test_the_viewer_opened_from_f1_shows_the_page_and_shelf_its_warm_up_drew(self):
+        # Opening it drew its page over the paused game, its shelf of cards and the shelf's
+        # photo again: about 130 of its 200 ms at 3440x1440.
+        import time as clock
+        from PIL import ImageTk
+
+        scene = self.scene
+        scene.canvas.winfo_width = lambda: 1920
+        scene.canvas.winfo_height = lambda: 1080
+        for opening in range(2):
+            with self.subTest(opening=opening):
+                scene.dev_key_press(SimpleNamespace(keysym='F1', state=0))
+                scene.dev_key_release(SimpleNamespace(keysym='F1', state=0))
+                self.assertEqual(scene.game_menu.page, 'menu')
+                deadline = clock.monotonic() + 20
+                while scene.menu_warmup_after_id is not None and clock.monotonic() < deadline:
+                    scene.root.update()
+                    clock.sleep(0.002)
+                prepared = scene._cutscene_gallery_grid_photo
+                self.assertIsNotNone(prepared)
+                with patch('pop2.menu_theme.panel_scaled', side_effect=AssertionError('the ground was drawn')), \
+                        patch.object(CutsceneGallery, 'card_image', side_effect=AssertionError('a card was drawn')):
+                    scene.apply_game_action('cutscenes')
+                gallery = scene.game_menu.cutscene_viewer
+                self.assertIs(scene._cutscene_gallery_grid_photo, prepared)
+                self.assertIs(scene._cutscene_gallery_strip.photo, prepared[1])
+                shown = self.displayed_gallery()
+                # The same as the page drawn by a viewer of its own.
+                fresh = CutsceneGallery(scene.cutscene_collection, scene.cutscene_preview)
+                source = scene.cutscene_gallery_source(shown.size, keep=False)
+                expected = fresh.draw(source, scene.ui_font, visible=True).convert('RGB')
+                self.assertIsNone(ImageChops.difference(shown, expected).getbbox())
+                self.assertIs(gallery.grid_cache[1], prepared[0])
+                # Back to F1 and to the viewer again: its strip and photo were kept.
+                scene.dev_key_press(SimpleNamespace(keysym='Escape', state=0))
+                scene.dev_key_release(SimpleNamespace(keysym='Escape', state=0))
+                strip = scene._cutscene_gallery_strip
+                self.assertFalse(strip.shown)
+                with patch.object(ImageTk, 'PhotoImage', side_effect=AssertionError('a new photo')):
+                    scene.apply_game_action('cutscenes')
+                self.assertIs(scene._cutscene_gallery_strip, strip)
+                self.assertTrue(strip.shown)
+                self.assertIsNone(ImageChops.difference(self.displayed_gallery(), expected).getbbox())
+                scene.close_game_menu()
+                self.assertIsNone(scene._cutscene_gallery_grid_photo)
+                self.assertIsNone(scene.cutscene_viewer_shelf)
+
     def test_f1_keeps_progress_and_f3_offers_the_same_chapters_with_developer_access(self):
         scene = self.scene
         self.assertIn('cutscenes', {item.action for item in GameMenu().items})

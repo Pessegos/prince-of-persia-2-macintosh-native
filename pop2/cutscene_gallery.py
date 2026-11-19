@@ -120,8 +120,10 @@ class CutsceneGallery:
         self.dragged = False
         self.hovered = None
         self.last_clicked = None
-        self.background_cache = self.grid_cache = None
         if relaid:
+            # A new viewer keeps the page's ground and shelf it was given (their keys name
+            # what they were drawn for); a viewer laid out again lets them go.
+            self.background_cache = self.grid_cache = None
             self.card_cache.clear()
             self.image_cache.clear()
 

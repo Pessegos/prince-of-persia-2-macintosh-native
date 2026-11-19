@@ -245,9 +245,52 @@ class CutsceneControls:
             gallery.begin_reveal(index for index, chapter in enumerate(CHAPTERS) if chapter.key in fresh)
             self.cutscene_collection.revealed |= fresh
             fresh.clear()
+        self.take_cutscene_shelf(gallery)
         self.redraw_menu()   # from F1, over the game's picture kept under the menu
+        self.cutscene_viewer_ground = self.screenshot_viewport, gallery.background_cache
         if gallery.reveal:
             self.schedule_cutscene_gallery()
+
+    def take_cutscene_shelf(self, gallery):
+        """Give a viewer just opened the page's ground and its shelf of cards as they were
+        drawn last while the menu was open (by F1's warm-up or a viewer left for F1): at
+        3440x1440 they took about 45 ms to draw. Their keys say what they were drawn for:
+        a viewer that differs draws its own. A shelf on which chapters are being revealed
+        is the viewer's own, drawn with the veils it reveals."""
+        ground = getattr(self, 'cutscene_viewer_ground', None)
+        if ground is not None and ground[0] is self.screenshot_viewport:
+            gallery.background_cache = ground[1]
+        if not gallery.reveal:
+            gallery.grid_cache = getattr(self, 'cutscene_viewer_shelf', None)
+
+    def keep_cutscene_shelf(self, gallery):
+        """Remember the viewer's shelf once no chapter on it is being revealed."""
+        if gallery.grid_cache is not None and not gallery.reveal and not gallery.reveal_drawn:
+            self.cutscene_viewer_shelf = gallery.grid_cache
+
+    def prepare_cutscene_shelf_photo(self):
+        """The photo of the shelf the viewer would show now, made with the pixels Tk prepares
+        for the window (about 40 ms at 3440x1440), so that the viewer shows it at once."""
+        from PIL import ImageTk
+        from pop2.window_controls import photo_holder
+
+        shelf = getattr(self, 'cutscene_viewer_shelf', None)
+        kept = getattr(self, '_cutscene_gallery_grid_photo', None)
+        if shelf is None or kept is not None and kept[0] is shelf[1]:
+            return
+        photo = ImageTk.PhotoImage(shelf[1])
+        self.drop_cutscene_shelf_holder()
+        self._cutscene_gallery_grid_photo = shelf[1], photo
+        self._cutscene_shelf_holder = photo_holder(self.canvas, photo)
+
+    def drop_cutscene_shelf_holder(self):
+        holder = getattr(self, '_cutscene_shelf_holder', None)
+        self._cutscene_shelf_holder = None
+        if holder is not None:
+            try:
+                holder.destroy()
+            except TclError:
+                pass
 
     def active_cutscene_gallery(self):
         menu = getattr(self, 'game_menu', None)
@@ -311,7 +354,6 @@ class CutsceneControls:
 
     def cutscene_gallery_frame(self, size, *, capture=False):
         from copy import copy
-        from pop2.game_ui import fit_viewport
 
         gallery = self.active_cutscene_gallery()
         if capture:
@@ -319,19 +361,25 @@ class CutsceneControls:
             gallery = copy(gallery)
             for name in ('text_cache', 'image_cache', 'card_cache'):
                 setattr(gallery, name, getattr(gallery, name).copy())
-        cached = getattr(self, '_cutscene_gallery_source', None)
-        if cached is None or cached[0] is not self.screenshot_viewport or cached[1] != size:
-            source = Image.new('RGBA', size, '#080808')
-            fitted, origin = fit_viewport(*size)
-            source.paste(self.screenshot_viewport.crop((1, 0, 511, 384)).resize(
-                fitted, Image.Resampling.NEAREST), origin)
-            if not capture:
-                self._cutscene_gallery_source = self.screenshot_viewport, size, source
-        else:
-            source = cached[2]
-        frame = self.draw_screenshot_notice(gallery.draw(source, self.ui_font, visible=True,
-            background_key=id(self.screenshot_viewport)), visible=True, uniform=True)
+        frame = self.draw_screenshot_notice(gallery.draw(self.cutscene_gallery_source(size, keep=not capture),
+            self.ui_font, visible=True, background_key=id(self.screenshot_viewport)), visible=True, uniform=True)
         return frame if frame.mode == 'RGB' else frame.convert('RGB')
+
+    def cutscene_gallery_source(self, size, keep=True):
+        """The picture the viewer's page is drawn over: the game's, as the window shows it,
+        in a window-sized black picture."""
+        from pop2.game_ui import fit_viewport
+
+        cached = getattr(self, '_cutscene_gallery_source', None)
+        if cached is not None and cached[0] is self.screenshot_viewport and cached[1] == size:
+            return cached[2]
+        source = Image.new('RGBA', size, '#080808')
+        fitted, origin = fit_viewport(*size)
+        source.paste(self.screenshot_viewport.crop((1, 0, 511, 384)).resize(
+            fitted, Image.Resampling.NEAREST), origin)
+        if keep:
+            self._cutscene_gallery_source = self.screenshot_viewport, size, source
+        return source
 
     def present_cutscene_gallery(self, size, position):
         from PIL import ImageTk
@@ -339,7 +387,10 @@ class CutsceneControls:
 
         gallery = self.active_cutscene_gallery()
         if gallery is None:
-            self.release_cutscene_gallery()
+            if getattr(self, 'game_menu', None) is not None and getattr(self, 'cutscene_replay', None) is None:
+                self.park_cutscene_gallery()
+            else:
+                self.release_cutscene_gallery()
             return False
         previous = getattr(self, '_cutscene_gallery_frame', None)
 
@@ -431,15 +482,27 @@ class CutsceneControls:
             strip.highlight(gallery.hover_border(sx))
         self._cutscene_gallery_frame = (gallery, previous[1] if fast else frame,
                                        self.image_ref, state, moving, appearance())
+        self.keep_cutscene_shelf(gallery)
         return True
+
+    def park_cutscene_gallery(self):
+        """The menu shows another page: the viewer's strip is hidden, and kept with the photo
+        of its shelf for the viewer opened again while the menu is open."""
+        strip = getattr(self, '_cutscene_gallery_strip', None)
+        if strip is not None:
+            strip.hide()
+        self._cutscene_gallery_frame = None
+        self._cutscene_gallery_patch = None
 
     def release_cutscene_gallery(self):
         """Take the viewer's strip off the window and drop the pictures kept for it."""
         self.dispose_cutscene_strip()
+        self.drop_cutscene_shelf_holder()
         self._cutscene_gallery_frame = None
         self._cutscene_gallery_source = None
         self._cutscene_gallery_patch = None
         self._cutscene_gallery_grid_photo = None
+        self.cutscene_viewer_ground = self.cutscene_viewer_shelf = None
 
     def dispose_cutscene_strip(self):
         strip = getattr(self, '_cutscene_gallery_strip', None)
