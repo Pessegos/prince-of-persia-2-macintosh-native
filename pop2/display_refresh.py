@@ -57,6 +57,18 @@ class WindowsDisplayRefresh:
             return valid_refresh_rate(mode.frequency)
         return 60.0
 
+    def monitor_size(self, hwnd):
+        """The size of the monitor the window is on (most of it), which a fullscreen Tk
+        window covers; None when it cannot be read."""
+        outer = self.user.GetAncestor(hwnd, 2) or hwnd
+        monitor = self.user.MonitorFromWindow(outer, 2)
+        info = MonitorInfo(size=ctypes.sizeof(MonitorInfo))
+        if monitor and self.user.GetMonitorInfoW(monitor, ctypes.byref(info)):
+            rect = info.monitor
+            if rect.right > rect.left and rect.bottom > rect.top:
+                return rect.right - rect.left, rect.bottom - rect.top
+        return None
+
 
 @lru_cache(maxsize=1)
 def windows_display_refresh():
@@ -70,3 +82,13 @@ def window_refresh_rate(root):
         return windows_display_refresh().rate(root.winfo_id())
     except (OSError, RuntimeError, TclError):
         return 60.0
+
+
+def window_monitor_size(root):
+    """The size a fullscreen window of ``root`` would have, on Windows; else None."""
+    if sys.platform != 'win32':
+        return None
+    try:
+        return windows_display_refresh().monitor_size(root.winfo_id())
+    except (OSError, RuntimeError, TclError):
+        return None

@@ -4,7 +4,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 from pop2.display_refresh import (DisplayMode, MonitorInfo, WindowsDisplayRefresh,
-                                  valid_refresh_rate, window_refresh_rate)
+                                  valid_refresh_rate, window_monitor_size, window_refresh_rate)
 
 
 class DisplayRefreshTests(unittest.TestCase):
@@ -65,3 +65,29 @@ class DisplayRefreshTests(unittest.TestCase):
         with patch('pop2.display_refresh.sys.platform', 'win32'), \
                 patch('pop2.display_refresh.windows_display_refresh', side_effect=OSError):
             self.assertEqual(window_refresh_rate(root), 60)
+
+    def test_a_fullscreen_window_s_size_is_its_monitor_s(self):
+        user = Mock()
+        user.GetAncestor.return_value = 0x123
+        user.MonitorFromWindow.return_value = 0x456
+
+        def monitor(_handle, pointer):
+            self.assertEqual(pointer._obj.size, ctypes.sizeof(MonitorInfo))
+            rect = pointer._obj.monitor
+            rect.left, rect.top, rect.right, rect.bottom = -1920, -200, 1520, 1240   # left of the main one
+            return 1
+
+        user.GetMonitorInfoW.side_effect = monitor
+        self.assertEqual(WindowsDisplayRefresh(user).monitor_size(0x789), (3440, 1440))
+        user.MonitorFromWindow.assert_called_once_with(0x123, 2)
+        user.GetMonitorInfoW.side_effect = None
+        user.GetMonitorInfoW.return_value = 0
+        self.assertIsNone(WindowsDisplayRefresh(user).monitor_size(0x789))
+        user.MonitorFromWindow.return_value = 0
+        self.assertIsNone(WindowsDisplayRefresh(user).monitor_size(0x789))
+        root = Mock()
+        with patch('pop2.display_refresh.sys.platform', 'other'):
+            self.assertIsNone(window_monitor_size(root))
+            root.winfo_id.assert_not_called()
+        with patch('pop2.display_refresh.sys.platform', 'win32'),                 patch('pop2.display_refresh.windows_display_refresh', side_effect=OSError):
+            self.assertIsNone(window_monitor_size(root))

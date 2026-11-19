@@ -71,6 +71,61 @@ class PresentationTests(unittest.TestCase):
             host.present_viewport()
             bitmap.return_value.present.assert_called_once()
 
+    def fullscreen_host(self, **state):
+        host = WindowControls()
+        host.canvas = Mock()
+        host.canvas.find_all.return_value = (1,)
+        host.canvas.winfo_width.return_value = 1020
+        host.canvas.winfo_height.return_value = 768
+        place = {}
+        host.canvas.coords.side_effect = lambda item, *xy: place.update({item: xy}) if xy else place.get(item, ())
+        host.root, host.status_label = Mock(), Mock()
+        host.root.geometry.return_value, host.root.state.return_value = '1020x768+200+100', 'normal'
+        host.native_viewport = Image.new('RGBA', (512, 384), 'red')
+        host.fullscreen = host.paused = False
+        host.game_menu = host.dev_menu = host.copy_challenge = host.image_ref = None
+        for name, value in state.items():
+            setattr(host, name, value)
+        return host
+
+    def test_a_still_picture_is_drawn_for_the_monitor_before_the_window_grows(self):
+        # Windows shows the grown window's old pixels at its top-left until the canvas paints
+        # again: the paused or menu picture used to be drawn for the new size only then.
+        for still in ({'paused': True}, {'game_menu': object(), 'paused': True}):
+            with self.subTest(still=still):
+                host = self.fullscreen_host(**still)
+                shown = []
+                host.root.attributes.side_effect = lambda *args: shown.append(
+                    (host.image_ref.size, host.canvas.coords.call_args.args))
+                with patch('pop2.window_controls.sys.platform', 'win32'), \
+                        patch('pop2.display_refresh.window_monitor_size', return_value=(3440, 1440)), \
+                        patch('pop2.window_controls.remember'), \
+                        patch('pop2.window_controls.ImageTk.PhotoImage', side_effect=lambda frame: frame) as photo:
+                    host.toggle_fullscreen()
+                    size, origin = fit_viewport(3440, 1440)
+                    self.assertEqual(shown, [(size, (1, *origin))])
+                    made = photo.call_count
+                    # The canvas grown, the drawing that follows finds the picture shown.
+                    host.canvas.winfo_width.return_value, host.canvas.winfo_height.return_value = 3440, 1440
+                    picture, moves = host.image_ref, host.canvas.coords.call_count
+                    host.present_viewport()
+                    self.assertIs(host.image_ref, picture)
+                    self.assertEqual(photo.call_count, made)
+                    self.assertEqual(host.canvas.coords.call_count, moves + 1)   # read, not moved
+
+    def test_the_running_game_or_an_unknown_monitor_is_drawn_after_the_window_grows(self):
+        for state, monitor in (({}, (3440, 1440)), ({'paused': True}, None)):
+            with self.subTest(state=state, monitor=monitor):
+                host = self.fullscreen_host(**state)
+                host.root.attributes.side_effect = lambda *args: self.assertIsNone(host.image_ref)
+                with patch('pop2.window_controls.sys.platform', 'win32'), \
+                        patch('pop2.display_refresh.window_monitor_size', return_value=monitor) as size, \
+                        patch('pop2.window_controls.remember'), \
+                        patch('pop2.window_controls.ImageTk.PhotoImage', side_effect=lambda frame: frame):
+                    host.toggle_fullscreen()
+                self.assertEqual(size.call_count, 1 if state else 0)
+                host.root.after_idle.assert_called_once_with(host.present_viewport)
+
     def test_presentation_crops_padding_before_nearest_neighbor_scaling(self):
         host = WindowControls()
         host.native_viewport = Image.new("RGB", (512, 384), "red")

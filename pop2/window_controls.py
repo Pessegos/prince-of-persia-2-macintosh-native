@@ -416,6 +416,7 @@ class WindowControls(InputRouting):
             self.windowed_geometry = windowed_geometry or self.root.geometry()
             self.windowed_state = windowed_state or self.root.state()
             self.status_label.pack_forget()
+            self.present_before_fullscreen()
             self.root.attributes("-fullscreen", True)
             self.fullscreen = True
             self.update_cursor_visibility()
@@ -430,6 +431,26 @@ class WindowControls(InputRouting):
         self.root.after_idle(self.present_viewport)
         remember(fullscreen=self.fullscreen)
         return "break"
+
+    def present_before_fullscreen(self):
+        """Draw a still picture (paused, a menu) for the fullscreen window before it grows.
+
+        Until the canvas paints again, Windows shows the grown window's old pixels at its
+        top-left corner. The running game is painted again within a few milliseconds (by
+        CanvasBitmap), but a still picture was drawn anew at the monitor's size first, tens
+        of milliseconds at 3440x1440 (twice when paused), so the small picture was seen in
+        the corner. Drawn beforehand, the drawing after the resize finds it done and only
+        Tk's painting remains."""
+        if (sys.platform != 'win32' or getattr(self, 'native_viewport', None) is None
+                or not (getattr(self, 'paused', False) or getattr(self, 'game_menu', None) is not None
+                        or getattr(self, 'dev_menu', None) is not None
+                        or getattr(self, 'copy_challenge', None) is not None)):
+            return
+        from pop2.display_refresh import window_monitor_size
+
+        size = window_monitor_size(self.root)
+        if size is not None:
+            self.present_viewport(canvas_size=size)
 
     def open_dev_mode(self, _event=None):
         if not self.development_available():
@@ -2202,11 +2223,12 @@ class WindowControls(InputRouting):
                  for x1, y1, x2, y2 in rects]
         return [rect for rect in rects if rect[0] < rect[2] and rect[1] < rect[3]]
 
-    def present_viewport(self):
+    def present_viewport(self, canvas_size=None):
+        """Show the picture in the window. ``canvas_size``: drawn for a canvas of that
+        size instead of the canvas's own (see present_before_fullscreen)."""
         if self.native_viewport is None:
             return
-        width = self.canvas.winfo_width()
-        height = self.canvas.winfo_height()
+        width, height = canvas_size or (self.canvas.winfo_width(), self.canvas.winfo_height())
         if width <= 1 or height <= 1:
             width, height = VISIBLE_SIZE[0] * 2, VISIBLE_SIZE[1] * 2
         size, position = fit_viewport(width, height)
@@ -2422,7 +2444,9 @@ class WindowControls(InputRouting):
             source = self.native_viewport.crop(VISIBLE_VIEWPORT)
             if menu is not None and menu.preview_enabled:
                 source = source.convert('RGB')  # cheaper here than on the enlarged frame
-            elif game_menu is not None or menu is not None or getattr(self, 'copy_challenge', None) is not None:
+            elif (game_menu is not None or menu is not None or getattr(self, 'copy_challenge', None) is not None
+                  or getattr(self, 'paused', False)):
+                # A still picture: drawn again, only what changed is sent (a paused game too).
                 if self.patch_native_menu(native_menu, source, size, position):
                     return
                 native_menu = source   # remembered below, with the photo made from it
