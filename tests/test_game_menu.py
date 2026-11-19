@@ -20,6 +20,18 @@ from pop2.window_controls import put_patch
 from tests.desktop import exclusive_desktop
 
 
+def window_photo(scene):
+    """The pixels of the window's photo: black where the Cutscene Viewer's shelf, a widget of
+    its own, lies over it, which a page shown at once leaves unwritten."""
+    image = ImageTk.getimage(scene.image_ref).convert('RGB')
+    strip = getattr(scene, '_cutscene_gallery_strip', None)
+    if strip is not None and strip.shown:
+        x, y = scene.canvas.coords(scene.canvas.find_all()[0])
+        left, top, right, bottom = strip.region
+        ImageDraw.Draw(image).rectangle((left - x, top - y, right - x - 1, bottom - y - 1), fill=0)
+    return image.tobytes()
+
+
 class GameMenuModelTests(unittest.TestCase):
     def test_shortcuts_include_quit_and_alt_enter_but_exclude_removed_commands(self):
         items = GameMenu().items
@@ -333,15 +345,7 @@ class GameMenuSceneTests(unittest.TestCase):
         scene = self.scene
 
         def shown():
-            image = ImageTk.getimage(scene.image_ref).convert('RGB')
-            strip = getattr(scene, '_cutscene_gallery_strip', None)
-            if strip is not None and strip.shown:
-                # The Cutscene Viewer's shelf, a widget of its own, lies over the page's photo
-                # there: a page shown at once leaves that part unwritten.
-                x, y = scene.canvas.coords(scene.canvas.find_all()[0])
-                left, top, right, bottom = strip.region
-                ImageDraw.Draw(image).rectangle((left - x, top - y, right - x - 1, bottom - y - 1), fill=0)
-            return image.tobytes()
+            return window_photo(scene)
 
         render = type(scene).render
 
@@ -456,9 +460,9 @@ class GameMenuSceneTests(unittest.TestCase):
                         opening()
                     self.assertEqual(scene.game_menu.page, page)
                     self.assertIs(scene.image_ref, prepared)
-                    drawn = ImageTk.getimage(scene.image_ref).convert('RGB').tobytes()
+                    drawn = window_photo(scene)
                     scene.render()   # the same as the window drawn again
-                    self.assertEqual(ImageTk.getimage(scene.image_ref).convert('RGB').tobytes(), drawn)
+                    self.assertEqual(window_photo(scene), drawn)
                     scene.close_game_menu()
                     # The running game keeps no photo of the wide pages' size.
                     self.assertNotIn(size, scene.spare_photos())
@@ -505,6 +509,71 @@ class GameMenuSceneTests(unittest.TestCase):
             scene.close_game_menu()
             self.assertIsNone(scene.save_menu_source)
             self.assertIsNone(scene.save_grounds)
+
+    def test_save_game_from_f1_opens_on_the_page_its_warm_up_wrote(self):
+        # F1's warm-up draws the page that Save game opens and writes it into the photo it
+        # makes; a saves page left for F1 stays in its photo. Writing all of it again took
+        # about 25 ms at 3440x1440, drawing it 15.
+        from pop2 import window_controls
+        from pop2.save_slots import SaveSlot
+
+        scene = self.scene
+        written = []
+        put = window_controls.put_patch
+
+        def put_patch(target, image, x, y):
+            written.append(image.shape[0] * image.shape[1] if hasattr(image, 'shape') else image.width * image.height)
+            put(target, image, x, y)
+
+        def settle():
+            deadline = time.monotonic() + 20
+            while scene.menu_warmup_after_id is not None and time.monotonic() < deadline:
+                scene.root.update()
+                time.sleep(0.002)
+            self.assertIsNone(scene.menu_warmup_after_id)
+
+        def drawn_from_nothing():
+            browser = scene.game_menu.save_browser
+            browser.ground_cache = None
+            browser.list_base_cache.clear()
+            browser.kept_pages.clear()
+            scene.save_menu_source = scene.save_menu_frame = None
+            scene.present_viewport()
+            return window_photo(scene)
+
+        slots = []
+        with patch('pop2.save_slots.list_slots', side_effect=lambda *_: tuple(slots)), \
+                patch.object(scene.canvas, 'winfo_width', return_value=1400), \
+                patch.object(scene.canvas, 'winfo_height', return_value=800):
+            size = fit_menu_viewport(1400, 800)[0]
+            self.press('F1')
+            settle()
+            photo, _, prepared = scene.spare_photos()[size]
+            self.assertEqual(prepared.browser.mode, 'save')
+            for opening in ('from the warm-up', 'again, from the page left'):
+                with self.subTest(opening=opening):
+                    written.clear()
+                    with patch('pop2.window_controls.ImageTk.PhotoImage', side_effect=AssertionError('a new photo')), \
+                            patch.object(ImageTk.PhotoImage, 'paste', side_effect=AssertionError('all of it written')), \
+                            patch.object(window_controls, 'put_patch', put_patch):
+                        scene.apply_game_action('save')
+                    self.assertEqual(scene.game_menu.page, 'saves')
+                    self.assertIs(scene.game_menu.save_browser, prepared.browser)
+                    self.assertIs(scene.image_ref, photo)
+                    self.assertEqual(written, [])
+                    shown = window_photo(scene)
+                    self.assertEqual(drawn_from_nothing(), shown)
+                    photo, prepared = scene.image_ref, SimpleNamespace(browser=scene.game_menu.save_browser)
+                    self.press('Escape')
+                    self.assertEqual(scene.game_menu.page, 'menu')
+            # Another save since: the page is drawn and shown as it is now.
+            slots.append(SaveSlot(Path('other.pop2save'), 'Other', exists=True, level=2, date='Today', modified=1.0))
+            scene.apply_game_action('save')
+            self.assertIsNot(scene.game_menu.save_browser, prepared.browser)
+            self.assertEqual(scene.game_menu.save_browser.slots, tuple(slots))
+            shown = window_photo(scene)
+            self.assertEqual(drawn_from_nothing(), shown)
+            scene.close_game_menu()
 
     def test_f2_capture_works_during_intro_with_developer_tools_unavailable(self):
         scene = self.scene

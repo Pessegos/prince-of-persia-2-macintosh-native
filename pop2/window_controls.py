@@ -6,6 +6,7 @@ import sys
 import time
 import tkinter as tk
 from types import SimpleNamespace
+from typing import NamedTuple
 
 import numpy
 from PIL import Image, ImageChops, ImageTk
@@ -127,6 +128,25 @@ def photo_holder(master, photo):
     and showing the photo again then prepared all of them again (about 30 ms at 3440x1440).
     Destroy it once the photo is shown again or no longer needed."""
     return tk.Label(master, image=photo)
+
+
+class SavePageShown(NamedTuple):
+    """What a photo kept (spare_photos) shows of a saves page: the picture ``frame`` that
+    ``browser`` drew for ``menu`` in place, with what present_viewport remembers of it
+    (``state``, ``listing``). Kept by F1's warm-up, and by a saves page left for F1."""
+    photo: object
+    menu: object
+    browser: object
+    frame: object
+    state: tuple
+    listing: tuple
+
+
+def same_save_page(kept, browser):
+    """Whether the browser ``kept`` shows the page that ``browser``, just made, would: the
+    same saves (the same ones read), the same game to save and the same state."""
+    return (len(kept.slots) == len(browser.slots) and all(a is b for a, b in zip(kept.slots, browser.slots))
+            and kept == browser and (browser.current is None or kept.current.document == browser.current.document))
 
 
 def put_patch(photo, image, x, y):
@@ -1295,8 +1315,6 @@ class WindowControls(InputRouting):
         self.present_viewport()
 
     def open_save_browser(self, load=False):
-        from pop2.save_slots import SAVE_DIRECTORY, SaveBrowser, SaveSlot, list_slots
-
         direct = self.game_menu is None
         if self.game_menu is None:
             self.open_game_menu(render=False)
@@ -1304,6 +1322,22 @@ class WindowControls(InputRouting):
         self.dispose_screenshot_gallery()
         self.game_menu.show_page('saves')
         self.game_menu.return_to_menu = parent and not direct
+        browser = self.new_save_browser(load)
+        # The page a kept photo shows already, when it is this one (SavePageShown): it then
+        # opens on that photo, drawn and written already. Writing all of it into the photo
+        # took about 25 ms at 3440x1440, drawing it 15.
+        self.game_menu.save_browser = next(
+            (shown.browser for _, _, shown in self.spare_photos().values()
+             if isinstance(shown, SavePageShown) and shown.menu is self.game_menu
+             and same_save_page(shown.browser, browser)), browser)
+        self.pause_resume_keys.update(self.window_keys_down)
+        # From F1 the game is not drawn again under the page (as a page reached from F1).
+        self.redraw_menu()
+
+    def new_save_browser(self, load):
+        """The saves page's browser as it opens now, saving or loading (``load``)."""
+        from pop2.save_slots import SAVE_DIRECTORY, SaveBrowser, SaveSlot, list_slots
+
         try:
             slots = list_slots(SAVE_DIRECTORY)
         except OSError:
@@ -1327,16 +1361,12 @@ class WindowControls(InputRouting):
             current = SaveSlot(SAVE_DIRECTORY, 'New save', level=self.game.level.number,
                                resume='Checkpoint' if progress['checkpoint'] else 'Level start',
                                capacity=progress['max_life'], document=document)
-        self.game_menu.save_browser = SaveBrowser(slots, 'load' if load else 'save', selected,
-                                                  focus=100 + selected if load or active_index is not None else 29,
-                                                  save_available=self.can_save_game(), current=current,
-                                                  active_path=active_path,
-                                                  preview_provider=self.save_slot_preview,
-                                                  ground_cache=self.save_page_grounds())
-        self.game_menu.save_browser.ensure_visible(immediate=True)
-        self.pause_resume_keys.update(self.window_keys_down)
-        # From F1 the game is not drawn again under the page (as a page reached from F1).
-        self.redraw_menu()
+        browser = SaveBrowser(slots, 'load' if load else 'save', selected,
+                              focus=100 + selected if load or active_index is not None else 29,
+                              save_available=self.can_save_game(), current=current, active_path=active_path,
+                              preview_provider=self.save_slot_preview, ground_cache=self.save_page_grounds())
+        browser.ensure_visible(immediate=True)
+        return browser
 
     def apply_save_action(self, action):
         from pop2.save_slots import SAVE_DIRECTORY, list_slots
@@ -2252,6 +2282,9 @@ class WindowControls(InputRouting):
         native_menu, self.native_menu_frame = getattr(self, 'native_menu_frame', None), None
         # What the photo shown holds, should another take its place (show_photo keeps it).
         self.leaving_menu_frame = native_menu
+        saves = getattr(self, 'save_menu_frame', None)
+        if native_menu is None and saves is not None and saves[2] is getattr(self, 'image_ref', None):
+            self.leaving_menu_frame = SavePageShown(saves[2], saves[0], saves[5], saves[1], saves[3], saves[4])
         if (sys.platform == "win32" and getattr(self, "fullscreen", False)
                 and not getattr(self, "paused", False)
                 and getattr(self, "game_menu", None) is None
@@ -2395,22 +2428,14 @@ class WindowControls(InputRouting):
         self.hide_screenshot_lava()
         self.screenshot_gallery_frame = self.screenshot_gallery_source = None
         if getattr(game_menu, 'page', None) == 'saves':
-            fitted, size, position, source = self.save_page_source(width, height)
             browser = game_menu.save_browser
-            # The page stays RGBA: Tk is given only the parts that changed, their alpha ignored.
-            # Drawn in place: the page shown, drawn over again where the focus or the scroll moved.
-            page = browser.draw(source, self.ui_font, visible=True, background_key=id(self.screenshot_viewport),
-                                in_place=True)
+            size, position, source, page, frame, state, listing = self.save_page_frame(browser, width, height)
             redrawn = browser.redrawn
-            frame = self.draw_screenshot_notice(page, visible=True, uniform=size != fitted)
             modal = browser.editing or browser.confirmation
-            state = (id(self.screenshot_viewport), id(self.ui_font), browser.mode, browser.selected,
-                     id(browser.slots), id(browser.current), browser.error, browser.status,
-                     browser.save_available, browser.editing, browser.confirmation,
-                     getattr(self, 'screenshot_toast', None), browser.active_path)
-            # The Rename highlight and its tip change only the name's part (NAME_AREA).
-            listing = browser.focus, browser.scroll, browser.focus == 25, browser.hovered == 25
             previous = getattr(self, 'save_menu_frame', None)
+            if previous is None or previous[2] is not self.image_ref:
+                # The page opens on a photo kept that shows it already (by F1's warm-up).
+                previous = self.save_photo_back(game_menu, browser, frame, state, position) or previous
             if (previous is not None and previous[0] is game_menu and previous[1].size == frame.size
                     and previous[2] is self.image_ref):
                 damages = []
@@ -2453,7 +2478,7 @@ class WindowControls(InputRouting):
                                         damage[2] + rect[0], damage[3] + rect[1]))
                 for damage in damages:
                     put_patch(self.image_ref, frame.crop(damage), *damage[:2])
-                self.save_menu_frame = (game_menu, frame, self.image_ref, state, listing)
+                self.save_menu_frame = (game_menu, frame, self.image_ref, state, listing, browser)
                 self.keep_photo_at(position)
                 return
         else:
@@ -2506,7 +2531,7 @@ class WindowControls(InputRouting):
         if native_menu is source:
             self.native_menu_frame = self.image_ref, source, size, None
         if getattr(game_menu, 'page', None) == 'saves':
-            self.save_menu_frame = (game_menu, frame, self.image_ref, state, listing)
+            self.save_menu_frame = (game_menu, frame, self.image_ref, state, listing, browser)
         if menu is not None and menu.preview_enabled:
             self.dev_map_frame = (menu, frame, self.image_ref, native, entry)
 
@@ -2593,7 +2618,7 @@ class WindowControls(InputRouting):
         Writing all of it, in a new photo, took about 35 ms at 3440x1440."""
         spares = self.spare_photos()
         spare = spares.get(size)
-        if spare is None or spare[2] is None or not self.canvas.find_all():
+        if spare is None or spare[2] is None or isinstance(spare[2], SavePageShown) or not self.canvas.find_all():
             return None
         photo, holder, shown = spares.pop(size)
         self.place_photo(photo, size, position)
@@ -2625,14 +2650,75 @@ class WindowControls(InputRouting):
             kept = self.save_grounds = self.screenshot_viewport, {}
         return kept[1]
 
-    def prepare_page_photo(self, picture):
+    def save_page_frame(self, browser, width, height):
+        """The saves page that ``browser`` draws in place for a window of this size, as
+        present_viewport shows it: (its size, its place, the picture it is drawn over, the
+        page, the picture shown, what is remembered of it: its state, and what the pointer
+        and the keys light up)."""
+        fitted, size, position, source = self.save_page_source(width, height)
+        # The page stays RGBA: Tk is given only the parts that changed, their alpha ignored.
+        # Drawn in place: the page shown, drawn over again where the focus or the scroll moved.
+        page = browser.draw(source, self.ui_font, visible=True, background_key=id(self.screenshot_viewport),
+                            in_place=True)
+        frame = self.draw_screenshot_notice(page, visible=True, uniform=size != fitted)
+        state = (id(self.screenshot_viewport), id(self.ui_font), browser.mode, browser.selected,
+                 id(browser.slots), id(browser.current), browser.error, browser.status,
+                 browser.save_available, browser.editing, browser.confirmation,
+                 getattr(self, 'screenshot_toast', None), browser.active_path)
+        # The Rename highlight and its tip change only the name's part (NAME_AREA).
+        listing = browser.focus, browser.scroll, browser.focus == 25, browser.hovered == 25
+        return size, position, source, page, frame, state, listing
+
+    def prepare_save_page(self, width, height):
+        """The saves page that F1's Save game opens now (Load game, when the game cannot be
+        saved), drawn in place over this pause's picture, with what present_viewport
+        remembers of it: a SavePageShown without its photo, for prepare_page_photo. None
+        while a capture's toast is shown over the pages."""
+        if self.game_menu is None or getattr(self, 'screenshot_toast', None) is not None:
+            return None
+        browser = self.new_save_browser(not self.can_save_game())
+        _, _, _, page, frame, state, listing = self.save_page_frame(browser, width, height)
+        return SavePageShown(None, self.game_menu, browser, frame, state, listing) if frame is page else None
+
+    def save_photo_back(self, menu, browser, frame, state, position):
+        """Show the kept photo of the saves page ``frame``, as ``browser`` drew it in place
+        for ``menu`` with the same ``state`` (SavePageShown): what present_viewport remembers
+        of it (save_menu_frame), for only what changed since to be written into it; or None
+        when no such photo is kept."""
+        spares = self.spare_photos()
+        spare = spares.get(frame.size)
+        shown = spare[2] if spare is not None else None
+        if (not isinstance(shown, SavePageShown) or shown.menu is not menu or shown.browser is not browser
+                or shown.frame is not frame or shown.state != state or not self.canvas.find_all()):
+            return None
+        spares.pop(frame.size)
+        self.place_photo(spare[0], frame.size, position)
+        spare[1].destroy()
+        return menu, frame, spare[0], state, shown.listing, browser
+
+    def prepare_page_photo(self, picture, shown=None):
         """Keep a photo of ``picture``'s size, the pixels Tk prepares for the window
         already made, for the next page of that size (a wide page opened from F1: the
         saves, the screenshots, the Cutscene Viewer), which then only writes into it
-        (show_photo): its first opening made a new photo, about 12 ms more at 3440x1440."""
-        if picture.size in self.spare_photos() or not self.canvas.find_all():
+        (show_photo): its first opening made a new photo, about 12 ms more at 3440x1440.
+
+        ``shown``: ``picture`` is that saves page (SavePageShown, prepare_save_page), which
+        is written into the photo and opens on it as it is. A photo of that size kept
+        already takes it, unless it shows a menu shown again from it (menu_photo_back)."""
+        spares = self.spare_photos()
+        spare = spares.get(picture.size)
+        if not self.canvas.find_all() or spare is not None and (
+                shown is None or spare[2] is not None and not isinstance(spare[2], SavePageShown)):
             return
-        self.keep_photo(ImageTk.PhotoImage(picture), picture.size)
+        if spare is None and shown is None:
+            self.keep_photo(ImageTk.PhotoImage(picture), picture.size)
+            return
+        if spare is None:
+            # Blank, shown to Tk by its holder first: Tk prepares its pixels once, as they are written.
+            self.keep_photo(ImageTk.PhotoImage('RGB', picture.size), picture.size)
+            spare = spares[picture.size]
+        put_patch(spare[0], picture, 0, 0)
+        spares[picture.size] = spare[0], spare[1], shown._replace(photo=spare[0])
 
     def patch_native_menu(self, previous, source, size, position):
         """Show again a menu drawn at the game's resolution (the game menu, its options

@@ -8,11 +8,12 @@ Tk's events: a key pressed meanwhile waits at most one step. It stops as soon
 as F1 gives way to another page or the menu closes. It fills the caches those
 pages already keep (the theme's frames, SHARED_READS, LAST_SCANS, the saves
 read by list_slots and the viewer's covers). It draws the saves pages' ground
-over the paused game, which they take up (save_page_grounds), and the Cutscene
-Viewer's page over it and its shelf of cards, with the shelf's photo, which
-the viewer opened from this F1 shows as they are (take_cutscene_shelf).
-Last, it makes a photo of the wide pages' size, which the first of them writes
-into (prepare_page_photo).
+over the paused game, which they take up (save_page_grounds), the saves page
+that F1's Save game opens (prepare_save_page), and the Cutscene Viewer's page
+over it and its shelf of cards, with the shelf's photo, which the viewer opened
+from this F1 shows as they are (take_cutscene_shelf). Last, it makes a photo of
+the wide pages' size, which the first of them writes into, with that saves page
+in it, which then opens on it as it is (prepare_page_photo).
 """
 
 import logging
@@ -94,15 +95,21 @@ def warm_steps(scene):
         SaveBrowser((), ground_cache=scene.save_page_grounds()).draw(
             source, font, visible=True, background_key=id(scene.screenshot_viewport))
         yield
+    saves = scene.prepare_save_page(width, height) if hasattr(scene, 'prepare_save_page') else None
+    yield
 
     size = fit_menu_viewport(width, height)[0]
     page = None
     if hasattr(scene, 'cutscene_preview'):
         page = yield from cutscene_steps(scene, size, font, theme, done)
-    # A photo of the wide pages' size, for the first of them that F1 opens to write into.
+    # A photo of the wide pages' size, for the first of them that F1 opens to write into:
+    # with the saves page in it, which opens on it as it is.
     if hasattr(scene, 'prepare_page_photo'):
         yield
-        scene.prepare_page_photo(page if page is not None else Image.new('RGB', size, (8, 8, 8)))
+        if saves is not None and saves.frame.size == size:
+            scene.prepare_page_photo(saves.frame, saves)
+        else:
+            scene.prepare_page_photo(page if page is not None else Image.new('RGB', size, (8, 8, 8)))
 
 
 def cutscene_steps(scene, size, font, theme, done):
