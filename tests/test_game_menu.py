@@ -12,7 +12,7 @@ from unittest.mock import Mock, patch
 from PIL import Image, ImageChops, ImageTk
 
 from pop2.game_menu import GameMenu
-from pop2.game_ui import PLAYFIELD_VIEWPORT, fit_viewport, viewport_point
+from pop2.game_ui import PLAYFIELD_VIEWPORT, fit_menu_viewport, fit_viewport, viewport_point
 from pop2.preferences import load_preferences
 from pop2.screenshots import ScreenshotSettings
 from pop2.window_controls import put_patch
@@ -384,6 +384,36 @@ class GameMenuSceneTests(unittest.TestCase):
                     scene.render()
                     self.assertEqual(shown(), drawn)
             self.assertEqual(len(wide), 3)   # the saves pages and the Cutscene Viewer
+
+    def test_the_first_wide_page_from_f1_writes_into_the_photo_its_warm_up_made(self):
+        # Its first opening made a new photo of the whole window: about 12 ms more at 3440x1440.
+        scene = self.scene
+        pages = (('saves', lambda: scene.apply_game_action('save')),
+                 ('saves', lambda: scene.apply_game_action('open')),
+                 ('cutscenes', lambda: scene.apply_game_action('cutscenes')))
+        with patch('pop2.save_slots.list_slots', return_value=()), \
+                patch.object(scene.canvas, 'winfo_width', return_value=1400), \
+                patch.object(scene.canvas, 'winfo_height', return_value=800):
+            size = fit_menu_viewport(1400, 800)[0]
+            for page, opening in pages:
+                with self.subTest(page=page):
+                    self.press('F1')
+                    deadline = time.monotonic() + 20
+                    while scene.menu_warmup_after_id is not None and time.monotonic() < deadline:
+                        scene.root.update()
+                        time.sleep(0.002)
+                    self.assertIsNone(scene.menu_warmup_after_id)
+                    prepared = scene.spare_photos()[size][0]
+                    with patch('pop2.window_controls.ImageTk.PhotoImage', side_effect=AssertionError('a new photo')):
+                        opening()
+                    self.assertEqual(scene.game_menu.page, page)
+                    self.assertIs(scene.image_ref, prepared)
+                    drawn = ImageTk.getimage(scene.image_ref).convert('RGB').tobytes()
+                    scene.render()   # the same as the window drawn again
+                    self.assertEqual(ImageTk.getimage(scene.image_ref).convert('RGB').tobytes(), drawn)
+                    scene.close_game_menu()
+                    # The running game keeps no photo of the wide pages' size.
+                    self.assertNotIn(size, scene.spare_photos())
 
     def test_f2_capture_works_during_intro_with_developer_tools_unavailable(self):
         scene = self.scene

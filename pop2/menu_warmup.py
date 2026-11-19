@@ -10,6 +10,8 @@ pages already keep (the theme's frames, SHARED_READS, LAST_SCANS, the saves
 read by list_slots and the viewer's covers), and draws the Cutscene Viewer's
 page over the paused game and its shelf of cards, with the shelf's photo,
 which the viewer opened from this F1 shows as they are (take_cutscene_shelf).
+Last, it makes a photo of the wide pages' size, which the first of them writes
+into (prepare_page_photo).
 """
 
 import logging
@@ -85,11 +87,20 @@ def warm_steps(scene):
         done.add(('saves', theme.name, size))
         yield
 
-    # The Cutscene Viewer: its chapters' covers fitted to their cards, then its page over this
-    # pause's picture, its shelf of cards and the shelf's photo, which the viewer takes up.
     size = fit_menu_viewport(width, height)[0]
-    if not hasattr(scene, 'cutscene_preview'):
-        return
+    page = None
+    if hasattr(scene, 'cutscene_preview'):
+        page = yield from cutscene_steps(scene, size, font, theme, done)
+    # A photo of the wide pages' size, for the first of them that F1 opens to write into.
+    if hasattr(scene, 'prepare_page_photo'):
+        yield
+        scene.prepare_page_photo(page if page is not None else Image.new('RGB', size, (8, 8, 8)))
+
+
+def cutscene_steps(scene, size, font, theme, done):
+    """The Cutscene Viewer: its chapters' covers fitted to their cards, then its page over
+    this pause's picture, its shelf of cards and the shelf's photo, which the viewer takes
+    up. Gives back the page drawn."""
     from pop2.cutscene_gallery import CutsceneGallery
     from pop2.cutscenes import CHAPTERS, chapter_available
 
@@ -111,13 +122,14 @@ def warm_steps(scene):
             viewer.card_image(index, font, scale, scale)
             yield
     scene.take_cutscene_shelf(viewer)
-    viewer.draw(scene.cutscene_gallery_source(size), font, visible=True,
-                background_key=id(scene.screenshot_viewport))
+    page = viewer.draw(scene.cutscene_gallery_source(size), font, visible=True,
+                       background_key=id(scene.screenshot_viewport))
     scene.cutscene_viewer_ground = scene.screenshot_viewport, viewer.background_cache
     scene.keep_cutscene_shelf(viewer)
     done.add(('cutscenes', theme.name, size))
     yield
     scene.prepare_cutscene_shelf_photo()
+    return page
 
 
 def schedule_menu_warmup(scene):

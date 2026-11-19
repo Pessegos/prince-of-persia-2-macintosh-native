@@ -2584,6 +2584,15 @@ class WindowControls(InputRouting):
         holder.destroy()
         return shown
 
+    def prepare_page_photo(self, picture):
+        """Keep a photo of ``picture``'s size, the pixels Tk prepares for the window
+        already made, for the next page of that size (a wide page opened from F1: the
+        saves, the screenshots, the Cutscene Viewer), which then only writes into it
+        (show_photo): its first opening made a new photo, about 12 ms more at 3440x1440."""
+        if picture.size in self.spare_photos() or not self.canvas.find_all():
+            return
+        self.keep_photo(ImageTk.PhotoImage(picture), picture.size)
+
     def patch_native_menu(self, previous, source, size, position):
         """Show again a menu drawn at the game's resolution (the game menu, its options
         and controls, the tools): only the pixels that changed go into the window's photo,
