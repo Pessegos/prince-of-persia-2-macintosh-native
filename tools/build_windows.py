@@ -42,7 +42,7 @@ def validate_bundle(directory):
             raise ValueError(f'Private/imported data must not be distributed: {relative}')
     for name in ('PoP2Mac.exe', '_internal/python/python.exe', '_internal/python/pythonw.exe',
                  '_internal/worker/worker_entry.py', '_internal/worker/portable-worker.json',
-                 'LICENSE', 'BUILD-INFO.json', 'README.txt'):
+                 'LICENSE', 'BUILD-INFO.json', 'README.txt', 'recomplauncher.json'):
         if not (directory / name).is_file():
             raise ValueError(f'Incomplete portable build: {name}')
     for name in ('PoP2Mac-tools.exe', 'PoP2Mac-worker.exe'):
@@ -162,6 +162,8 @@ COLLECT(gui, a.binaries, a.datas, upx=False, name='PoP2Mac')
     bundle = work / 'dist/PoP2Mac'
     shutil.copy2(ROOT / 'LICENSE', bundle / 'LICENSE')
     shutil.copy2(ROOT / 'distribution/README.txt', bundle / 'README.txt')
+    # RecompLauncher reads it beside the program (the ZIP's one top folder is unwrapped).
+    shutil.copy2(ROOT / 'distribution/recomplauncher.json', bundle / 'recomplauncher.json')
     shutil.copy2(info_file, bundle / 'BUILD-INFO.json')
     copy_notices(bundle)
     shutil.copytree(packaged_runtime, bundle / '_internal/python')

@@ -178,7 +178,7 @@ class WindowsDistributionTests(unittest.TestCase):
             bundle = Path(directory)
             for name in ('PoP2Mac.exe', '_internal/python/python.exe', '_internal/python/pythonw.exe',
                          '_internal/worker/worker_entry.py', '_internal/worker/portable-worker.json',
-                         'LICENSE', 'BUILD-INFO.json', 'README.txt'):
+                         'LICENSE', 'BUILD-INFO.json', 'README.txt', 'recomplauncher.json'):
                 path = bundle / name
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.touch()

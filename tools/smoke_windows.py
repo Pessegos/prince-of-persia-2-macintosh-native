@@ -71,7 +71,15 @@ def smoke(archive, image=None, defender=False, reference=None):
         if image:
             run('PoP2Mac.exe', '--smoke-import', Path(image).resolve(), timeout=900)
             run('PoP2Mac.exe', '--check')
-            prepared = json.loads(run('PoP2Mac.exe', '--smoke-test').strip().splitlines()[-1])
+            # RecompLauncher's windowless import (recomplauncher.json "prepare"),
+            # read from the program's own stdout as the launcher reads it.
+            lines = run('PoP2Mac.exe', '--prepare', f'--game={Path(image).resolve()}',
+                        timeout=900).strip().splitlines()
+            if (not lines or any(not line.startswith('progress ') for line in lines)
+                    or lines[-1] != 'progress 1.000 Game files ready'):
+                raise RuntimeError(f'Launcher import printed unexpected lines: {lines[-5:]}')
+            run('PoP2Mac.exe', '--check')
+            prepared =json.loads(run('PoP2Mac.exe', '--smoke-test').strip().splitlines()[-1])
             if prepared['levels'] != list(range(1, 15)):
                 raise RuntimeError('Imported build did not render every currently supported level')
             if reference:

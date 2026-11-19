@@ -1,0 +1,31 @@
+{
+  "$schema": "https://recomplauncher.com/schema/recomplauncher.json",
+  "format": 1,
+  "name": "Prince of Persia 2 Macintosh Native",
+  "repo": "Pessegos/prince-of-persia-2-macintosh-native",
+  "game": {
+    "kind": "iso",
+    "label": "Your disk image of Prince of Persia 2 for Macintosh (.dsk, .img, .hfs, .hfv, .iso or an uncompressed .dmg). An ISO of the hybrid PC/Mac Prince of Persia CD Collection also works."
+  },
+  "start": {
+    "program": ["PoP2Mac.exe"]
+  },
+  "prepare": {
+    "program": ["PoP2Mac.exe"],
+    "args": ["--prepare", "--game={game}"],
+    "label": "Pictures, music and scenes from your disk image",
+    "timeout": 900
+  },
+  "saves": ["{home}/Saved Games/PoP2 Macintosh Native"],
+  "folders": {
+    "saves": [{ "path": "{home}/Saved Games/PoP2 Macintosh Native" }],
+    "logs": [{ "path": "{install}/rendered" }]
+  },
+  "actions": [
+    { "id": "saves", "label": "Saves", "help": "Your saved games, the hall of fame and the game's settings.", "open": "saves" }
+  ],
+  "looks": {
+    "allowed": false,
+    "reason": "The game draws its own pixel-exact picture in an ordinary window, which the looks cannot filter."
+  }
+}

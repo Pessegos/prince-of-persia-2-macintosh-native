@@ -131,5 +131,48 @@ class PackagedDispatchTests(unittest.TestCase):
         prepare.assert_not_called()
 
 
+class LauncherManifestTests(unittest.TestCase):
+    """distribution/recomplauncher.json, shipped beside PoP2Mac.exe, against the port."""
+
+    def setUp(self):
+        import json
+
+        self.manifest = json.loads((Path(__file__).resolve().parents[1] / 'distribution'
+                                    / 'recomplauncher.json').read_text(encoding='utf-8'))
+
+    def test_it_starts_the_portable_program_and_prepares_through_prepare_mode(self):
+        self.assertEqual(self.manifest['format'], 1)
+        self.assertEqual(self.manifest['start']['program'], ['PoP2Mac.exe'])
+        self.assertNotIn('args', self.manifest['start'])
+        prepare = self.manifest['prepare']
+        self.assertEqual(prepare['program'], ['PoP2Mac.exe'])
+        self.assertEqual(prepare['args'][0], '--prepare')
+        # The copy as one argument, as the launcher leaves out whole arguments.
+        self.assertEqual([item for item in prepare['args'] if '{game}' in item], ['--game={game}'])
+        self.assertEqual(prepare_game.game_argument(
+            [item.replace('{game}', 'C:/a b/game.dsk') for item in prepare['args'][1:]]), 'C:/a b/game.dsk')
+
+    def test_saves_and_logs_are_where_the_game_writes_them(self):
+        saves = '{home}/Saved Games/PoP2 Macintosh Native'
+        self.assertEqual(self.manifest['saves'], [saves])
+        self.assertEqual(self.manifest['folders']['saves'], [{'path': saves}])
+        self.assertEqual(self.manifest['folders']['logs'], [{'path': '{install}/rendered'}])
+        # The tests redirect these folders (POP2_USER_DATA), so read the
+        # players' defaults from the sources.
+        code = Path(__file__).resolve().parents[1] / 'pop2'
+        for name in ('save_game.py', 'preferences.py', 'hall_of_fame.py'):
+            with self.subTest(name=name):
+                self.assertIn("Path.home() / 'Saved Games' / 'PoP2 Macintosh Native'",
+                              (code / name).read_text(encoding='utf-8'))
+        self.assertIn('OUTPUT_DIR = PROJECT_DIR / "rendered"', (code / 'paths.py').read_text(encoding='utf-8'))
+
+    def test_the_label_names_every_image_type_the_window_accepts(self):
+        from pop2.setup_game import IMAGE_TYPES
+
+        label = self.manifest['game']['label']
+        for pattern in IMAGE_TYPES[1].split():
+            self.assertIn(pattern.removeprefix('*'), label)
+
+
 if __name__ == '__main__':
     unittest.main()

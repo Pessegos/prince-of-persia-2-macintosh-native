@@ -55,6 +55,16 @@ The importer and cache warmup use explicit helper modes and native Windows
 multiprocessing. Original game files, imported audio,
 disk images, saves and user settings are excluded and the output is audited.
 
+`recomplauncher.json` (from `distribution/`) sits beside `PoP2Mac.exe` for
+[RecompLauncher](https://recomplauncher.com/sdk): the player picks a disk
+image there, the launcher runs `PoP2Mac.exe --prepare --game=IMAGE` (a
+windowless import into the same `assets/`, printing `progress <0-1> <text>`
+lines; exit 0 ready, 1 unusable image, 2 no `--game`) and Play starts
+`PoP2Mac.exe` as usual. Keep its paths in step with the saves folder and
+`rendered/`; `tests.test_prepare_game` checks them. Release assets keep
+`windows-x64` in their names so the launcher picks them; it installs the
+latest full release and treats prereleases as betas.
+
 Bundled support art and the MIDI renderer live under `_internal`. Imported
 assets, diagnostics and the default user data live beside the executables in
 `assets/` and `rendered/`. Extract the ZIP to a writable folder. Source-mode
@@ -76,7 +86,8 @@ on another PC or clean Windows VM as well.
 For a local original-image integration check, add `--image PATH_TO_IMAGE.hfs`.
 That runs the actual hidden first-run UI through cancellation and full import,
 validates the resulting installation, renders the intro and levels 1-13, and
-prepares map caches through the signed helper. All generated files and user
+prepares map caches through the signed helper. It also runs the launcher's
+`--prepare --game=IMAGE` import and checks its progress lines. All generated files and user
 data stay inside the disposable test directory. Never upload the disk image
 or the imported installation as build artifacts.
 
