@@ -345,6 +345,33 @@ def custom_foreground_records(resources, room_id):
     return frozenset(records)
 
 
+_WALL_REDRAWS = {}
+
+
+def temple_wall_redraws(level_number):
+    """{(room, column, row, shape)}: a temple wall cell that, redrawn alone,
+    draws the two-column front face of the wall on its left.
+
+    The kind-20 drawer's front pass (10:03a4-0402) takes shape 22 + (fg & 3).
+    For fg & 3 of 2 or 3 a clean cut (A5-4832 set) draws nothing there, as
+    the left cell's shape 22/23 already spans both columns; a dirty cell
+    (RedrawCell 3:1d3a, A5-4832 clear) draws shape 20 + (fg & 3) 51 pixels
+    left, clipped to itself. The export keeps the clean cut's commands only.
+    """
+    if level_number not in TEMPLE_LEVELS or not (ASSET_DIR / 'Prince.rsrc').is_file():
+        return frozenset()
+    if level_number not in _WALL_REDRAWS:
+        from pop2.level_data import LevelDefinition
+
+        terrain = LevelMap(LevelDefinition.read(load_resource_file('Prince.rsrc'), level_number).data)
+        _WALL_REDRAWS[level_number] = frozenset(
+            (room, column, row, 3520 + (tile.foreground & 3))
+            for room in range(32) for row in range(3) for column in range(10)
+            for tile in (terrain.tile(room, column, row),)
+            if tile.room == room and tile.kind == 20 and tile.foreground & 3 in (2, 3))
+    return _WALL_REDRAWS[level_number]
+
+
 def cavern_assets(level_number=3):
     if type(level_number) is not int or level_number not in (3, 4, 5, *RUINS_LEVELS, *TEMPLE_LEVELS,
                                                              *FINAL_LEVELS):
@@ -1575,6 +1602,7 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
         background.paste(palette[colour], (left, top, right, bottom))
     masks = {row: Image.new('L', background.size) for row in range(-1, 5)}
     cell_masks = {} if program.get('version') >= 6 else None
+    wall_redraws = temple_wall_redraws(level_number) if cell_masks is not None else frozenset()
     gate_masks = {}
     custom_records = custom_foreground_records(resources, room_id)
     custom_mask = Image.new('L', background.size) if custom_records else None
@@ -1677,9 +1705,15 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
                 masks[row] = ImageChops.lighter(masks[row], mask)
             if cell_masks is not None and len(command) >= 10:
                 cell = (command[8], command[9])
-                merged = merge_positioned_mask(cell_masks.get(cell), sprite.getchannel('A'), position)
-                if merged is not None:
-                    cell_masks[cell] = merged
+                cells = [cell]
+                if (library == 4 and command[2] == cell[0] * 51
+                        and (room_id, cell[0] + 1, cell[1], index) in wall_redraws):
+                    # The right column's dirty redraw repeats this face.
+                    cells.append((cell[0] + 1, cell[1]))
+                for cell in cells:
+                    merged = merge_positioned_mask(cell_masks.get(cell), sprite.getchannel('A'), position)
+                    if merged is not None:
+                        cell_masks[cell] = merged
     if (level_number, room_id) == HORSE_ROOM:
         # Drawn after the room's back pieces (3:23ca-23e2), before the front.
         sprite = horse_sprite()

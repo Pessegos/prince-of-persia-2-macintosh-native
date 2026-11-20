@@ -533,8 +533,35 @@ the Prince's feet. `tools/probe_object_sort.py` runs the original sort on
 heads in back poses, kind 5/14 and MOB types 0-13): zero mismatches. A
 slab is still drawn with the scenery; one sorted after a character covers
 it again with its own changed pixels inside his. Not covered: DrawObj's
-attachment links, other MOBs' own painters and the per-cell foreground
-peel.
+attachment links and other MOBs' own painters.
+
+The scenery in front of the characters is drawn after them (DumpTable 0,
+3, 1 at 3:3362-3378), but only in the cells the characters mark: each
+character's rectangle goes through MarkBufsForRect 5:19f8 with MarkFRedraw
+5:1990 (SetupSword/SetupOpponent 3:0d18-0f62, 4:26b8), and RedrawCell
+3:1f04-1f30 runs DrawForeImg 3:2598 for each marked cell, clipped to the
+cell (ComputeClipRect 5:0162) and the marked rectangle. MarkPeelForeBufs
+3:0428 marks the previous frame's rectangles the same way, after Peel
+erased them. The port unites the clean-cut export's front commands of the
+cells a character covers (`actor_cell_occlusion`). The one place this lost
+pixels is the temple wall: its front pass (10:03a4-0402) draws shape
+22 + (fg & 3), and for fg & 3 of 2 or 3 a clean cut draws nothing because
+the left cell's shape spans both columns, while a dirty cell draws shape
+20 + (fg & 3) 51 pixels left, clipped to itself. So a hand, head or sword
+in such a cell, with the left cell unmarked, went over the wall's face.
+`temple_wall_redraws` adds that face to the right cell's mask from the
+level words. `tools/probe_foreground_cells.py` runs the original drawers
+for every cell of levels 3-14 in dirty-cell mode against the port's
+masks: of 11,460 cells none draws a pixel the port's mask for that cell
+lacks (195,534 temple pixels without the rule). The port still hides
+57,163 pixels the original does not repaint: pieces a few pixels past
+their own cell (5-7 pixel pillar and arch rims in the ruins and temple)
+and three temple faces whose right cell redraws the empty SHAP 3522. They
+matter only when both cells are marked; on the six temple test routes six
+of 41,709 drawn characters lose at most 33 such pixels. Both sides use the
+port's SHAP alpha, rooms at rest; the upper border row (MarkTop 5:16f2),
+QuickFloor's DrawFloorBuf/DrawHalf and the marking rectangle itself are
+outside the probe.
 
 Original instruction execution confirmed 6,144 climb selections, 512 gate
 catch admissions and 80 foreground-admission cases. Real-terrain tests replay
