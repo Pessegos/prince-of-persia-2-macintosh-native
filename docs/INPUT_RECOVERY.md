@@ -355,14 +355,13 @@ before/on pose 109 and preservation of other pending commands.
 
 ## Intentional Port Extensions
 
-After a soft landing below a downward room cut, holding Down and Forward
-can carry the Prince over the next ledge in one longer crouch step. This
-intentional port change follows the look of the DOS recordings for levels
-3 and 8. It applies when the first ordinary crouch step would end on the
-same plain floor tile and the next would leave that tile for open air.
-The longer step reaches the same takeoff position using the usual floor
-check. The level 3 and 8 replays cover both facings and check the landing
-poses, takeoff positions and health.
+When Down and Forward are held at a soft landing below a downward room
+cut, a plain floor tile with open air ahead in the same room reserves
+20 pixels at the landing's edge instead of 32. The Prince plants closer to
+the edge and can reach the next drop in one ordinary crouch step (SEQS:79).
+This is a port preference based on the DOS recordings of levels 3 and 8.
+Their replays check the contact position, the normal step displacements,
+the next takeoff and health in both facings.
 
 Remappable keys and controller input (2026-11-08) sit in front of every rule
 in this document: a chosen key or button is translated into the original key

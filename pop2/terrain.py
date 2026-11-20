@@ -823,21 +823,28 @@ class LevelMap:
             state.target_x += (distance - 32) * direction
         state.current_x = state.target_x
 
-    def landing_offset(self, room, row, state, record):
+    def landing_offset(self, room, row, state, record, *, crouch_drop=False):
         # HitFloor 6:02ba-0310 reserves native distance 32 before loading
         # the landing pose when the forward cell cannot receive a landing.
         if state.actor_type in (7, 8):
             return 0
         contact = floor_contact_x(state.target_x, state.facing, record)
         column = character_column(contact)
-        if self.tile(room, column, row).kind in (23, 24):
+        floor = self.tile(room, column, row)
+        if floor.kind in (23, 24):
             return 0
         direction = 1 if state.facing else -1
-        ahead = self.tile(room, column + direction, row).kind
+        ahead = self.tile(room, column + direction, row)
         impassable = {11, 15, 26, 12, 13, 23, 24}
         distance = floor_edge_distance(contact, state.facing)
-        return ((distance - 32) * direction
-                if distance <= 30 and ahead in EMPTY_TILES | impassable else 0)
+        if distance > 30 or ahead.kind not in EMPTY_TILES | impassable:
+            return 0
+        # The DOS clips land closer to the edge before the first low step.
+        # Back up only as far as 20 pixels from the edge while chaining a
+        # drop. The original landing and crouch step still check the floor.
+        clearance = (20 if crouch_drop and floor.kind == 1
+                     and ahead.kind in EMPTY_TILES and ahead.room == floor.room else 32)
+        return min(0, distance - clearance) * direction
 
     def fatal_hit_fall_offset(self, room, row, state, record, supporting_column=None):
         # CheckStab 6:5428-54b2 tests the struck pose before loading death.
@@ -1131,7 +1138,7 @@ class TerrainMotion:
     gate_passages: tuple[tuple[int, int], ...] = ()
     # CheckPress immediately after HitFloor still sees the incoming foot.
     landing_pressure: tuple[int, int] | None = None
-    # Kept through SEQS:17 for a low step off a ledge just below the cut.
+    # Used by a soft landing after the room has already cut down.
     fall_crossed_down: bool = False
 
 
@@ -1266,9 +1273,7 @@ class RooftopPhysics:
                     and absolute_y >= DOWN_CUT_Y + height):
                 motion.void_fall = True
             return False
-        # The collision step can already have selected the soft landing
-        # when the camera cuts down on that same tick.
-        motion.fall_crossed_down = motion.falling or state.source_sequence_id == 17
+        motion.fall_crossed_down = motion.falling
         motion.smooth_landing = (motion.room == 11 and room == 14
                                  and state.actor_type == 0 and state.level_kind == 5)
         motion.room = room
@@ -1449,7 +1454,7 @@ class RooftopPhysics:
     def advance(self, motion, runtime, old_x, bounds, sword_drawn=False, protected=False,
                 frame_flags=0x40, frame_record=None, bounds_for_state=None, cut_enabled=True,
                 alive=True, old_bounds=None, catch_ledge=None, collision_bounds_for_state=None,
-                invulnerable=False, native_alive=None, barriers=True):
+                invulnerable=False, native_alive=None, barriers=True, crouch_held=False):
         state = runtime.state
         motion.landing_pressure = None
         if motion.dead:
@@ -1485,8 +1490,7 @@ class RooftopPhysics:
             return ()
         if not motion.falling:
             motion.scream_played = False
-            if state.source_sequence_id != 17:
-                motion.fall_crossed_down = False
+            motion.fall_crossed_down = False
         landing_recovery = state.sequence_id in (17, 20, 117, 212, 49)
         if not motion.falling and not landing_recovery:
             motion.smooth_landing = False
@@ -1890,8 +1894,14 @@ class RooftopPhysics:
                         state.target_x, state.facing, frame_record))
                     motion.landing_pressure = supporting_column, state.action
                 if frame_record is not None:
+                    cut_on_impact = (cut_enabled and motion.row >= 3
+                                     and tile.room == self.map.neighbor(motion.room, "down")
+                                     and self.map.allows_down_cut(motion.room, state.actor_type))
+                    crouch_drop = (sequence == 17 and not npc and crouch_held
+                                   and self.held_direction == (1 if state.facing else -1)
+                                   and (motion.fall_crossed_down or cut_on_impact))
                     state.target_x += self.map.landing_offset(
-                        motion.room, motion.row, state, frame_record)
+                        motion.room, motion.row, state, frame_record, crouch_drop=crouch_drop)
                 state.current_y = 0
                 state.horizontal_velocity = state.vertical_velocity = 0
                 motion.falling = False

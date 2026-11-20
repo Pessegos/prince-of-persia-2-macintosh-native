@@ -28,7 +28,6 @@ from pop2.control_mapping import (
     CROUCH_STANDING_LOWER_SEQUENCE,
     CROUCH_HOLD_SEQUENCE,
     CROUCH_STEP_SEQUENCE,
-    LANDING_LEDGE_STEP_SEQUENCE,
     CROUCH_RISE_SEQUENCE,
     RUN_START_SEQUENCE,
     RUN_STOP_SEQUENCE,
@@ -1462,13 +1461,11 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
             self.advance_animation_now()
         return True
 
-    def start_crouch_step(self, direction, *, try_crawl=True, from_landing=False):
+    def start_crouch_step(self, direction, *, try_crawl=True):
         if try_crawl and self.start_crawl():
             return
-        sequence = LANDING_LEDGE_STEP_SEQUENCE if from_landing else CROUCH_STEP_SEQUENCE
-        self.start_sequence(sequence)
-        self.status.set("Crouch step off a landing ledge" if from_landing
-                        else "Crouch step: original SEQS:79")
+        self.start_sequence(CROUCH_STEP_SEQUENCE)
+        self.status.set("Crouch step: original SEQS:79")
         if not self.in_animation_tick:
             self.advance_animation_now()
 
@@ -2274,7 +2271,8 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
             frame_record=self.frames[self.action], bounds_for_state=self.player_bounds,
             old_bounds=old_bounds, alive=self.combat.player.alive,
             collision_bounds_for_state=self.player_collision_bounds,
-            catch_ledge=self.catch_falling_ledge, invulnerable=getattr(self, 'god_mode', False))
+            catch_ledge=self.catch_falling_ledge, invulnerable=getattr(self, 'god_mode', False),
+            crouch_held=self.down_held and not self.up_held)
         if getattr(self, 'god_mode', False) and any(event.kind == 'death' for event in events):
             # A bottomless fall has no safe floor: return to this room's F3 entry.
             life, capacity = self.combat.player.life, self.combat.player.max_life

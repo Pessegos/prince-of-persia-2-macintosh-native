@@ -21,8 +21,7 @@ if TYPE_CHECKING:
     from pop2.combat import CombatEncounter
 
 
-# A single longer low step uses the same poses and reaches the same takeoff
-# position as two successive SEQS:79 steps on the ledge below a room cut.
+# Retain this sequence for saves made mid-step in the earlier crouch experiment.
 LANDING_LEDGE_STEP_WORDS = (
     -7, 1,
     -5, 10, 110,
