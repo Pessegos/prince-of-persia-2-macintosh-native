@@ -1,6 +1,7 @@
 """CheckGateInFore 3:26e4 draws a gate's moving stone over a character at it."""
 
 from pathlib import Path
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -92,6 +93,60 @@ class NativeGatePeelTests(unittest.TestCase):
             self.assertEqual(report['totals']['states'], 48)
 
 
+class GateClipTests(unittest.TestCase):
+    """CheckGateInFore's choice of whose rectangle clips each stone."""
+
+    def art(self):
+        return SimpleNamespace(gate_occlusion={(6, 1): (Image.new('L', (30, 126), 255), (357, 109))})
+
+    def clips(self, kid, opponents):
+        return CavernRoom.gate_clips(self.art(), kid, opponents)
+
+    KID = (5, 1, 0, False, (280, 150, 330, 246))
+    GUARD = (2, 6, 1, 0, (300, 150, 350, 246))
+
+    def test_the_kid_is_tested_first_and_his_rectangle_clips_the_stone(self):
+        self.assertEqual(self.clips(self.KID, [self.GUARD]), {(6, 1): self.KID[4]})
+        # Hanging (modes 2/6) or another row does not match.
+        self.assertEqual(self.clips((5, 1, 2, False, self.KID[4]), []), {})
+        self.assertEqual(self.clips((5, 0, 0, False, self.KID[4]), []), {})
+
+    def test_an_opponent_is_clipped_by_the_next_slots_object(self):
+        # A type-2 slot after it: GetObjTableType(3, 2) finds the first
+        # type-2 guard filed as (3, 2), here the matching one itself.
+        far = (2, -9, -9, 0, (0, 0, 10, 10))
+        self.assertEqual(self.clips(None, [self.GUARD, far]), {(6, 1): self.GUARD[4]})
+        # Nothing after it, or no such object: the cell's clip from Y 125.
+        self.assertEqual(self.clips(None, [self.GUARD]), {(6, 1): (0, 125, 510, 365)})
+        # A type-1 opponent is filed under kind 2: never found either.
+        self.assertEqual(self.clips(None, [self.GUARD, (1, -9, -9, 0, (0, 0, 10, 10))]),
+                         {(6, 1): (0, 125, 510, 365)})
+
+    def test_type_11_slots_and_a_crushed_kid_draw_no_stone(self):
+        self.assertEqual(self.clips(None, [(11, 6, 1, 0, self.GUARD[4])]), {})
+        self.assertEqual(self.clips((5, 1, 0, True, self.KID[4]), [self.GUARD]), {})
+
+
+@unittest.skipUnless(unicorn is not None and (RECOVERY / 'resource_forks').is_dir() and TEMPLE_IMPORTED,
+                     'Unicorn, the original recovery and the imported temple are required')
+class NativeGateOpponentTests(unittest.TestCase):
+    ROOMS = {(3, 19), (7, 19)}
+
+    def test_the_opponents_branch_matches_the_original(self):
+        from tools.probe_gate_peel import run_opponent_probe
+
+        report = run_opponent_probe(RECOVERY, levels=(3, 7), rooms=self.ROOMS)
+        self.assertEqual(report['cases'], {})
+        self.assertGreater(report['totals']['peeled'], 0)
+
+    def test_every_character_at_a_gate_under_the_whole_stone_is_rejected(self):
+        from tools.probe_gate_peel import run_opponent_probe
+
+        with patch.object(CavernRoom, 'gate_clips', lambda self, *_arguments: dict.fromkeys(self.gate_occlusion)):
+            report = run_opponent_probe(RECOVERY, levels=(3, 7), rooms=self.ROOMS)
+        self.assertGreater(report['totals']['extra_pixels'], 0)
+
+
 class SharedSlotKeyTests(unittest.TestCase):
     # Level 12 room 4's cell 0 slot: its own gate's stone and the left room's.
     OWN = ['back', 3576, 50, 235, 16, 0, [0, 50, 120, 80], 4, 0, 0]
@@ -144,7 +199,8 @@ class TempleGateSceneTests(unittest.TestCase):
                 actual = scene.screenshot_viewport.crop((ROOM_ORIGIN_X, 0, ROOM_ORIGIN_X + 510, 365))
                 difference = ImageChops.difference(actual.convert('RGB'), scenery.convert('RGB'))
                 self.assertIsNone(ImageChops.multiply(difference, mask.convert('RGB')).getbbox())
-                with patch.object(CavernRoom, 'gate_peel', lambda *_arguments: ()):
+                with (patch.object(CavernRoom, 'gate_peel', lambda *_arguments: ()),
+                      patch.object(CavernRoom, 'gate_clips', lambda *_arguments: {})):
                     type(scene).render(scene)
                 actual = scene.screenshot_viewport.crop((ROOM_ORIGIN_X, 0, ROOM_ORIGIN_X + 510, 365))
                 difference = ImageChops.difference(actual.convert('RGB'), scenery.convert('RGB'))

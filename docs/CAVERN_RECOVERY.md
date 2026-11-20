@@ -524,10 +524,27 @@ no cell to its right and is never drawn in front, and level 11's temple
 3542 (room 3) is not a gate stone. The crushed actions 264-266 take 3:2922
 instead, which in the caves only repeats the gate cell's own front pieces
 (S08_2112 in mode 1) and elsewhere draws nothing; the port's DOS-inspired
-crush keeps the row's stones in front on purpose. The opponents' branch
-(3:2768-283c, only when the Kid does not match, and it looks up the next
-slot's type word as the object index) and several characters at once are
-not compared.
+crush keeps the row's stones in front on purpose.
+
+The stone is drawn once per gate and frame, over everything inside its
+clip, so several characters share it (`CavernRoom.gate_clips`, applied by
+the scene to every character's mask). The Kid is tested first; when he
+matches, his object rectangle clips the stone and an opponent standing at
+the same gate stays in front of it outside that rectangle. Only otherwise
+the first opponent slot that matches (3:2768-283c, type 11 skipped) peels
+it, and its clip comes from GetObjTableType(3, type) with the type word of
+the next slot, as a3 has already moved past the match (3:2832-2848).
+AddCharObj 3:0130 files an opponent under kind 2 for types 0, 1 and 6 and
+3 otherwise (3:0b08-0b18), numbered by its type for 1, 6, 7, 8 and 10 and
+2 otherwise (3:0f10-0f44). With no such object the stone keeps the cell's
+own clip from the row's top (row * 120 + 5). A slot past the room's count
+is taken as empty; swords' and flames' objects are not modelled.
+`probe_gate_peel.py --opponents` runs the branch natively with the Kid
+absent or in the columns around each gate and a first-slot opponent of
+types 2, 4, 7 or 11 beside it (with a second, type-2 slot where the room has
+one): 288 states, zero pixels either way. The gate rooms whose opponents can
+reach a gate are few (3:19's skeleton, 7:19's head); 3:5, 11:25 and 12:5's
+gates are in the last column and peel nothing.
 
 One drawing slot can draw a gate stone twice: level 12 room 4's (native 5)
 cell 0 draws its own gate's and the left room's 1:9 stone (X 50 and -1),
@@ -635,15 +652,24 @@ once (each one's first and last moving state, the others at rest): 2,099
 states, none different. `--variants --revealed` draws each crevice run
 revealed while the room is on screen (the covered drawing plus its cells'
 redraw, `redrawn`): 28 states, none different. CheckGateInFore's peel of a
-moving gate is `tools/probe_gate_peel.py`, above. Not covered: falling
-slabs (the port hides 154 pixels of front rims in 10:19 that the original,
-clipping each marked cell to the slab's MOB rectangle, shows). The
-animated torches (levels 3-5 and the temple's) and level 14's fangs need
-no front check: every one of their exported commands is in the back pass
-(DrawCaveTorch 8:2ae8, DrawTempTorch 10:1196), so no dirty cell redraws
-them over a character. Of the flasks the front pass draws, only level 14
-room 7's (SHAP 3001) lies under a later front piece, 3 pixels of SHAP
-4179 that the port's item layer draws the flask over. Both sides use the port's SHAP
+moving gate is `tools/probe_gate_peel.py`, above.
+
+A falling slab's MOB rectangle (ComputeMobRect 5:32f6) marks the cells it
+covers (ATMLoose 5:3128-32e8 -> MarkMobRedraw 5:33fa -> MarkFRedraw
+5:1990), and each marked cell's front redraw is clipped to the cell and
+that rectangle. The port masked the slab with the whole foreground, which
+hid 154 pixels of front rims in level 10 room 19 (native 20) that the
+original leaves behind the slab (31 at once as it passes the statue's
+arm). `mob_front_cover` now unites the per-cell masks of the rectangle's
+cells, clipped to it. The animated torches (levels 3-5 and the temple's)
+and level 14's fangs need no front check: every one of their exported
+commands is in the back pass (DrawCaveTorch 8:2ae8, DrawTempTorch
+10:1196), so no dirty cell redraws them over a character. Items are drawn
+by the front pass in command order, so a later front piece covers them;
+the port draws them over the finished scenery. `later_front_cover` removes
+those pieces' pixels from flasks (with their bubbles) and sword items: only
+level 14 room 7's flask (SHAP 3001) lies under one, 3 pixels of SHAP 4179,
+and the room now matches the original's own drawing order. Both sides use the port's SHAP
 alpha; QuickFloor's DrawFloorBuf/DrawHalf and the marking rectangle
 itself are outside the probe.
 

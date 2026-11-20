@@ -3733,6 +3733,26 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
             )
         return self.sword_sprite_cache[shape_id], dx, dy
 
+    def gate_clip_plan(self, kid, opponents):
+        """CavernRoom.gate_clips for this frame's Kid and opponents, or None
+        outside a room with gate covers."""
+        room = getattr(self, "room_cache", {}).get(getattr(self, "room_id", None))
+        if not getattr(room, 'gate_occlusion', None):
+            return None
+
+        def place(entry):
+            state, record, bounds, row, _layer = entry
+            column = character_column(floor_contact_x(state.target_x, state.facing, record))
+            # Image bounds are inclusive; an object rectangle is not.
+            return column, row, state.animation_state, (bounds[0], bounds[1], bounds[2] + 1, bounds[3] + 1)
+
+        column, row, mode, bounds = place(kid)
+        state = kid[0]
+        crushed = state.source_sequence_id == 118 and 264 <= state.action <= 266
+        slots = [(entry[0].actor_type, *place(entry)) for entry in opponents
+                 if entry[0] is not None and entry[1] is not None]
+        return room.gate_clips((column, row, mode, crushed, bounds), slots)
+
     def composite_actor(self, frame, layer, row=None, bottom=None, state=None, bounds=None, record=None):
         # ClipChar 4:4152 skips an actor that IsCharNonViewable (4:4724)
         # marks by +0x34, e.g. the Prince after SEQS:27 sinks him (-21 7).
@@ -3747,7 +3767,9 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
             floor_exclusion = loose_contact_floor_cell(
                 getattr(self, 'level_map', None), getattr(caverns, 'loose', None),
                 self.room_id, row, state, record)
-        mask = (room.actor_mask(row, bottom, state, bounds, record)
+        plan = getattr(self, 'gate_peel_plan', None)
+        mask = ((room.actor_mask(row, bottom, state, bounds, record, peel=plan) if plan is not None
+                 else room.actor_mask(row, bottom, state, bounds, record))
                 if room is not None and row is not None else self.foreground.getchannel("A"))
         if floor_exclusion is not None:
             mask = room.contact_floor_mask(mask, floor_exclusion)
@@ -3945,6 +3967,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
                 self.guard_art.draw(layer, state, ground, guard.palette_variant, piece=piece)
                 bounds = self.guard_art.bounds(state, ground, piece=piece)
                 actors.append((state, record, bounds, guard.row, layer))
+        opponents = list(actors)
         actors.extend(environment.extra_actors(frame.size))
         player_layer = Image.new("RGBA", frame.size)
         draw_state, draw_height = environment.drawn_player(self.sequence_state)
@@ -3999,9 +4022,13 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         motion = getattr(self, "terrain_motion", None)
         player_bounds = self.player_bounds() if motion is not None else None
         draw_bounds = drawn_bounds if draw_height is not None else player_bounds
+        self.gate_peel_plan = None
         if motion is not None and draw_bounds is not None:
             # The Prince is added first; only equal bottoms and X depend on it.
             actors.insert(0, (draw_state, self.frames[draw_action], draw_bounds, motion.row, player_layer))
+            # CheckGateInFore draws each gate's stone once, over every
+            # character inside its clip (CavernRoom.gate_clips).
+            self.gate_peel_plan = self.gate_clip_plan(actors[0], opponents)
             frame = self.draw_objects(frame, actors, falling)
         else:
             for state, record, bounds, row, layer in actors:
@@ -4013,6 +4040,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
             frame = self.composite_actor(frame, flame_layer, motion.row if motion is not None else None,
                                          player_bounds[3] if player_bounds is not None else None,
                                          self.sequence_state, player_bounds, self.frames[self.action])
+        self.gate_peel_plan = None
 
         if combat is not None:
             for guard in (() if hide_guards else (*combat.visible_guards(), *combat.visible_ruins())):

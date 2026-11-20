@@ -80,7 +80,9 @@ class CavernRoom(OpeningRoom):
     exit_foreground: tuple = ()
     platform_contours: dict | None = None
 
-    def actor_mask(self, row, bottom=None, state=None, bounds=None, record=None):
+    def actor_mask(self, row, bottom=None, state=None, bounds=None, record=None, peel=None):
+        """`peel`, when given, is the frame's `gate_clips`: the stones the
+        original draws over every character inside each clip."""
         mask = super().actor_mask(row, bottom, state, bounds, record)
         if self.custom_occlusion is not None:
             # Global front items: DrawCustomRoomImgs 3:239e-23b2 repeats
@@ -102,16 +104,76 @@ class CavernRoom(OpeningRoom):
         # QuickFloor's native repaint commands supply their foreground below.
         # CheckGateInFore 3:2722-2762/2860 peels the movable gate over
         # actors in its own/preceding column, except hanging modes 2/6.
-        if (not self.gate_occlusion or state is None or record is None
-                or state.actor_type == 11 or state.animation_state in (2, 6)):
+        if not self.gate_occlusion or state is None:
+            return mask
+        crushed = (record is not None and state.source_sequence_id == 118
+                   and 264 <= state.action <= 266)
+        if peel is not None and not crushed:
+            mask = mask.copy()
+            for cell, clip in peel.items():
+                cover, (x, y) = self.gate_occlusion[cell]
+                rect = (x, y, x + cover.width, y + cover.height)
+                if clip is not None:
+                    inner = (max(rect[0], clip[0]), max(rect[1], clip[1]),
+                             min(rect[2], clip[2]), min(rect[3], clip[3]))
+                    if inner[0] >= inner[2] or inner[1] >= inner[3]:
+                        continue
+                    cover = cover.crop((inner[0] - x, inner[1] - y, inner[2] - x, inner[3] - y))
+                    rect = inner
+                mask.paste(ImageChops.lighter(mask.crop(rect), cover), rect[:2])
+            return mask
+        if record is None or state.actor_type == 11 or state.animation_state in (2, 6):
             return mask
         column = character_column(floor_contact_x(state.target_x, state.facing, record))
         mask = mask.copy()
-        crushed = state.source_sequence_id == 118 and 264 <= state.action <= 266
         for cover, (x, y) in self.gate_peel(column, row, crushed):
             rect = (x, y, x + cover.width, y + cover.height)
             mask.paste(ImageChops.lighter(mask.crop(rect), cover), (x, y))
         return mask
+
+    def gate_clips(self, kid, opponents):
+        """CheckGateInFore 3:26e4 for one frame: {gate tile: clip}, the
+        stone drawn over everything inside the clip (None: the whole cell
+        right of the tile, which the cover already is).
+
+        `kid` is (column, row, mode, crushed, rect) or None, `opponents` the
+        room's slots in order as (type, column, row, mode, rect); rects are
+        (left, top, right, bottom). For each gate the Kid is tested first
+        (3:2722-2762): same row, the gate's column or the one before, not
+        modes 2/6; his object rectangle clips the stone (GetObjTableType(2,
+        0), 3:2852-285e). Only when he does not match, the first opponent
+        slot that does (type 11 skipped, 3:27c8-283a); its clip comes from
+        GetObjTableType(3, type) with the type word of the NEXT slot (a3 has
+        already moved on, 3:2832-2848). AddCharObj 3:0130 files an opponent
+        under kind 2 for types 0, 1 and 6 and 3 otherwise (3:0b08-0b18), and
+        number = its type for 1, 6, 7, 8 and 10, else 2 (3:0f10-0f44). No
+        object found clips to the whole cell. A slot past the room's count is
+        taken as empty. A crushed Kid (actions 264-266) takes 3:2922 and no
+        stone is drawn over anyone."""
+        clips = {}
+        if not self.gate_occlusion or (kid is not None and kid[3]):
+            return clips
+
+        def matches(column, row, mode, gate):
+            return row == gate[1] and column in (gate[0], gate[0] - 1) and mode not in (2, 6)
+
+        objects = [(2 if kind in (0, 1, 6) else 3, kind if kind in (1, 6, 7, 8, 10) else 2, rect)
+                   for kind, _column, _row, _mode, rect in opponents]
+        for gate in self.gate_occlusion:
+            if kid is not None and matches(kid[0], kid[1], kid[2], gate):
+                clips[gate] = kid[4]
+                continue
+            for slot, (kind, column, row, mode, _rect) in enumerate(opponents):
+                if kind == 11 or not matches(column, row, mode, gate):
+                    continue
+                following = opponents[slot + 1][0] if slot + 1 < len(opponents) else None
+                # Without an object the stone keeps the cell's own clip,
+                # which starts at the row's top (row * 120 + 5).
+                clips[gate] = next((rect for object_kind, number, rect in objects
+                                    if object_kind == 3 and number == following),
+                                   (0, gate[1] * 120 + 5, 510, 365))
+                break
+        return clips
 
     def gate_peel(self, column, row, crushed=False):
         """The positioned gate covers CheckGateInFore peels over a character
@@ -803,17 +865,57 @@ def draw_final_scenery(frame, room_id, state, *, level_number=14, front=False, t
     return frame
 
 
+@lru_cache(maxsize=64)
+def later_front_cover(level_number, room_id, index):
+    """The alpha of the front pieces the room's front pass draws after its
+    command `index` (an item), as (mask, (x, y)) or None. The port draws
+    items over the finished scenery; the original's front pass draws them in
+    command order, so a later piece covers them (level 14 room 7's flask
+    under 3 px of SHAP 4179)."""
+    program, resources, palette, shapes = cavern_assets(level_number)
+    commands = program['rooms'][str(room_id)]
+    cover = None
+    for command in commands[index + 1:]:
+        library = command[7] if len(command) >= 8 else 4
+        if command[0] != 'front' or library in (0, 1, 5):
+            continue
+        clipped = clipped_sprite(cavern_command_sprite(command, resources, palette, shapes), command)
+        if clipped is not None:
+            sprite, position = clipped
+            cover = merge_positioned_mask(cover, sprite.getchannel('A'), position)
+    return cover
+
+
+def covered_item(sprite, position, cover):
+    """`sprite` at `position` with the pixels under `cover` removed."""
+    if cover is None:
+        return sprite
+    mask, (x, y) = cover
+    layer = Image.new('L', sprite.size)
+    layer.paste(mask, (x - position[0], y - position[1]))
+    if layer.getbbox() is None:
+        return sprite
+    sprite = sprite.copy()
+    sprite.putalpha(ImageChops.multiply(sprite.getchannel('A'), ImageChops.invert(layer)))
+    return sprite
+
+
 def draw_cavern_flasks(frame, room_id, state, terrain, *, level_number=3):
     program, resources, palette, shapes = cavern_assets(level_number)
     terrain.caverns = state
+    commands = program['rooms'][str(room_id)]
     for command, tile in cavern_flask_instances(program, room_id, terrain):
+        index = next((position for position, other in enumerate(commands) if other is command), None)
+        cover = later_front_cover(level_number, room_id, index) if index is not None else None
         value = tile.foreground
         kind, phase = (value >> 5) & 7, value & 31
         large = 2 <= kind < 5
         body = list(command)
         body[1] = 3002 if large else 3001
         sprite = cavern_command_sprite(body, resources, palette, shapes)
-        frame.paste(sprite, (body[2], body[3] - sprite.height), sprite)
+        position = (body[2], body[3] - sprite.height)
+        sprite = covered_item(sprite, position, cover)
+        frame.paste(sprite, position, sprite)
         # DrawFlask 3:46fc draws two monochrome layers, mirrored in the
         # second half of the cycle, with a quiet interval at phases 10-13/24-27.
         if not kind or phase in range(10, 14) or phase >= 24:
@@ -828,6 +930,7 @@ def draw_cavern_flasks(frame, room_id, state, terrain, *, level_number=3):
                                             resources, palette, shapes)
             if mirrored:
                 bubble = ImageOps.mirror(bubble)
+            bubble = covered_item(bubble, (x, bottom - bubble.height), cover)
             frame.paste(bubble, (x, bottom - bubble.height), bubble)
     return frame
 
@@ -837,7 +940,7 @@ def draw_sword_items(frame, room_id, state, terrain, *, level_number=6):
     # once picked up.
     program, resources, palette, shapes = cavern_assets(level_number)
     terrain.caverns = state
-    for command in program['rooms'][str(room_id)]:
+    for index, command in enumerate(program['rooms'][str(room_id)]):
         if len(command) < 10 or command[7] != 0:
             continue
         tile = terrain.tile(room_id, command[8], command[9])
@@ -846,6 +949,7 @@ def draw_sword_items(frame, room_id, state, terrain, *, level_number=6):
         clipped = clipped_sprite(cavern_command_sprite(command, resources, palette, shapes), command)
         if clipped is not None:
             sprite, position = clipped
+            sprite = covered_item(sprite, position, later_front_cover(level_number, room_id, index))
             frame.paste(sprite, position, sprite)
     return frame
 
@@ -1130,6 +1234,28 @@ def cavern_scene_signature(program, room_id, state):
     return ''.join(indices)
 
 
+def mob_front_cover(art, mob):
+    """The front scenery the original repaints over a falling slab: its MOB
+    rectangle (ComputeMobRect 5:32f6) marks the cells it covers (ATMLoose
+    5:3128-32e8 -> MarkMobRedraw 5:33fa -> MarkFRedraw 5:1990), and each
+    marked cell's front redraw is clipped to the cell and that rectangle
+    (the per-cell clip store 5:48e8). So a piece reaching in from a cell the
+    slab does not cover, or past the rectangle, stays behind it. Without
+    per-cell masks (older exports) the whole foreground covers it."""
+    if getattr(art, 'actor_cell_occlusion', None) is None:
+        return art.foreground.getchannel('A')
+    cover = Image.new('L', art.foreground.size)
+    clip = Image.new('L', art.foreground.size)
+    clip.paste(255, mob)
+    for cell in native_buffer_cells(mob):
+        positioned = art.actor_cell_occlusion.get(cell)
+        if positioned is not None:
+            mask, (x, y) = positioned
+            rect = (x, y, x + mask.width, y + mask.height)
+            cover.paste(ImageChops.lighter(cover.crop(rect), mask), (x, y))
+    return ImageChops.multiply(cover, clip)
+
+
 def draw_cavern_falling(frame, room_id, state, level, art, *, level_number=3, drawn=None):
     """The falling slabs (MOBs) of this room and the ones above and below.
 
@@ -1158,6 +1284,7 @@ def draw_cavern_falling(frame, room_id, state, level, art, *, level_number=3, dr
                   else ((3528, y), (3529, y)) if level_number in TEMPLE_LEVELS
                   else ((3557, y - 18), (3604, y)))
         width, height = block.size
+        front = mob_front_cover(art, (block.x, y - height, block.x + width, y + 1))
         area = None
         for index, bottom in pieces:
             sprite = cavern_command_sprite(['back', index, block.x, bottom, 16],
@@ -1170,7 +1297,7 @@ def draw_cavern_falling(frame, room_id, state, level, art, *, level_number=3, dr
             rect = (block.x, bottom - sprite.height + 1, block.x + sprite.width, bottom + 1)
             area = rect if area is None else (min(area[0], rect[0]), min(area[1], rect[1]),
                                               max(area[2], rect[2]), max(area[3], rect[3]))
-            cover = art.foreground.crop(rect).getchannel('A')
+            cover = front.crop(rect)
             sprite = sprite.copy()
             sprite.putalpha(ImageChops.multiply(sprite.getchannel('A'), ImageChops.invert(cover)))
             frame.paste(sprite, rect[:2], sprite)

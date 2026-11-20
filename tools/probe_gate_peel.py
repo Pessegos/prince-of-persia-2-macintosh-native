@@ -204,6 +204,103 @@ def run_probe(source, levels=LEVELS, rooms=None, modes=False):
                 executable_sha256=hashlib.sha256(executable).hexdigest(), scope=__doc__)
 
 
+def actor_rect(column, row, shift=0):
+    """A character-sized object rectangle (left, top, right, bottom) around
+    a column of a row."""
+    left = column * 51 - 14 + shift
+    return left, row * 120 + 30, left + 44, row * 120 + 126
+
+
+def clipped_peel(room_art, clips):
+    covered = np.zeros(SIZE, bool)
+    for cell, clip in clips.items():
+        cover, (x, y) = room_art.gate_occlusion[cell]
+        alpha = np.zeros(SIZE, bool)
+        top, left = max(0, y), max(0, x)
+        bottom, right = min(SIZE[0], y + cover.height), min(SIZE[1], x + cover.width)
+        if top < bottom and left < right:
+            alpha[top:bottom, left:right] = (np.asarray(cover) > 0)[top - y:bottom - y, left - x:right - x]
+        if clip is not None:
+            inside = np.zeros(SIZE, bool)
+            inside[max(0, clip[1]):max(0, clip[3]), max(0, clip[0]):max(0, clip[2])] = True
+            alpha &= inside
+        covered |= alpha
+    return covered
+
+
+def run_opponent_probe(source, levels=LEVELS, rooms=None):
+    """The opponents' branch with the Kid: for each gate room with
+    opponent slots, gates at rest, the Kid absent or in the columns around
+    each gate and the first slot's opponent (types 2, 4, 7 and the skipped
+    11) in the columns around it, both on the gate's row, every cell of
+    that row redrawn. With two slots or more the second holds a type-2
+    opponent off screen, so the first one's lookup GetObjTableType(3, 2)
+    finds an object (the first type-2-filed opponent's). The objects are the
+    Kid (2, 0) and each opponent as AddCharObj files it, with character-
+    sized rectangles; the port's `gate_clips` covers are compared with the
+    stones the original draws."""
+    directory = Path(source) / 'resource_forks'
+    executable = (directory / 'Prince of Persia 2.bin').read_bytes()
+    prince = (directory / 'Prince.rsrc.bin').read_bytes()
+    digest, totals = hashlib.sha256(), Counter()
+    results = {}
+    for number in levels:
+        if not scenery_available(number):
+            continue
+        level = probe_level(number, prince)
+        terrain = LevelMap(level)
+        scenery = (directory / f'{scenery_resource(number)}.bin').read_bytes()
+        program = room_assets(number, 0)[0]
+        with CavernRecovery(executable, scenery, prince) as machine:
+            for room in probed_rooms(number, program, rooms):
+                records = program.get('pressure_plates', {}).get('rooms', {}).get(str(room), ())
+                tiles = gate_tiles(terrain, room, records)
+                base = 0x20e6 + (room + 1) * 0xc0
+                count = struct.unpack_from('>h', level, base)[0]
+                if not tiles or not 1 <= count <= 5:
+                    continue
+                _program, resources, palette, shapes = room_assets(number, room)
+                art = resources, palette, shapes
+                room_art = cavern_room(room, animated=True, level_number=number)
+                cases = []
+                for (gate_column, row), kind in ((tile, kind) for tile in tiles for kind in (2, 4, 7, 11)):
+                    for kid_column in (None, gate_column - 1, gate_column, gate_column + 1):
+                        for column in (gate_column - 1, gate_column, gate_column + 1):
+                            slots = [(kind, column, row, 0, actor_rect(column, row, 6))]
+                            if count >= 2:
+                                slots.append((2, -9, -9, 0, actor_rect(-9, -9)))
+                            kid = (None if kid_column is None else
+                                   (kid_column, row, 0, False, actor_rect(kid_column, row)))
+                            port = clipped_peel(room_art, room_art.gate_clips(kid, slots))
+                            objects = [] if kid is None else [(2, 0, kid[4])]
+                            objects += [(2 if k in (0, 1, 6) else 3, k if k in (1, 6, 7, 8, 10) else 2, rect)
+                                        for k, _c, _r, _m, rect in slots]
+                            result = recover_room(
+                                executable, scenery, level, room, prince, _machine=machine, cell_redraw=True,
+                                only={(row, cell, 1) for cell in range(10)},
+                                gate_peel={'kid': (0, -9, -9, 0) if kid is None else (0, row, kid_column, 0),
+                                           'opponents': [(k, r, c, m) for k, c, r, m, _rect in slots],
+                                           'objects': [(o, n, (rect[1], rect[0], rect[3], rect[2]))
+                                                       for o, n, rect in objects]})
+                            native = paint(result['peel'], art)
+                            missing, extra = int((native & ~port).sum()), int((port & ~native).sum())
+                            totals['states'] += 1
+                            totals['peeled'] += int(native.any())
+                            totals['native_pixels'] += int(native.sum())
+                            totals['missing_pixels'] += missing
+                            totals['extra_pixels'] += extra
+                            digest.update(struct.pack('>5h', number, room, column, row,
+                                                      -99 if kid_column is None else kid_column))
+                            digest.update(np.packbits(native).tobytes())
+                            if missing or extra:
+                                cases.append(dict(kid=kid_column, opponent=[kind, column, row],
+                                                  missing=missing, extra=extra))
+                if cases:
+                    results[f'{number}:{room}'] = cases
+    return dict(totals=dict(totals), cases=results, native_sha256=digest.hexdigest(),
+                executable_sha256=hashlib.sha256(executable).hexdigest(), scope=run_opponent_probe.__doc__)
+
+
 def on_screen(commands, shapes):
     return Counter((c[1], c[2], c[3], max(0, c[6][0]), max(0, c[6][1]), min(365, c[6][2]), min(510, c[6][3]))
                    for c in commands if c[0] == 'back' and c[1] in shapes
@@ -271,9 +368,11 @@ if __name__ == '__main__':
     parser.add_argument('--level', type=int, action='append', help='Only these levels (repeatable)')
     parser.add_argument('--modes', action='store_true', help='Also modes 0-7 and the crushed actions')
     parser.add_argument('--drawing', action='store_true', help="The gates' own back pieces per state")
+    parser.add_argument('--opponents', action='store_true', help="The opponents' branch with the Kid")
     args = parser.parse_args()
     levels = tuple(args.level) if args.level else LEVELS
     report = (run_drawing_probe(args.source, levels) if args.drawing
+              else run_opponent_probe(args.source, levels) if args.opponents
               else run_probe(args.source, levels, modes=args.modes))
     text = json.dumps(report, indent=1) + '\n'
     if args.output is not None:

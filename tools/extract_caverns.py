@@ -357,6 +357,12 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
             cpu.mem_write(base, bytes(0x3e))
             for field, value in ((8, kind), (0xc, column), (0xe, row), (0x10, mode)):
                 put_word(base + field, value)
+        if count < 5:
+            # 3:2840 reads the type word of the slot after a match; one past
+            # the room's count is taken as empty (CavernRoom.gate_clips).
+            base = a5 - 0x5208 + count * 0x3e
+            cpu.mem_write(base, bytes(0x3e))
+            put_word(base + 8, 11)
         objects = 0x97000
         put_long(a5 - 0x4cb2, objects)
         put_word(a5 - 0x4826, len(gate_peel.get('objects', ())))

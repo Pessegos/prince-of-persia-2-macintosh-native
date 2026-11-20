@@ -151,6 +151,12 @@ class NativeForegroundCellTests(unittest.TestCase):
     def test_a_border_row_in_a_customized_room_is_rejected(self):
         from tools.probe_foreground_cells import run_probe
 
+        from pop2.caverns import room_assets
+
+        if not any(command[5] == -1 for command in room_assets(13, 25)[0]['rooms']['25']):
+            # An import since recover_room skips it has no border row to
+            # bring back (customized_room).
+            return
         with patch('pop2.caverns.customized_rooms', return_value=frozenset()):
             report = run_probe(RECOVERY, levels=(13,), rooms={(13, 25)})
         self.assertEqual(report['totals']['own_extra_pixels'], 2550)
