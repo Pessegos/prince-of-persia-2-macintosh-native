@@ -252,7 +252,9 @@ sword rests more than 40 pixels away and counters from 161, so the forced
 retreats no longer carry the Prince off room 7's west edge; `swordpass`
 backs three steps. The duel's other random draws leave the room-14
 birdhead duel 9 pixels west, so `LEVEL_12_VIDEO` adds two `nudgeL` after
-it. These are replay choices, not timing claims.
+it. Since the crossing frame steps the room left first (2026-11-20) the
+room-14 birdhead strikes the crawling Prince down, so a `down` (crouch)
+precedes the last crawl. These are replay choices, not timing claims.
 
 Open: the Prince hit in room 7 at X 498 crossed into room 12 and the next
 frame stood at X 516 in room 7 (seen in a rejected `swordpass` variant);

@@ -1211,9 +1211,12 @@ its foot is 54 pixels from that cell's left edge.
   the frame is the last opponent's of the room left, from the set loaded
   for that room, or the Prince's when that room has none. The port
   records it in `CombatEncounter.entry_frame`
-  (`_last_loaded_opponent_frame`) before the room changes. Remaining
-  differences: the port has not yet advanced those opponents in the tick
-  of the cut (a moving one gives its previous pose); an opponent below the
+  (`_last_loaded_opponent_frame`) before the room changes. Since the
+  same day the port steps those opponents before the cut, as FrameAdv
+  does (`ScenePrototype.finish_room_entry`, see
+  [the frame order](research/frame-phase-order.md#room-crossing-the-room-left-moves-first-2026-11-20)),
+  so the rule reads this frame's poses. Remaining
+  differences: an opponent below the
   room (Y > 484, 2:64f2) or other actor types are not resolved; at level
   start (FirstFrame 2:5fb8) the cache is stale and the port keeps the
   Prince's frame. No LEVL heap's decision depends on this: the only
@@ -1238,8 +1241,15 @@ its foot is 54 pixels from that cell's left edge.
   inside the pass include its bump/landing (4:39ee), 4:4dd8, 4:6546 and
   4:34da besides 2:6512/2:65e2. The port's rule on the native opponents of
   the room left picks the words InitOpps sees in 4,239 crossings; the
-  others are the known difference (the opponent's pose advanced in the
-  crossing frame itself, 1,661) and the 14 bridge cases. Rerunning
+  others were the opponent's pose advanced in the crossing frame itself
+  (1,661) and the 14 bridge cases. Rerun after the port began stepping
+  the room left before the cut (`rendered/crossing-frame-native-v2-l*.json`,
+  same 5,914 crossings, the rule now on the slots as the pass leaves them):
+  5,809 agree; 89 differ because the opponent's pose was written after its
+  last LoadFrame in the same pass (mostly 106 -> 207, a heap sinking), 14
+  are the bridge slot and 2 a pose-91 record whose FRAM index lies before
+  the table; the earlier order's input (poses before the frame) is still
+  counted and agrees in 4,239. Rerunning
   the original 4:198a with the port's words instead changes no heap's X
   or SEQS in any of the 2,008 settles where the words differ, so the
   port keeps the rule. Supplied: drawing/sound segments, palette routines,

@@ -70,8 +70,8 @@ LEVEL_12_VIDEO = [
     'hopcatchL', 'tapL', 'tapR', 'climb', 'climb', 'tapR', 'down', 'runL5', 'hopL', 'runL11', 'runR5',
     'leapcatchL5', 'descendhangL', 'drink', 'leapR5', 'crawlL', 'leapcatchR5', 'climb', 'climb', 'climb',
     'climb', 'runR11', 'hopR', 'leapcatchR11', 'leapR14', 'swordduel', 'down', 'runR20', 'leapR5', 'tapR',
-    'leapL11', 'runL11', 'runR5', 'runL5', 'crawlL', 'crawlL', 'crawlL', 'crawlL', 'crawlL', 'crawlL',
-    'duel', 'down', 'nudgeL', 'nudgeL', 'runL11', 'runL11', 'leapcatchL14', 'leapL20', 'runL20', 'descendL', 'crawlL',
+    'leapL11', 'runL11', 'runR5', 'runL5', 'crawlL', 'crawlL', 'crawlL', 'crawlL', 'crawlL', 'down',
+    'crawlL', 'duel', 'down', 'nudgeL', 'nudgeL', 'runL11', 'runL11', 'leapcatchL14', 'leapL20', 'runL20', 'descendL', 'crawlL',
     'crawlL', 'crawlL', 'crawlL', 'duelfar', 'down', 'stepL', 'stepL', 'crawlL', 'runL20',
     'descendhangL', 'hopcatchR',
     'climb', 'climb', 'climb', 'leapcatchR11', 'climb', 'leapcatchR11', 'runR8', 'runR20', 'runR20',
@@ -82,6 +82,10 @@ LEVEL_12_VIDEO = [
 # Since the flaming sword strikes with SEQS 109 (DoStrike 6:27e0, 2026-11-20)
 # its duel takes other random draws and life; the room-14 birdhead duel
 # that follows ends 9 pixels west, so two nudges west follow it.
+# Since a room's opponents first move in the frame after the Prince enters it
+# (FrameAdv 2:626c before PrepCut 2:629a, 2026-11-20) the room-14 birdhead
+# meets the crawling Prince a frame later and strikes him down; a crouch
+# before the last crawl lets it come first.
 # The recording's life bar shows twelve flasks on arrival; a level loaded on
 # its own starts with three, too few for the flaming sword.
 LEVEL_12_VIDEO_LIFE = 12
@@ -89,20 +93,30 @@ LEVEL_12_VIDEO_LIFE = 12
 # Searched with opponents on (2026-11-16, life 12 supplied as for level 12):
 # past the room-11 birdhead, which follows him into room 8, then the route's
 # second half. It costs six life points; with three he dies in room 11.
-LEVEL_10_HOSTILE = ['leapL5', 'runR20', 'leapR20', 'leapR5', 'crawlL', 'crawlR', 'crawlR', 'crawlL',
-                    'hopL', 'leapcatchR5', 'leapcatchR5', 'leapR5', 'hopcatchR', 'leapR5', 'hopcatchL']
+# Searched again 2026-11-20 from room 22 on, once a room's opponents first
+# move in the frame after the Prince enters it (FrameAdv 2:626c before PrepCut
+# 2:629a): the old leap into room 11 met the birdhead a frame later and died.
+# This one leaps past it from further back and costs two life points; it
+# also finishes with the three of a level loaded alone (one left).
+LEVEL_10_HOSTILE = ['leapL5', 'runR20', 'leapR11', 'leapR14', 'crawlL', 'hopcatchR', 'leapcatchR5',
+                    'leapR5', 'hopcatchR', 'leapR5', 'hopcatchL']
 
 # Searched with opponents on (2026-11-16, life 12 supplied): from a fresh load
 # to the stairway, with the altar birdhead woken by three steps (`wake`), not
 # supplied. With the three of a level loaded alone he dies in native room 7.
+# Searched again 2026-11-20 from the altar room on, after the crossing frame
+# began stepping the room left (FrameAdv 2:626c before PrepCut): the old
+# route died leaping into native room 32. After the first three steps the
+# birdhead wounds him (12 -> 7) without killing him, so no flame yet; he
+# steps back east and three more steps bring the death and the flame.
 LEVEL_13_HOSTILE = ['runL8', 'hopcatchR', 'crawlL', 'leapcatchL14', 'leapL5', 'leapcatchL20',
                     'runR11', 'runL5', 'descendhangL', 'jump', 'crawlL', 'runL20', 'leapL5',
                     'climb', 'climb', 'hopL', 'hopcatchL', 'leapcatchR5', 'climb', 'hopcatchR',
                     'climb', 'climb', 'runR8', 'descendR', 'leapR5', 'leapL20', 'hopL',
-                    'hopcatchL', 'leapcatchL8', 'descendL', 'descendL', 'leapL11', 'tapR',
-                    'crawlL', 'runL20', 'crawlL', 'wait4', 'creepL32', 'leapL8', 'leapL11',
-                    'descendR', 'leapL20', 'wake', 'runR5', 'leapR11', 'leapcatchR20', 'runR11',
-                    'descendR', 'leapR11', 'leapcatchR20']
+                    'hopcatchL', 'leapcatchL8', 'descendL', 'leapL20', 'tapR', 'crawlL',
+                    'runL5', 'creepL24', 'runR8', 'hopL', 'crawlR', 'hopL', 'leapL11',
+                    'leapL11', 'leapL11', 'wake', 'runR5', 'creepR4', 'wake', 'stepR',
+                    'leapR14', 'leapcatchR5', 'engageR', 'leapcatchR20']
 
 INSTALLED = all(blades_exported(number) for number in (10, 11, 12, 13))
 

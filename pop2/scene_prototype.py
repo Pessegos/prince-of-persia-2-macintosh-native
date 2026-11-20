@@ -1978,7 +1978,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
             if trace is not None:
                 trace.append((mode, phase))
             if phase == 'terrain':
-                self.advance_terrain(old_x, old_bounds)
+                self.advance_terrain(old_x, old_bounds, defer_entry='combat' in WORLD_PHASES[mode])
                 if self.level_complete and self.game.level.number == 9 and self.game.exit is not None:
                     # The horse leap is continuous with NIS 2's falling Kid.
                     # Do not hold the last jump pose for another gameplay
@@ -1990,6 +1990,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
                 # A room cut rebases X; it must not be swept as a cross-room jump.
                 swept = sweep_combat and (motion is None or motion.room == old_room)
                 self.advance_combat(old_x if swept else None)
+                self.finish_room_entry()
             elif phase == 'environment':
                 self.advance_environment()
             elif phase == 'harbor':
@@ -2002,9 +2003,30 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
                 self.advance_audio()
             elif phase == 'render':
                 self.render()
+        self.finish_room_entry()
         self.retire_waiting_controls()
         self.in_animation_tick = False
         self.schedule_next_animation()
+
+    def finish_room_entry(self):
+        """PrepCut's half of a room cut. In the original the frame that
+        crosses an edge runs the Prince (2:625c), then the opponent pass of
+        the room he is leaving (2:626c -> 2:648c), TestStrike/CheckStab,
+        AddSFX, CheckAlert, the environment hook and ChangeMeters with his
+        X or Y already outside it; only then CutAllOpponents 6:4382 cuts
+        him (CutChar 6:4918, X -/+510 at 6:489a/48ba) and the opponents
+        following him (6:4476), and PrepCut 2:532c-5394 switches the room
+        (-0x4fc4 -> -0x4fc2) and runs InitOpps for the new one. So the new
+        room's opponents first move in the next frame."""
+        pending = getattr(self, 'pending_room_entry', None)
+        if pending is None:
+            return
+        self.pending_room_entry = None
+        old_room, room = pending
+        if room != self.room_id or self.combat.player.room != old_room:
+            return  # a warp or restart in between already placed him
+        self.combat.enter_room(room, self.combat.player.row)
+        environment_for(self).entered_room()
 
     def _opening_active(self):
         opening = getattr(self, "opening", None)
@@ -2178,7 +2200,10 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         self.level_map.align_catch(motion.room, motion.row, state, self.frames[state.action])
         return True
 
-    def advance_terrain(self, old_x, old_bounds=None):
+    def advance_terrain(self, old_x, old_bounds=None, defer_entry=False):
+        """The Prince's terrain step. With defer_entry a room cut leaves
+        the opponents in the room he is leaving until finish_room_entry,
+        which the frame calls after the combat phase (see that method)."""
         self.jump_descent_frame = None
         motion = getattr(self, "terrain_motion", None)
         if motion is None or self._opening_active():
@@ -2241,8 +2266,9 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
             self.room_id = motion.room
             room = self.level_renderer.enter_room(self.room_id, self.game.caverns)
             self.background, self.foreground = room.background, room.foreground
-            self.combat.enter_room(self.room_id, motion.row)
-            environment_for(self).entered_room()
+            self.pending_room_entry = (old_room, self.room_id)
+            if not defer_entry:
+                self.finish_room_entry()
             self.status.set(self.screen_label(self.room_id))
         self.combat.player.row = motion.row
         for event in events:
@@ -2411,6 +2437,17 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
             combat.world_frame += 1
             combat.last_guard_at = time.perf_counter()
             return
+        pending = getattr(self, 'pending_room_entry', None)
+        if pending is not None:
+            # The crossing frame's opponent pass belongs to the room left
+            # (finish_room_entry); the cut follows the combat phase.
+            with combat.leaving_room(pending[1]):
+                events = self._combat_pass(combat, old_x)
+        else:
+            events = self._combat_pass(combat, old_x)
+        self._combat_events(combat, events)
+
+    def _combat_pass(self, combat, old_x):
         if combat.choose_player_bump(old_x):
             motion = getattr(self, 'terrain_motion', None)
             if motion is not None:
@@ -2424,9 +2461,11 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
             self.action = self.sequence_state.action
             self.player_x = self.sequence_state.target_x
             self.status.set("Blocked by opponent")
-        events = combat.step(
+        return combat.step(
             time.perf_counter(), self.current_animation_interval_ms() / 1000,
         )
+
+    def _combat_events(self, combat, events):
         songs = getattr(combat, 'final_songs', None)
         if songs:
             if getattr(self, 'audio', None) is not None:

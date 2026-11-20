@@ -292,3 +292,34 @@ Every move was behaviour-identical and passed full discovery
 flip controls (part of the key handling), the cavern gate presentation
 timer (Tk scheduling) and per-level loading/saves. `scene_prototype.py`
 went from 4,323 to 3,606 lines; `environments.py` has about 950.
+
+## Room Crossing: The Room Left Moves First (2026-11-20)
+
+The frame in which the Prince crosses an edge is an ordinary world update
+(2:62e6 returns 0; only -1 and the frozen 1 take 2:62c4): the Prince's
+step leaves his X (or Y) outside the room, and -0x4fc2 still names the
+room he is leaving while the opponent pass 2:626c -> 2:648c, TestStrike
+6:57b2, CheckStab 6:5092, AddSFX, CheckAlert 2:6b46, the environment hook
+2:7124 and ChangeMeters run. Only then CutAllOpponents 6:4382 calls CutChar
+6:4918 for the Kid (X +/-510 at 6:489a/48ba, Y +/-360 at 6:48da/48f2; it
+sets -0x4fc4) and cuts the opponents following him (6:4476), and PrepCut
+2:532c-5394 switches -0x4fc2 and runs InitOpps for the new room. CheckOppGenPts
+(step 3, before the Prince) and the opponent pass therefore reach the new
+room's records first in the next frame.
+
+The port entered the new room in its terrain phase, so the crossing frame
+stepped, alerted and generated the new room's opponents instead, against
+the rebased Prince, and the room left's opponents lost that frame (their
+cut and the skeleton entry settle read their pose before it). Now
+`advance_terrain` only records the entry (`pending_room_entry`); the combat
+phase runs on the room left with the Prince shown in its terms
+(`CombatEncounter.leaving_room`: X -/+510 or row +/-3, restored with
+whatever the pass did to him), and `finish_room_entry` then calls
+`CombatEncounter.enter_room` and the environment's `entered_room`. The
+scene's drawing state (room, backdrop) still changes in the terrain phase.
+`tests.test_frame_phases.RoomCrossingTickTests` fails on the old order.
+
+Still different: the port's `environment` and `harbor` phases (the hook
+2:7124) run after the entry, natively before the cut; level 5's bridge hook
+reloading slot 0's frame after the pass (14 crossings in the native probe)
+is the visible case.

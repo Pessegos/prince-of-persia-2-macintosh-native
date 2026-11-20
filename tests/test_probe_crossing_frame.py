@@ -29,10 +29,20 @@ class NativeCrossingFrameTests(unittest.TestCase):
         phases = {key.split()[1] for key in result['sources']}
         self.assertLessEqual(phases, {'prince_step', 'opponent_pass'})
         self.assertTrue(any(key.startswith('opponent') for key in result['sources']))
-        # The port's rule agrees except where the opponent's pose advanced in
-        # the crossing frame itself (the port has not stepped it yet).
-        self.assertGreater(result['port']['agree'], 20)
-        self.assertLessEqual(set(result['port']), {'agree', 'pose_advanced_in_frame'})
+        # The port's rule, on the room left's opponents after their pass (the
+        # port steps them before the cut since 2026-11-20), agrees everywhere.
+        self.assertEqual(result['port']['agree'], counts['crossings'])
+        self.assertLessEqual(set(result['port']), {'agree', 'before_pass_agree', 'before_pass_differs'})
+
+    def test_their_poses_before_the_pass_are_rejected(self):
+        # The earlier tick order entered the new room before the opponent
+        # pass, so the rule read the room left's poses of the frame before.
+        # Level 3, native room 1, 12 pixels inside each edge.
+        from tools.probe_crossing_frame import run_probe
+
+        result = run_probe(RECOVERY, rooms={(3, 1)}, levels=(3,), distances=(12,))
+        self.assertEqual(result['port']['agree'], result['counts']['crossings'])
+        self.assertGreater(result['port'].get('before_pass_differs', 0), 0)
 
     def test_the_prince_frame_on_every_crossing_is_rejected(self):
         from pop2.combat import CombatEncounter
@@ -41,8 +51,8 @@ class NativeCrossingFrameTests(unittest.TestCase):
         # Before 2026-11-20 the heap settle always used the Prince's frame.
         with patch.object(CombatEncounter, '_last_loaded_opponent_frame', lambda self, actors: None):
             result = run_probe(RECOVERY, **SCOPE)
-        self.assertGreater(sum(v for k, v in result['port'].items() if k != 'agree'),
-                           result['port'].get('agree', 0))
+        port = {k: v for k, v in result['port'].items() if not k.startswith('before_pass')}
+        self.assertGreater(sum(v for k, v in port.items() if k != 'agree'), port.get('agree', 0))
 
 
 if __name__ == '__main__':

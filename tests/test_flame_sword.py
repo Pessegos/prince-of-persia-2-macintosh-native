@@ -338,8 +338,9 @@ class LevelTwelveFlameSwordTests(unittest.TestCase):
         self.tick(12)
         self.assertEqual((sword.state.action, sword.flame_sword.timer > 400), (213, True))
         sword.state.target_x = sword.state.current_x = 505
-        combat.enter_room(11, 0)
-        combat.player.state.target_x = combat.player.state.current_x = 40
+        # The scene enters room 12 with it (a combat-only entry left the
+        # scene in room 7, where the Prince walked off to its left).
+        self.scene.jump_to_room(11, row=0, x=40, reset_guards=False)
         self.assertEqual((sword.room, sword.state.target_x, sword.flame_sword.timer), (11, -5, 0))
         self.assertIn(sword, combat.guards)
         life = combat.player.life

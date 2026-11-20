@@ -107,7 +107,12 @@ Prince (2:6386); the port now settles with it (`entry_frame`).
 Executed natively the same day (`tools/probe_crossing_frame.py`): 5,914
 crossings agree on the order; level 5's bridge hook reloads slot 0 after
 the pass; the port's pre-advance pose differs in 1,661 frames without
-changing any of 2,008 native heap settles.
+changing any of 2,008 native heap settles. That difference was the
+port's tick order: it entered the new room in the terrain phase, before the
+opponent pass. Since 2026-11-20 the crossing frame steps the room left's
+opponents first (`ScenePrototype.finish_room_entry`,
+`CombatEncounter.leaving_room`); rerun, the rule on the post-pass poses
+agrees in 5,809 of 5,914 crossings (pre-pass 4,239).
 
 Initial-record inventory: all eight level-three skeletons have a nonempty
 left anchor cell, so this initialization branch is inactive for those fixed

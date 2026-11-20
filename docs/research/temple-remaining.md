@@ -74,7 +74,10 @@ supplied life. Each defect found gets its own trace, fix and regression.
   life 12 supplied) found a 15-macro route from a fresh load that slips past
   the room-11 birdhead, which follows into room 8; it costs six life points,
   and with the three of a level loaded alone he dies in room 11.
-  `LEVEL_10_HOSTILE` in `tests.test_temple_routes`. Open: the route's leap
+  `LEVEL_10_HOSTILE` in `tests.test_temple_routes`. Searched again
+  2026-11-20 after the crossing frame began stepping the room left first:
+  an 11-macro route that costs two life points and also finishes with three.
+  The trace below is of the earlier route. Open: the route's leap
   from X 395 lands at 622, past the birdhead (570-624). **Traced 2026-11-16**: the
   birdhead (actor 2, SEQS 58) is in a pose with animation state 5 on the
   frame the running jump comes in reach, and FrameAdv 2:6caa skips the
@@ -89,7 +92,10 @@ supplied life. Each defect found gets its own trace, fix and regression.
   supplied) found a 50-macro route to the stairway; with the altar's
   birdhead woken by three steps (`wake`, then `runR5` back east) instead of
   the supplied fixture, it still finishes. With three life points he dies
-  in native room 7. `LEVEL_13_HOSTILE`. The search showed a fixture fault:
+  in native room 7. `LEVEL_13_HOSTILE` (searched again from the altar
+  room on, 2026-11-20, after the crossing-frame order change: the first
+  three steps wake the birdhead, which wounds him, and three more bring the
+  death and the flame). The search showed a fixture fault:
   `altar` left the scene peaceful, so a hostile replay through it ran its
   second half without opponents; it now restores the mode.
   `tests.test_temple_routes`.

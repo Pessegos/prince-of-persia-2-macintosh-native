@@ -401,13 +401,12 @@ class SkeletonTests(unittest.TestCase):
                     s.horizontal_key(None, 1, False)
                     break
             self.assertEqual(s.room_id, 16)
-            # InitOpps clears a reloaded heap's timer before this room's
-            # proximity pass; it can already have started rising on the cut.
+            # The crossing frame's opponent pass is room 14's (FrameAdv
+            # 2:626c before PrepCut 2:629a); InitOpps clears the reloaded
+            # heap's timer, so it rises in the first frame of room 16.
+            self.assertFalse(actor.alive)
+            RooftopSceneTests.tick(self)
             self.assertTrue(actor.alive)
-            for _ in range(50):
-                RooftopSceneTests.tick(self)
-                if actor.alive:
-                    break
         self.assertEqual((s.room_id, actor.room, actor.skeleton.phase), (16, 16, 'rising'))
         self.assertIs(s.combat.guard, actor)
         self.assertIs(s.combat.health_opponent(), actor)

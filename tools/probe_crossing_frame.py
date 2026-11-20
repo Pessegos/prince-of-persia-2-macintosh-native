@@ -18,8 +18,10 @@ Checked at each crossing: (1) the last LoadFrame 4:2a8e before InitOpps ran
 inside the Prince's step 2:62e6 or the opponent pass 2:648c, and every write
 to the loaded-frame words after it belongs to that call; (2) nothing writes
 them between InitOpps and SkelAddOpponent; (3) the port rule, run on the
-native opponents of the room left (slot order, their poses before the
-frame), picks the same frame words that InitOpps sees; (4) where it does
+native opponents of the room left (slot order, their poses once the pass
+has run, as the port now steps them before the cut), picks the same frame
+words that InitOpps sees; the same rule on their poses before the frame
+(the port's earlier tick order) is counted as `before_pass_*`; (4) where it does
 not and a heap settles, the original 4:198a is run again with the port's
 words (tools.probe_skeleton_settle) to see whether the heap's X or SEQS
 changes. Rooms are run with their LEVL records and again with each of the
@@ -134,7 +136,10 @@ class NativeCrossing(RecordedSimulation):
             caller = self.long(sp + 4) if self.long(sp) == 0x42a76 else self.long(sp)
             working = struct.unpack('>31h', cpu.mem_read(self.A5 - 0x5056, 62))
             record = (struct.unpack('>19h', cpu.mem_read(self.long(sp + 4), 38))
-                      if name == 'settle' else None)
+                      if name == 'settle' else
+                      # The room left's slots once the opponent pass has run.
+                      [struct.unpack('>31h', cpu.mem_read(self.A5 + SLOTS + 62 * i, 62)) for i in range(5)]
+                      if name == 'pass_done' else None)
             self.events.append((name, caller, working[0], working[4], working[5], self.cache(), record))
             return
         super().hook(cpu, address, size, user)
@@ -278,10 +283,10 @@ def opponents(sim, level_address, native_room):
     return [dict(slot=i, actor=s[4], pose=s[5], facing=s[1], x=s[2], y=s[3]) for i, s in enumerate(slots)]
 
 
-def port_frame(art, kid_frames, before, kid_pose):
+def port_frame(art, kid_frames, slots, kid_pose):
     """The production rule on the native opponents of the room left."""
     actors = [SimpleNamespace(state=SimpleNamespace(actor_type=o['actor'], action=o['pose']))
-              for o in before]
+              for o in slots]
     record = CombatEncounter._last_loaded_opponent_frame(SimpleNamespace(guard_art=art), actors)
     if record is None:
         record = kid_frames[kid_pose]
@@ -350,9 +355,18 @@ def run_case(sim, snapshot, level_address, number, native_room, row, x, facing, 
             return dict(level=number, start=(native_room, row, x, facing), frame=index,
                         failure=result['error'], room=room, extra=extra)
         kid_pose = result['kid_pose']
+        # Since 2026-11-20 the port, like FrameAdv, steps the room left's
+        # opponents before the cut (ScenePrototype.finish_room_entry), so
+        # its rule reads their poses after the pass; `before_pass` is the
+        # earlier order's input, kept to show that it is rejected.
+        passes = [event[6] for event in sim.events[:[e[0] for e in sim.events].index('initopps')]
+                  if event[0] == 'pass_done']
+        after = ([dict(slot=i, actor=s[4], pose=s[5], facing=s[1], x=s[2], y=s[3])
+                  for i, s in enumerate(passes[-1][:len(before)])] if passes else before)
         result.update(level=number, left=room, entered=sim.word(sim.A5 - 0x4fc2), frame=index,
-                      start=(native_room, row, x, facing), opponents=before,
-                      port=port_frame(art, kid_frames, before, kid_pose))
+                      start=(native_room, row, x, facing), opponents=after, before=before,
+                      port=port_frame(art, kid_frames, after, kid_pose),
+                      before_pass=port_frame(art, kid_frames, before, kid_pose))
         return result
     return dict(level=number, start=(native_room, row, x, facing), crossing=None)
 
@@ -416,6 +430,8 @@ def run_probe(source, *, rooms=None, distances=EDGE_DISTANCES, levels=LEVELS):
                                     raise AssertionError(('settle cache changed', result))
                             native = result['cache'][2], result['cache'][4]
                             agree = native == tuple(result['port'])
+                            port['before_pass_' + ('agree' if native == tuple(result['before_pass'])
+                                                   else 'differs')] += 1
                             kind = 'agree' if agree else classify(result)
                             port[kind] += 1
                             phases[f"{kind} | {result['phase']} {result['site']}"] += 1
