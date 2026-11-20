@@ -1389,6 +1389,10 @@ def pressure_drawing_commands(commands, records, phases, resources):
             key = (source[0], 3591, *source[7:10])
         if source[1] in (4052, 4053, 4064):
             key = (source[0], 4051, *source[7:10])
+        # A slot drawing one SHAP twice keys each command by its X and tile
+        # row too (tools/extract_pressure_plates.keyed_commands).
+        if key + (source[2], source[5]) in overrides:
+            key = key + (source[2], source[5])
         item = overrides.get(key)
         if item is None:
             result.append(source)
@@ -1679,7 +1683,7 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
         commands = with_scythe(commands, patch['commands'])
     if retouched:
         commands = retouched_room_commands(level_number, room_id, commands)
-    gate_cells = {tuple(key[-2:]) for record in records if record['kind'] == 4
+    gate_cells = {tuple(key[3:5]) for record in records if record['kind'] == 4
                   for key in record['commands']}
     background = Image.new('RGBA', (510, 365))
     foreground = Image.new('RGBA', background.size)

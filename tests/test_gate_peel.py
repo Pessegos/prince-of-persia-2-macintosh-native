@@ -67,8 +67,9 @@ class NativeGatePeelTests(unittest.TestCase):
         self.assertEqual(report['cases'], {})
         self.assertEqual((totals['missing_pixels'], totals['extra_pixels']), (0, 0))
         self.assertGreater(totals['peeled'], 0)
-        # 12:4's gate 4:0 shares cell 0's pressure key with room 1's 1:9.
-        self.assertEqual(totals['shared_slot_states'], 8)
+        # 12:4's gate 4:0 shares cell 0's slot with room 1's 1:9; only an
+        # import from before X/row keys leaves its states out.
+        self.assertIn(totals.get('old_export_states', 0), (0, 8))
         # The port's crush keeps the row's stones in front; the original
         # repeats only the gate cell's front pieces (3:2922).
         self.assertGreater(totals['crushed_port_pixels'], totals['crushed_native_pixels'])
@@ -80,8 +81,42 @@ class NativeGatePeelTests(unittest.TestCase):
             report = run_probe(RECOVERY, levels=(10,), rooms={(10, 8)})
         self.assertGreater(report['totals']['missing_pixels'], 0)
 
+    def test_each_gate_moves_only_its_own_stones(self):
+        # 12:4's cell 0 and 11:8's slot each draw two gates' SHAP 3576.
+        from tools.probe_gate_peel import run_drawing_probe
 
-@unittest.skipUnless(TEMPLE_IMPORTED, 'Imported temple artwork required')
+        report = run_drawing_probe(RECOVERY, levels=(11, 12), rooms={(11, 8), (12, 4)})
+        self.assertEqual(report['cases'], {})
+        self.assertGreater(report['totals']['states'], 0)
+        if not report['totals'].get('old_export_states'):
+            self.assertEqual(report['totals']['states'], 48)
+
+
+class SharedSlotKeyTests(unittest.TestCase):
+    # Level 12 room 4's cell 0 slot: its own gate's stone and the left room's.
+    OWN = ['back', 3576, 50, 235, 16, 0, [0, 50, 120, 80], 4, 0, 0]
+    LEFT = ['back', 3576, -1, 235, 16, 0, [0, 0, 120, 29], 4, 0, 0]
+
+    def test_a_slot_drawing_a_shape_twice_keys_each_by_x_and_row(self):
+        from tools.extract_pressure_plates import command_key, keyed_commands
+
+        key = command_key(self.OWN)
+        self.assertEqual(set(keyed_commands([self.OWN, self.LEFT], {key})),
+                         {key + (50, 0), key + (-1, 0)})
+        self.assertEqual(set(keyed_commands([self.OWN], set())), {key})
+
+    def test_a_gate_moves_only_the_stone_of_its_own_key(self):
+        from pop2.caverns import pressure_drawing_commands
+
+        shape = {'data': bytes(4) + (30).to_bytes(2, 'big') + (126).to_bytes(2, 'big')}
+        records = [{'room': 4, 'cell': 0, 'kind': 4, 'foreground': 0,
+                    'commands': [['back', 3576, 4, 0, 0, 50, 0]]}]
+        own, left = pressure_drawing_commands([self.OWN, self.LEFT], records, (10,), {'SHAP': {3576: shape}})
+        self.assertEqual(own[3], 235 - 20)
+        self.assertEqual(left, self.LEFT)
+
+
+@unittest.skipUnless(TEMPLE_IMPORTED,'Imported temple artwork required')
 class TempleGateSceneTests(unittest.TestCase):
     def test_a_half_open_temple_gate_stays_in_front_of_the_head(self):
         from tests.test_terrain import RooftopSceneTests

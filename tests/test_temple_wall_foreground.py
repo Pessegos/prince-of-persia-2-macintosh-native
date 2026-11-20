@@ -168,6 +168,18 @@ class NativeForegroundCellTests(unittest.TestCase):
         self.assertEqual(report['totals']['states'], 9)
         self.assertEqual(report['cases'], {})
 
+    def test_two_units_at_once_and_crevices_revealed_on_screen(self):
+        # 10:11's two loose floors moving together; 8:1's crevice runs
+        # revealed while the room is shown (their cells redrawn).
+        from tools.probe_foreground_cells import pair_states, run_variant_probe
+
+        self.assertEqual([label for label, _states in pair_states([2, 4, 1])],
+                         ['0=1,1=1', '0=1,1=3'])
+        report = run_variant_probe(RECOVERY, levels=(10,), rooms={(10, 11)}, pairs=True)
+        self.assertEqual((report['totals']['states'], report['cases']), (2, {}))
+        report = run_variant_probe(RECOVERY, levels=(8,), rooms={(8, 1)}, revealed=True)
+        self.assertEqual((report['totals']['states'], report['cases']), (2, {}))
+
     def test_the_masks_at_rest_are_rejected_for_rooms_in_motion(self):
         import tools.probe_foreground_cells as probe
 

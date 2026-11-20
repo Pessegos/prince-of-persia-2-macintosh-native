@@ -33,10 +33,16 @@ port keeps the stones of his row in front during its DOS-inspired crush
 presentation (`pop2.gate_crush`, sequence 118): a deliberate exception,
 counted apart (`crushed_*`), not a failure.
 
-Level 12 room 4 is excluded while its gate 4:0 moves (`SHARED_SLOT`): cell
-0's slot draws that gate's stone and the left room's (1:9) with the same
-pressure key (layer, shape, library, slot), so the export binds both to
-4:0 and the probe's one-gate-at-a-time state moves the left stone too.
+`--drawing` compares the gates' own back pieces instead: for every gate
+state above, the port's `pressure_drawing_commands` against the original
+room drawn with those level words (stones on screen: shape, X, bottom and
+visible clip). One slot can draw a stone twice: level 12 room 4's cell 0
+draws its gate's stone and the left room's (1:9), level 11 rooms 8 and 9 a
+row-2 gate's and the room below's (3:9). Earlier imports keyed both by
+(layer, shape, library, slot), so the second stone moved with the first
+and had no record of its own; the export now adds X and tile row to such a
+key. With an earlier import those gates' states are counted apart
+(`old_export_states`), not compared.
 
 Both sides use the port's SHAP alpha. Not covered: the opponents' branch
 (3:2768-283c, which looks up the next slot's type word in the object
@@ -62,8 +68,15 @@ from tools.probe_foreground_cells import SIZE, pressure_phase, pressure_states, 
 LEVELS = tuple(number for number in sorted(n for numbers in SCENERY_LEVELS.values() for n in numbers)
                if number <= 13)
 SCREEN = (0, 0, 365, 510)
-# (level, room, gate room, gate cell) whose moving states are excluded.
-SHARED_SLOT = {(12, 4, 4, 0)}
+# (level, room, gate room, gate cell): a gate whose stone shares its slot's
+# key with another's in imports before the X/row key, and the other gate.
+SHARED_SLOT = {(12, 4, 4, 0): (1, 9), (11, 8, 9, 29): (3, 9), (11, 9, 9, 29): (3, 9)}
+
+
+def old_export(number, room, record, records):
+    """An import from before shared slot keys carried X and tile row."""
+    other = SHARED_SLOT.get((number, room, record['room'], record['cell']))
+    return other is not None and not any((r['room'], r['cell']) == other for r in records)
 
 
 def paint(commands, art):
@@ -148,8 +161,8 @@ def run_probe(source, levels=LEVELS, rooms=None, modes=False):
                                        for other, value in enumerate(rest))
                         states.append((record, word, phases))
                 for record, word, phases in states:
-                    if record is not None and (number, room, record['room'], record['cell']) in SHARED_SLOT:
-                        totals['shared_slot_states'] += 1
+                    if record is not None and old_export(number, room, record, records):
+                        totals['old_export_states'] += 1
                         continue
                     mutable = bytearray(level)
                     if record is not None:
@@ -191,14 +204,77 @@ def run_probe(source, levels=LEVELS, rooms=None, modes=False):
                 executable_sha256=hashlib.sha256(executable).hexdigest(), scope=__doc__)
 
 
+def on_screen(commands, shapes):
+    return Counter((c[1], c[2], c[3], max(0, c[6][0]), max(0, c[6][1]), min(365, c[6][2]), min(510, c[6][3]))
+                   for c in commands if c[0] == 'back' and c[1] in shapes
+                   and max(0, c[6][0]) < min(365, c[6][2]) and max(0, c[6][1]) < min(510, c[6][3]))
+
+
+def run_drawing_probe(source, levels=LEVELS, rooms=None):
+    """Each gate's back pieces at rest and at a sample of heights, one gate
+    at a time: the port's pressure commands against the original room."""
+    from pop2.caverns import pressure_drawing_commands
+    from tools.extract_pressure_plates import CHANGED_SHAPES
+
+    directory = Path(source) / 'resource_forks'
+    executable = (directory / 'Prince of Persia 2.bin').read_bytes()
+    prince = (directory / 'Prince.rsrc.bin').read_bytes()
+    totals, results = Counter(), {}
+    for number in levels:
+        if not scenery_available(number):
+            continue
+        level = probe_level(number, prince)
+        environment = struct.unpack_from('>H', level, 0x2186)[0]
+        shapes = set(CHANGED_SHAPES[environment][4])
+        scenery = (directory / f'{scenery_resource(number)}.bin').read_bytes()
+        if number in SCENERY_LEVELS[2]:
+            # Level 13 room 4 draws Kid.rsrc SHAP 4077 (extract_caverns KID_LIBRARY).
+            scenery = scenery, (directory / 'Kid.rsrc.bin').read_bytes()
+        program = room_assets(number, 0)[0]
+        with CavernRecovery(executable, scenery, prince) as machine:
+            for room in probed_rooms(number, program, rooms):
+                records = program.get('pressure_plates', {}).get('rooms', {}).get(str(room), ())
+                if not any(record['kind'] == 4 for record in records):
+                    continue
+                resources = room_assets(number, room)[1]
+                commands = program['rooms'][str(room)]
+                commands = commands['commands'] if isinstance(commands, dict) else commands
+                rest = [pressure_phase(record['kind'], record['foreground']) for record in records]
+                for index, record in enumerate(records):
+                    if record['kind'] != 4:
+                        continue
+                    if old_export(number, room, record, records):
+                        totals['old_export_states'] += len(pressure_states(record))
+                        continue
+                    for word in pressure_states(record):
+                        mutable = bytearray(level)
+                        struct.pack_into('>H', mutable, 0x780 + record['room'] * 120 + record['cell'] * 4, word)
+                        phases = tuple(pressure_phase(4, word) if other == index else value
+                                       for other, value in enumerate(rest))
+                        port = on_screen(pressure_drawing_commands(commands, records, phases, resources), shapes)
+                        native = on_screen(recover_room(executable, scenery, bytes(mutable), room, prince,
+                                                        _machine=machine)['commands'], shapes)
+                        totals['states'] += 1
+                        if port != native:
+                            totals['different_states'] += 1
+                            results[f"{number}:{room}:{record['room']}:{record['cell']}={phases[index]}"] = dict(
+                                port=[list(key) for key in port - native],
+                                native=[list(key) for key in native - port])
+    return dict(totals=dict(totals), cases=results, executable_sha256=hashlib.sha256(executable).hexdigest(),
+                scope=__doc__)
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source', type=Path, required=True, help='The original recovery folder')
     parser.add_argument('--output', type=Path)
     parser.add_argument('--level', type=int, action='append', help='Only these levels (repeatable)')
     parser.add_argument('--modes', action='store_true', help='Also modes 0-7 and the crushed actions')
+    parser.add_argument('--drawing', action='store_true', help="The gates' own back pieces per state")
     args = parser.parse_args()
-    report = run_probe(args.source, tuple(args.level) if args.level else LEVELS, modes=args.modes)
+    levels = tuple(args.level) if args.level else LEVELS
+    report = (run_drawing_probe(args.source, levels) if args.drawing
+              else run_probe(args.source, levels, modes=args.modes))
     text = json.dumps(report, indent=1) + '\n'
     if args.output is not None:
         args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -206,5 +282,5 @@ if __name__ == '__main__':
     print(json.dumps(report['totals']))
     for key, cases in report['cases'].items():
         print(key, cases[:6], f'... {len(cases)}' if len(cases) > 6 else '')
-    if report['totals'].get('missing_pixels') or report['totals'].get('extra_pixels'):
+    if any(report['totals'].get(key) for key in ('missing_pixels', 'extra_pixels', 'different_states')):
         raise SystemExit(1)

@@ -217,8 +217,24 @@ def variant_arguments(record, states):
     return arguments
 
 
-def run_variant_probe(source, levels=LEVELS, rooms=None, units=None):
-    """Each slot unit's other states, one at a time, the other units at rest."""
+def pair_states(counts):
+    """Two units moving at once: for every pair, each unit's first and last
+    moving state, the other units at rest."""
+    for first in range(len(counts)):
+        for second in range(first + 1, len(counts)):
+            for a in sorted({1, counts[first] - 1}):
+                for b in sorted({1, counts[second] - 1}):
+                    if 0 < a < counts[first] and 0 < b < counts[second]:
+                        states = [0] * len(counts)
+                        states[first], states[second] = a, b
+                        yield f'{first}={a},{second}={b}', states
+
+
+def run_variant_probe(source, levels=LEVELS, rooms=None, units=None, pairs=False, revealed=False):
+    """Each slot unit's other states, one at a time, the other units at rest
+    (or, with `pairs`, two units at once: `pair_states`). With `revealed`,
+    only crevice runs, revealed while the room was on screen (`redrawn`):
+    the covered drawing plus their cells' redraw."""
     from functools import partial
 
     from tools.extract_slots import room_renderer, slot_context
@@ -245,20 +261,28 @@ def run_variant_probe(source, levels=LEVELS, rooms=None, units=None):
                 exported = program.get('loose_floors', {}).get('rooms', {}).get(str(room), {})
                 if exported.get('cells') != record['cells']:
                     raise AssertionError(f'Level {number} room {room}: the export has other slot cells')
-                for unit, count in enumerate(counts):
-                    if units is not None and unit not in units:
-                        continue
-                    for state in range(1, count):
-                        states = [0] * len(counts)
-                        states[unit] = state
-                        room_art = cavern_room(room, animated=True, level_number=number,
-                                               **variant_arguments(record, states))
-                        totals['states'] += 1
-                        cases = compare_room(machine, (executable, scenery, prince),
-                                             render.scene_level(tuple(states)), number, room,
-                                             room_art, totals, digest)
-                        if cases:
-                            results[f'{number}:{room}:{unit}={state}'] = cases
+                if revealed:
+                    cases_of = ((f'{unit}={state}r', [0] * unit + [state] + [0] * (len(counts) - unit - 1))
+                                for unit in record.get('crevices', ()) for state in range(1, counts[unit]))
+                elif pairs:
+                    cases_of = pair_states(counts)
+                else:
+                    cases_of = ((f'{unit}={state}', [0] * unit + [state] + [0] * (len(counts) - unit - 1))
+                                for unit, count in enumerate(counts)
+                                if units is None or unit in units for state in range(1, count))
+                for label, states in cases_of:
+                    arguments = variant_arguments(record, states)
+                    if revealed:
+                        unit = int(label.split('=')[0])
+                        arguments['redrawn'] = frozenset(tuple(record['cells'][index])
+                                                         for index in record['units'][unit])
+                    room_art = cavern_room(room, animated=True, level_number=number, **arguments)
+                    totals['states'] += 1
+                    cases = compare_room(machine, (executable, scenery, prince),
+                                         render.scene_level(tuple(states)), number, room,
+                                         room_art, totals, digest)
+                    if cases:
+                        results[f'{number}:{room}:{label}'] = cases
     return dict(totals=dict(totals), cases=results, native_sha256=digest.hexdigest(),
                 executable_sha256=hashlib.sha256(executable).hexdigest(), scope=__doc__)
 
@@ -336,11 +360,18 @@ if __name__ == '__main__':
     parser.add_argument('--level', type=int, action='append', help='Only these levels (repeatable)')
     parser.add_argument('--variants', action='store_true',
                         help="Each slot unit's other states (loose floors, scythes, planks, door)")
+    parser.add_argument('--pairs', action='store_true',
+                        help='With --variants: two units at once (first and last state of each)')
+    parser.add_argument('--revealed', action='store_true',
+                        help='With --variants: crevice runs revealed on screen')
     parser.add_argument('--pressure', action='store_true',
                         help="Each trigger target's other phases (gates, exits, plates, bars, darts)")
     args = parser.parse_args()
-    probe = run_variant_probe if args.variants else run_pressure_probe if args.pressure else run_probe
-    report = probe(args.source, tuple(args.level) if args.level else LEVELS)
+    levels = tuple(args.level) if args.level else LEVELS
+    if args.variants:
+        report = run_variant_probe(args.source, levels, pairs=args.pairs, revealed=args.revealed)
+    else:
+        report = (run_pressure_probe if args.pressure else run_probe)(args.source, levels)
     text = json.dumps(report, indent=1) + '\n'
     if args.output is not None:
         args.output.parent.mkdir(parents=True, exist_ok=True)

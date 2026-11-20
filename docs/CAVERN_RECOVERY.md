@@ -516,7 +516,7 @@ column or the one before it, not in modes 2/6, and draws the stone in mode
 starts one pixel further left (3:2892-28a0). Over every gate room of levels
 3-13, at rest and at a sample of each gate's heights, with the Kid in six
 columns around each gate and in modes 0-7, the port's covers now match all
-17,756 states pixel for pixel. The temple had none: its stone, SHAP 3576,
+18,692 states pixel for pixel. The temple had none: its stone, SHAP 3576,
 sits on the tile's right edge (x = column * 51 + 50), not a column further
 right, so the port only looked for the cave and ruins shapes; a turban next
 to a half-open temple gate went over its bars. A gate in the last column has
@@ -527,9 +527,20 @@ instead, which in the caves only repeats the gate cell's own front pieces
 crush keeps the row's stones in front on purpose. The opponents' branch
 (3:2768-283c, only when the Kid does not match, and it looks up the next
 slot's type word as the object index) and several characters at once are
-not compared. Level 12 room 4's gate 4:0 is left out of the probe: cell 0's
-slot draws its stone and the left room's 1:9 stone with the same pressure
-key, so the export binds the left stone to 4:0 and has no record for 1:9.
+not compared.
+
+One drawing slot can draw a gate stone twice: level 12 room 4's (native 5)
+cell 0 draws its own gate's and the left room's 1:9 stone (X 50 and -1),
+and level 11 rooms 8 and 9 one slot draws a row-2 gate's and the room
+below's 3:9 (tile rows 2 and 3), all SHAP 3576. The pressure export keyed
+both by (layer, shape, library, slot), so the second stone moved with the
+first gate and had no record of its own. `keyed_commands` now adds X and
+tile row to a key a slot repeats, and `pressure_drawing_commands` looks
+that longer key up first. `probe_gate_peel.py --drawing` compares every
+gate's back pieces in each sampled state with the original room drawn from
+those level words: 952 states of levels 3-13, none different (an earlier
+import's three shared gates are counted apart, not compared). The fix
+takes effect with a new import.
 
 The gate mask is keyed by the stone's actual tile, not the cell that
 requested its repaint. DrawCaveGateMovable (8:1f40) places SHAP:3563 one
@@ -616,13 +627,23 @@ export draws them from (`room_renderer`'s `scene_level`), and compares
 the native dirty cells with `cavern_room`'s masks for that state: 3,316
 states, 132,640 cells, none different. `--pressure` does the same for
 every trigger target (a sample of each gate's heights and exit's
-openings, every bar and dart phase, each plate pressed or released): 1,461
-states, 58,440 cells, none different. The masks at rest would miss 14,427
-pixels in 10:1's states alone. Not covered: two units moving at once (the
-export's slot composition is checked separately), crevice runs revealed
-on screen, CheckGateInFore's peel of a moving gate over an actor (now
-`tools/probe_gate_peel.py`, above), falling
-slabs and the animated torches and fangs. Both sides use the port's SHAP
+openings, every bar and dart phase, each plate pressed or released): 1,485
+states, 59,400 cells, none different (with the shared gate stones'
+records below). The masks at rest would miss 14,427
+pixels in 10:1's states alone. `--variants --pairs` moves two units at
+once (each one's first and last moving state, the others at rest): 2,099
+states, none different. `--variants --revealed` draws each crevice run
+revealed while the room is on screen (the covered drawing plus its cells'
+redraw, `redrawn`): 28 states, none different. CheckGateInFore's peel of a
+moving gate is `tools/probe_gate_peel.py`, above. Not covered: falling
+slabs (the port hides 154 pixels of front rims in 10:19 that the original,
+clipping each marked cell to the slab's MOB rectangle, shows). The
+animated torches (levels 3-5 and the temple's) and level 14's fangs need
+no front check: every one of their exported commands is in the back pass
+(DrawCaveTorch 8:2ae8, DrawTempTorch 10:1196), so no dirty cell redraws
+them over a character. Of the flasks the front pass draws, only level 14
+room 7's (SHAP 3001) lies under a later front piece, 3 pixels of SHAP
+4179 that the port's item layer draws the flask over. Both sides use the port's SHAP
 alpha; QuickFloor's DrawFloorBuf/DrawHalf and the marking rectangle
 itself are outside the probe.
 

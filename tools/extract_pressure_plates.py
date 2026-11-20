@@ -27,6 +27,17 @@ def command_key(command):
     return command[0], shape, *command[7:10]
 
 
+def keyed_commands(commands, shared):
+    """{key: command}; a key in `shared` (one slot drawing a SHAP more than
+    once) also carries the command's X and tile row, which a gate's height
+    does not change. In level 12 room 4 (native 5) cell 0's slot draws its
+    own gate's stone and the left room's (X 50 and -1); in level 11 rooms 8
+    and 9 one slot draws a row-2 gate's stone and the room below's (rows 2
+    and 3), all SHAP 3576."""
+    return {(key + (command[2], command[5]) if key in shared else key): command
+            for key, command in ((command_key(command), command) for command in commands)}
+
+
 def pressure_scenery(program, caverns, prince, level, base, progress=lambda _text: None, *, recover=None):
     from tools.extract_caverns import recover_room
     recover = recover or recover_room
@@ -46,6 +57,10 @@ def pressure_scenery(program, caverns, prince, level, base, progress=lambda _tex
                    and (tile.kind in (4, 5, 6, 27, 33, 34)
                         or tile.kind == 17 and tile.room != entry)}
         before = base['rooms'][str(room)]
+        places = {}
+        for command in before:
+            places.setdefault(command_key(command), set()).add((command[2], command[5]))
+        shared = {key for key, xs in places.items() if len(xs) > 1}
         records = []
         for source_room, cell in sorted(visible):
             tile = terrain.tile(source_room, cell % 10, cell // 10)
@@ -63,7 +78,7 @@ def pressure_scenery(program, caverns, prince, level, base, progress=lambda _tex
                          tile.foreground ^ 0x2000)
             struct.pack_into('>H', mutable, 0x780 + source_room * 120 + cell * 4, value)
             after = recover(program, caverns, bytes(mutable), room, prince)['commands']
-            old, new = {command_key(c): c for c in before}, {command_key(c): c for c in after}
+            old, new = keyed_commands(before, shared), keyed_commands(after, shared)
             if new.keys() - old.keys():
                 raise ValueError('Unexpected new pressure/gate drawing slot')
             keys = [key for key in old if old[key] != new.get(key)]
