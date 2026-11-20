@@ -167,6 +167,16 @@ hidden scene from the room-7 start at X 420 facing west:
   reads only the records of the Kid's room (a5-0x4fc2). The flaming sword
   now wakes only when the Prince is in its own room. (The skeleton's wake
   uses the same view; it was not changed here.)
+
+  *2026-11-20 correction:* this rule is a hypothesis, not recovered
+  behaviour. The user's Macintosh level-3 run shows a skeleton heap
+  rising in native room 15, meter and all, after the Prince has run into
+  room 17, which has no records, so the native does wake a side-room
+  record and the reading of 14f0-151e above is incomplete. Applying the
+  same rule to skeletons broke that video's behaviour and was dropped. The
+  sword keeps it because it removes the reported room-12 rise; a
+  Macintosh capture of a fallen sword left at room 7's edge while the
+  Prince stands in room 12 would settle it.
 - **The cut.** Port room changes carried only actors 2 and 4. In
   CutAllOpponents only the running-pose test (**6:44f2-4500**) is limited
   to them; the ALIVE/engaged/direction test (**4582-45fa**) applies to

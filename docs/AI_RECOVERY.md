@@ -569,7 +569,16 @@ delays. The final activation uses 88 and restores the record's full life.
 
 The existing side-room coordinate view lets shaking finish and activation
 begin while the Prince has already crossed into the adjacent room, provided
-the original row/range/path tests still pass. The health meter now selects
+the original row/range/path tests still pass. The user's Macintosh level-3
+run (2026-11-20 check) shows this: the Prince runs right over the native
+room-15 heap into room 17 before it visibly stirs; about seven frames after
+the cut the skeleton's three flasks appear, then its sword tip shows at
+room 17's left edge and stays there, the skeleton never crossing. A
+static reading of 4:14f0-151e (the wake loop counts the records of
+a5-0x4fc2's room, which has none in room 17) would forbid that rise, so
+that reading is incomplete; the side-room view is kept on video evidence
+and the mechanism that lets the native wake a side-room record is not
+recovered. The health meter now selects
 the nearest living actor in the current or horizontal side rooms using the
 original horizontal/vertical distance comparison described above,
 independently of the same-room sword-control target. Dormant bones have no
