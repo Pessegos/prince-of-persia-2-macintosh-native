@@ -10,7 +10,7 @@ column*51, 120 by 51) and the marked rectangle. So the scenery in front of a
 character is, cell by cell, what that cell's own redraw draws inside it.
 
 The port keeps the clean-cut export's front commands under the cell that
-drew them (`CavernRoom.actor_cell_occlusion`, unclipped) and unites the
+drew them (`CavernRoom.actor_cell_occlusion`, clipped to that cell) and unites the
 cells the character's rectangle covers. Here every room of the imported
 levels 3-14 is drawn by the original drawers again, one cell at a time in
 dirty-cell mode (`recover_room(cell_redraw=True)`: A5-4832 clear, the cell
@@ -20,9 +20,10 @@ clip), and compared, per cell, with the port's masks:
   With only that cell marked, the port shows the character there and the
   original hides him.
 - `bleed`: port pixels inside a cell that the cell's redraw does not draw,
-  by the neighbouring cell whose mask reaches into it. They hide a
-  character only when that neighbour is marked too; the original never
-  repaints them.
+  by the neighbouring cell whose mask reaches into it. The original never
+  repaints them over a character (the port clips each cell's mask to the
+  cell, `clip_cell_masks`).
+- `own_extra`: port pixels in a cell's own mask that its redraw does not draw.
 
 Both sides leave out what the port draws elsewhere: items and flames
 (libraries 0, 1, 5), level 3-5 torch frames and level 14's moving fangs
@@ -177,5 +178,5 @@ if __name__ == '__main__':
     print(json.dumps(report['totals']))
     for key, cases in report['cases'].items():
         print(key, cases)
-    if report['totals'].get('missing_pixels'):
+    if any(report['totals'].get(key) for key in ('missing_pixels', 'bleed_pixels', 'own_extra_pixels')):
         raise SystemExit(1)

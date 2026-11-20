@@ -46,6 +46,23 @@ class TempleWallFaceTests(unittest.TestCase):
         self.assertEqual(art.actor_mask(0, bounds=(270, 60, 300, 110)).getpixel((280, 80)), 0)
         self.assertEqual(art.actor_mask(0, bounds=(215, 60, 240, 110)).getpixel((220, 80)), 255)
 
+    def test_a_piece_reaching_into_the_next_column_does_not_hide_a_body_there(self):
+        # Level 12 room 8's statue: drawn from cell (3, 1), 5 px past X 204.
+        # The (3, 1) redraw is clipped to its cell (ComputeClipRect 5:0162).
+        commands = [['front', 3530, 160, 240, 16, 1, [125, 160, 245, 210], 4, 3, 1]]
+        program = {'version': 6, 'level': 12, 'rooms': {'8': commands}}
+        shapes = {3530: Image.new('RGBA', (50, 100), 'gray')}
+        with (patch('pop2.caverns.room_assets', return_value=(program, {}, {}, shapes)),
+              patch('pop2.caverns.loose_variant', return_value=None),
+              patch('pop2.caverns.temple_wall_redraws', return_value=frozenset())):
+            art = cavern_room(8, level_number=12)
+        mask = art.actor_mask(1, bounds=(194, 101, 231, 190))
+        self.assertEqual(mask.getpixel((203, 160)), 255)
+        # The unclipped masks hid the leg in column 4 as well.
+        self.assertEqual(mask.getpixel((206, 160)), 0)
+        self.assertEqual(art.actor_cell_occlusion[(3, 1)][1], (160, 140))
+        self.assertEqual(art.actor_cell_occlusion[(3, 1)][0].size, (44, 100))
+
     @unittest.skipUnless(TEMPLE_IMPORTED, 'Imported temple artwork required')
     def test_the_wall_cells_come_from_the_level_words(self):
         walls = temple_wall_redraws(10)
@@ -65,10 +82,10 @@ class NativeForegroundCellTests(unittest.TestCase):
         report = run_probe(RECOVERY, levels=(10, 11, 12, 13), rooms=self.ROOMS)
         self.assertEqual(report['totals']['cells'], 150)
         self.assertEqual(report['totals']['missing_pixels'], 0, report['cases'])
-        # A face whose right cell redraws the empty shape 3522 stays the
-        # clean cut's alone: the original never repaints it over a body.
-        self.assertEqual(report['cases']['12:30'], [
-            dict(cell=[3, 1], missing=0, bleed={'2,1': 5763}, own_extra=0)])
+        # Nor does a cell hide more: a face whose right cell redraws the
+        # empty shape 3522 (12:30) stays inside the left cell.
+        self.assertEqual(report['totals']['bleed_pixels'], 0, report['cases'])
+        self.assertEqual(report['cases'], {})
 
     def test_the_masks_without_the_right_column_redraw_are_rejected(self):
         from tools.probe_foreground_cells import run_probe

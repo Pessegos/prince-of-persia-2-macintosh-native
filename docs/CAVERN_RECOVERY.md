@@ -553,12 +553,16 @@ in such a cell, with the left cell unmarked, went over the wall's face.
 level words. `tools/probe_foreground_cells.py` runs the original drawers
 for every cell of levels 3-14 in dirty-cell mode against the port's
 masks: of 11,460 cells none draws a pixel the port's mask for that cell
-lacks (195,534 temple pixels without the rule). The port still hides
-57,163 pixels the original does not repaint: pieces a few pixels past
-their own cell (5-7 pixel pillar and arch rims in the ruins and temple)
-and three temple faces whose right cell redraws the empty SHAP 3522. They
-matter only when both cells are marked; on the six temple test routes six
-of 41,709 drawn characters lose at most 33 such pixels. Both sides use the
+lacks (195,534 temple pixels without the rule). Each cell's mask is also
+clipped to its own cell (`clip_cell_masks`, row 0 keeping its border rows):
+the unclipped masks hid 57,163 pixels the original never repaints, pieces a
+few pixels past their own cell (5-7 pixel pillar, statue and arch rims in
+the ruins and temple) and three temple faces whose right cell redraws the
+empty SHAP 3522; the user compared level 12 room 8's hanging Prince beside
+the statue and chose the original. With the clip the probe finds no pixel
+either way, and the six temple test routes draw all 41,709 characters with
+the same masks as the native per-cell redraw (six lost up to 33 pixels
+before). Both sides use the
 port's SHAP alpha, rooms at rest; the upper border row (MarkTop 5:16f2),
 QuickFloor's DrawFloorBuf/DrawHalf and the marking rectangle itself are
 outside the probe.

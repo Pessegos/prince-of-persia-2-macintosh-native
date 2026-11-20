@@ -417,14 +417,14 @@ class CavernDrawingTests(unittest.TestCase):
 
     def test_version_six_export_populates_draw_cell_occlusion(self):
         sprite = Image.new('RGBA', (3, 3), (200, 100, 30, 255))
-        command = ['front', 3501, 10, 20, 16, 0, [0, 0, 365, 510], 4, 2, 1]
-        next_command = ['front', 3502, 12, 20, 16, 0, [0, 0, 365, 510], 4, 2, 1]
+        command = ['front', 3501, 110, 140, 16, 0, [0, 0, 365, 510], 4, 2, 1]
+        next_command = ['front', 3502, 112, 140, 16, 0, [0, 0, 365, 510], 4, 2, 1]
         program = {'version': 6, 'level': 3, 'rooms': {'0': [command, next_command]}}
         with patch('pop2.caverns.cavern_assets',
                    return_value=(program, {}, {}, {3501: sprite, 3502: sprite})):
             art = cavern_room()
         cell_mask, position = art.actor_cell_occlusion[(2, 1)]
-        self.assertEqual((position, cell_mask.size), ((10, 17), (5, 3)))
+        self.assertEqual((position, cell_mask.size), ((110, 137), (5, 3)))
         self.assertEqual((cell_mask.getpixel((0, 0)), cell_mask.getpixel((4, 2))), (255, 255))
         self.assertNotIn((1, 1), art.actor_cell_occlusion)
 

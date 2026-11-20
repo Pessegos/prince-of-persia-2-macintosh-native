@@ -60,7 +60,10 @@ class CustomForegroundTests(unittest.TestCase):
     def test_ordinary_foreground_retains_cell_admission(self):
         art = self.art(custom=False)
         self.assertEqual(art.actor_mask(2, bounds=(410, 280, 445, 310)).getpixel((415, 295)), 0)
-        self.assertEqual(art.actor_mask(0, bounds=(459, 1, 480, 30)).getpixel((415, 295)), 255)
+        # The (9, 0) redraw is clipped to its own cell (ComputeClipRect
+        # 5:0162): its piece in column 8, row 2 hides nobody from there.
+        self.assertEqual(art.actor_mask(0, bounds=(459, 1, 480, 30)).getpixel((415, 295)), 0)
+        self.assertEqual(art.actor_mask(0, bounds=(459, 1, 480, 30)).getbbox(), None)
 
     def test_custom_mask_also_applies_to_legacy_exports_and_fallback_rows(self):
         art = replace(self.art(), actor_cell_occlusion=None)

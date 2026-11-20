@@ -810,6 +810,35 @@ def clipped_sprite(sprite, command):
     return sprite, (x, bottom - sprite.height)
 
 
+def clip_cell_masks(cell_masks):
+    """Each playfield cell hides a character only inside itself.
+
+    A marked cell's redraw (RedrawCell 3:1f04-1f30 -> DrawForeImg 3:2598)
+    is clipped to the cell by ComputeClipRect 5:0162 (row * 120 + 5,
+    column * 51, 120 by 51), so a piece reaching 5-7 pixels into the next
+    column never repaints over a character there. Row 0 keeps its upper
+    border rows (MarkTop 5:16f2 is not modelled); border cells are kept.
+    """
+    clipped = {}
+    for cell, (mask, (x, y)) in cell_masks.items():
+        column, row = cell
+        if 0 <= column < 10 and 0 <= row < 3:
+            top = 0 if row == 0 else row * 120 + 5
+            left, right, bottom = column * 51, (column + 1) * 51, (row + 1) * 120 + 5
+            box = (max(0, left - x), max(0, top - y),
+                   min(mask.width, right - x), min(mask.height, bottom - y))
+            if box[0] >= box[2] or box[1] >= box[3]:
+                continue
+            part = mask.crop(box)
+            inner = part.getbbox()
+            if inner is None:
+                continue
+            mask = part.crop(inner)
+            x, y = x + box[0] + inner[0], y + box[1] + inner[1]
+        clipped[cell] = mask, (x, y)
+    return clipped
+
+
 def merge_positioned_mask(existing, source, position):
     box = source.getbbox()
     if box is None:
@@ -1714,6 +1743,8 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
                     merged = merge_positioned_mask(cell_masks.get(cell), sprite.getchannel('A'), position)
                     if merged is not None:
                         cell_masks[cell] = merged
+    if cell_masks is not None:
+        cell_masks = clip_cell_masks(cell_masks)
     if (level_number, room_id) == HORSE_ROOM:
         # Drawn after the room's back pieces (3:23ca-23e2), before the front.
         sprite = horse_sprite()
