@@ -99,14 +99,17 @@ class Skeleton:
         if encounter._guard_tile(actor, column - 1).kind not in EMPTY_TILES:
             return 0
         # GetFCharX 4:3a72 reads the frame record already loaded (a5-0x520e/
-        # 0x520a). When opponents are created on room entry that is the
-        # Prince's current frame, not the heap's own pose [I].
+        # 0x520a), not the heap's own pose: InitOpps loads none. On a room
+        # entry that is the last opponent of the room left, else the
+        # Prince's frame (CombatEncounter._last_loaded_opponent_frame).
+        record = getattr(encounter, 'entry_frame', None)
         frames = getattr(encounter, 'player_frames', None)
         player = getattr(encounter, 'player', None)
-        if frames is not None and player is not None and player.state.action < len(frames):
+        if record is None and frames is not None and player is not None and player.state.action < len(frames):
+            record = frames[player.state.action]
+        if record is not None:
             from pop2.terrain import floor_edge_distance
 
-            record = frames[player.state.action]
             offset = record.offset_x - (record.aux & 0x3f)
             foot = actor.state.target_x + (offset if actor.state.facing else -offset)
             front = floor_edge_distance(foot, actor.state.facing)

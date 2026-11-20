@@ -1197,11 +1197,34 @@ its foot is 54 pixels from that cell's left edge.
   6:2c9a by 4:3ad6), not the heap pose's supporting foot as the port first
   used; no real heap's decision changes.
 - The native routine measures with the frame record already loaded (a5
-  globals 0x520e/0x520a). When opponents are created on room entry, that is
-  the Prince's current frame [I], so the port uses it too. With a standing
-  Prince the heap moves 31 pixels and ends partly behind the pillar, as in
-  an emulator image; that image fitted best about 9 pixels further right,
-  which depends on the Prince's pose at entry.
+  globals 0x520e/0x520a); InitOpps loads none. Which one that is was read
+  from FrameAdv (2026-11-20, static, not executed): the world update
+  2:6224 runs the Prince (2:62e6, last LoadFrame 2:6386 after his SEQS
+  step), then the opponents of the room being left (2:648c: per slot,
+  LoadFrame 2:6512, AnimChar, LoadFrame 2:65e2), then TestStrike,
+  CheckStab, AddSFX, CheckAlert, the environment hook, ChangeMeters,
+  CutAllOpponents and PrepCut (2:629a, or 2:62da after a Prince cut).
+  A call-graph search from each of these, and from PrepCut up to its
+  InitOpps call (2:5394) and InitOpps up to 2ce6, finds LoadFrame only
+  behind hits, falls and special-room scripts (JumpSeq 6:0006 via
+  6:5896, 6:51f2, CutChar 6:4d92 -> 7:373e). So on an ordinary crossing
+  the frame is the last opponent's of the room left, from the set loaded
+  for that room, or the Prince's when that room has none. The port
+  records it in `CombatEncounter.entry_frame`
+  (`_last_loaded_opponent_frame`) before the room changes. Remaining
+  differences: the port has not yet advanced those opponents in the tick
+  of the cut (a moving one gives its previous pose); an opponent below the
+  room (Y > 484, 2:64f2) or other actor types are not resolved; at level
+  start (FirstFrame 2:5fb8) the cache is stale and the port keeps the
+  Prince's frame. No LEVL heap's decision depends on this: the only
+  frame-dependent one (level 4, native room 14) has no record in its
+  neighbours, and the side-room heaps 2f4e moves in (levels 3-5, six)
+  settle identically with every Kid (FRAM 25001, 0-199) and skeleton
+  (FRAM 750) record tried through native 4:198a.
+- With a standing Prince the room-14 heap moves 31 pixels and ends partly
+  behind the pillar, as in an emulator image; that image fitted best
+  about 9 pixels further right, which depends on the Prince's pose at
+  entry.
 - `tools/probe_skeleton_settle.py` runs the original 4:198a-1a70 with its
   callees (17fa, 2bae, 39fc, 3a48-3ae8, ReadCell 27ee, 3:4eb2, 5:48b0,
   6:3642) on every LEVL skeleton record of levels 3-5. It sweeps the record

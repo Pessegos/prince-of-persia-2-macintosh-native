@@ -317,6 +317,51 @@ class LevelFourHeapPlacementTests(unittest.TestCase):
         self.assertEqual(heap.state.target_x, settled)
         self.assertFalse(heap.skeleton.settle_pending)
 
+    def test_the_heap_settles_with_the_last_opponent_frame_of_the_room_left(self):
+        # FrameAdv runs the opponents of the room being left (2:648c, a
+        # LoadFrame after each one's AnimChar at 2:65e2) after the Prince
+        # (2:6386) and before PrepCut's InitOpps (2:629a -> 6:2b7e), which
+        # loads no frame before SkelAddOpponent 4:198a. GetFCharX 4:3a72 thus
+        # measures with that opponent's frame, not the Prince's.
+        from pop2.combat import GuardSpawn, actor_frame_index
+        from tests.test_terrain import RooftopSceneTests
+
+        RooftopSceneTests.setUp(self)
+        scene = self.scene
+        scene.load_level(4)
+        RooftopSceneTests.tick(self, 16)
+        combat = scene.combat
+        left = combat.terrain.neighbor(13, 'left')
+        combat._load_room(16)
+        other = next(guard for guard in combat.room_encounters[16][0] if guard.skeleton)
+        combat.room_encounters[16][0].remove(other)
+        scene.jump_to_room(left, 0, 100, 0)
+        other.room = left
+        combat.room_encounters[left][0].append(other)
+        loaded = combat.guard_art.frames[actor_frame_index(other.state)]
+        prince = combat.player_frames[combat.player.state.action]
+        self.assertNotEqual(loaded.offset_x - (loaded.aux & 0x3f), prince.offset_x - (prince.aux & 0x3f))
+
+        combat.enter_room(13, 0)
+        self.assertIs(combat.entry_frame, loaded)
+        heap = next(guard for guard in combat.room_encounters[13][0] if guard.skeleton)
+        entered = heap.state.target_x
+
+        # The same record measured with the Prince's frame ends elsewhere.
+        levl_x = next(spawn.x for spawn in GuardSpawn.all_from_level(combat.level, 13)
+                      if spawn.skeleton_words)
+        self.assertGreater(entered, levl_x)
+        heap.state.target_x = heap.state.current_x = levl_x
+        combat.entry_frame = None
+        heap.skeleton.settle_heap(combat, heap)
+        self.assertNotEqual(heap.state.target_x, entered)
+
+        # Leaving a room with no opponent leaves the Prince's frame.
+        combat.room_encounters[left][0].remove(other)
+        combat.enter_room(left, 0)
+        combat.enter_room(13, 0)
+        self.assertIsNone(combat.entry_frame)
+
 
 @unittest.skipUnless((ASSET_DIR / 'caverns_level4.json').is_file(), 'Imported level-four resources required')
 class LevelFourSkeletonChaseTests(unittest.TestCase):

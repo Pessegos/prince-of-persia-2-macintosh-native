@@ -100,6 +100,11 @@ establish how this cache is initialized for actual supported room records.
 If this requires unavailable full-runtime state, keep the limitation explicit
 and advance another independent AI branch rather than hardcoding positions.
 
+Resolved 2026-11-20 (see `docs/CAVERN_RECOVERY.md`, SkelAddOpponent):
+the cache at InitOpps is the last LoadFrame of the frame that crosses the
+room, which is the last opponent of the room left (2:648c) or else the
+Prince (2:6386); the port now settles with it (`entry_frame`).
+
 Initial-record inventory: all eight level-three skeletons have a nonempty
 left anchor cell, so this initialization branch is inactive for those fixed
 spawns. Level-four room 14 has a dormant record whose left cell is space.

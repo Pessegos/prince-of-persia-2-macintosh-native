@@ -499,6 +499,9 @@ class CombatEncounter:
         self.final_songs = []
         # 9:00e2 flasks left by room-3 copies: (room, cell, foreground).
         self.final_drops = []
+        # The FRAM record LoadFrame (4:2a72) last loaded before a room entry's
+        # InitOpps; None means the Prince's current frame.
+        self.entry_frame = None
         if self.spawn is None:
             if self.level is None:
                 raise ValueError("An encounter without an initial guard needs LEVL data")
@@ -599,6 +602,7 @@ class CombatEncounter:
         """Keep the Prince and the visited room's NPC/generator objects intact."""
         previous_room = self.player.room
         previous_active = self.active_guards()
+        self.entry_frame = self._last_loaded_opponent_frame(previous_active) if previous_room != room else None
         room_records = []
         if previous_room != room:
             for actor in previous_active:
@@ -722,6 +726,26 @@ class CombatEncounter:
         for actor in self.guards:
             if actor.skeleton is not None and actor.skeleton.settle_pending:
                 actor.skeleton.settle_heap(self, actor)
+
+    def _last_loaded_opponent_frame(self, actors):
+        """The frame record LoadFrame left loaded when PrepCut (2:629a/62da)
+        reaches InitOpps. The opponent pass 2:648c follows the Prince's
+        (whose last LoadFrame is 2:6386, after his SEQS step) and loads each
+        opponent of the room being left in slot order, again after its
+        AnimChar (2:6512, 2:65e2); nothing in TestStrike, CheckStab, AddSFX,
+        CheckAlert, the environment hook, ChangeMeters, CutAllOpponents or
+        PrepCut before 2:5394 reloads one on an ordinary crossing. So the
+        last such opponent's frame, from the set loaded for that room,
+        stands; with none it is the Prince's. Known difference: the port
+        has not yet advanced those opponents in this tick, so a moving one
+        gives its previous pose. Only actors 2/4/10 are resolved (the only
+        ones beside skeleton heaps); another last actor leaves the Prince's."""
+        art = getattr(self, 'guard_art', None)
+        if not actors or art is None or actors[-1].state.actor_type not in (2, 4, 10):
+            return None
+        frames = art.frames
+        index = actor_frame_index(actors[-1].state)
+        return frames[index] if 0 <= index < len(frames) else None
 
     def _opponent_set(self):
         return struct.unpack_from(">h", self.level, 0x21a4)[0] if self.level is not None else 0
