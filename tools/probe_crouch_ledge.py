@@ -14,7 +14,10 @@ class NativeCrouchLedge(NativeTempleFrameProgression):
     RANGES = dict(NativeTempleFrameProgression.RANGES)
     RANGES[4] += ((0x35ba, 0x3686), (0x3982, 0x3a70), (0x3a92, 0x3ac8),
                   (0x3f44, 0x40a0), (0x4b16, 0x4e32), (0x5e6e, 0x5eac))
+    RANGES[5] += ((0x1202, 0x127c),)
     RANGES[6] += ((0x0e8e, 0x0f56), (0x1068, 0x10e2))
+    ENDPOINTS = {target: name for target, name in NativeTempleFrameProgression.ENDPOINTS.items()
+                 if target != (5, 0x1202)}
 
     def start(self, level, room, row, x, facing):
         self.reset(level)
@@ -33,13 +36,18 @@ class NativeCrouchLedge(NativeTempleFrameProgression):
         return (self.word(-0x502e), self.word(-0x504c), self.word(-0x5052) - 207,
                 self.word(-0x5050), self.word(-0x5048))
 
+    def tick(self):
+        for operation in (0x2c0c, 0x341a, 0x3464, 0x2a72):
+            self.call(4, operation)
+        self.call(5, 0x1202)
+
 
 def run_probe(source):
     forks = Path(source) / 'resource_forks'
     program = parse_resource_fork((forks / 'Prince of Persia 2.bin').read_bytes())
     prince = parse_resource_fork((forks / 'Prince.rsrc.bin').read_bytes())
     kid = parse_resource_fork((forks / 'Kid.rsrc.bin').read_bytes())
-    sequences = {n: prince['SEQS'][n]['data'] for n in (2, 7, 50, 214)}
+    sequences = {n: prince['SEQS'][n]['data'] for n in (2, 7, 49, 50, 117, 214)}
     machine = NativeCrouchLedge(program, sequences, kid['FRAM'][25001]['data'],
                                 kid['AFRM'][25001]['data'])
     cases = []
@@ -66,14 +74,32 @@ def run_probe(source):
         expected = (2, 15, x + direction * 15, y, row) if falls else (50, 15, x, y, row)
         if machine.pose() != expected or machine.word(-0x3482) != 1:
             raise AssertionError(('standing Down', room, x, machine.pose(), expected))
-        for operation in (0x2c0c, 0x341a, 0x3464, 0x2a72, 0x35ba):
-            machine.call(4, operation)
+        machine.tick()
         expected = (7, 102, fall_x, y + 19, row + 1) if falls else (50, 107, x + direction * 3, y, row)
         if machine.pose() != expected or machine.services:
             raise AssertionError(('first frame', room, x, machine.pose(), expected, machine.services))
         verify_frames(machine)
         machine.verify_sequences()
-    return len(cases)
+
+    # Exactly five pixels from the edge, the Prince crouches. Supply the
+    # normal accepted release action and run its entire rise into the fall.
+    machine.start(prince['LEVL'][2010]['data'], 32, 1, 223, 0)
+    machine.call(6, 0x0e8e)
+    for _ in range(3):
+        machine.tick()
+    if machine.pose() != (50, 109, 239, 226, 1):
+        raise AssertionError(('held crouch', machine.pose()))
+    machine.call(6, 0x0006, (49,))
+    for pose, x in enumerate((242, 244, 246, 251, 251, 254, 246), 110):
+        machine.tick()
+        if machine.pose() != (49, pose, x, 226, 1):
+            raise AssertionError(('crouch rise', pose, machine.pose()))
+    machine.tick()
+    if machine.pose() != (7, 102, 249, 245, 2) or machine.services:
+        raise AssertionError(('fall after rise', machine.pose(), machine.services))
+    verify_frames(machine)
+    machine.verify_sequences()
+    return len(cases) + 1
 
 
 if __name__ == '__main__':

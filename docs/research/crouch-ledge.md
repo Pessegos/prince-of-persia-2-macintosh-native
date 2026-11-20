@@ -22,22 +22,33 @@ and 2003, Kid FRAM/AFRM 25001, and the original SEQS bytes, with prepared
 resource handles and host Memory Manager trap returns. It supplies a
 standing type-0 actor at pose 15, SEQS 2 cursor zero, fresh Down, and an empty
 moving-object bank. It calls StairClimbing, AnimChar, gravity, vertical
-movement, LoadFrame and CheckFloor explicitly. The 13 cases cover both
+movement, LoadFrame and the CheckFloor dispatcher at `5:1202` explicitly.
+The 13 initial cases cover both
 facings at distances 0–4 and 5, plus a modified temple tile blocking the
 forward step. The five admitted temple starts (scene X224–228) all end the
 first tick in SEQS 7, pose 102, scene X248, absolute Y245 and row 2
 (zero-based). The equivalent left-facing checks use level 4, native room 3.
+
+At scene X223, five pixels before the same edge, Down selects ordinary
+crouch. For the release trace the probe supplies the accepted JumpSeq 49
+action. The original dispatcher at `5:1240-124c` only checks support at pose
+109 in mode 5. The port now skips the floor check during the crouch-rise
+poses 110–116 in that mode. The rise finishes at X246 before the first
+fall frame at X249, absolute Y245. The port replay uses actual Down press
+and release and presses the plate below. Before the rise fix, the port fell
+during the forward lean and landed beyond that plate.
+
 The probe ends at fall entry and excludes keyboard sampling, the complete
 frame caller, sprite collision, room cuts, landing and pressure effects.
 
 The port replays a real Shift-step to scene X224 and Down in level 11.
 The first frame matches the native entry tuple. The existing fall and plate
 logic then land the Prince at scene X277 in room 29 and activate the closing
-plate. With the forward step disabled, the same inputs land at scene X292
+plate. Before the two fixes, the same inputs landed at scene X292
 with the plate untouched. A separate level 4 replay exercises an unbuffered
 Down and the four- versus five-pixel boundary facing left.
 
 ```powershell
 .venv\Scripts\python.exe -m tools.probe_crouch_ledge --source ..\PoP2-Mac-Code-Recovery
-.venv\Scripts\python.exe -m unittest -q tests.test_temple_playtest.TemplePlaytestTests.test_down_from_room32_ledge_lands_on_room29_plate tests.test_run_crouch.StandingCrouchLedgeTests
+.venv\Scripts\python.exe -m unittest -q tests.test_temple_playtest tests.test_run_crouch
 ```

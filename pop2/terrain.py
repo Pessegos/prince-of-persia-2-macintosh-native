@@ -1346,6 +1346,11 @@ class RooftopPhysics:
         if not frame_flags & 0x40:
             return False
         state = runtime.state
+        # The caller (5:1240-124c) admits only pose 109 in mode 5.
+        # Wait for the crouch rise to return to standing mode before testing
+        # the floor under its temporary forward lean.
+        if state.animation_state == 5 and 110 <= state.action <= 116:
+            return False
         # CheckFloor 4:3638 / RoofClimbingIntoShip 23:12ba: the ship is
         # moving scenery, not a supporting tile in the level map.
         if (state.level_kind == 5 and motion.room == SHIP_ROOM
