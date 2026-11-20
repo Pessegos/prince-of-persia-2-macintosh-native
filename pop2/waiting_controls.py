@@ -180,8 +180,6 @@ class WaitingControls:
             relative = relative.consume('left', 'up')
         elif request == 'up':
             relative = relative.consume('up', clear=True)
-        elif request == 'down':
-            relative = relative.consume('down', clear=True)
         self.directional_input = relative.remap(facing_right=facing)
         self.modifier_input = relative.modifier
         if request == 'turn_run':
@@ -193,9 +191,7 @@ class WaitingControls:
             self.jump_started_for_press = True
             self.dispatch_jump(BufferedCommand('jump', direction if relative.left else 0))
         elif request == 'down':
-            if not (self.start_native_descent() or
-                    self.down_held and self.shift_held and self._try_start_ledge_hang()):
-                self.start_crouch_lower()
+            self.start_standing_down()
         elif request == 'draw':
             # DoKidEngarde 6:1f4c-1f72: the final shadow casts instead.
             from pop2.environments import environment_for

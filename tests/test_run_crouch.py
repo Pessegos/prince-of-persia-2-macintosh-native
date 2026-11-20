@@ -119,5 +119,25 @@ class RunningCrouchSceneTests(unittest.TestCase):
         self.assertEqual((scene.action, scene.combat.player.life), (109, 3))
 
 
+@unittest.skipUnless((ASSET_DIR / 'caverns_level4.json').is_file(), 'Imported cavern scenery required')
+class StandingCrouchLedgeTests(unittest.TestCase):
+    def test_left_facing_down_steps_at_four_pixels_and_crouches_at_five(self):
+        from tools.audit_temple_routes import Harness, press
+
+        harness = Harness(4)
+        self.addCleanup(harness.close)
+        scene = harness.scene
+        scene.audio = None
+        # Native room 3, bottom row, facing a gap on the left. Starting
+        # directly at pose 15 also exercises Down without a prior input bank.
+        for x, expected in ((229, (7, 102, 205, True)), (230, (50, 107, 227, False))):
+            with self.subTest(x=x):
+                scene.jump_to_room(2, 2, x, 0)
+                press(harness, 'down', True)
+                state = scene.sequence_state
+                self.assertEqual((state.source_sequence_id, state.action, state.target_x,
+                                  scene.terrain_motion.falling), expected)
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -96,6 +96,39 @@ class TemplePlaytestTests(unittest.TestCase):
         return harness
 
     @unittest.skipUnless((ASSET_DIR / 'temple_level11.json').is_file(), 'Imported level 11 required')
+    def test_down_from_room32_ledge_lands_on_room29_plate(self):
+        harness = Harness(11)
+        self.addCleanup(harness.close)
+        scene = harness.scene
+        scene.audio = None
+        scene.jump_to_room(31, 1, 187, 1)
+        press(harness, 'shift', True)
+        press(harness, 'R', True)
+        harness.tick(2)
+        press(harness, 'R', False)
+        press(harness, 'shift', False)
+        harness.tick(14)
+        state = scene.sequence_state
+        self.assertEqual((state.action, state.target_x), (15, 224))
+        self.assertFalse(scene.level_map.tile(28, 4, 0).foreground & 0x2000)
+
+        press(harness, 'down', True)
+        with self.subTest('first fall frame'):
+            self.assertTrue(scene.terrain_motion.falling)
+            self.assertEqual((state.source_sequence_id, state.action, state.target_x), (7, 102, 248))
+        harness.tick(6)
+        press(harness, 'down', False)
+        for _ in range(24):
+            harness.tick()
+            if scene.room_id == 28 and not scene.terrain_motion.falling:
+                break
+        with self.subTest('pressure plate on arrival'):
+            self.assertEqual((scene.room_id, scene.terrain_motion.row), (28, 0))
+            self.assertTrue(scene.level_map.tile(28, 4, 0).foreground & 0x2000)
+            self.assertIn((25, 28, 9, 6), scene.game.caverns.plates.triggered)
+            self.assertEqual((state.action, state.target_x), (108, 277))
+
+    @unittest.skipUnless((ASSET_DIR / 'temple_level11.json').is_file(), 'Imported level 11 required')
     def test_room26_fatal_hit_and_gate_reopening(self):
         harness = Harness(11, peaceful=False)
         self.addCleanup(harness.close)

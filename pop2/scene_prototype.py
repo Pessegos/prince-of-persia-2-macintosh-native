@@ -668,8 +668,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
                 self.down_sheathe_consumed = False
             self.update_ledge_test_state()
             if pressed and not self.ledge_hanging and self._is_resting():
-                if not self.start_native_descent():
-                    self.start_crouch_lower()
+                self.start_standing_down()
         elif key == "shift":
             if pressed and not self.shift_held:
                 self.queue_potion_pickup()
@@ -1383,6 +1382,30 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         if sequence_id in (JUMP_FORWARD_SEQUENCE, JUMP_VERTICAL_SEQUENCE, RUN_JUMP_SEQUENCE, 14):
             self.sequence_state.current_y = 0
 
+    def start_standing_down(self):
+        state = self.sequence_state
+        bank = getattr(self, 'directional_input', None)
+        if getattr(self, 'level_map', None) is not None:
+            motion = self.terrain_motion
+            offset = self.level_map.down_ledge_step(
+                motion.room, motion.row, state, self.frames[state.action])
+            if offset:
+                if not self.in_animation_tick:
+                    # Keep the Down request fresh for the controller pass
+                    # inside the tick, before that tick's floor check.
+                    self.advance_animation_now()
+                    return
+                if bank is not None:
+                    self.directional_input = bank.consume('down')
+                state.target_x += offset
+                self.player_x = state.current_x = state.target_x
+                return
+        if bank is not None:
+            self.directional_input = bank.consume('down', clear=True)
+        if not (self.start_native_descent() or
+                self.shift_held and self._try_start_ledge_hang()):
+            self.start_crouch_lower()
+
     def start_crouch_lower(self):
         state = self.sequence_state
         # StairClimbing -> 1068 chooses 50; only running GenCtrl 125a uses 26.
@@ -1713,9 +1736,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         if self._is_resting():
             if (self.down_held and not self.up_held
                     and not self.down_sheathe_consumed and not self.ledge_hanging):
-                if self._try_start_ledge_hang():
-                    return True
-                self.start_crouch_lower()
+                self.start_standing_down()
                 return True
             if self.up_held and not self.jump_started_for_press and not self.ledge_hanging:
                 self.start_jump()

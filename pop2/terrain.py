@@ -605,6 +605,17 @@ class LevelMap:
                     return edge
         return None
 
+    def down_ledge_step(self, room, row, state, record):
+        # StairClimbing 6:0e9a-0ecc advances the standing foot into space
+        # before AnimChar and CheckFloor, without selecting a crouch clip.
+        contact = floor_contact_x(state.target_x, state.facing, record)
+        direction = 1 if state.facing else -1
+        if floor_edge_distance(contact, state.facing) < 5:
+            ahead = self.tile(room, character_column(contact) + direction, row)
+            if ahead.kind in EMPTY_TILES:
+                return 15 * direction
+        return 0
+
     def descend_ledge(self, room, row, state, record):
         # StairClimbing 6:0ece-0f46: empty behind, floor under the foot,
         # distance >=11. The Prince backs down while facing the building.
