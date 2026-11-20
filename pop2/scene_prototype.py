@@ -28,6 +28,7 @@ from pop2.control_mapping import (
     CROUCH_STANDING_LOWER_SEQUENCE,
     CROUCH_HOLD_SEQUENCE,
     CROUCH_STEP_SEQUENCE,
+    LANDING_LEDGE_STEP_SEQUENCE,
     CROUCH_RISE_SEQUENCE,
     RUN_START_SEQUENCE,
     RUN_STOP_SEQUENCE,
@@ -1461,11 +1462,13 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
             self.advance_animation_now()
         return True
 
-    def start_crouch_step(self, direction, *, try_crawl=True):
+    def start_crouch_step(self, direction, *, try_crawl=True, from_landing=False):
         if try_crawl and self.start_crawl():
             return
-        self.start_sequence(CROUCH_STEP_SEQUENCE)
-        self.status.set("Crouch step: original SEQS:79")
+        sequence = LANDING_LEDGE_STEP_SEQUENCE if from_landing else CROUCH_STEP_SEQUENCE
+        self.start_sequence(sequence)
+        self.status.set("Crouch step off a landing ledge" if from_landing
+                        else "Crouch step: original SEQS:79")
         if not self.in_animation_tick:
             self.advance_animation_now()
 

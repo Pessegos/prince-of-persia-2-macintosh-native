@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from pop2.animation_data import parse_aframe_records, parse_frame_records, sequence_words
-from pop2.control_mapping import IDLE_SEQUENCE
+from pop2.control_mapping import IDLE_SEQUENCE, LANDING_LEDGE_STEP_SEQUENCE
 from pop2.desert_state import DesertState
 from pop2.cavern_state import CavernState
 from pop2.harbor import Harbor
@@ -21,6 +21,18 @@ if TYPE_CHECKING:
     from pop2.combat import CombatEncounter
 
 
+# A single longer low step uses the same poses and reaches the same takeoff
+# position as two successive SEQS:79 steps on the ledge below a room cut.
+LANDING_LEDGE_STEP_WORDS = (
+    -7, 1,
+    -5, 10, 110,
+    -5, 10, 111,
+    -5, 10, 112,
+    -5, 9, 108,
+    -5, 7, -1, 117,
+)
+
+
 @dataclass(frozen=True)
 class GameResources:
     prince: dict
@@ -34,8 +46,9 @@ class GameResources:
     def load(cls):
         prince = load_resource_file("Prince.rsrc")
         kid = load_resource_file("Kid.rsrc")
-        return cls(prince, kid,
-                   {key: sequence_words(value["data"]) for key, value in prince["SEQS"].items()},
+        sequences = {key: sequence_words(value["data"]) for key, value in prince["SEQS"].items()}
+        sequences[LANDING_LEDGE_STEP_SEQUENCE] = LANDING_LEDGE_STEP_WORDS
+        return cls(prince, kid, sequences,
                    parse_frame_records(kid["FRAM"][25001]["data"]),
                    parse_aframe_records(kid["AFRM"][25001]["data"]),
                    int.from_bytes(kid["SHPL"][25001]["data"][:2], "big"))

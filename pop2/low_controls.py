@@ -3,18 +3,23 @@
 from dataclasses import replace
 
 from pop2.animation_data import character_collision_bounds
+from pop2.control_mapping import LANDING_LEDGE_STEP_SEQUENCE
 from pop2.coordinates import column_left
 from pop2.crevices import CREVICE_TILE
 from pop2.ledge_controls import LedgeControls
 from pop2.mac_input import DirectionalInput, low_input_request
-from pop2.opponent_generation import character_column
+from pop2.opponent_generation import EMPTY_TILES, character_column
 from pop2.sequence_runtime import SequenceRuntime
+from pop2.terrain import floor_contact_x
 
 
 # 20/212 are the hard-fall recovery before its rise through 49, 46 the
 # wall bump (also rising through 49) and 47 the wall stop: GenCtrl's mode-5
 # gate (6:0576-059c) clears the bank there, as in the low family.
-LOW_INPUT_SEQUENCES = frozenset((17, 20, 26, 46, 47, 49, 50, 79, 117, 121, 122, 123, 124, 125, 212))
+LOW_INPUT_SEQUENCES = frozenset((
+    17, 20, 26, 46, 47, 49, 50, 79, 117, 121, 122, 123, 124, 125, 212,
+    LANDING_LEDGE_STEP_SEQUENCE,
+))
 
 
 class LowControls(LedgeControls):
@@ -127,6 +132,7 @@ class LowControls(LedgeControls):
             ahead_low = ahead.kind in (12, 13) or ahead.kind == CREVICE_TILE and ahead.foreground & 3 != 3
         facing = bool(state.facing)
         relative = self.directional_input.remap(facing_right=facing)
+        down_active = bool(relative.down)
         relative, sequence = low_input_request(
             relative, state.action,
             mode=state.animation_state, selected=state.selected_sequence_id,
@@ -143,7 +149,9 @@ class LowControls(LedgeControls):
         if sequence == 125:
             self.start_crawl(down_active=True)
         elif sequence == 79:
-            self.start_crouch_step(1 if facing else -1, try_crawl=False)
+            self.start_crouch_step(
+                1 if facing else -1, try_crawl=False,
+                from_landing=down_active and self.can_step_off_landing_ledge())
         elif sequence == 49:
             self.start_crouch_rise()
         else:
@@ -152,6 +160,22 @@ class LowControls(LedgeControls):
                 state.target_x += (9 - clearance) * (1 if facing else -1)
                 state.current_x = self.player_x = state.target_x
         return True
+
+    def can_step_off_landing_ledge(self):
+        """Join two crouch steps when the Prince lands above another drop."""
+        state, motion = self.sequence_state, getattr(self, 'terrain_motion', None)
+        if motion is None or not motion.fall_crossed_down or state.source_sequence_id != 17:
+            return False
+        column, floor = self.crawl_cell(0)
+        direction = 1 if state.facing else -1
+        _, ahead = self.crawl_cell(1)
+        if floor.kind != 1 or ahead.kind not in EMPTY_TILES or ahead.room != floor.room:
+            return False
+        # The first ordinary step finishes on the same floor. The next
+        # step's pose 108 is the first one supported by the empty cell.
+        first = floor_contact_x(state.target_x + 23 * direction, state.facing, self.frames[109])
+        takeoff = floor_contact_x(state.target_x + 39 * direction, state.facing, self.frames[108])
+        return character_column(first) == column and character_column(takeoff) == column + direction
 
     def crawl_blocked(self, sequence):
         motion = getattr(self, 'terrain_motion', None)

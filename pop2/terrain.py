@@ -1131,6 +1131,8 @@ class TerrainMotion:
     gate_passages: tuple[tuple[int, int], ...] = ()
     # CheckPress immediately after HitFloor still sees the incoming foot.
     landing_pressure: tuple[int, int] | None = None
+    # Kept through SEQS:17 for a low step off a ledge just below the cut.
+    fall_crossed_down: bool = False
 
 
 @dataclass(frozen=True)
@@ -1264,6 +1266,9 @@ class RooftopPhysics:
                     and absolute_y >= DOWN_CUT_Y + height):
                 motion.void_fall = True
             return False
+        # The collision step can already have selected the soft landing
+        # when the camera cuts down on that same tick.
+        motion.fall_crossed_down = motion.falling or state.source_sequence_id == 17
         motion.smooth_landing = (motion.room == 11 and room == 14
                                  and state.actor_type == 0 and state.level_kind == 5)
         motion.room = room
@@ -1273,6 +1278,7 @@ class RooftopPhysics:
         return True
 
     def start_fall(self, motion, runtime, sword_drawn=False):
+        motion.fall_crossed_down = False
         state = runtime.state
         contact = (floor_contact_x(state.target_x, state.facing, self.frames[state.action])
                    if self.frames is not None else state.target_x)
@@ -1479,6 +1485,8 @@ class RooftopPhysics:
             return ()
         if not motion.falling:
             motion.scream_played = False
+            if state.source_sequence_id != 17:
+                motion.fall_crossed_down = False
         landing_recovery = state.sequence_id in (17, 20, 117, 212, 49)
         if not motion.falling and not landing_recovery:
             motion.smooth_landing = False
@@ -1793,6 +1801,7 @@ class RooftopPhysics:
         # FrameAdv 2:6372-63a6 runs AnimChar/Move before Falling/Catch.
         # Catch must see this frame's displacement before the floor row advances.
         if catch_ledge is not None and catch_ledge():
+            motion.fall_crossed_down = False
             return finish()
 
         # Below a chasm the Prince is in room 0 (CutChar 6:4d64): its cells

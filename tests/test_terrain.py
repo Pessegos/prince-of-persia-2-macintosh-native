@@ -1258,6 +1258,41 @@ class RooftopSceneTests(unittest.TestCase):
         self.assertEqual((scene.action, scene.room_id, scene.terrain_motion.row,
                           scene.player_x), (15, 0, 2, 379))
 
+    def test_downward_room_cut_joins_the_landing_and_next_drop_without_a_second_dip(self):
+        scene = self.scene
+        for level, room, x, facing, takeoff_x in (
+                (3, 0, 234, 1, 462), (8, 12, 466, 0, 297)):
+            with self.subTest(level=level):
+                scene.clear_keys(None)
+                scene.load_level(level)
+                scene.peaceful = True
+                scene.jump_to_room(room, row=1, x=x, facing=facing)
+                scene.in_animation_tick = True
+                scene.horizontal_key(None, 1 if facing else -1, True)
+                traces = []
+                with patch.object(scene, 'render'), patch.object(scene, 'advance_audio'):
+                    for _ in range(60):
+                        self.tick()
+                        state = scene.sequence_state
+                        if state.action == 107 and state.source_sequence_id == 17:
+                            traces.append([])
+                            if len(traces) == 1:
+                                self.assertEqual((scene.room_id, scene.terrain_motion.row), (room, 2))
+                                scene.set_key_state('down', True)
+                            else:
+                                self.assertEqual((scene.room_id, scene.terrain_motion.row), (3, 0))
+                        if traces:
+                            traces[-1].append(state.action)
+                        if len(traces) == 2 and scene.terrain_motion.falling:
+                            break
+                self.assertEqual(traces, [
+                    [107, 108, 109, 110, 111, 112, 108, 109, 109, 110, 111, 112,
+                     102, 103, 104, 105, 106],
+                    [107, 108, 109, 110, 111, 112, 102],
+                ])
+                self.assertEqual(scene.player_x, takeoff_x)
+                self.assertEqual(scene.combat.player.life, 3)
+
     def test_cavern_sword_draw_contacts_wall_with_attachment_and_recoils(self):
         scene = self.scene
         scene.load_level(3)

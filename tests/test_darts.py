@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 from PIL import Image, ImageChops
 
+from pop2.control_mapping import LANDING_LEDGE_STEP_SEQUENCE
 from pop2.cavern_state import CavernState
 from pop2.caverns import draw_cavern_darts, pressure_drawing_commands
 from pop2.darts import Dart, dart_death
@@ -137,9 +138,10 @@ class DartTests(unittest.TestCase):
         self.assertEqual((first.dy, second.dy), (-1, -19))
         self.assertEqual(self.darts.contacts(0, self.state, (100, 150, 140, 226)), ())
 
-    def test_only_sequence_79_crouch_is_exempt_from_hit_testing(self):
+    def test_crouch_step_poses_are_exempt_from_hit_testing(self):
         for sequence, action, immune in ((79, 108, True), (79, 112, True),
-                                         (79, 113, False), (117, 109, False)):
+                                         (79, 113, False), (117, 109, False),
+                                         (LANDING_LEDGE_STEP_SEQUENCE, 112, True)):
             with self.subTest(sequence=sequence, action=action):
                 self.state.select(sequence)
                 self.state.action = action

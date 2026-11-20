@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass, field
 
+from pop2.control_mapping import CROUCH_STEP_SEQUENCE, LANDING_LEDGE_STEP_SEQUENCE
 from pop2.opponent_generation import EMPTY_TILES, WALL_TILES
 from pop2.terrain import floor_contact_x, floor_edge_distance
 
@@ -85,8 +86,10 @@ class Darts:
         return tuple(cues)
 
     def contacts(self, room, state, bounds):
-        # SEQS:79's crouch poses are immune; an ordinary crouch is not.
-        if 108 <= state.action <= 112 and state.source_sequence_id == 79:
+        # The original crouch step and its longer landing variant share
+        # dart immunity for the moving low poses.
+        if (108 <= state.action <= 112 and state.source_sequence_id in
+                (CROUCH_STEP_SEQUENCE, LANDING_LEDGE_STEP_SEQUENCE)):
             return ()
         left, top, right, bottom = bounds
         rectangle = max(0, left), max(0, top), min(510, right + 1), min(365, bottom + 1)
