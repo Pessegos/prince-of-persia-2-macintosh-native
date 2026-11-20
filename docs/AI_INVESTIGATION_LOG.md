@@ -104,6 +104,10 @@ Resolved 2026-11-20 (see `docs/CAVERN_RECOVERY.md`, SkelAddOpponent):
 the cache at InitOpps is the last LoadFrame of the frame that crosses the
 room, which is the last opponent of the room left (2:648c) or else the
 Prince (2:6386); the port now settles with it (`entry_frame`).
+Executed natively the same day (`tools/probe_crossing_frame.py`): 5,914
+crossings agree on the order; level 5's bridge hook reloads slot 0 after
+the pass; the port's pre-advance pose differs in 1,661 frames without
+changing any of 2,008 native heap settles.
 
 Initial-record inventory: all eight level-three skeletons have a nonempty
 left anchor cell, so this initialization branch is inactive for those fixed

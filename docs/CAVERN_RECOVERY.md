@@ -1198,7 +1198,7 @@ its foot is 54 pixels from that cell's left edge.
   used; no real heap's decision changes.
 - The native routine measures with the frame record already loaded (a5
   globals 0x520e/0x520a); InitOpps loads none. Which one that is was read
-  from FrameAdv (2026-11-20, static, not executed): the world update
+  from FrameAdv (2026-11-20, statically first, then executed; see below): the world update
   2:6224 runs the Prince (2:62e6, last LoadFrame 2:6386 after his SEQS
   step), then the opponents of the room being left (2:648c: per slot,
   LoadFrame 2:6512, AnimChar, LoadFrame 2:65e2), then TestStrike,
@@ -1221,6 +1221,35 @@ its foot is 54 pixels from that cell's left edge.
   neighbours, and the side-room heaps 2f4e moves in (levels 3-5, six)
   settle identically with every Kid (FRAM 25001, 0-199) and skeleton
   (FRAM 750) record tried through native 4:198a.
+- Executed natively since (`tools/probe_crossing_frame.py`, 2026-11-20):
+  the original FrameAdv 2:6224, with PrepCut and InitOpps, runs frame by
+  frame on levels 3-5 with the Kid's recorded controller held toward each
+  room edge, from standing starts 12/40/90 pixels inside it on each row,
+  with the LEVL records and again with each of the level's skeleton
+  records appended to the room left. A write hook on a5-0x5212..-0x520a
+  records every writer. Over 5,914 crossings from 9,882 starts (1,633 with
+  SkelAddOpponent calls) the last LoadFrame before InitOpps ran inside the
+  Prince's step or the opponent pass, nothing else wrote the words after
+  it, and nothing wrote them between InitOpps and 4:198a, with one
+  exception: on level 5 the bridge hook (environment callback 2:7124 ->
+  8:0252/8:063e, a character on the bridge between native rooms 10 and
+  12) reloads slot 0's frame after the pass (18 crossings), so there the
+  frame is slot 0's, not the last slot's. The opponent's own frame loads
+  inside the pass include its bump/landing (4:39ee), 4:4dd8, 4:6546 and
+  4:34da besides 2:6512/2:65e2. The port's rule on the native opponents of
+  the room left picks the words InitOpps sees in 4,239 crossings; the
+  others are the known difference (the opponent's pose advanced in the
+  crossing frame itself, 1,661) and the 14 bridge cases. Rerunning
+  the original 4:198a with the port's words instead changes no heap's X
+  or SEQS in any of the 2,008 settles where the words differ, so the
+  port keeps the rule. Supplied: drawing/sound segments, palette routines,
+  DrawOppMeter, the checkpoint checksum, resource lookups and the memory
+  traps (listed in the tool). Excluded and counted: 16 level-5 starts where
+  a synthetic copy of the room-10 rising record (SEQS 63) reaches pose
+  90/91, whose FRAM index -59 lies before the table (GetCharEdges reads
+  unmapped memory here); level start, death and level exits.
+  `tests.test_probe_crossing_frame` runs level 3 room 3 and rejects the
+  Prince's frame on every crossing.
 - With a standing Prince the room-14 heap moves 31 pixels and ends partly
   behind the pillar, as in an emulator image; that image fitted best
   about 9 pixels further right, which depends on the Prince's pose at

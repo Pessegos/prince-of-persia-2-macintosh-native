@@ -738,8 +738,11 @@ class CombatEncounter:
         last such opponent's frame, from the set loaded for that room,
         stands; with none it is the Prince's. Known difference: the port
         has not yet advanced those opponents in this tick, so a moving one
-        gives its previous pose. Only actors 2/4/10 are resolved (the only
-        ones beside skeleton heaps); another last actor leaves the Prince's."""
+        gives its previous pose; and on level 5's bridge the environment
+        hook (8:0252/063e) reloads slot 0 after the pass. Executed natively
+        over 5,914 crossings (tools/probe_crossing_frame.py), neither changes
+        a heap settle. Only actors 2/4/10 are resolved (the only ones beside
+        skeleton heaps); another last actor leaves the Prince's."""
         art = getattr(self, 'guard_art', None)
         if not actors or art is None or actors[-1].state.actor_type not in (2, 4, 10):
             return None
