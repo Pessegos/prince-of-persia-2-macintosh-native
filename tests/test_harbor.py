@@ -624,7 +624,10 @@ class HarborSceneTests(unittest.TestCase):
 
     def test_ship_catch_uses_fall_displacement_on_last_eligible_frame(self):
         scene = self.scene
-        for ship_frame in (31, 32, 33):
+        # AnimRoofShip 23:1066 is a trob (AnimTrob 5:0de0, AnimTrobs 2:6230):
+        # it advances the counter before the Prince's step, so the catch
+        # (RoofCanGrabShip 23:12f0, counter < 33) sees the next value.
+        for ship_frame in (30, 31, 32):
             with self.subTest(ship_frame=ship_frame):
                 self.prepare('Room 10')
                 scene.set_key_state('shift', True)
@@ -644,7 +647,7 @@ class HarborSceneTests(unittest.TestCase):
                     self.tick()
                     self.assertEqual(catch.call_count, 1)
                 self.assertEqual(scene.harbor.ship_frame, ship_frame + 1)
-                if ship_frame < 33:
+                if ship_frame + 1 < 33:
                     self.assertTrue(scene.ledge_hanging)
                     self.assertFalse(scene.terrain_motion.falling)
                     self.assertEqual((state.action, state.sequence_id), (80, 15))
@@ -656,6 +659,25 @@ class HarborSceneTests(unittest.TestCase):
                     self.tick(30)
                     self.assertTrue(scene.terrain_motion.dead)
                     self.assertFalse(scene.level_complete)
+
+    def test_the_ship_starts_at_the_cut_and_first_moves_in_the_next_frame(self):
+        # PrepCut -> KeepTime 2:5374 -> TriggerRoofShip 23:1256 adds the ship
+        # trob after the crossing frame's hook; AnimRoofShip runs from the
+        # next frame's AnimTrobs (2:6230). The port advanced it in the same
+        # frame, one step ahead of the drawn native ship.
+        self.prepare('Room 9')
+        scene = self.scene
+        scene.horizontal_key(None, -1, True)
+        for _ in range(240):
+            self.tick()
+            if scene.room_id == 18:
+                break
+        self.assertEqual(scene.room_id, 18)
+        self.assertTrue(scene.harbor.ship_active)
+        start = scene.harbor.ship_frame
+        self.assertIn(start, (0, 6))
+        self.tick()
+        self.assertEqual(scene.harbor.ship_frame, start + 1)
 
     def test_jump_across_room_cut_then_jump_to_ship(self):
         scene = self.scene

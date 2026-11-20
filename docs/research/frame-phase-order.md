@@ -319,7 +319,35 @@ whatever the pass did to him), and `finish_room_entry` then calls
 scene's drawing state (room, backdrop) still changes in the terrain phase.
 `tests.test_frame_phases.RoomCrossingTickTests` fails on the old order.
 
-Still different: the port's `environment` and `harbor` phases (the hook
-2:7124) run after the entry, natively before the cut; level 5's bridge hook
-reloading slot 0's frame after the pass (14 crossings in the native probe)
-is the visible case.
+### The environment hook sees the room left too (2026-11-20)
+
+The port's `environment` and `harbor` phases (the hook 2:7124: level 5's
+BridgeCheckBreak 8:3b92, the temple's 10:27ba, the final level's 9:0654,
+the rooftops' 23:0874) ran after the entry; natively they run before
+CutAllOpponents with -0x4fc2 still the room left (23:0ab2 reads it, 23:0a46
+the Kid record's room). The tick table now has an explicit `entry` phase
+(CutAllOpponents/PrepCut, `finish_room_entry`) after them, and on a
+crossing frame both phases run in `ScenePrototype.room_left_view`: room,
+terrain room and row, X and the combat Prince in the room left's terms
+(`CombatEncounter.crossing_offset`), given back afterwards with what the
+hook did to him; a hook that redraws (the bridge) draws the room left and
+the new room's scenery is put back. So on the crossing frame the bridge
+checks the room left and its slot-0 opponent, not the room entered, and
+the temple/final hooks see the Prince where FrameAdv does.
+
+The rooftops' ship moved with it. TriggerRoofShip 23:1256 (PrepCut ->
+KeepTime 2:5374 -> 2:5168) adds the ship trob after the hook, and
+AnimRoofShip 23:1066 is that trob's animation (AnimTrob's switch, kind 48
+at 5:0de0, from AnimTrobs 2:6230), before the Prince's step. The port
+advanced the counter in its harbor phase after the Prince, so a ship
+started on the crossing frame moved in that same frame, and the catch
+(RoofCanGrabShip 23:12f0, counter < 33) saw the value before the advance.
+Now `Harbor.advance_ship` runs at the frame start (`Rooftops.frame_start`)
+and the hook keeps the waves and splash ages (`advance_water`): the ship
+starts at the cut and first moves in the next frame, and the catch sees
+the advanced counter (a counter of 32 before the frame no longer catches).
+The exit-song frames advance both, as before.
+
+Still different: level 5's bridge hook reloading slot 0's frame for the
+skeleton entry settle (14 crossings, no heap changes) is not modelled; the
+desert's hook 18:01e0 still runs in the terrain phase (no opponents there).

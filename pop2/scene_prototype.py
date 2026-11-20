@@ -1,6 +1,7 @@
 import argparse
 import math
 import time
+from contextlib import contextmanager
 from copy import deepcopy
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -1990,11 +1991,14 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
                 # A room cut rebases X; it must not be swept as a cross-room jump.
                 swept = sweep_combat and (motion is None or motion.room == old_room)
                 self.advance_combat(old_x if swept else None)
-                self.finish_room_entry()
             elif phase == 'environment':
-                self.advance_environment()
+                with self.room_left_view():
+                    self.advance_environment()
             elif phase == 'harbor':
-                environment_for(self).harbor_phase()
+                with self.room_left_view():
+                    environment_for(self).harbor_phase()
+            elif phase == 'entry':
+                self.finish_room_entry()
             elif phase == 'level_events':
                 self.advance_level_events()
             elif phase == 'rebirth':
@@ -2007,6 +2011,42 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         self.retire_waiting_controls()
         self.in_animation_tick = False
         self.schedule_next_animation()
+
+    @contextmanager
+    def room_left_view(self):
+        """On a crossing frame, before the cut: the environment hook 2:7124
+        (and ChangeMeters) run with -0x4fc2 still the room being left and
+        the Kid's X or Y outside it (FrameAdv 2:6284-6290, before
+        CutAllOpponents 6:4382). The port's terrain has already moved the
+        scene into the new room, so this shows the room, row and X in the
+        room left's terms and gives them back afterwards, keeping what the
+        hook did to him. A hook that redraws the room (the bridge) redraws
+        the room left; the new room's scenery is restored."""
+        pending = getattr(self, 'pending_room_entry', None)
+        motion = getattr(self, 'terrain_motion', None)
+        combat = getattr(self, 'combat', None)
+        if (pending is None or motion is None or combat is None or pending[1] != self.room_id
+                or motion.room != self.room_id or combat.player.room != pending[0]):
+            yield
+            return
+        old_room, room = pending
+        dx, drow = combat.crossing_offset(old_room, room)
+        drawn = self.background, self.foreground
+        self.room_id = motion.room = old_room
+        motion.row += drow
+        self.player_x += dx
+        try:
+            with combat.leaving_room(room):
+                yield
+        finally:
+            self.player_x -= dx
+            motion.row -= drow
+            if motion.room == old_room:
+                motion.room = room
+            self.room_id = room
+            if (self.background, self.foreground) != drawn:
+                scenery = self.level_renderer.enter_room(room, self.game.caverns)
+                self.background, self.foreground = scenery.background, scenery.foreground
 
     def finish_room_entry(self):
         """PrepCut's half of a room cut. In the original the frame that

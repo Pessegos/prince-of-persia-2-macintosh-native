@@ -843,7 +843,13 @@ class Rooftops(Environment):
     def exit_scenery(self):
         self.scene.harbor.advance()
 
+    def frame_start(self):
+        harbor = getattr(self.scene, 'harbor', None)
+        if harbor is not None:
+            harbor.advance_ship()
+
     def entered_room(self):
+        # PrepCut -> KeepTime 2:5374 -> TriggerRoofShip, after the hook.
         scene = self.scene
         scene.harbor.enter_room(scene.room_id, scene.action)
 
@@ -866,7 +872,7 @@ class Rooftops(Environment):
                 or scene.harbor.hanging_from_ship(motion.room, state)):
             state.target_x -= 2
             state.current_x = state.target_x
-        scene.harbor.advance()
+        scene.harbor.advance_water()
         if (not motion.dead and not getattr(scene, 'god_mode', False)
                 and scene.harbor.right_exit_is_fatal(motion.room, state)):
             scene.clear_keys(None)

@@ -9,10 +9,13 @@ class WorldPhaseTableTests(unittest.TestCase):
         # the orchestrator; changes need original evidence.
         from pop2.frame_phases import WORLD_PHASES
 
-        # 'environment' (2:7124, after the opponents) holds the bridge check.
-        full = ('terrain', 'combat', 'environment', 'harbor', 'level_events', 'rebirth', 'audio', 'render')
+        # 'environment' (2:7124, after the opponents) holds the bridge check;
+        # 'entry' (CutAllOpponents 6:4382, PrepCut 2:532c) follows the hook.
+        full = ('terrain', 'combat', 'environment', 'harbor', 'entry', 'level_events', 'rebirth',
+                'audio', 'render')
         self.assertEqual(WORLD_PHASES, {
-            'potion': ('terrain', 'combat', 'environment', 'level_events', 'rebirth', 'audio', 'render'),
+            'potion': ('terrain', 'combat', 'environment', 'entry', 'level_events', 'rebirth',
+                       'audio', 'render'),
             'falling': full, 'locked': full, 'opening': ('combat', 'audio', 'render'),
             'ordinary': full})
 
@@ -40,9 +43,9 @@ class WorldPhaseTraceTests(unittest.TestCase):
         scene.frame_trace = []
         self.tick(3)
         self.assertEqual(self.modes(), ['ordinary'] * 3)
-        self.assertEqual([phase for _mode, phase in scene.frame_trace[:8]],
-                         ['terrain', 'combat', 'environment', 'harbor', 'level_events', 'rebirth', 'audio',
-                          'render'])
+        self.assertEqual([phase for _mode, phase in scene.frame_trace[:9]],
+                         ['terrain', 'combat', 'environment', 'harbor', 'entry', 'level_events',
+                          'rebirth', 'audio', 'render'])
 
     def test_the_bridge_check_runs_after_the_opponents(self):
         # FrameAdv 2:6224: the opponents (2:626c) and strikes (2:627c-6280)
@@ -118,6 +121,43 @@ class RoomCrossingTickTests(unittest.TestCase):
         self.assertEqual((scene.combat.player.room, scene.sequence_state.target_x), (16, 23))
         # The heap 2f4e moved into room 16 was not stepped in that frame.
         self.assertEqual((heap.room, heap.skeleton.phase, heap.alive), (16, 'dormant', False))
+
+    def test_the_environment_hook_sees_the_room_left_before_the_cut(self):
+        # FrameAdv 2:6284-6290: the environment hook 2:7124 runs before
+        # CutAllOpponents 6:4382, so -0x4fc2 is still the room being left
+        # and the Kid's X is outside it. The port ran the hook (and the
+        # rooftops' harbor phase) after the entry, in the new room's terms.
+        from unittest.mock import patch
+        from tests.test_terrain import RooftopSceneTests
+
+        scene = self.scene
+        scene.load_level(3)
+        scene.jump_to_room(14, row=2, x=300, facing=1)
+        scene.in_animation_tick = True
+        seen = []
+        hook = scene.advance_environment
+
+        def record():
+            seen.append((scene.room_id, scene.terrain_motion.room, scene.terrain_motion.row,
+                         scene.sequence_state.target_x, scene.player_x, scene.combat.player.room))
+            # A hook that redraws draws the room it sees.
+            room = scene.level_renderer.enter_room(scene.room_id, scene.game.caverns)
+            scene.background, scene.foreground = room.background, room.foreground
+            hook()
+
+        scene.horizontal_key(None, 1, True)
+        with patch.object(scene, 'render'), patch.object(scene, 'advance_environment', record):
+            for _ in range(30):
+                RooftopSceneTests.tick(self)
+                if scene.room_id == 16:
+                    break
+        self.assertEqual(scene.room_id, 16)
+        self.assertEqual(seen[-1], (14, 14, 2, 533, 533, 14))
+        self.assertEqual((scene.terrain_motion.room, scene.sequence_state.target_x, scene.player_x,
+                          scene.combat.player.room), (16, 23, 23, 16))
+        # The new room's scenery is back after the hook redrew the room left.
+        drawn = scene.level_renderer.enter_room(16, scene.game.caverns)
+        self.assertIs(scene.background, drawn.background)
 
 
 if __name__ == '__main__':

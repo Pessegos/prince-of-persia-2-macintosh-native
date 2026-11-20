@@ -68,7 +68,12 @@ straight, severed waterline on every near post; all four phases are tested.
 - TriggerRoofShip 23:1256 activates departure below counter 98; entering
   in poses 34-40 resets the counter to 6.
 - AnimRoofShip 23:1066 advances the counter once per simulation frame,
-  stops after 98, and moves the ship two pixels left per frame.
+  stops after 98, and moves the ship two pixels left per frame. It is the
+  ship trob's animation (AnimTrob kind 48, 5:0de0, from AnimTrobs 2:6230),
+  so it runs before the Prince's step and the catch below sees the
+  advanced counter; TriggerRoofShip runs at the cut, after the rooftops'
+  environment hook, and the ship first moves in the next frame
+  (`Harbor.advance_ship` at the frame start since 2026-11-20).
 - DrawRoofShip 23:1120 uses original body, hatch and wake SHAPs. The hatch
   is drawn over the Prince during boarding, rather than flattened behind him.
 - RoofCanGrabShip 23:12f0 requires native X <297 (scene X <90), row <3 and

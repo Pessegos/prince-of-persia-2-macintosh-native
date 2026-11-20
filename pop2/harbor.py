@@ -32,13 +32,22 @@ class Harbor:
             self.ship_active = True
 
     def advance(self):
-        self.wave_frame = (self.wave_frame + 1) & 3
-        for entry in self.water.values():
-            entry.age += 1
+        self.advance_ship()
+        self.advance_water()
+
+    def advance_ship(self):
+        # AnimRoofShip 23:1066 is a trob animation (AnimTrob's switch,
+        # 5:0de0): FrameAdv's AnimTrobs step 2:6230, before the Prince.
         if self.ship_active:
             self.ship_frame += 1
             if self.ship_frame > 98:
                 self.ship_active = False
+
+    def advance_water(self):
+        # The rooftops' environment hook (2:7124 -> 23:0874), after the actors.
+        self.wave_frame = (self.wave_frame + 1) & 3
+        for entry in self.water.values():
+            entry.age += 1
 
     @property
     def ship_x(self):

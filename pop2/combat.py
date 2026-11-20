@@ -740,7 +740,9 @@ class CombatEncounter:
         opponents before the entry as FrameAdv does
         (ScenePrototype.finish_room_entry), so their poses are this frame's.
         Known difference: on level 5's bridge the environment hook
-        (8:0252/063e) reloads slot 0 after the pass. Executed natively over
+        (8:0252/063e) reloads slot 0 after the pass; the port runs that hook
+        before the entry too (ScenePrototype.room_left_view) but does not
+        record its load here. Executed natively over
         5,914 crossings (tools/probe_crossing_frame.py), it changes no heap
         settle. Only actors 2/4/10 are resolved (the only ones beside
         skeleton heaps); another last actor leaves the Prince's."""
@@ -989,6 +991,22 @@ class CombatEncounter:
         return any(actor.alive and actor.ruins.alert > 0 and actor.state.actor_type != 11
                    for actor in self.visible_ruins())
 
+    def crossing_offset(self, old_room, room):
+        """(dx, drow) that put a Kid rebased into `room` back in `old_room`'s
+        terms, as before CutChar 6:4918 (X -/+510, Y +/-360 = 3 rows)."""
+        terrain = getattr(self, 'terrain', None)
+        if terrain is None or room == old_room:
+            return 0, 0
+        if terrain.neighbor(old_room, 'left') == room:
+            return -510, 0
+        if terrain.neighbor(old_room, 'right') == room:
+            return 510, 0
+        if terrain.neighbor(old_room, 'down') == room:
+            return 0, 3
+        if terrain.neighbor(old_room, 'up') == room:
+            return 0, -3
+        return 0, 0
+
     @contextmanager
     def leaving_room(self, room):
         """The frame that crosses into `room` before its cut: the opponent
@@ -999,18 +1017,8 @@ class CombatEncounter:
         port's terrain has already rebased him into `room`, so this shows
         his X or row in the old room's terms until the entry, and keeps
         whatever the pass did to him (moves, hits) when it gives them back."""
-        player, terrain = self.player, getattr(self, 'terrain', None)
-        old_room = player.room
-        dx = drow = 0
-        if terrain is not None and room != old_room:
-            if terrain.neighbor(old_room, 'left') == room:
-                dx = -510
-            elif terrain.neighbor(old_room, 'right') == room:
-                dx = 510
-            elif terrain.neighbor(old_room, 'down') == room:
-                drow = 3
-            elif terrain.neighbor(old_room, 'up') == room:
-                drow = -3
+        player = self.player
+        dx, drow = self.crossing_offset(player.room, room)
         state = player.state
         state.target_x += dx
         state.current_x += dx
