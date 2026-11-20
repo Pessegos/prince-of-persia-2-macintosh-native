@@ -1133,6 +1133,8 @@ class Caverns(Environment):
                 death_count=scene.death.counter, displayed_room=scene.room_id))
             for guard in scene.combat.active_guards():
                 if guard.terrain_motion is not None:
+                    column, pose = guard.terrain_motion.landing_pressure or (None, guard.state.action)
+                    guard.terrain_motion.landing_pressure = None
                     guard.state.sound_events.extend(loose.press(scene.level_map, guard.terrain_motion,
                         guard.state, scene.guard_art.frames[guard_frame_index(guard.state.action)]))
                     guard.state.sound_events.extend(scene.game.caverns.trapdoors.check(
@@ -1140,9 +1142,10 @@ class Caverns(Environment):
                         scene.guard_art.frames[guard_frame_index(guard.state.action)]))
                     guard.state.sound_events.extend(scene.game.caverns.plates.press(
                         scene.level_map, guard.terrain_motion, guard.state,
-                        scene.guard_art.frames[guard_frame_index(guard.state.action)], guard.alive,
+                        scene.guard_art.frames[guard_frame_index(pose)], guard.alive,
                         sword_type=scene.game.sword_type, native_alive=_native_alive(guard),
-                        death_count=guard.death_song_frames, displayed_room=scene.room_id))
+                        death_count=guard.death_song_frames, displayed_room=scene.room_id,
+                        supporting_column=column))
             shakes = [event for event in state.sequence_events if event[0] in (-12, -13)]
             if shakes:
                 # CheckAlert 2:6c1c consumes one scalar request; a later

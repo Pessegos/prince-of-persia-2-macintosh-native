@@ -202,6 +202,47 @@ class TemplePlaytestTests(unittest.TestCase):
             self.assertEqual(cues.count(273), 1)
             self.assertNotIn(275, cues)
 
+    @unittest.skipUnless((ASSET_DIR / 'temple_level12.json').is_file(), 'Imported level 12 required')
+    def test_room20_guard_fall_latches_both_room18_plate_gates(self):
+        harness = Harness(12, peaceful=False)
+        self.addCleanup(harness.close)
+        scene = harness.scene
+        scene.audio = None
+        room, plate_cell = 17, 27
+        gates = ((room, 19), (11, 21))
+        plates = scene.game.caverns.plates
+        scene.jump_to_room(19, 1, 285, 1, redraw=False)
+        prince, guard = scene.combat.player, scene.combat.guard
+        guard.state.current_x = guard.state.target_x = 349
+        guard.state.facing = 0
+        guard.life, guard.alert_mode = 2, 3
+        for fighter in (prince, guard):
+            fighter.sword_drawn = True
+            select_sequence(fighter, 227)
+            fighter.runtime.next_frame()
+        prince.state.action = 154
+        guard.state.action = 170
+        self.assertEqual(scene.combat.resolve_contacts()[0].kind, 'hit')
+        self.assertEqual(guard.life, 1)
+        self.assertEqual([scene.level_map.tile(r, c % 10, c // 10).foreground & 255
+                          for r, c in gates], [0, 0])
+
+        for _ in range(24):
+            harness.tick()
+            if not guard.alive:
+                break
+        self.assertEqual((guard.room, guard.row, guard.state.target_x, guard.state.action),
+                         (room, 2, 400, 185))
+        self.assertEqual(scene.room_id, 19)
+        self.assertTrue(scene.level_map.tile(room, plate_cell % 10, plate_cell // 10).foreground & 0x2000)
+        self.assertEqual([plates.active.get(key) for key in gates], [3, 3])
+
+        # The plate can release while both gates stay open past a timed cycle.
+        for _ in range(300):
+            plates.advance(scene.level_map)
+        self.assertFalse(scene.level_map.tile(room, plate_cell % 10, plate_cell // 10).foreground & 0x2000)
+        self.assertEqual([plates.foreground[key] & 255 for key in gates], [255, 255])
+
     def test_room2_standing_jump_cannot_catch_room10_after_the_down_cut(self):
         harness = self.harness(12)
         scene = harness.scene

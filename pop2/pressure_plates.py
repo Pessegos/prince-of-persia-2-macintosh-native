@@ -60,14 +60,14 @@ class PressurePlates:
             self.active[key] = phase
 
     def press(self, terrain, motion, state, record, alive=True, *, sword_type=None,
-              native_alive=None, death_count=-1, displayed_room=None):
+              native_alive=None, death_count=-1, displayed_room=None, supporting_column=None):
         if state.actor_type == 1 and 29 <= state.selected_sequence_id <= 42:
             return ()
         # CheckPress 5:129a-12a2: a floating Prince presses no plate.
         caverns = getattr(terrain, 'caverns', None)
         if state.actor_type in (0, None) and caverns is not None and caverns.potions.floating:
             return ()
-        tile = pressure_tile(terrain, motion, state, record)
+        tile = pressure_tile(terrain, motion, state, record, supporting_column=supporting_column)
         if tile is None or tile.kind not in (5, 6, 34):
             return ()
         # TriggerGateWithRevPlate 8:2d66-2d96: a skeleton on level five's

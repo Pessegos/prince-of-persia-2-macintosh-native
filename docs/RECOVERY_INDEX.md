@@ -125,7 +125,8 @@ or approximation, not a literal translation. Source addresses are CODE:offset.
 | Collision response's wider pose stays outside solid wall | 4:6534-6546 reloads pose | A/T: second body sweep after response; full native buffers P | terrain / test_game_ui |
 | Body touches exclusive wall edge without overlap; right-facing step clearance conversion | 4:53b8-53ca, 65d8-65ea | T/A: native edge semantics within port body sweep; short steps and actual bumps retained | terrain / test_terrain, test_game_ui |
 | Fall preparation uses old supporting foot/column | 4:4b16-4d90 | T: ordinary rooftop preparation | terrain / test_terrain |
-| Gravity +6 capped at 63; landing thresholds 50/63 | 4:341a, 3464; 6:00a6, 0280 | T: ordinary player/NPC falls | terrain / test_terrain |
+| Gravity +6 capped at 63; birdhead scream sets speed 64; landing thresholds 50/63 | 4:341a, 3464; 6:00a6, 0280 | T: ordinary player/NPC falls | terrain / test_terrain, test_guard_audio |
+| Opponent fall through lower room and pressure at impact | 6:42dc-433a, 0156-026c, 046a-0478; 5:127e-13dc | T/A: original level 12 room 20 → 18 fall and impact cell. Port keeps its early room ownership transfer and preserves floor-relative Y and the incoming foot for pressure | terrain, environments, pressure_plates / test_temple_playtest, probe_room18_guard_fall; [scope](research/temple-room18-guard-fall.md) |
 | Catch velocity <60, height [-48,+3), source-99 release look-behind 24 instead of 17 | 4:37ca/3882-3894; 6:011e-0132 | T: ordinary catch and release admission (11,304 native comparisons) | terrain / test_game_ui / test_ledge_catch |
 | Wall-backed hang settles once, mode 6 bypass; free-air expiry | 6:18e0, 1926; SEQS:25 | T: tested wall/gate distinction and free-air branch | terrain, scene_prototype / test_game_ui, test_terrain |
 | Up climb takes priority over Shift release | 6:18e0; SEQS:10/235 | T: ordinary ledges | scene_prototype / test_game_ui |

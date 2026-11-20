@@ -1129,6 +1129,8 @@ class TerrainMotion:
     # Resolved (room, cell) identities admitted before a gate closes.
     # Per actor, retained through a pose/room change and optional in old saves.
     gate_passages: tuple[tuple[int, int], ...] = ()
+    # CheckPress immediately after HitFloor still sees the incoming foot.
+    landing_pressure: tuple[int, int] | None = None
 
 
 @dataclass(frozen=True)
@@ -1443,6 +1445,7 @@ class RooftopPhysics:
                 alive=True, old_bounds=None, catch_ledge=None, collision_bounds_for_state=None,
                 invulnerable=False, native_alive=None, barriers=True):
         state = runtime.state
+        motion.landing_pressure = None
         if motion.dead:
             motion.gate_passages = ()
             return ()
@@ -1521,7 +1524,7 @@ class RooftopPhysics:
                 if floating:
                     # 4:342c-3444: the global float timer slows every faller.
                     state.vertical_velocity = min(8, state.vertical_velocity + 2)
-                else:
+                elif state.vertical_velocity < MAX_FALL_SPEED:
                     state.vertical_velocity = min(MAX_FALL_SPEED, state.vertical_velocity + GRAVITY)
                 if state.animation_state == 4:
                     # 4:34b2-34ca halves the floating Prince's horizontal step.
@@ -1536,6 +1539,9 @@ class RooftopPhysics:
                     and not motion.scream_played):
                 motion.scream_played = True
                 state.sound_events.append(30)
+                # Falling 6:00ee-00f0 writes 64 after Move. Gravity keeps it
+                # on later steps (4:3446-344e).
+                state.vertical_velocity = 64
             if bounds_for_state is not None:
                 bounds = bounds_for_state()
             else:
@@ -1870,6 +1876,10 @@ class RooftopPhysics:
                             else 187 if state.actor_type == 2 and state.sequence_id == 186
                             else 63 if (sword_drawn or npc) and state.actor_type not in (1, 6)
                             else 17)
+                if state.actor_type == 2 and frame_record is not None:
+                    supporting_column = character_column(floor_contact_x(
+                        state.target_x, state.facing, frame_record))
+                    motion.landing_pressure = supporting_column, state.action
                 if frame_record is not None:
                     state.target_x += self.map.landing_offset(
                         motion.room, motion.row, state, frame_record)
@@ -1900,13 +1910,12 @@ class RooftopPhysics:
                 room = (self.map.neighbor(motion.room, "down")
                         if self.map.allows_down_cut(motion.room, state.actor_type) else None)
                 if room is not None:
-                    # Cut coordinates use the 365-pixel clip, not 360 tile pixels.
-                    motion.smooth_landing = (motion.room == 11 and room == 14
-                                             and state.actor_type == 0 and state.level_kind == 5)
+                    # CutOpponent 6:42dc-433a leaves a falling actor active
+                    # when a lower room exists. Keep its floor-relative Y
+                    # across the port's early room transfer (three tile rows).
                     motion.room = room
                     motion.row -= 3
-                    state.current_y -= ROOM_HEIGHT - 3 * TILE_HEIGHT
-                    absolute_y -= ROOM_HEIGHT
+                    absolute_y -= 3 * TILE_HEIGHT
                     events.append(TerrainEvent("room"))
                 else:
                     break

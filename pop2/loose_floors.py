@@ -7,11 +7,13 @@ from pop2.opponent_generation import EMPTY_TILES, character_column
 from pop2.terrain import floor_contact_x, floor_edge_distance, floor_y
 
 
-def pressure_tile(terrain, motion, state, record):
+def pressure_tile(terrain, motion, state, record, *, supporting_column=None):
     """CheckPress supporting-foot/pose eligibility, shared by floors and plates."""
     if state.actor_type in (10, 11):
         return None
-    column = character_column(floor_contact_x(state.target_x, state.facing, record))
+    column = supporting_column
+    if column is None:
+        column = character_column(floor_contact_x(state.target_x, state.facing, record))
     above = 87 <= state.action <= 99 or 135 <= state.action < 141
     grounded = state.animation_state < 2 or state.animation_state in (5, 7, 8)
     if not (above or grounded):
