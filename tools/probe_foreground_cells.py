@@ -25,14 +25,20 @@ clip), and compared, per cell, with the port's masks:
   cell, `clip_cell_masks`).
 - `own_extra`: port pixels in a cell's own mask that its redraw does not draw.
 
+Row -1 is the border row, the upper room's last row in the top five
+pixels: MarkTop 5:16f2 marks its cells and RedrawTopFast 3:1f4e redraws
+them with the same front pass (recover_room's row -1). A customized room
+(any foreground word with 0xc000, IsCustomizedRoom 3:1310) has no border
+row (3:32c8-32cc), and its row 0's clip reaches the top (5:01ba-01c4).
+
 Both sides leave out what the port draws elsewhere: items and flames
 (libraries 0, 1, 5), level 3-5 torch frames and level 14's moving fangs
 (the animated room), and CUST front records (`custom_occlusion`, repeated
 for every dirty cell). Alpha comes from the port's own SHAP decoder on both
 sides, so this checks which pieces are drawn where, not the decoder. Not
-covered: the upper border row (MarkTop 5:16f2), loose-floor, gate, scythe
-and plate variants (the rooms at rest), DrawFloorBuf/DrawHalf (QuickFloor),
-CheckGateInFore's actor test and the rectangle marking itself.
+covered: loose-floor, gate, scythe and plate variants (the rooms at rest),
+DrawFloorBuf/DrawHalf (QuickFloor), CheckGateInFore's actor test and the
+rectangle marking itself.
 """
 
 import argparse
@@ -50,14 +56,14 @@ from pop2.caverns import (FINAL_MOVING_SHAPES, SCENERY_LEVELS, cavern_command_sp
                           scenery_resource)
 from pop2.level_data import LevelDefinition
 from pop2.mac_resources import parse_resource_fork
-from tools.extract_caverns import CavernRecovery, hide_crevices, recover_room
+from tools.extract_caverns import CavernRecovery, customized_room, dirty_cell_top, hide_crevices, recover_room
 
 SIZE = (365, 510)
 LEVELS = tuple(number for numbers in SCENERY_LEVELS.values() for number in numbers)
 
 
-def cell_clip(column, row):
-    return max(0, row * 120 + 5), column * 51, (row + 1) * 120 + 5, (column + 1) * 51
+def cell_clip(column, row, customized=False):
+    return dirty_cell_top(row, customized), column * 51, (row + 1) * 120 + 5, (column + 1) * 51
 
 
 def animated_scenery(number, room, command):
@@ -125,12 +131,17 @@ def run_probe(source, levels=LEVELS, rooms=None):
                 port = port_cells(room_art)
                 extra_cover = (np.asarray(room_art.custom_occlusion) > 0
                                if room_art.custom_occlusion is not None else np.zeros(SIZE, bool))
+                customized = customized_room(level, room)
                 cases = []
-                for row, column in product(range(3), range(10)):
-                    commands = recover_room(executable, scenery, level, room, prince, _machine=machine,
-                                            cell_redraw=True, only={(row, column, 1)})['commands']
-                    native = native_cell(commands, art, custom, number, room)
-                    top, left, bottom, right = cell_clip(column, row)
+                for row, column in product(range(-1, 3), range(10)):
+                    if row == -1 and customized:
+                        # 3:32c8-32cc: no border redraw (RedrawTopFast 3:1f4e).
+                        native = np.zeros(SIZE, bool)
+                    else:
+                        commands = recover_room(executable, scenery, level, room, prince, _machine=machine,
+                                                cell_redraw=True, only={(row, column, 1)})['commands']
+                        native = native_cell(commands, art, custom, number, room)
+                    top, left, bottom, right = cell_clip(column, row, customized)
                     outside = native.copy()
                     outside[top:bottom, left:right] = False
                     if outside.any():

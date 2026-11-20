@@ -10,7 +10,8 @@ from math import prod
 import threading
 from time import monotonic, sleep
 
-from pop2.caverns import SCENERY_LEVELS, TEMPLE_TORCH_SHAPES, entry_room, scenery_name
+from pop2.caverns import (SCENERY_LEVELS, TEMPLE_TORCH_SHAPES, customized_room, dirty_cell_top,
+                          entry_room, scenery_name)
 from pop2.slot_drawing import clip_climbing, draw_order_key
 from pop2.crevices import CREVICE_TILE, hide_crevices
 from pop2.trapdoors import TRAPDOOR_TILE
@@ -320,8 +321,7 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
     put_long(a5 - 0x5014, lev)
     # LoadCustomRoomData 3:1378-13d6 locks CUST room*25+3975 at a5-0x4c9e for
     # customized rooms (foreground bits 0xc000, IsCustomizedRoom 3:1310).
-    customized = any(struct.unpack_from('>H', level, 0x780 + room_id * 120 + cell * 4)[0] & 0xc000
-                     for cell in range(30))
+    customized = customized_room(level, room_id)
     custom = (artwork['CUST'].get(3975 + (room_id + 1) * 25)
               if artwork is not None and customized else None)
     if custom is not None:
@@ -617,7 +617,8 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
             if climb_action is not None or floor_redraw:
                 raise ValueError('The whole-scene audit requires a full repaint')
             execute(3, 0x1c64)
-        rows = () if _native_scene else (2, 1, 0, -1)
+        # RedrawCellFast 3:1cb0-1cb4 skips the border row of a customized room.
+        rows = () if _native_scene else (2, 1, 0) if customized else (2, 1, 0, -1)
         # Cells whose inputs a render limited to some slots (`only`) needs.
         # The border row's native setup runs after every other row and draws
         # nothing itself: without a border slot, it and every cell without a
@@ -681,8 +682,9 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
                     if floor_redraw or cell_redraw:
                         # GetCells/ComputeClipRect supplies the dirty cell clip;
                         # RedrawCell intersects it with QuickFloor's actor rect.
+                        top = dirty_cell_top(draw_row, customized) if cell_redraw else max(0, draw_row * 120 + 5)
                         cpu.mem_write(a5 - 0x4600, struct.pack('>4h',
-                                      max(0, draw_row * 120 + 5), draw_column * 51,
+                                      top, draw_column * 51,
                                       (draw_row + 1) * 120 + 5, (draw_column + 1) * 51))
                     current_slot[0] = (draw_row, draw_column, draw_pass)
                     execute(3, entry, draw_pass)

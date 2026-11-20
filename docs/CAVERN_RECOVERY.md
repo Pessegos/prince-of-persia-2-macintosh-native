@@ -562,10 +562,27 @@ empty SHAP 3522; the user compared level 12 room 8's hanging Prince beside
 the statue and chose the original. With the clip the probe finds no pixel
 either way, and the six temple test routes draw all 41,709 characters with
 the same masks as the native per-cell redraw (six lost up to 33 pixels
-before). Both sides use the
-port's SHAP alpha, rooms at rest; the upper border row (MarkTop 5:16f2),
-QuickFloor's DrawFloorBuf/DrawHalf and the marking rectangle itself are
-outside the probe.
+before).
+
+The top five pixels are the border row, the upper room's last row. A
+character reaching above Y 5 marks its cells through MarkTop 5:16f2 (their
+own table at a5-0x43e4), and RedrawTopFast 3:1f4e redraws them with the
+upper room's back passes and DrawForeImg, clipped to the strip and the
+cell; row 0's own redraw starts at Y 5. So the border row's front pieces
+cover a head there like any other cell's, the upper room's wall faces
+included (10:20, 12:18 and 13:0 repeat a two-column face in a border cell,
+255 pixels each, now in `temple_wall_redraws`). A customized room, one
+with a foreground word carrying 0xc000 (IsCustomizedRoom 3:1310, kept at
+a5-0x4fb0, with or without a CUST record), has no border row at all:
+RedrawCellFast 3:1cb0-1cb4 and the dirty pass 3:32c8-32cc skip it, and
+ComputeClipRect lifts row 0's clip to Y 0 (5:01ba-01c4). The export drew
+the border anyway; only level 13 room 25 (native 26, customized without a
+CUST record) had one, a default floor strip the original never draws, and
+its masks hid 2,550 pixels. The export now skips it (`customized_room`),
+and `cavern_room` leaves an earlier import's border commands out. With the
+border row the probe covers 15,280 cells, none different. Both sides use
+the port's SHAP alpha, rooms at rest; QuickFloor's DrawFloorBuf/DrawHalf
+and the marking rectangle itself are outside the probe.
 
 Original instruction execution confirmed 6,144 climb selections, 512 gate
 catch admissions and 80 foreground-admission cases. Real-terrain tests replay

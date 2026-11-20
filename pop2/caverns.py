@@ -4,6 +4,7 @@ import json
 import struct
 from dataclasses import dataclass
 from functools import lru_cache
+from itertools import product
 from pathlib import Path
 
 from PIL import Image, ImageChops, ImageOps
@@ -345,6 +346,42 @@ def custom_foreground_records(resources, room_id):
     return frozenset(records)
 
 
+def customized_room(level, room_id):
+    """IsCustomizedRoom 3:1310: one of the room's 30 foreground words has 0xc000.
+
+    Room setup keeps it at a5-0x4fb0 (3:1c3c-1c46), with or without a CUST
+    record (LoadCustomRoomData 3:1378 locks one when it exists)."""
+    return any(struct.unpack_from('>H', level, 0x780 + room_id * 120 + cell * 4)[0] & 0xc000
+               for cell in range(30))
+
+
+def dirty_cell_top(row, customized):
+    """The top of ComputeClipRect 5:0162's clip for a dirty cell of `row`.
+
+    Rows start at row * 120 + 5 below the five-pixel border row (-1, the
+    room above's last row, 0-5). A customized room has no border row
+    (RedrawCellFast 3:1cb0-1cb4 and the dirty pass 3:32c8-32cc skip it),
+    and its first row's clip reaches the top instead (5:01ba-01c4)."""
+    if row == 0 and customized:
+        return 0
+    return max(0, row * 120 + 5)
+
+
+_CUSTOMIZED_ROOMS = {}
+
+
+def customized_rooms(level_number):
+    """The rooms of a scenery level for which `customized_room` holds."""
+    if not (ASSET_DIR / 'Prince.rsrc').is_file():
+        return frozenset()
+    if level_number not in _CUSTOMIZED_ROOMS:
+        from pop2.level_data import LevelDefinition
+
+        level = LevelDefinition.read(load_resource_file('Prince.rsrc'), level_number).data
+        _CUSTOMIZED_ROOMS[level_number] = frozenset(room for room in range(32) if customized_room(level, room))
+    return _CUSTOMIZED_ROOMS[level_number]
+
+
 _WALL_REDRAWS = {}
 
 
@@ -364,11 +401,21 @@ def temple_wall_redraws(level_number):
         from pop2.level_data import LevelDefinition
 
         terrain = LevelMap(LevelDefinition.read(load_resource_file('Prince.rsrc'), level_number).data)
+        customized = customized_rooms(level_number)
+
+        def tiles(room):
+            for row, column in product(range(3), range(10)):
+                yield column, row, terrain.tile(room, column, row), room
+            above = terrain.neighbor(room, 'up')
+            if above is not None and room not in customized:
+                # The border row (RedrawTopFast 3:1f4e) is the upper room's last row.
+                for column in range(10):
+                    yield column, -1, terrain.tile(above, column, 2), above
+
         _WALL_REDRAWS[level_number] = frozenset(
             (room, column, row, 3520 + (tile.foreground & 3))
-            for room in range(32) for row in range(3) for column in range(10)
-            for tile in (terrain.tile(room, column, row),)
-            if tile.room == room and tile.kind == 20 and tile.foreground & 3 in (2, 3))
+            for room in range(32) for column, row, tile, owner in tiles(room)
+            if tile.room == owner and tile.kind == 20 and tile.foreground & 3 in (2, 3))
     return _WALL_REDRAWS[level_number]
 
 
@@ -810,20 +857,25 @@ def clipped_sprite(sprite, command):
     return sprite, (x, bottom - sprite.height)
 
 
-def clip_cell_masks(cell_masks):
+def clip_cell_masks(cell_masks, customized=False):
     """Each playfield cell hides a character only inside itself.
 
     A marked cell's redraw (RedrawCell 3:1f04-1f30 -> DrawForeImg 3:2598)
     is clipped to the cell by ComputeClipRect 5:0162 (row * 120 + 5,
     column * 51, 120 by 51), so a piece reaching 5-7 pixels into the next
-    column never repaints over a character there. Row 0 keeps its upper
-    border rows (MarkTop 5:16f2 is not modelled); border cells are kept.
+    column never repaints over a character there. The border row -1 is
+    the upper room's last row, which MarkTop 5:16f2 marks and RedrawTopFast
+    3:1f4e redraws, front pieces too, clipped to its 0-5 strip. A
+    customized room has none (`dirty_cell_top`): its row 0 reaches the
+    top instead. Cells outside the room's columns are kept.
     """
     clipped = {}
     for cell, (mask, (x, y)) in cell_masks.items():
         column, row = cell
-        if 0 <= column < 10 and 0 <= row < 3:
-            top = 0 if row == 0 else row * 120 + 5
+        if row == -1 and customized:
+            continue
+        if 0 <= column < 10 and -1 <= row < 3:
+            top = dirty_cell_top(row, customized)
             left, right, bottom = column * 51, (column + 1) * 51, (row + 1) * 120 + 5
             box = (max(0, left - x), max(0, top - y),
                    min(mask.width, right - x), min(mask.height, bottom - y))
@@ -1644,8 +1696,11 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
     # A crevice reveal's redraw paints over the displayed screen: its back
     # pieces also cover the earlier front pieces (slot_variant `redrawn`).
     redraw_start = variant.get('redraw_start', len(commands)) if variant is not None else len(commands)
+    customized = room_id in customized_rooms(level_number)
     for position_index, command in enumerate(commands):
         layer, index, _, _, _, row = command[:6]
+        if customized and row == -1:
+            continue  # No border row (3:1cb0-1cb4); earlier imports drew one.
         library = command[7] if len(command) >= 8 else 4
         if animated and library in (0, 1, 5):
             continue  # Items and the temple flame animate separately.
@@ -1744,7 +1799,7 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
                     if merged is not None:
                         cell_masks[cell] = merged
     if cell_masks is not None:
-        cell_masks = clip_cell_masks(cell_masks)
+        cell_masks = clip_cell_masks(cell_masks, customized)
     if (level_number, room_id) == HORSE_ROOM:
         # Drawn after the room's back pieces (3:23ca-23e2), before the front.
         sprite = horse_sprite()
