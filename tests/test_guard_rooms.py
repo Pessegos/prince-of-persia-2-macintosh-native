@@ -105,6 +105,24 @@ class GuardRoomTests(unittest.TestCase):
         combat.enter_room(31, 1)
         self.assertNotIn(actor, combat.active_guards())
 
+    def test_room_entry_moves_visible_side_guard_records_into_the_room(self):
+        # CheckSideRoomsForVisibleOpps 6:2f4e-308a: a right neighbour's record
+        # below X 124 becomes a record of the entered room at X + 510; one
+        # further in stays where it is.
+        combat = self.fixture.encounter(31, player_x=150, running=False)
+        visible = self.fixture.runner(combat, 2, 20)
+        hidden = self.fixture.runner(combat, 2, 250)
+        combat.enter_room(0, 1)
+        self.assertEqual((visible.room, visible.state.target_x, visible.state.current_x),
+                         (0, 530, 530))
+        self.assertEqual(visible.entry_x, 530)
+        self.assertIn(visible, combat.room_encounters[0][0])
+        self.assertNotIn(visible, combat.room_encounters[2][0])
+        self.assertEqual((hidden.room, hidden.state.target_x), (2, 250))
+        self.assertNotIn(hidden, combat.active_guards())
+        combat.enter_room(2, 1)
+        self.assertEqual((visible.room, visible.state.target_x), (2, 20))
+
     def test_terminal_removed_guard_does_not_reappear_on_revisit(self):
         combat, actor = self.actor()
         actor.state.sequence_mode = 5

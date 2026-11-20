@@ -239,9 +239,13 @@ read frame by frame at the game's 12 Hz) shows two things the port lacked.
   14f0 was right; the record moves. The port's `bank_room` view leaves side
   records in their room, which is why the sword once rose there and
   hovered (alert 0 outside the Kid's room), and why the 2026-11-19 rule
-  never let it rise. `_take_visible_flame_swords` now moves visible type-10
+  never let it rise. `_take_visible_flame_swords` (now `_take_visible_side_records`) moved visible type-10
   records on entry. Ordinary guards and skeletons keep the bank view; the
   same transfer probably explains the level-3 skeleton (P, not changed).
+  *Later the same day:* 2f4e has no type test, so the port's
+  `_take_visible_side_records` now moves guards and skeletons too; the
+  level-3 room-15 heap becomes a room-17 record (AI_RECOVERY.md,
+  level-three skeletons).
 
 Key policies: `swordduel` presses up at pose 222, advances only when the
 sword rests more than 40 pixels away and counters from 161, so the forced

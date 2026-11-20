@@ -523,6 +523,7 @@ class CombatEncounter:
         self.last_guard_at = None
         self.rooftop_escape = False
         if self.spawn is None:
+            self._take_visible_side_records(self.player.room)
             self._select_opponent_bank(self.player.room)
             self._restore_opponent_records()
         if getattr(self, 'ruins', None) is not None:
@@ -636,7 +637,7 @@ class CombatEncounter:
             else:
                 self._capture_opponent_record(actor, restart_living=False, cell=opponent_row_cell(actor.row))
         if previous_room != room:
-            self._take_visible_flame_swords(room)
+            self._take_visible_side_records(room)
         self._select_opponent_bank(room)
         art = getattr(self, 'guard_art', None)
         if hasattr(art, 'select_room'):
@@ -652,28 +653,44 @@ class CombatEncounter:
                     actor.state.facing = self.rng.randrange(2)
         self.guard = self._nearest_guard() or next(iter(self.active_guards()), None)
 
-    def _take_visible_flame_swords(self, room):
+    def _take_visible_side_records(self, room):
         """CheckSideRoomsForVisibleOpps 6:2f4e-308a, first in InitOpps 2b7e:
-        a left neighbour's record with native X > 585, or a right one's below
-        331, moves into the entered room (AddOpp 358e, RemoveOpp 3462), X
-        rebased by 510. The flaming sword then wakes and fights there as a
-        record of the Kid's room (4:14f0). Other opponents keep the port's
-        side-bank view (bank_room), which does not move them."""
+        every record of the left neighbour with native X > 585 (0x249), or of
+        the right one below 331 (0x14b), moves into the entered room (AddOpp
+        358e, RemoveOpp 3462), X rebased by 510. The routine tests no actor
+        type, life or pose: guards, skeletons and the flaming sword alike
+        become records of the Kid's room. Its other branch (2fe8-300a, native
+        rooms 7/8 of LEVL 0x2186 = 6, record kind 3) is the palace copies'
+        rule, kept by the final-path code, so palace figures are left here.
+        Native AddOpp drops a sixth record; the port leaves it in its room."""
         terrain = getattr(self, 'terrain', None)
         if terrain is None:
             return
         for side, offset in (('left', -510), ('right', 510)):
             source = terrain.neighbor(room, side)
-            if source is None or source == room or source not in self.room_encounters:
+            if source is None or source == room:
                 continue
+            if source not in self.room_encounters:
+                # Native records exist from the level's start; the port builds
+                # a room's on first need, so only when one would be visible.
+                if (self._opponent_set() not in (0, 2, 7)
+                        or not any(visible_side_opponent(spawn.x, side)
+                                   for spawn in GuardSpawn.all_from_level(self.level, source))):
+                    continue
+                self._load_room(source)
             for actor in tuple(self.room_encounters[source][0]):
-                if (actor.flame_sword is None or len(self.guards) >= 5
+                if (len(self.guards) >= 5 or actor.final_jaffar or actor.final_path
+                        or actor.state.actor_type not in (2, 4, 10)
                         or not visible_side_opponent(actor.state.target_x, side)):
                     continue
                 self.room_encounters[source][0].remove(actor)
                 actor.room = room
                 actor.state.target_x += offset
                 actor.state.current_x += offset
+                # Like a carried actor (TransferOppInfo), it stands off the
+                # room's floor until it walks in; no cut sends it back.
+                x = actor.state.target_x
+                actor.entry_x = x if not 0 <= x < 510 else None
                 if actor.terrain_motion is not None:
                     actor.terrain_motion.room = room
                 self.guards.append(actor)
@@ -796,6 +813,10 @@ class CombatEncounter:
         self.guards.append(guard)
 
     def _select_opponent_bank(self, room):
+        # InitOpps numbers the Kid room's records first. Visible side records
+        # of types 2/4/10 were already moved into it (6:2f4e); the side view
+        # below remains for others, older saves and fixtures that place an
+        # actor beside the room without entering it.
         terrain = getattr(self, 'terrain', None)
         for side in ('left', 'right'):
             neighbor = terrain.neighbor(room, side) if terrain is not None else None

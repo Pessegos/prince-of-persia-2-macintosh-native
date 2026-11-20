@@ -575,10 +575,23 @@ room-15 heap into room 17 before it visibly stirs; about seven frames after
 the cut the skeleton's three flasks appear, then its sword tip shows at
 room 17's left edge and stays there, the skeleton never crossing. A
 static reading of 4:14f0-151e (the wake loop counts the records of
-a5-0x4fc2's room, which has none in room 17) would forbid that rise, so
-that reading is incomplete; the side-room view is kept on video evidence
-and the mechanism that lets the native wake a side-room record is not
-recovered. The health meter now selects
+a5-0x4fc2's room, which has none in room 17) seemed to forbid that rise.
+The mechanism is CheckSideRoomsForVisibleOpps `6:2f4e-308a`, the first call
+of InitOpps (`6:2b82`): on entry every record of the left neighbour with
+native X > 585, or of the right one below 331, is copied into the Kid's
+room with X -/+510 (AddOpp `358e`) and deleted from its room (RemoveOpp
+`3462`). The routine tests no actor type, life or pose; its only other
+branch (`2fe8-300a`) also moves kind-3 records of native rooms 7/8 when
+LEVL 0x2186 is 6 (the palace copies). So the room-15 heap at X 381 becomes
+a room-17 record at X -129 and wakes by the Kid-room rule. Since
+2026-11-20 the port moves visible records of actors 2, 4 and 10 this way
+on every room change and at level start (`_take_visible_side_records`);
+a moved actor keeps `entry_x` until it walks onto the floor, as a carried
+one does, and leaving the room stores it back through the existing Cut
+of an out-of-bounds record. Palace figures, other actor types, a sixth
+record (native AddOpp drops it; the port keeps it in its room) and
+fixtures that place an actor beside the room without entering it still
+use the side-bank view. The health meter now selects
 the nearest living actor in the current or horizontal side rooms using the
 original horizontal/vertical distance comparison described above,
 independently of the same-room sword-control target. Dormant bones have no

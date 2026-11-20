@@ -56,7 +56,10 @@ class SkeletonTests(unittest.TestCase):
         actor.sword_drawn = actor.targetable = True
         actor.alert_mode = 3
         actor.state.facing = int(side == 'left')
-        actor.state.target_x = actor.state.current_x = (473 if side == 'left' else 17)
+        # CheckSideRoomsForVisibleOpps 6:2f4e moved the record into the
+        # entered room, X rebased by 510.
+        self.assertEqual(actor.room, combat.player.room)
+        actor.state.target_x = actor.state.current_x = (-37 if side == 'left' else 527)
         select_sequence(actor, 227)
         actor.runtime.next_frame()
         return game, combat, actor
@@ -66,7 +69,7 @@ class SkeletonTests(unittest.TestCase):
             with self.subTest(side=side):
                 _, combat, actor = self.boundary_encounter(side)
                 self.assertFalse(getattr(combat, 'god_mode', False))
-                self.assertNotIn(actor, combat.guards)
+                self.assertIn(actor, combat.guards)
                 actor.state.action = 154
                 position = actor.room, actor.state.target_x, actor.state.current_x
                 events = combat.resolve_contacts()
@@ -75,7 +78,7 @@ class SkeletonTests(unittest.TestCase):
                 self.assertTrue(combat.player.sword_drawn)
                 self.assertTrue(combat.player.recovering)
                 self.assertEqual(position, (actor.room, actor.state.target_x, actor.state.current_x))
-                self.assertIs(combat.room_encounters[14][0][0], actor)
+                self.assertIs(combat.room_encounters[combat.player.room][0][0], actor)
                 self.assertEqual(combat.resolve_contacts(), [])
                 self.assertEqual(combat.player.life, 2)
 
@@ -96,9 +99,9 @@ class SkeletonTests(unittest.TestCase):
                 events = combat.resolve_contacts()
                 self.assertEqual([(e.kind, e.actor) for e in events], [('death', 'guard')])
                 self.assertEqual((actor.life, actor.room, actor.skeleton.phase),
-                                 (0, 14, 'collapsing'))
+                                 (0, combat.player.room, 'collapsing'))
                 self.assertEqual(actor.skeleton.timer, 120)
-                self.assertIs(combat.room_encounters[14][0][0], actor)
+                self.assertIs(combat.room_encounters[combat.player.room][0][0], actor)
 
     def test_side_room_parries_update_real_actors_in_both_directions(self):
         for side in ('left', 'right'):
@@ -155,7 +158,7 @@ class SkeletonTests(unittest.TestCase):
             self.tick(combat)
             if combat.resolve_contacts():
                 break
-        self.assertEqual((actor.room, combat.player.room), (14, 16))
+        self.assertEqual((actor.room, combat.player.room), (16, 16))
         self.assertEqual(combat.player.life, 2)
         self.assertTrue(combat.player.sword_drawn)
 
@@ -177,7 +180,7 @@ class SkeletonTests(unittest.TestCase):
                 RooftopSceneTests.tick(self)
                 if scene.combat.player.life < 3:
                     break
-        self.assertEqual((actor.room, scene.room_id), (14, 16))
+        self.assertEqual((actor.room, scene.room_id), (16, 16))
         self.assertEqual(scene.combat.player.life, 2)
         self.assertTrue(scene.sword_drawn)
         self.assertTrue(scene.combat.player.recovering)
@@ -367,7 +370,7 @@ class SkeletonTests(unittest.TestCase):
             if actor.skeleton.phase == 'rising':
                 break
         self.assertEqual(actor.skeleton.phase, 'rising')
-        self.assertEqual((combat.player.room, actor.room, actor.life), (16, 14, 3))
+        self.assertEqual((combat.player.room, actor.room, actor.life), (16, 16, 3))
         self.assertIs(combat.health_opponent(), actor)
         self.assertIs(combat.guard, actor)
         before = actor.state.target_x, actor.state.cursor, actor.skeleton.phase, actor.life
@@ -376,7 +379,7 @@ class SkeletonTests(unittest.TestCase):
                                   actor.skeleton.phase, actor.life))
         self.tick(combat, 22)
         self.assertEqual(actor.skeleton.phase, 'active')
-        self.assertGreater(actor.state.target_x, 381)
+        self.assertGreater(actor.state.target_x, 381 - 510)
         self.assert_enemy_meter(combat, 3)
 
     def test_live_run_past_skeleton_displays_meter_as_soon_as_it_rises_offscreen(self):
@@ -405,7 +408,7 @@ class SkeletonTests(unittest.TestCase):
                 RooftopSceneTests.tick(self)
                 if actor.alive:
                     break
-        self.assertEqual((s.room_id, actor.room, actor.skeleton.phase), (16, 14, 'rising'))
+        self.assertEqual((s.room_id, actor.room, actor.skeleton.phase), (16, 16, 'rising'))
         self.assertIs(s.combat.guard, actor)
         self.assertIs(s.combat.health_opponent(), actor)
         for life in (3, 2, 1, 0):
@@ -757,14 +760,16 @@ class SkeletonTests(unittest.TestCase):
         self.assertNotIn(14, combat.room_encounters)
         game.place(16, 2, 40, 0)
         combat.guard_art = self.art
-        actor, = combat.room_encounters[14][0]
-        self.assertEqual((actor.room, actor.state.target_x), (14, 381))
+        self.assertEqual(combat.room_encounters[14][0], [])
+        actor, = combat.room_encounters[16][0]
+        self.assertEqual((actor.room, actor.state.target_x), (16, 381 - 510))
         self.assertIn(actor, combat.active_guards())
         self.tick(combat, 100)
         self.assertTrue(actor.alive)
         self.assertIs(combat.health_opponent(), actor)
         combat.enter_room(14, 2)
         self.assertIs(combat.room_encounters[14][0][0], actor)
+        self.assertEqual(actor.room, 14)
 
     def test_invisible_neighbor_is_not_initialized_by_room_entry(self):
         game = GameSession.load(self.resources, 3)
@@ -785,8 +790,11 @@ class SkeletonTests(unittest.TestCase):
                 actor.runtime.next_frame()
                 pose = actor.state.action, actor.state.sequence_id, actor.state.cursor
                 combat.enter_room(room, 2)
-                self.assertEqual(actor.room, room if follows else 14)
-                expected = x + (510 if room == 13 else -510) if follows else x
+                # A record left at X 384 is still visible from room 17 (> 378)
+                # and moves in (6:2f4e); X 124 is not visible from room 14.
+                moved = follows or room == 16
+                self.assertEqual(actor.room, room if moved else 14)
+                expected = x + (510 if room == 13 else -510) if moved else x
                 self.assertEqual((actor.state.target_x, actor.state.current_x), (expected, expected))
                 reinitialized = room == 16 and x == 384
                 self.assertEqual((actor.life, actor.max_life), (0 if reinitialized else 2, 3))
@@ -852,7 +860,8 @@ class SkeletonTests(unittest.TestCase):
         select_sequence(actor, 119)
         actor.runtime.next_frame()
         combat.enter_room(16, 2)
-        self.assertEqual(actor.room, 14)
+        # Not carried with its pose; the stored record moves in (6:2f4e).
+        self.assertEqual((actor.room, actor.state.target_x), (16, 400 - 510))
         self.assertIn(actor, combat.active_guards())
         self.assertEqual(actor.bank_room, 16)
 
@@ -1037,9 +1046,11 @@ class SkeletonTests(unittest.TestCase):
                                                 current_x=250, target_x=250)),
                 skeleton=replace(actor.skeleton)))
         combat.enter_room(16, 2)
-        self.assertEqual(combat.active_guards(), residents + [actor])
+        self.assertEqual(combat.active_guards(), residents)
+        self.assertIs(residents[4], actor)
         self.assertEqual(actor.bank_slot, 4)
         combat.enter_room(0, 2)
+        self.assertEqual(actor.room, 14)
         residents.append(replace(residents[0], runtime=SequenceRuntime(
             combat.sequences, SequenceState(119, actor_type=4, action=206, cursor=1,
                                             current_x=250, target_x=250)),
@@ -1068,10 +1079,9 @@ class SkeletonTests(unittest.TestCase):
         combat.enter_room(16, 2)
         select_sequence(actor, 119)
         actor.runtime.next_frame()
-        actor.state.target_x = 378
-        combat.shake_bones(16, 2)
+        self.assertEqual(actor.room, 16)
+        combat.shake_bones(0, 2)
         self.assertEqual(actor.selected_sequence, 119)
-        actor.state.target_x = 379
         combat.shake_bones(16, 2)
         self.assertEqual(actor.selected_sequence, 112)
         self.assertEqual(actor.skeleton.timer, 120)

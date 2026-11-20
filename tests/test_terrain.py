@@ -2218,8 +2218,10 @@ class RooftopSceneTests(unittest.TestCase):
                     break
             self.assertEqual(scene.room_id, 1)
             self.assertEqual(c.player.life, 3)
-            self.assertEqual(len(c.guards), 1)
-            self.assertEqual(c.guards[0].life, 1)
+            # The corpse left at X 110 is visible from room 1, so its record
+            # moves in at X 620, off the floor (6:2f4e).
+            self.assertEqual([(g.life, g.state.target_x if not g.alive else None)
+                              for g in c.guards], [(1, None), (0, 620)])
 
 
 

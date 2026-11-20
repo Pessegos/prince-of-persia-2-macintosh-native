@@ -233,14 +233,14 @@ class SaveFormatTests(unittest.TestCase):
     def test_side_room_skeleton_bank_roundtrip_keeps_selection_and_order(self):
         original = GameSession.load(self.resources, 3)
         original.place(16, 2, 40, 0)
-        actor, = original.combat.room_encounters[14][0]
+        actor, = original.combat.room_encounters[16][0]
         # Already imported actors remain active even after moving out of the
         # region that permits a fresh import on the next room entry.
         actor.state.target_x = actor.state.current_x = 300
         actor.skeleton.timer = 99
         write_save(self.path, capture(original))
         loaded, _saved = read_save(self.path, self.resources)
-        restored, = loaded.combat.room_encounters[14][0]
+        restored, = loaded.combat.room_encounters[16][0]
         self.assertEqual((restored.bank_room, restored.bank_slot), (16, 0))
         self.assertIn(restored, loaded.combat.active_guards())
         loaded.combat.advance_guard()
