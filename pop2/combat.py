@@ -526,6 +526,7 @@ class CombatEncounter:
             self._take_visible_side_records(self.player.room)
             self._select_opponent_bank(self.player.room)
             self._restore_opponent_records()
+            self._settle_entered_heaps()
         if getattr(self, 'ruins', None) is not None:
             self.ruins.rooms, self.ruins.banked = {}, None
             self.ruins.load_room(self, self.player.room)
@@ -578,7 +579,6 @@ class CombatEncounter:
                     from pop2.skeleton import Skeleton
                     fighter.skeleton = Skeleton.from_spawn(spawn)
                     fighter.skeleton.initialize(fighter, slot)
-                    fighter.skeleton.settle_heap(self, fighter)
                 elif spawn.actor_type == 10:
                     from pop2.flame_sword import FlameSword
                     fighter.flame_sword = FlameSword()
@@ -644,6 +644,7 @@ class CombatEncounter:
             # InitOpps -> CheckLoadedOppSet 3:5278 loads the room's set.
             art.select_room(self.guards)
         self._restore_opponent_records()
+        self._settle_entered_heaps()
         if self.level_kind == 6 and room == FALSE_PRINCE_ROOM and previous_room != room:
             # CheckSideRoomsForVisibleOpps 6:2b7e -> 6:3972, actor 6 in
             # native room 6 (6:39a2-39c8): each figure faces Rnd(1) - 1 on
@@ -710,6 +711,17 @@ class CombatEncounter:
             if restored and living:
                 self.player.state.callback_flag = 0
                 self.advance_pause = self.attack_pause = 0
+
+    def _settle_entered_heaps(self):
+        """InitOpps 6:2cd4-2cee: each zero-cursor skeleton record of the
+        Kid's room goes through SkelAddOpponent 4:198a when he enters it,
+        after 2f4e has brought in the side rooms' visible records, so the
+        edge settle (4:19f0) measures the X the record has then, with the
+        Prince's frame of that entry. A room the port builds earlier (a
+        side room, a debris check) is not settled until it is entered."""
+        for actor in self.guards:
+            if actor.skeleton is not None and actor.skeleton.settle_pending:
+                actor.skeleton.settle_heap(self, actor)
 
     def _opponent_set(self):
         return struct.unpack_from(">h", self.level, 0x21a4)[0] if self.level is not None else 0

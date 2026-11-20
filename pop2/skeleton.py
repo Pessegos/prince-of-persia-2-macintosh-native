@@ -56,6 +56,10 @@ class Skeleton:
     victory_pending: bool = False
     rise_song_pending: bool = False
     room_record: SkeletonRoomRecord | None = None
+    # InitOpps 6:2ce6 calls SkelAddOpponent for a zero-cursor record each
+    # time the Kid enters its room; its edge settle (4:19f0-1a54) waits
+    # for that entry, not for the port building the room.
+    settle_pending: bool = False
     native_alive: bool = False
 
     @classmethod
@@ -74,14 +78,24 @@ class Skeleton:
         actor.targetable = active
         select_sequence(actor, 63 if active else 112 if self.marker == 0 and slot == 0 else 119)
         actor.runtime.next_frame()
+        self.settle_pending = True
+
+    @staticmethod
+    def heap_column(actor):
+        # InitOpps 6:2c9a sets a5-0x504a = GetCharCol(record X) (4:3ad6):
+        # the record's X itself, not the heap pose's supporting foot.
+        from pop2.opponent_generation import character_column
+
+        return character_column(actor.state.target_x)
 
     def settle_heap(self, encounter, actor):
         # SkelAddOpponent 4:19f0-1a54: a heap with open space on its left
         # (behind a right-facing heap, ahead of a left-facing one) is moved
         # right until its foot is 54 pixels from that cell's left edge.
+        self.settle_pending = False
         if self.phase == 'active':
             return 0
-        column = encounter._supporting_column(actor)
+        column = self.heap_column(actor)
         if encounter._guard_tile(actor, column - 1).kind not in EMPTY_TILES:
             return 0
         # GetFCharX 4:3a72 reads the frame record already loaded (a5-0x520e/

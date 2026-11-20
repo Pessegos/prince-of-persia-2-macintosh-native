@@ -1185,14 +1185,32 @@ Macintosh the heap is not drawn there.
 SkelAddOpponent (4:19f0-1a54) moves a heap with open space on its left
 (behind a right-facing heap, ahead of a left-facing one) to the right, until
 its foot is 54 pixels from that cell's left edge.
-- The port now applies this when it creates a heap. Only room 14 in levels
-  3-4 is affected.
+- InitOpps (6:2cd4-2cee) calls SkelAddOpponent for a record whose SEQS
+  cursor is zero, each time the Kid enters its room, after
+  CheckSideRoomsForVisibleOpps (6:2f4e) has brought in the neighbours'
+  visible records. Since 2026-11-20 the port settles then too
+  (`CombatEncounter._settle_entered_heaps`, `Skeleton.settle_pending`), not
+  when it first builds the room; a room built early (as a side room or for
+  debris) keeps its LEVL X until entered, and a zero-cursor record settles
+  again on its next entry. Of the real data only room 14 in levels 3-4 moves.
+- The tested cell is beside GetCharCol of the record's X (a5-0x504a, set at
+  6:2c9a by 4:3ad6), not the heap pose's supporting foot as the port first
+  used; no real heap's decision changes.
 - The native routine measures with the frame record already loaded (a5
   globals 0x520e/0x520a). When opponents are created on room entry, that is
   the Prince's current frame [I], so the port uses it too. With a standing
   Prince the heap moves 31 pixels and ends partly behind the pillar, as in
   an emulator image; that image fitted best about 9 pixels further right,
   which depends on the Prince's pose at entry.
+- `tools/probe_skeleton_settle.py` runs the original 4:198a-1a70 with its
+  callees (17fa, 2bae, 39fc, 3a48-3ae8, ReadCell 27ee, 3:4eb2, 5:48b0,
+  6:3642) on every LEVL skeleton record of levels 3-5. It sweeps the record
+  X from native 190 to 730 (step 5), both facings and the loaded frame
+  record's fields (a5-0x520e offset -8..60, a5-0x520a flags 0 or 0xc5).
+  The InitOpps globals are supplied from the record. 180,504 cases (7,992
+  moved) match `Skeleton.settle_heap` in X and SEQS, with the heap pose
+  from the port's FRAM 750 decoder. `tests.test_probe_skeleton_settle` runs
+  a sixteenth of the sweep and rejects the old foot-column rule.
 
 Native execution matched 644 pickup admission/alignment/sequence/removal
 cases, 128 particle-controller states and 150 life/capacity/song effects.

@@ -278,6 +278,45 @@ class LevelFourHeapPlacementTests(unittest.TestCase):
         self.assertGreater(heap.state.target_x, 302 + 20)
         self.assertEqual(heap.skeleton.settle_heap(scene.combat, heap), 0)
 
+    def test_the_heap_settles_when_its_room_is_entered_not_when_it_is_built(self):
+        # InitOpps 6:2ce6 runs SkelAddOpponent for a zero-cursor record on
+        # each entry to its room, after 2f4e. Before 2026-11-20 the port
+        # settled when it built the room (as a side room, or for debris).
+        from pop2.combat import GuardSpawn
+        from tests.test_terrain import RooftopSceneTests
+
+        RooftopSceneTests.setUp(self)
+        scene = self.scene
+        scene.load_level(4)
+        RooftopSceneTests.tick(self, 16)
+        combat = scene.combat
+        levl_x = next(spawn.x for spawn in GuardSpawn.all_from_level(combat.level, 13)
+                      if spawn.skeleton_words)
+        self.assertNotEqual(combat.player.room, 13)
+        combat._load_room(13)
+        heap = next(guard for guard in combat.room_encounters[13][0] if guard.skeleton)
+        self.assertEqual(heap.state.target_x, levl_x)
+        self.assertTrue(heap.skeleton.settle_pending)
+        scene.jump_to_room(13, 0, 450, 0)
+        heap = next(guard for guard in combat.active_guards() if guard.room == 13)
+        self.assertGreater(heap.state.target_x, levl_x + 20)
+        self.assertFalse(heap.skeleton.settle_pending)
+        settled = heap.state.target_x
+
+        # Leaving keeps the heap's cursor: re-entering does not settle again.
+        left = combat.terrain.neighbor(13, 'left')
+        combat.enter_room(left, 0)
+        heap.state.target_x = heap.state.current_x = levl_x
+        combat.enter_room(13, 0)
+        self.assertEqual(heap.state.target_x, levl_x)
+
+        # A zero-cursor record goes through SkelAddOpponent again.
+        combat.enter_room(left, 0)
+        heap.skeleton.room_record.cursor = 0
+        combat.enter_room(13, 0)
+        self.assertEqual(heap.state.target_x, settled)
+        self.assertFalse(heap.skeleton.settle_pending)
+
 
 @unittest.skipUnless((ASSET_DIR / 'caverns_level4.json').is_file(), 'Imported level-four resources required')
 class LevelFourSkeletonChaseTests(unittest.TestCase):

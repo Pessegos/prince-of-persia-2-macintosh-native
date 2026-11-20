@@ -601,8 +601,12 @@ compares record membership, row, X and actor type with the production
 the current/left/right room globals are supplied, from the level's links.
 The level's own records give 238 entries (8 transfers); a sweep appends
 one copy of each record kind to each side room at native X 100, 330-332,
-400, 584-586 and 650, for 3,445 more entries (881 transfers). There are
-no mismatches. Excluded and counted:
+400, 584-586 and 650, for 3,498 more entries (894 transfers). There are
+no mismatches. Since the port settles skeleton heaps (SkelAddOpponent
+`4:19f0`) on entering their room rather than on building it, a side room
+built early keeps the LEVL X that native 2f4e reads; the 53 synthetic heaps
+once excluded for a settle that crossed a threshold now match, and a
+regression rejects settling at build time. Excluded and counted:
 
 - 30 level-14 entries where the palace branch (`2fe8-300a`) moves a
   kind-3 record between native rooms 7 and 8, whatever its X. Those two
@@ -610,10 +614,6 @@ no mismatches. Excluded and counted:
   rooms' final-path figures active while the Prince is in either
   (`active_guards`), so the figure is seen in the same place without
   changing its bank.
-- 53 synthetic heaps that the port settles (SkelAddOpponent `4:19f0`,
-  done when the room is built) across a threshold that their LEVL X does
-  not cross. Native 2f4e reads the LEVL X before InitOpps adds the heap.
-  No real LEVL heap is near enough to a threshold for this to matter.
 - A sixth record (the port's capacity safeguard).
 
 Run it with `python -m tools.probe_side_room_records <recovery dir>

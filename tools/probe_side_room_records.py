@@ -9,7 +9,9 @@ the level's own links; no game or emulator is operated. The port side calls
 the production routine `CombatEncounter._take_visible_side_records` after
 loading the entered room alone, so it checks that rule, not the full
 enter_room carry/Cut scheduler. Skeleton heaps are compared at their LEVL X:
-SkelAddOpponent's settle (4:19f0) runs later in InitOpps than 6:2f4e.
+SkelAddOpponent's settle (4:19f0) runs later in InitOpps than 6:2f4e, and
+the port settles only on entry (`_settle_entered_heaps`), so building a side
+room early leaves its records at the X 2f4e reads.
 
 Excluded and reported separately: records the port does not represent in
 the ordinary bank (temple kinds other than the guard and the flaming sword),
@@ -27,10 +29,9 @@ import random
 import struct
 
 from pop2.animation_data import sequence_words
-from pop2.combat import CombatEncounter, GuardSpawn, visible_side_opponent
+from pop2.combat import CombatEncounter, GuardSpawn
 from pop2.mac_resources import parse_resource_fork
 from pop2.sequence_runtime import SequenceRuntime, SequenceState
-from pop2.skeleton import Skeleton
 from pop2.terrain import LevelMap
 from tools.probe_level7_rules import NativeRules
 
@@ -63,14 +64,6 @@ def with_record(level, native_room, words):
     struct.pack_into('>19h', data, start + 2 + count * 38, *words)
     struct.pack_into('>H', data, start, count + 1)
     return bytes(data)
-
-
-def _recording_settle(settle):
-    def wrapped(self, encounter, actor):
-        shift = settle(self, encounter, actor)
-        actor.probe_settle_shift = getattr(actor, 'probe_settle_shift', 0) + shift
-        return shift
-    return wrapped
 
 
 def compare_entry(machine, sequences, level, room):
@@ -108,19 +101,6 @@ def compare_entry(machine, sequences, level, room):
         2, action=15, current_x=150, target_x=150, actor_type=0, level_kind=kind))
     encounter = CombatEncounter(player, sequences, None, 509, level=level, rng=random.Random(1))
     encounter.terrain = terrain
-    # A heap the port has settled (4:19f0) across a threshold its LEVL X
-    # does not cross: native 2f4e sees the LEVL X. Checked on a copy, since
-    # loading a side room early would change what the port rule sees.
-    encounter.room_encounters = {}
-    for side, _delta in SIDES:
-        if sides[side] is None or sides[side] == room:
-            continue
-        encounter._load_room(sides[side])
-        for actor in encounter.room_encounters[sides[side]][0]:
-            shift = getattr(actor, 'probe_settle_shift', 0)
-            if shift and (visible_side_opponent(actor.state.target_x, side)
-                          != visible_side_opponent(actor.state.target_x - shift, side)):
-                return 'settle_crossing_excluded', moved, [], digest
     encounter.room_encounters = {}
     encounter.player.room = room
     encounter._load_room(room)
@@ -128,7 +108,7 @@ def compare_entry(machine, sequences, level, room):
     encounter._take_visible_side_records(room)
     for check in {room, *(r for r in sides.values() if r is not None)}:
         encounter._load_room(check)
-        actual = Counter((a.row, a.state.target_x + 207 - getattr(a, 'probe_settle_shift', 0),
+        actual = Counter((a.row, a.state.target_x + 207,
                           a.state.actor_type)
                          for a in encounter.room_encounters[check][0])
         expected = Counter()
@@ -147,22 +127,12 @@ def compare_entry(machine, sequences, level, room):
             raise AssertionError(('side records', struct.unpack_from('>H', level, 0x218a)[0],
                                   room + 1, check + 1, sorted(actual.items()),
                                   sorted(expected.items()),
-                                  [(a.state.target_x, getattr(a, 'probe_settle_shift', 0))
-                                   for r in sides.values() if r is not None
+                                  [a.state.target_x for r in sides.values() if r is not None
                                    for a in encounter.room_encounters.get(r, ((),))[0]]))
     return 'room_entries', moved, [], digest
 
 
 def run_probe(source):
-    original_settle = Skeleton.settle_heap
-    Skeleton.settle_heap = _recording_settle(original_settle)
-    try:
-        return _run_probe(source)
-    finally:
-        Skeleton.settle_heap = original_settle
-
-
-def _run_probe(source):
     forks = Path(source) / 'resource_forks'
     executable = (forks / 'Prince of Persia 2.bin').read_bytes()
     prince = parse_resource_fork((forks / 'Prince.rsrc.bin').read_bytes())
