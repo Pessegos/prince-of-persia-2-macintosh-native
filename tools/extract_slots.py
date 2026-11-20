@@ -253,25 +253,35 @@ def room_renderer(context, room, recover, progress=lambda _text: None):
         counts.append(len(entry['frames']))
     cache = {}
 
+    def unit_level(states):
+        """The level bytes with these unit states, except the door's phase."""
+        loose = states[:len(members)]
+        mutable = mutate_level(level, choices, keys, members, loose, clears)
+        for index, state in zip(scythes, states[len(members):]):
+            for source_room, cell in pairs[index]:
+                offset = 0x780 + source_room * 120 + cell * 4
+                foreground = struct.unpack_from('>H', mutable, offset)[0] & 0xff00
+                struct.pack_into('>H', mutable, offset, foreground | SCYTHE_STATES[state])
+        for (source_room, cell), state in zip(bridge, states[len(members) + len(scythes):]):
+            offset = 0x780 + source_room * 120 + cell * 4
+            foreground = struct.unpack_from('>H', mutable, offset)[0]
+            if state == 3:
+                struct.pack_into('>H', mutable, source_room * 60 + cell * 2, 0)
+                struct.pack_into('>H', mutable, offset, 0xc000)
+            else:
+                struct.pack_into('>H', mutable, offset, (foreground & 0xfff0) | state)
+        return mutable
+
+    def door_level(mutable, states):
+        offset = 0x780 + room * 120 + entry['cell'] * 4
+        foreground = struct.unpack_from('>H', level, offset)[0] & 0xff00
+        struct.pack_into('>H', mutable, offset, foreground | entry['frames'][states[-1]]['phase'])
+
     def render(states, only=None):
         """{list name: scene}; with `only` (a set of slots), just those slots, untracked."""
         if only is not None or states not in cache:
             progress(f'Cavern floor slots: room {room + 1}/32, renders {len(cache) + 1}')
-            loose = states[:len(members)]
-            mutable = mutate_level(level, choices, keys, members, loose, clears)
-            for index, state in zip(scythes, states[len(members):]):
-                for source_room, cell in pairs[index]:
-                    offset = 0x780 + source_room * 120 + cell * 4
-                    foreground = struct.unpack_from('>H', mutable, offset)[0] & 0xff00
-                    struct.pack_into('>H', mutable, offset, foreground | SCYTHE_STATES[state])
-            for (source_room, cell), state in zip(bridge, states[len(members) + len(scythes):]):
-                offset = 0x780 + source_room * 120 + cell * 4
-                foreground = struct.unpack_from('>H', mutable, offset)[0]
-                if state == 3:
-                    struct.pack_into('>H', mutable, source_room * 60 + cell * 2, 0)
-                    struct.pack_into('>H', mutable, offset, 0xc000)
-                else:
-                    struct.pack_into('>H', mutable, offset, (foreground & 0xfff0) | state)
+            mutable = unit_level(states)
 
             def draw(*args, mutable=bytes(mutable), **options):
                 if only is not None:
@@ -289,15 +299,21 @@ def room_renderer(context, room, recover, progress=lambda _text: None):
                 for action in actions:
                     lists[f'climb:{action}'] = lambda action=action: draw(action)
             if door:
-                offset = 0x780 + room * 120 + entry['cell'] * 4
-                foreground = struct.unpack_from('>H', level, offset)[0] & 0xff00
-                struct.pack_into('>H', mutable, offset, foreground | entry['frames'][states[-1]]['phase'])
+                door_level(mutable, states)
             lists['commands'] = lambda mutable=bytes(mutable): draw(mutable=mutable)
             if only is not None:
                 return LazyScenes(lists)
             cache[states] = LazyScenes(lists)
         return cache[states]
 
+    def scene_level(states):
+        """The level bytes the room's scenery (`commands`) is drawn from."""
+        mutable = unit_level(states)
+        if door:
+            door_level(mutable, states)
+        return bytes(mutable)
+
+    render.scene_level = scene_level
     unit_cells = [{keys[index] for index in group} | {clears[keys[index]] for index in group
                                                       if keys[index] in clears}
                   for group in members]

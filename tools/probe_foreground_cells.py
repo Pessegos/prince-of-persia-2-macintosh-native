@@ -36,9 +36,15 @@ Both sides leave out what the port draws elsewhere: items and flames
 (the animated room), and CUST front records (`custom_occlusion`, repeated
 for every dirty cell). Alpha comes from the port's own SHAP decoder on both
 sides, so this checks which pieces are drawn where, not the decoder. Not
-covered: loose-floor, gate, scythe and plate variants (the rooms at rest),
-DrawFloorBuf/DrawHalf (QuickFloor), CheckGateInFore's actor test and the
-rectangle marking itself.
+covered: DrawFloorBuf/DrawHalf (QuickFloor), CheckGateInFore's actor test
+and the rectangle marking itself.
+
+`--variants` and `--pressure` probe rooms in motion: each slot unit's
+other states (loose floors, crevices, scythes, planks, the entry door) or
+each trigger target's other phases (gates, exits, plates, bars, darts),
+one at a time with the rest at rest, the native level words changed to
+match. Two units moving at once and on-screen crevice reveals are not
+covered.
 """
 
 import argparse
@@ -105,6 +111,69 @@ def port_cells(room_art):
     return cells
 
 
+def compare_room(machine, sources, level, number, room, room_art, totals, digest, cells=None):
+    """The cases where `room_art`'s cell masks differ from each dirty cell's redraw."""
+    executable, scenery, prince = sources
+    _program, resources, palette, shapes = room_assets(number, room)
+    art = (resources, palette, shapes)
+    custom = custom_foreground_records(resources, room)
+    port = port_cells(room_art)
+    extra_cover = (np.asarray(room_art.custom_occlusion) > 0
+                   if room_art.custom_occlusion is not None else np.zeros(SIZE, bool))
+    customized = customized_room(level, room)
+    cases = []
+    for row, column in product(range(-1, 3), range(10)):
+        if cells is not None and (column, row) not in cells:
+            continue
+        if row == -1 and customized:
+            # 3:32c8-32cc: no border redraw (RedrawTopFast 3:1f4e).
+            native = np.zeros(SIZE, bool)
+        else:
+            commands = recover_room(executable, scenery, level, room, prince, _machine=machine,
+                                    cell_redraw=True, only={(row, column, 1)})['commands']
+            native = native_cell(commands, art, custom, number, room)
+        top, left, bottom, right = cell_clip(column, row, customized)
+        outside = native.copy()
+        outside[top:bottom, left:right] = False
+        if outside.any():
+            raise AssertionError(f'Level {number} room {room} cell {column},{row} drew outside its clip')
+        inside = native[top:bottom, left:right]
+        own = port.get((column, row), np.zeros(SIZE, bool))[top:bottom, left:right]
+        missing = int((inside & ~own).sum())
+        bleed = {}
+        for (other_column, other_row), covered in port.items():
+            if (other_column, other_row) == (column, row):
+                continue
+            part = covered[top:bottom, left:right] & ~inside & ~extra_cover[top:bottom, left:right]
+            if part.any():
+                bleed[f'{other_column},{other_row}'] = int(part.sum())
+        own_extra = int((own & ~inside & ~extra_cover[top:bottom, left:right]).sum())
+        totals['cells'] += 1
+        totals['native_pixels'] += int(inside.sum())
+        totals['missing_pixels'] += missing
+        totals['bleed_pixels'] += sum(bleed.values())
+        totals['own_extra_pixels'] += own_extra
+        if missing or bleed or own_extra:
+            cases.append(dict(cell=[column, row], missing=missing, bleed=bleed, own_extra=own_extra))
+        digest.update(struct.pack('>4h', number, room, column, row))
+        digest.update(np.packbits(inside).tobytes())
+    return cases
+
+
+def probe_level(number, prince):
+    definition = LevelDefinition.read(parse_resource_fork(prince), number)
+    return hide_crevices(definition.data) if definition.kind == 4 else definition.data
+
+
+def probed_rooms(number, program, rooms):
+    for room in sorted(int(key) for key in program['rooms']):
+        if rooms is not None and (number, room) not in rooms:
+            continue
+        if number in SCENERY_LEVELS[6] and room in (8, 9):
+            continue  # Views of rooms 3 and 8 (cavern_room), not their own scenery.
+        yield room
+
+
 def run_probe(source, levels=LEVELS, rooms=None):
     directory = Path(source) / 'resource_forks'
     executable = (directory / 'Prince of Persia 2.bin').read_bytes()
@@ -114,63 +183,148 @@ def run_probe(source, levels=LEVELS, rooms=None):
     for number in levels:
         if not scenery_available(number):
             continue
-        definition = LevelDefinition.read(parse_resource_fork(prince), number)
-        level = hide_crevices(definition.data) if definition.kind == 4 else definition.data
+        level = probe_level(number, prince)
         scenery = (directory / f'{scenery_resource(number)}.bin').read_bytes()
         program = room_assets(number, 0)[0]
         with CavernRecovery(executable, scenery, prince) as machine:
-            for room in sorted(int(key) for key in program['rooms']):
-                if rooms is not None and (number, room) not in rooms:
-                    continue
-                if number in SCENERY_LEVELS[6] and room in (8, 9):
-                    continue  # Views of rooms 3 and 8 (cavern_room), not their own scenery.
-                _program, resources, palette, shapes = room_assets(number, room)
-                art = (resources, palette, shapes)
-                custom = custom_foreground_records(resources, room)
+            for room in probed_rooms(number, program, rooms):
                 room_art = cavern_room(room, animated=True, level_number=number)
-                port = port_cells(room_art)
-                extra_cover = (np.asarray(room_art.custom_occlusion) > 0
-                               if room_art.custom_occlusion is not None else np.zeros(SIZE, bool))
-                customized = customized_room(level, room)
-                cases = []
-                for row, column in product(range(-1, 3), range(10)):
-                    if row == -1 and customized:
-                        # 3:32c8-32cc: no border redraw (RedrawTopFast 3:1f4e).
-                        native = np.zeros(SIZE, bool)
-                    else:
-                        commands = recover_room(executable, scenery, level, room, prince, _machine=machine,
-                                                cell_redraw=True, only={(row, column, 1)})['commands']
-                        native = native_cell(commands, art, custom, number, room)
-                    top, left, bottom, right = cell_clip(column, row, customized)
-                    outside = native.copy()
-                    outside[top:bottom, left:right] = False
-                    if outside.any():
-                        raise AssertionError(f'Level {number} room {room} cell {column},{row} '
-                                             'drew outside its clip')
-                    inside = native[top:bottom, left:right]
-                    own = port.get((column, row), np.zeros(SIZE, bool))[top:bottom, left:right]
-                    missing = int((inside & ~own).sum())
-                    bleed = {}
-                    for (other_column, other_row), covered in port.items():
-                        if (other_column, other_row) == (column, row):
-                            continue
-                        part = (covered[top:bottom, left:right] & ~inside
-                                & ~extra_cover[top:bottom, left:right])
-                        if part.any():
-                            bleed[f'{other_column},{other_row}'] = int(part.sum())
-                    own_extra = int((own & ~inside & ~extra_cover[top:bottom, left:right]).sum())
-                    totals['cells'] += 1
-                    totals['native_pixels'] += int(inside.sum())
-                    totals['missing_pixels'] += missing
-                    totals['bleed_pixels'] += sum(bleed.values())
-                    totals['own_extra_pixels'] += own_extra
-                    if missing or bleed or own_extra:
-                        cases.append(dict(cell=[column, row], missing=missing, bleed=bleed,
-                                          own_extra=own_extra))
-                    digest.update(struct.pack('>4h', number, room, column, row))
-                    digest.update(np.packbits(inside).tobytes())
+                cases = compare_room(machine, (executable, scenery, prince), level, number, room,
+                                     room_art, totals, digest)
                 if cases:
                     results[f'{number}:{room}'] = cases
+    return dict(totals=dict(totals), cases=results, native_sha256=digest.hexdigest(),
+                executable_sha256=hashlib.sha256(executable).hexdigest(), scope=__doc__)
+
+
+def variant_arguments(record, states):
+    """`cavern_room` keywords for slot unit states (loose cells, scythes, planks, door frame)."""
+    units, scythes, planks = len(record['units']), len(record['scythes']), len(record['planks'])
+    key = ['0'] * len(record['cells'])
+    for group, state in zip(record['units'], states[:units]):
+        for index in group:
+            key[index] = str(state)
+    arguments = {'loose_key': ''.join(key) if any(states[:units]) else ''}
+    if scythes:
+        arguments['scythe_patch'] = ('slots', tuple(states[units:units + scythes]))
+    plank_states = states[units + scythes:units + scythes + planks]
+    arguments['bridge_fallen'] = frozenset(cell % 10 for (_room, cell), state
+                                           in zip(record['planks'], plank_states) if state == 3)
+    arguments['bridge_wobble'] = frozenset((cell % 10, state) for (_room, cell), state
+                                           in zip(record['planks'], plank_states) if state in (1, 2))
+    if record['door']:
+        arguments['entry_frame'] = states[-1]
+    return arguments
+
+
+def run_variant_probe(source, levels=LEVELS, rooms=None, units=None):
+    """Each slot unit's other states, one at a time, the other units at rest."""
+    from functools import partial
+
+    from tools.extract_slots import room_renderer, slot_context
+
+    directory = Path(source) / 'resource_forks'
+    executable = (directory / 'Prince of Persia 2.bin').read_bytes()
+    prince = (directory / 'Prince.rsrc.bin').read_bytes()
+    digest, totals = hashlib.sha256(), Counter()
+    results = {}
+    for number in levels:
+        if not scenery_available(number):
+            continue
+        level = probe_level(number, prince)
+        scenery = (directory / f'{scenery_resource(number)}.bin').read_bytes()
+        program = room_assets(number, 0)[0]
+        with CavernRecovery(executable, scenery, prince) as machine:
+            context = slot_context(executable, scenery, prince, level, program)
+            recover = partial(recover_room, _machine=machine)
+            for room in probed_rooms(number, program, rooms):
+                prepared = room_renderer(context, room, recover)
+                if prepared is None:
+                    continue
+                record, render, counts, _unit_cells = prepared
+                exported = program.get('loose_floors', {}).get('rooms', {}).get(str(room), {})
+                if exported.get('cells') != record['cells']:
+                    raise AssertionError(f'Level {number} room {room}: the export has other slot cells')
+                for unit, count in enumerate(counts):
+                    if units is not None and unit not in units:
+                        continue
+                    for state in range(1, count):
+                        states = [0] * len(counts)
+                        states[unit] = state
+                        room_art = cavern_room(room, animated=True, level_number=number,
+                                               **variant_arguments(record, states))
+                        totals['states'] += 1
+                        cases = compare_room(machine, (executable, scenery, prince),
+                                             render.scene_level(tuple(states)), number, room,
+                                             room_art, totals, digest)
+                        if cases:
+                            results[f'{number}:{room}:{unit}={state}'] = cases
+    return dict(totals=dict(totals), cases=results, native_sha256=digest.hexdigest(),
+                executable_sha256=hashlib.sha256(executable).hexdigest(), scope=__doc__)
+
+
+def pressure_phase(kind, foreground):
+    """The port's drawing phase of a trigger target (cavern_pressure_signature)."""
+    if kind == 4:
+        return min(foreground & 255, 184) // 4
+    if kind == 17:
+        return min(foreground & 255, 79)
+    if kind in (27, 33):
+        return foreground & 7
+    return int(bool(foreground & 0x2000))
+
+
+def pressure_states(record):
+    """Foreground words of one trigger target's other phases: a sample of a
+    gate's heights and an exit's openings, every bar and dart phase, a plate
+    pressed or released."""
+    foreground, kind = record['foreground'], record['kind']
+    if kind == 4:
+        words = [(foreground & 0xff00) | phase * 4 for phase in (0, 1, 2, 5, 10, 20, 30, 40, 46)]
+    elif kind == 17:
+        words = [(foreground & 0xff00) | phase for phase in (0, 1, 2, 5, 10, 20, 40, 60, 79)]
+    elif kind in (27, 33):
+        words = [(foreground & ~7) | phase for phase in range(4 if kind == 27 else 7)]
+    else:
+        words = [foreground ^ 0x2000]
+    rest = pressure_phase(kind, foreground)
+    return [word for word in words if pressure_phase(kind, word) != rest]
+
+
+def run_pressure_probe(source, levels=LEVELS, rooms=None):
+    """Each trigger target's other phases (gates, exits, plates, bars, darts), one at a time."""
+    directory = Path(source) / 'resource_forks'
+    executable = (directory / 'Prince of Persia 2.bin').read_bytes()
+    prince = (directory / 'Prince.rsrc.bin').read_bytes()
+    digest, totals = hashlib.sha256(), Counter()
+    results = {}
+    for number in levels:
+        if not scenery_available(number):
+            continue
+        level = probe_level(number, prince)
+        scenery = (directory / f'{scenery_resource(number)}.bin').read_bytes()
+        program = room_assets(number, 0)[0]
+        with CavernRecovery(executable, scenery, prince) as machine:
+            for room in probed_rooms(number, program, rooms):
+                records = program.get('pressure_plates', {}).get('rooms', {}).get(str(room), ())
+                for record in records:
+                    offset = 0x780 + record['room'] * 120 + record['cell'] * 4
+                    if struct.unpack_from('>H', level, offset)[0] != record['foreground']:
+                        raise AssertionError(f"Level {number} room {room}: record {record['room']}:"
+                                             f"{record['cell']} has another foreground")
+                rest = [pressure_phase(record['kind'], record['foreground']) for record in records]
+                for index, record in enumerate(records):
+                    for word in pressure_states(record):
+                        mutable = bytearray(level)
+                        struct.pack_into('>H', mutable, 0x780 + record['room'] * 120 + record['cell'] * 4, word)
+                        phase = pressure_phase(record['kind'], word)
+                        phases = tuple(phase if other == index else value for other, value in enumerate(rest))
+                        room_art = cavern_room(room, animated=True, level_number=number, pressure_key=phases)
+                        totals['states'] += 1
+                        cases = compare_room(machine, (executable, scenery, prince), bytes(mutable),
+                                             number, room, room_art, totals, digest)
+                        if cases:
+                            results[f"{number}:{room}:{record['room']}:{record['cell']}={phase}"] = cases
     return dict(totals=dict(totals), cases=results, native_sha256=digest.hexdigest(),
                 executable_sha256=hashlib.sha256(executable).hexdigest(), scope=__doc__)
 
@@ -180,8 +334,13 @@ if __name__ == '__main__':
     parser.add_argument('--source', type=Path, required=True, help='The original recovery folder')
     parser.add_argument('--output', type=Path)
     parser.add_argument('--level', type=int, action='append', help='Only these levels (repeatable)')
+    parser.add_argument('--variants', action='store_true',
+                        help="Each slot unit's other states (loose floors, scythes, planks, door)")
+    parser.add_argument('--pressure', action='store_true',
+                        help="Each trigger target's other phases (gates, exits, plates, bars, darts)")
     args = parser.parse_args()
-    report = run_probe(args.source, tuple(args.level) if args.level else LEVELS)
+    probe = run_variant_probe if args.variants else run_pressure_probe if args.pressure else run_probe
+    report = probe(args.source, tuple(args.level) if args.level else LEVELS)
     text = json.dumps(report, indent=1) + '\n'
     if args.output is not None:
         args.output.parent.mkdir(parents=True, exist_ok=True)

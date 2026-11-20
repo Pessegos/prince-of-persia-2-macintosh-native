@@ -156,5 +156,31 @@ class NativeForegroundCellTests(unittest.TestCase):
         self.assertEqual(report['totals']['own_extra_pixels'], 2550)
 
 
+    def test_rooms_in_motion_match_each_dirty_cell(self):
+        # 10:1's loose floors and scythes, one unit state at a time, and
+        # 10:2's gate heights and plate (the native level words changed).
+        from tools.probe_foreground_cells import run_pressure_probe, run_variant_probe
+
+        report = run_variant_probe(RECOVERY, levels=(10,), rooms={(10, 1)})
+        self.assertEqual(report['totals']['states'], 59)
+        self.assertEqual(report['cases'], {})
+        report = run_pressure_probe(RECOVERY, levels=(10,), rooms={(10, 2)})
+        self.assertEqual(report['totals']['states'], 9)
+        self.assertEqual(report['cases'], {})
+
+    def test_the_masks_at_rest_are_rejected_for_rooms_in_motion(self):
+        import tools.probe_foreground_cells as probe
+
+        at_rest = probe.cavern_room
+
+        def resting(room, **arguments):
+            return at_rest(room, animated=True, level_number=arguments['level_number'])
+
+        with patch.object(probe, 'cavern_room', resting):
+            moved = probe.run_variant_probe(RECOVERY, levels=(10,), rooms={(10, 1)})['totals']
+            pressed = probe.run_pressure_probe(RECOVERY, levels=(10,), rooms={(10, 2)})['totals']
+        self.assertEqual(moved['missing_pixels'], 14427)
+        self.assertEqual(pressed['own_extra_pixels'], 51)
+
 if __name__ == '__main__':
     unittest.main()

@@ -580,9 +580,24 @@ the border anyway; only level 13 room 25 (native 26, customized without a
 CUST record) had one, a default floor strip the original never draws, and
 its masks hid 2,550 pixels. The export now skips it (`customized_room`),
 and `cavern_room` leaves an earlier import's border commands out. With the
-border row the probe covers 15,280 cells, none different. Both sides use
-the port's SHAP alpha, rooms at rest; QuickFloor's DrawFloorBuf/DrawHalf
-and the marking rectangle itself are outside the probe.
+border row the probe covers 15,280 cells, none different.
+
+Rooms in motion keep the same agreement. `--variants` sets each slot
+unit's other states one at a time, the others at rest (loose floors
+shaking, fallen and as rubble, crevice runs, scythe blades, level 5's
+bridge planks, the entry door's frames), with the level words the slot
+export draws them from (`room_renderer`'s `scene_level`), and compares
+the native dirty cells with `cavern_room`'s masks for that state: 3,316
+states, 132,640 cells, none different. `--pressure` does the same for
+every trigger target (a sample of each gate's heights and exit's
+openings, every bar and dart phase, each plate pressed or released): 1,461
+states, 58,440 cells, none different. The masks at rest would miss 14,427
+pixels in 10:1's states alone. Not covered: two units moving at once (the
+export's slot composition is checked separately), crevice runs revealed
+on screen, CheckGateInFore's peel of a moving gate over an actor, falling
+slabs and the animated torches and fangs. Both sides use the port's SHAP
+alpha; QuickFloor's DrawFloorBuf/DrawHalf and the marking rectangle
+itself are outside the probe.
 
 Original instruction execution confirmed 6,144 climb selections, 512 gate
 catch admissions and 80 foreground-admission cases. Real-terrain tests replay
