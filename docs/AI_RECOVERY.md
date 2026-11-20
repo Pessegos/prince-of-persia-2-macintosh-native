@@ -591,7 +591,35 @@ one does, and leaving the room stores it back through the existing Cut
 of an out-of-bounds record. Palace figures, other actor types, a sixth
 record (native AddOpp drops it; the port keeps it in its room) and
 fixtures that place an actor beside the room without entering it still
-use the side-bank view. The health meter now selects
+use the side-bank view.
+
+`tools/probe_side_room_records.py` (2026-11-20) runs the original
+2f4e with RemoveOpp, AddOpp and GetOppInfo on LEVL records of every
+ordinary-bank level (opponent sets 0, 2, 7: levels 1, 3-5, 10-14) and
+compares record membership, row, X and actor type with the production
+`_take_visible_side_records` after a fresh load of the entered room. Only
+the current/left/right room globals are supplied, from the level's links.
+The level's own records give 238 entries (8 transfers); a sweep appends
+one copy of each record kind to each side room at native X 100, 330-332,
+400, 584-586 and 650, for 3,445 more entries (881 transfers). There are
+no mismatches. Excluded and counted:
+
+- 30 level-14 entries where the palace branch (`2fe8-300a`) moves a
+  kind-3 record between native rooms 7 and 8, whatever its X. Those two
+  rooms link only to each other horizontally, and the port keeps both
+  rooms' final-path figures active while the Prince is in either
+  (`active_guards`), so the figure is seen in the same place without
+  changing its bank.
+- 53 synthetic heaps that the port settles (SkelAddOpponent `4:19f0`,
+  done when the room is built) across a threshold that their LEVL X does
+  not cross. Native 2f4e reads the LEVL X before InitOpps adds the heap.
+  No real LEVL heap is near enough to a threshold for this to matter.
+- A sixth record (the port's capacity safeguard).
+
+Run it with `python -m tools.probe_side_room_records <recovery dir>
+--output <report>`; `tests.test_probe_side_room_records` runs it and rejects
+the old side-bank view and an inclusive threshold. Full room entry
+(carry, Cut, store) is outside it. The health meter now selects
 the nearest living actor in the current or horizontal side rooms using the
 original horizontal/vertical distance comparison described above,
 independently of the same-room sword-control target. Dormant bones have no
