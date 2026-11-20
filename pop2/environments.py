@@ -16,6 +16,7 @@ subclasses Environment and is selected in environment_for.
 
 import struct
 import time
+from dataclasses import replace
 from types import SimpleNamespace
 
 from pop2.bridge import BRIDGE_ROOM, CREAK_SOUND, bridge_checked, bridge_gate_open, bridge_sag, on_bridge
@@ -24,7 +25,7 @@ from pop2.carpet import (
     CARPET_ROOM, CARPET_TILE, CLOSED_SONG, CRASH_SEQUENCE, OPEN_SONG, RIDE_FRAME, ROOM_SONG, SIT_SEQUENCE,
     carpet_room,
 )
-from pop2.control_mapping import IDLE_SEQUENCE
+from pop2.control_mapping import IDLE_SEQUENCE, STANDING_TURN_SEQUENCE
 from pop2.coordinates import native_x, scene_x
 from pop2.crevices import CREVICE_TILE
 from pop2.harbor import SHIP_CLIMB_SEQUENCE
@@ -2022,6 +2023,31 @@ class Temple(Caverns):
             room = scene.level_renderer.enter_room(scene.room_id, scene.game.caverns)
             scene.background, scene.foreground = room.background, room.foreground
         return False
+
+    def check_spikes(self):
+        super().check_spikes()
+        scene = self.scene
+        state, motion = scene.sequence_state, scene.terrain_motion
+        if ((scene.game.level.number, scene.room_id) != (11, 3)
+                or motion is None or motion.row != 1 or not scene.combat.player.alive
+                or not state.facing or state.sequence_id != STANDING_TURN_SEQUENCE or state.action != 45):
+            return
+
+        # In native room 4, start the trap on the turn as in the DOS clip.
+        # From pose 45 to the first Up-ready pose (50), SEQS:5 moves 3 px
+        # left on a right turn. Test the ledge from that eventual position.
+        terrain = scene.level_map
+        tile = terrain.tile(motion.room, 5, motion.row)
+        if tile.foreground & 255:
+            return
+        ready = replace(state, target_x=state.target_x - 3)
+        record = scene.frames[50]
+        offset = terrain.upper_ledge(motion.room, motion.row, ready, record)
+        if offset is None:
+            jump = terrain.back_ledge_jump(motion.room, motion.row, ready, record)
+            offset = jump[1] if jump is not None and jump[0] == 24 else 0
+        if offset < 0:
+            scene.game.caverns.spikes.trigger(tile)
 
     def altar(self):
         """10:27ba -> 2a62: the Kid at level 13's sacred flame."""
