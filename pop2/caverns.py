@@ -107,18 +107,24 @@ class CavernRoom(OpeningRoom):
             return mask
         column = character_column(floor_contact_x(state.target_x, state.facing, record))
         mask = mask.copy()
+        crushed = state.source_sequence_id == 118 and 264 <= state.action <= 266
+        for cover, (x, y) in self.gate_peel(column, row, crushed):
+            rect = (x, y, x + cover.width, y + cover.height)
+            mask.paste(ImageChops.lighter(mask.crop(rect), cover), (x, y))
+        return mask
+
+    def gate_peel(self, column, row, crushed=False):
+        """The positioned gate covers CheckGateInFore peels over a character
+        whose column and row are these (modes 2/6 and type 11 excluded by
+        the caller)."""
+        if not self.gate_occlusion:
+            return ()
         cells = ((column, row), (column + 1, row))
-        if state.source_sequence_id == 118 and 264 <= state.action <= 266:
+        if crushed:
             # The flattened body's foot moves past the gate in one facing.
             # Keep the actual overlapping stone in front throughout the crush.
             cells = tuple(cell for cell in self.gate_occlusion if cell[1] == row)
-        for cell in cells:
-            positioned = self.gate_occlusion.get(cell)
-            if positioned is not None:
-                cover, (x, y) = positioned
-                rect = (x, y, x + cover.width, y + cover.height)
-                mask.paste(ImageChops.lighter(mask.crop(rect), cover), (x, y))
-        return mask
+        return tuple(self.gate_occlusion[cell] for cell in cells if cell in self.gate_occlusion)
 
     def contact_floor_mask(self, mask, cell):
         # The one-frame leg reveal must also reach the earlier actor-alpha
@@ -1689,6 +1695,14 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
     custom_mask = Image.new('L', background.size) if custom_records else None
     torch_occlusion = {} if animated and level_number in TEMPLE_LEVELS else None
     exit_foreground = []
+    # The moving stone each environment's movable-gate drawer (a5-0x4ab2)
+    # draws again in front: DrawCaveGateMovable 8:1f40, DrawRuinGateMovable
+    # 7:2ac2, DrawTempGateMovable 10:0976.
+    # The cave and ruins stone hangs in the column right of its tile, the
+    # temple's on the tile's right edge (x = column * 51 + 50).
+    gate_shape, stone_column = ((3563, 1) if level_number in SCENERY_LEVELS[3] else
+                                (3542, 1) if level_number in RUINS_LEVELS else
+                                (3576, 0) if level_number in TEMPLE_LEVELS else (None, 0))
     exit_shape = (3565 if level_number in SCENERY_LEVELS[3] else
                   3545 if level_number in RUINS_LEVELS else
                   3579 if level_number in TEMPLE_LEVELS else None)
@@ -1773,13 +1787,21 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
             for column in (8, 9):
                 gate_masks[(column, 2)] = merge_positioned_mask(
                     gate_masks.get((column, 2)), sprite.getchannel('A'), position)
-        if layer == 'back' and library == 4 and index in (3563, 3542) and cell in gate_cells:
+        if layer == 'back' and library == 4 and index == gate_shape and cell in gate_cells:
             # DrawCaveGate anchors the stone one column right of its tile.
             # The repaint caller may be a different cell, even on another row.
             # CheckGateInFore tests the gate's tile, not that repaint caller.
-            gate_cell = (command[2] // 51 - 1, command[5])
-            gate_masks[gate_cell] = merge_positioned_mask(
-                gate_masks.get(gate_cell), sprite.getchannel('A'), position)
+            gate_cell = (command[2] // 51 - stone_column, command[5])
+            # It draws the stone only in the redraw of the cell right of the
+            # tile (its left tile a5-0x49d6 is the gate, 3:2706-270e),
+            # clipped to that cell; the temple's clip starts one pixel to its
+            # left (3:2892-28a0). A gate in the last column has no such cell.
+            left = (gate_cell[0] + 1) * 51 - (level_number in TEMPLE_LEVELS)
+            alpha = sprite.getchannel('A').copy()
+            alpha.paste(0, (0, 0, max(0, min(sprite.width, left - position[0])), sprite.height))
+            alpha.paste(0, (max(0, (gate_cell[0] + 2) * 51 - position[0]), 0, sprite.width, sprite.height))
+            if 0 <= gate_cell[0] + 1 < 10:
+                gate_masks[gate_cell] = merge_positioned_mask(gate_masks.get(gate_cell), alpha, position)
         if layer == 'front':
             mask = Image.new('L', background.size)
             mask.paste(sprite.getchannel('A'), position)

@@ -37,7 +37,7 @@ Both sides leave out what the port draws elsewhere: items and flames
 for every dirty cell). Alpha comes from the port's own SHAP decoder on both
 sides, so this checks which pieces are drawn where, not the decoder. Not
 covered: DrawFloorBuf/DrawHalf (QuickFloor), CheckGateInFore's actor test
-and the rectangle marking itself.
+(`tools/probe_gate_peel.py`) and the rectangle marking itself.
 
 `--variants` and `--pressure` probe rooms in motion: each slot unit's
 other states (loose floors, crevices, scythes, planks, the entry door) or

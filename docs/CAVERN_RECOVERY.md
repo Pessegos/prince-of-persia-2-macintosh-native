@@ -505,6 +505,32 @@ formula are unchanged. This prevents the turban/body from painting over
 the moving stone at tight opening clearances, without hiding hanging poses.
 NPC-bank and special crushing redraw paths are not a complete translation.
 
+`tools/probe_gate_peel.py` runs CheckGateInFore itself (DrawForeImg 3:25aa
+-> 3:26e4) with each environment's movable-gate drawer, which
+SetPrinceLevelSpecPtrs 3:5da8 installs at a5-0x4ab2 from a5-0x4ace: 8:1f40
+in the caves, 7:2ac2 in the ruins and DrawTempGateMovable 10:0976 in the
+temple. It fires in the redraw of the cell right of a gate tile (its left
+tile a5-0x49d6 is kind 4) when the Kid stands on that row in the gate's
+column or the one before it, not in modes 2/6, and draws the stone in mode
+2 clipped to that cell and the Kid's object rectangle; the temple's clip
+starts one pixel further left (3:2892-28a0). Over every gate room of levels
+3-13, at rest and at a sample of each gate's heights, with the Kid in six
+columns around each gate and in modes 0-7, the port's covers now match all
+17,756 states pixel for pixel. The temple had none: its stone, SHAP 3576,
+sits on the tile's right edge (x = column * 51 + 50), not a column further
+right, so the port only looked for the cave and ruins shapes; a turban next
+to a half-open temple gate went over its bars. A gate in the last column has
+no cell to its right and is never drawn in front, and level 11's temple
+3542 (room 3) is not a gate stone. The crushed actions 264-266 take 3:2922
+instead, which in the caves only repeats the gate cell's own front pieces
+(S08_2112 in mode 1) and elsewhere draws nothing; the port's DOS-inspired
+crush keeps the row's stones in front on purpose. The opponents' branch
+(3:2768-283c, only when the Kid does not match, and it looks up the next
+slot's type word as the object index) and several characters at once are
+not compared. Level 12 room 4's gate 4:0 is left out of the probe: cell 0's
+slot draws its stone and the left room's 1:9 stone with the same pressure
+key, so the export binds the left stone to 4:0 and has no record for 1:9.
+
 The gate mask is keyed by the stone's actual tile, not the cell that
 requested its repaint. DrawCaveGateMovable (8:1f40) places SHAP:3563 one
 column right of that tile; its command's source row can differ from the
@@ -594,7 +620,8 @@ openings, every bar and dart phase, each plate pressed or released): 1,461
 states, 58,440 cells, none different. The masks at rest would miss 14,427
 pixels in 10:1's states alone. Not covered: two units moving at once (the
 export's slot composition is checked separately), crevice runs revealed
-on screen, CheckGateInFore's peel of a moving gate over an actor, falling
+on screen, CheckGateInFore's peel of a moving gate over an actor (now
+`tools/probe_gate_peel.py`, above), falling
 slabs and the animated torches and fangs. Both sides use the port's SHAP
 alpha; QuickFloor's DrawFloorBuf/DrawHalf and the marking rectangle
 itself are outside the probe.

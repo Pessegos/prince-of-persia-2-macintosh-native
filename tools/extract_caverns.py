@@ -58,7 +58,9 @@ LIBRARY_BASE = {0: 1000, 1: 3000, 4: 3500}
 @lru_cache(maxsize=1)
 def recovery_inputs(program, caverns, prince):
     resources = parse_resource_fork(program)
-    primitives = {(3, offset) for offset in (4, 0x29e2, 0x29b6, 0x2ac4, 0x06c4, 0x2324, 0x26e4, 0x2482, 0x2438)}
+    # 3:25ae is DrawForeImg's return from CheckGateInFore (`gate_peel`).
+    primitives = {(3, offset) for offset in (4, 0x29e2, 0x29b6, 0x2ac4, 0x06c4, 0x2324, 0x26e4, 0x2482, 0x2438,
+                                            0x25ae)}
     primitives.update((5, offset) for offset in (0x21c, 0x230, 0x08c4, 0x1990))
     primitives.update((8, offset) for offset in (0x176c, 0x20a6, 0x1ca4, 0x1752, 0x1f86))
     # The ruins drawers (CODE 7) call the same SectRect (a5-0x1f58) and
@@ -262,8 +264,17 @@ class CavernRecovery:
 
 def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=None,
                  floor_redraw=False, *, _machine=None, _native_scene=False, reads=None, only=None,
-                 cell_redraw=False):
+                 cell_redraw=False, gate_peel=None):
     """`reads`, when given, collects {slot: {(room, cell)}} the drawers read.
+
+    `gate_peel`, when given, runs CheckGateInFore 3:26e4 natively in each
+    front pass with the environment's movable-gate drawer (a5-0x4ab2, set by
+    SetPrinceLevelSpecPtrs 3:5da8 from a5-0x4ace) and these characters: a
+    dict with 'kid' (action, row, column, mode), 'opponents' [(type, row,
+    column, mode)] for the room's opponent slots (a5-0x5208, 0x3e each; the
+    rest get type 11, which the test skips) and 'objects' [(type, index,
+    (top, left, bottom, right))] for the object table GetObjTableType 3:3e7c
+    searches (a5-0x4cb2, a5-0x4826). Its commands are returned as 'peel'.
 
     `only`, a set of (row, column, pass) slots, runs just those slots' drawers
     (the other slots' commands are absent). Every slot's drawers start from
@@ -273,7 +284,7 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
         with CavernRecovery(program, caverns, prince, track_reads=reads is not None) as machine:
             return recover_room(program, caverns, level, room_id, prince, climb_action,
                                 floor_redraw, _machine=machine, _native_scene=_native_scene, reads=reads,
-                                only=only, cell_redraw=cell_redraw)
+                                only=only, cell_redraw=cell_redraw, gate_peel=gate_peel)
 
     from unicorn.m68k_const import (
         UC_M68K_REG_A5, UC_M68K_REG_A7,
@@ -328,6 +339,33 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
         cpu.mem_write(0x94000, custom['data'])
         put_long(a5 - 0x4c9e, 0x94000)
     put_long(a5 - 0x4ab2, 0)  # No actor-specific gate peeling in a static scene.
+    if gate_peel is not None:
+        peel_pointer = struct.unpack_from('>i', data, len(data) - 0x4ace + environment * 4)[0]
+        put_long(a5 - 0x4ab2, target(peel_pointer) if peel_pointer else 0)
+        action, kid_row, kid_column, kid_mode = gate_peel['kid']
+        for offset, value in ((0x50c8, action), (0x50c4, kid_row), (0x50c6, kid_column), (0x50c2, kid_mode)):
+            put_word(a5 - offset, value)
+        opponents = list(gate_peel.get('opponents', ()))
+        # CheckGateInFore 3:2768-2796 visits the room's opponent count
+        # (level + 0x20e6 + room * 0xc0); the Kid's words follow slot 4.
+        count = struct.unpack_from('>h', level, 0x20e6 + (room_id + 1) * 0xc0)[0]
+        if not 0 <= count <= 5 or len(opponents) > max(count, 0):
+            raise ValueError(f'Room {room_id} has {count} opponent slots')
+        for slot in range(count):
+            kind, row, column, mode = opponents[slot] if slot < len(opponents) else (11, -9, -9, 0)
+            base = a5 - 0x5208 + slot * 0x3e
+            cpu.mem_write(base, bytes(0x3e))
+            for field, value in ((8, kind), (0xc, column), (0xe, row), (0x10, mode)):
+                put_word(base + field, value)
+        objects = 0x97000
+        put_long(a5 - 0x4cb2, objects)
+        put_word(a5 - 0x4826, len(gate_peel.get('objects', ())))
+        for index, (kind, number, rect) in enumerate(gate_peel.get('objects', ())):
+            entry = objects + index * 0x1c
+            cpu.mem_write(entry, bytes(0x1c))
+            put_word(entry + 4, kind)
+            put_word(entry + 0xc, number)
+            cpu.mem_write(entry + 0xe, struct.pack('>4h', *rect))
     # a5-0x1f60 holds the EmptyRect trap glue the temple drawers call
     # (10:0198-019c); a small Pascal routine stands in for the trap.
     cpu.mem_write(EMPTY_RECT, EMPTY_RECT_CODE)
@@ -362,6 +400,8 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
         return found
 
     commands = []
+    peel = []
+    peeling = [False]
     fills = []
     command_kinds = []
     # The (row, column, pass) drawer call that admitted each command.
@@ -473,6 +513,8 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
                         min(bottom, clip[2]), min(x + width, clip[3])]
                 commands.append([layer, shape, x, bottom, fields[3], fields[8], rect, library,
                                  draw_column, draw_row])
+                if peeling[0]:
+                    peel.append(commands[-1])
                 command_kinds.append(fields[9])
                 command_slots.append(current_slot[0])
                 if (library == 4 and (environment == 3 and 3581 <= shape <= 3589
@@ -544,7 +586,12 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
             column, row = struct.unpack_from('>2h', stacked, 4)
             result = tile_at(column + 1, row).kind
         elif segment == 3 and offset == 0x26e4:
-            result = 0
+            if gate_peel is None:
+                result = 0
+            else:
+                peeling[0] = True
+        elif segment == 3 and offset == 0x25ae:
+            peeling[0] = False
         elif segment == 5 and offset == 0x1990 and (climb_action is not None or floor_redraw or cell_redraw):
             result = 0  # Dirty-buffer bookkeeping does not emit shape commands.
         if result is not None:
@@ -695,7 +742,7 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
                      key=lambda item: draw_order_key(item[0][0], item[1]))
     return {'version': 1, 'level': struct.unpack_from('>H', level, 0x218a)[0], 'room': room_id,
             'commands': [command for command, _kind, _slot in ordered], 'torches': torches,
-            'fills': fills,
+            'fills': fills, 'peel': peel,
             'slots': [[slot, kind] for _command, kind, slot in ordered]}
 
 
