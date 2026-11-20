@@ -232,13 +232,21 @@ def altar_wake(harness):
         if scene.combat.player.alive and scene.game.caverns.altar == -1:
             break
 
+# sword_duel's key policy (2026-11-20, after SEQS 109 replaced SEQS 58).
+FLAME_PARRY_KEY_POSE = 222
+FLAME_ADVANCE_GAP = 40
+FLAME_COUNTER = True
+
+
 def sword_duel(harness, limit=400):
     """Level 12: leap from gate 3:18 onto room 7's top floor and parry the
     flaming sword until it drops (it is worn down only by parries).
 
     Keys answer what is on screen, as a player's would: up while the sword
-    winds up a strike (pose 152), forward while it rests between strikes,
-    both only while the Prince is on guard.
+    winds up its SEQS 109 lunge (pose 222, the frame before the parryable
+    223/224), forward while it rests between strikes more than 40 pixels
+    away (its lunge reaches 21 pixels), and a counter (ctrl) from the parry
+    pose 161, which spares him the forced retreat off room 7's west edge.
     """
     play(harness, [(('R',), (), 1), (('up',), (), 3), ((), ('up',), 14), ((), ('R',), 1)])
     scene = harness.scene
@@ -255,20 +263,27 @@ def sword_duel(harness, limit=400):
         if sword.flame_sword.timer:
             break  # Down, for 480 frames.
         on_guard = 150 <= info['action'] < 180
-        press(harness, 'up', on_guard and sword.state.action == 152)
+        press(harness, 'up', on_guard and sword.state.action == FLAME_PARRY_KEY_POSE)
         press(harness, 'R', on_guard and sword.state.action in (170, 171)
-              and sword.state.target_x - info['x'] > 30)
+              and sword.state.target_x - info['x'] > FLAME_ADVANCE_GAP)
+        press(harness, 'ctrl', FLAME_COUNTER and info['action'] == 161)
         harness.tick()
     press(harness, 'up', False)
+    press(harness, 'ctrl', False)
     press(harness, 'R', False)
+
+
+PASS_BACK_STEPS = 3
+PASS_SHEATHE_DELAY = 0
 
 
 def sword_pass(harness, limit=200):
     """Level 12, as the Macintosh video plays it (02:33-02:36): the same leap
     as ``swordduel``, then, as soon as the resting sword starts to rise, the
     Prince draws and advances east over it, so that it ends behind him. He
-    backs east two steps, parries its next strike (which pushes it back,
-    SEQS 103) and puts his sword away before it closes in again. The awake
+    backs east three steps, parries its next strike (which pushes it back,
+    SEQS 103) and puts his sword away before it closes in again; with two
+    steps its SEQS 109 lunge reaches him, unarmed, as he starts to run. The awake
     sword follows him across the cut into room 12 (CutAllOpponents 6:4602)."""
     play(harness, [(('R',), (), 1), (('up',), (), 3), ((), ('up',), 14), ((), ('R',), 1)])
     scene = harness.scene
@@ -279,17 +294,17 @@ def sword_pass(harness, limit=200):
             break  # SEQS 106: it rises.
         harness.tick()
     play(harness, [((), (), 3), (('ctrl',), (), 2), ((), ('ctrl',), 6)]
-         + [(('R',), (), 2), ((), ('R',), 6)] * 2)
+         + [(('R',), (), 2), ((), ('R',), 6)] * PASS_BACK_STEPS)
     for _ in range(limit):
         sword = next(guard for guards, _points in scene.combat.room_encounters.values()
                      for guard in guards if guard.flame_sword is not None)
         if sword.state.source_sequence_id == 103 or not scene.combat.player.alive:
             break
         on_guard = 150 <= harness.player()['action'] < 180
-        press(harness, 'up', on_guard and sword.state.action == 152)
+        press(harness, 'up', on_guard and sword.state.action == FLAME_PARRY_KEY_POSE)
         harness.tick()
     press(harness, 'up', False)
-    play(harness, [(('down',), (), 10), ((), ('down',), 1)])
+    play(harness, [((), (), PASS_SHEATHE_DELAY), (('down',), (), 10), ((), ('down',), 1)])
 
 
 def guard_duel(reach, every, limit=600):

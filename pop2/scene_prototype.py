@@ -12,8 +12,9 @@ from pop2.animation_data import (
     shape_id_for_action,
 )
 from pop2.combat import (
-    PLAYER_COMBAT_TURN_SEQUENCE, contact_allowed,
+    PLAYER_COMBAT_TURN_SEQUENCE, contact_allowed, strike_pose,
 )
+from pop2.flame_sword import SWING_CUE as FLAME_SWING_CUE
 from pop2.combat_art import (
     HealthArtwork, HitArtwork, _CurrentFrames, actor_draw_order, opponent_artwork,
     slab_crush_draw_state, sword_palette_for_level,
@@ -2548,9 +2549,11 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
                         # including one queued on this very impact frame.
                         audio.stop_sound(30)
                         motion.scream_played = False
-                    if guard.state.action == 154 and contact_allowed(guard, self.combat.player):
-                        # NPCs use 6:5ab4-5af8, after the valid-target gate.
-                        guard.state.sound_events.append(11)
+                    if (guard.state.action == strike_pose(guard.state)
+                            and contact_allowed(guard, self.combat.player)):
+                        # NPCs use 6:5ab4-5af8, after the valid-target gate;
+                        # the flaming sword's swing is 239 (6:5ae6-5af4).
+                        guard.state.sound_events.append(FLAME_SWING_CUE if guard.state.actor_type == 10 else 11)
                     audio.drain(guard.state, not self.peaceful and guard.room == self.room_id)
             for actor in self.combat.visible_ruins():
                 audio.drain(actor.state, not self.peaceful)

@@ -18,7 +18,8 @@ are one-based, port rooms zero-based.
   ordinary guard poses. It is a sword fighting by itself.
 - SEQS 105 holds 213; 106 animates 213-217 (cues 241/239) and links to 227
   (en garde); 107 plays it back down to 105; 103 is the parried push-back;
-  108 its advance (13 pixels in pose 171); 90 a 17-pixel glide.
+  108 its advance (13 pixels in pose 171); 109 its strike (218-227: raised,
+  tilted, a 21-pixel lunge at 224, back down near the floor); 90 a 17-pixel glide.
 
 ## Recovered rules (port)
 
@@ -35,7 +36,9 @@ are one-based, port rooms zero-based.
 | GetCharStrikeRanges 6:5c58 | its strike reaches -16..61 | `strike_range` |
 | TestStrike 6:5962 | the Prince's parry window against it is 24..70 (61..99 otherwise) | `resolve_contacts` |
 | TestStrike 6:5a74, FlameSwordDecLifePts 4:1c36 | a parried strike costs one life: SEQS 103, cue 10, SetCharFloor 4:31fa; the last one 4:1c9e: SEQS 107, SetSkelTimer 480, AddSong 238, ALIVE 0 | `FlameSword.parried/fall` |
-| TestStrike 6:5ae6 | parry cue 239 instead of 11 | parry event sound |
+| DoStrike 6:27bc-27e4 | from 157/158/170/171/165 it strikes with SEQS 109 (poses 218-227), not the guard's SEQS 58 | `apply_guard_intent` (2026-11-20) |
+| IsStrikingPos 6:5d9a-5db8, IsTheStrikePos 6:5e4a-5e64 | 223/224 can be parried, the strike lands at 224 (153/154 and 154 for guards) | `striking_poses`, `strike_pose` |
+| TestStrike 6:5ab4-5af8 | an unparried strike that misses sounds 239 instead of 11; a parry (Prince at 161) and a hit sound nothing here | scene audio, parry event sound 0 (2026-11-20; it was read as a parry cue) |
 | Defence 4:1206 | it never blocks | `decide_guard_intent` |
 | 6:1e1c | advance SEQS 108 instead of 86 | `apply_guard_intent` |
 | 6:2592/25d4 | instead of sheathing (SEQS 77) it glides (SEQS 90) | Prince-dead branch |
@@ -197,7 +200,7 @@ depended on the sword staying in room 7. With the cut rule its key policy
 run. The Macintosh capture (02:36-02:40) shows the player back off, parry,
 sheathe while the sword is pushed back, and run east with the sword behind
 him; its flame then waits at room 12's top-left while he drops to the
-middle floor. `swordpass` now backs two steps, parries one strike and
+middle floor. `swordpass` now backs two (three since 2026-11-20) steps, parries one strike and
 sheathes; the Prince reaches room 12 untouched and the sword follows him
 there with five lives. This is a key policy, not a timing claim.
 
@@ -206,3 +209,47 @@ previous `combat.py`. Combat/AI/selection/temple-route/audio/save suites
 429 run, OK, 2 skipped (the optional original-resource export check and
 the slow fresh-import test). Original CODE read offline; no new CPU probe,
 no live game.
+
+## The strike and the fallen sword at room 12 (2026-11-20)
+
+The user's second Macintosh capture (room 7 to room 12, one minute, 60 fps,
+read frame by frame at the game's 12 Hz) shows two things the port lacked.
+
+- **Its strike.** The sword raises its flame upright, tilts it, lunges
+  blade first and drops low before it settles; the port's sword struck with
+  the guard's SEQS 58, whose poses 151-157 carry other pieces, so this was
+  never drawn. DoStrike **6:27bc-27e4** chooses by actor type: 96/75 for
+  the Kid and shadow, **109 for type 10**, 58 for the rest. SEQS 109 plays
+  poses 218-227 (FlameSword FRAM 69-78, pieces 1, 7, 11, 8, 7, 1, 2, 19, 4,
+  10) and moves -6, +9, +3, +9, +6 (a 21-pixel lunge at 224), then back.
+  IsStrikingPos **6:5d9a** makes 223/224 parryable and IsTheStrikePos
+  **6:5e4a** lands the strike at 224. TestStrike's sound at **5ab4-5af8**
+  plays only for a strike that was neither parried nor landed: 239 for the
+  sword, 11 for others. The port's parry sound 239 came from misreading
+  that branch and is removed; 4:1c4c's cue 10 stays.
+- **The fallen sword.** After the sixth parry it lies across room 7's
+  right edge (hilt in room 7, blade tip in room 12). The Prince walks into
+  room 12; a second later it rises at room 12's left edge and strikes him
+  from behind. InitOpps **6:2b7e** first calls CheckSideRoomsForVisibleOpps
+  **6:2f4e-308a**: a left neighbour's record with native X > 0x249 (scene
+  378), or a right one's below 0x14b (scene 124), is copied into the
+  entered room with X -/+ 510 (AddOpp 358e) and deleted from its room
+  (3462). The Kid-room wake **4:14f0** (a5-0x4fc2 is the Kid's room) then
+  finds it, and its timer was cleared on entry (6:2e34). So the reading of
+  14f0 was right; the record moves. The port's `bank_room` view leaves side
+  records in their room, which is why the sword once rose there and
+  hovered (alert 0 outside the Kid's room), and why the 2026-11-19 rule
+  never let it rise. `_take_visible_flame_swords` now moves visible type-10
+  records on entry. Ordinary guards and skeletons keep the bank view; the
+  same transfer probably explains the level-3 skeleton (P, not changed).
+
+Key policies: `swordduel` presses up at pose 222, advances only when the
+sword rests more than 40 pixels away and counters from 161, so the forced
+retreats no longer carry the Prince off room 7's west edge; `swordpass`
+backs three steps. The duel's other random draws leave the room-14
+birdhead duel 9 pixels west, so `LEVEL_12_VIDEO` adds two `nudgeL` after
+it. These are replay choices, not timing claims.
+
+Open: the Prince hit in room 7 at X 498 crossed into room 12 and the next
+frame stood at X 516 in room 7 (seen in a rejected `swordpass` variant);
+not investigated. Static CODE reading, no new CPU probe.

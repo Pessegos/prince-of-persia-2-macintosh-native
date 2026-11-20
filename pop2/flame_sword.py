@@ -25,7 +25,13 @@ FALL_TIMER = 480       # 4:1ca8 / cheat kill 2:4c52
 WAKE_COLUMNS = 5       # 4:1534-1548, as for every set except the skeletons'
 FALL_SONG = 238        # 4:1cb6 AddSong
 PUSHED_CUE = 10        # 4:1c4c
-PARRY_CUE = 239        # TestStrike 6:5ae6 instead of 11
+# DoStrike 6:27c8/27e0: its strike is SEQS 109 (218-227), not SEQS 58.
+STRIKE_SEQUENCE = 109
+# IsStrikingPos 6:5d9a-5db8 (parryable) and IsTheStrikePos 6:5e4a-5e64 (the hit).
+STRIKING_POSES = frozenset((223, 224))
+STRIKE_POSE = 224
+# TestStrike 6:5ab4-5af8: an unparried strike that missed sounds 239, not 11.
+SWING_CUE = 239
 DEATH_METHOD = 12      # CheckStab 6:5722
 # GetCharStrikeRanges 6:5c58: its own strike against the Prince.
 STRIKE_RANGE = (-16, 61)

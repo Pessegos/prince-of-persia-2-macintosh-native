@@ -16,8 +16,9 @@ from pop2.opponent_records import GuardRoomRecord, corpse_sequence, is_dead_pose
 from pop2.skeleton import exit_guarded
 from pop2.flame_sword import (
     ADVANCE_SEQUENCE as FLAME_ADVANCE, DEATH_METHOD as FLAME_DEATH_METHOD,
-    GLIDE_SEQUENCE as FLAME_GLIDE, PARRY_CUE as FLAME_PARRY_CUE,
-    PARRY_WINDOW as FLAME_PARRY_WINDOW, STRIKE_RANGE,
+    GLIDE_SEQUENCE as FLAME_GLIDE, PARRY_WINDOW as FLAME_PARRY_WINDOW,
+    STRIKE_POSE as FLAME_STRIKE_POSE, STRIKE_SEQUENCE as FLAME_STRIKE,
+    STRIKING_POSES as FLAME_STRIKING_POSES, STRIKE_RANGE,
 )
 from pop2.final_jaffars import (
     APPEAR_SEQUENCE, DROP_ALIVE, SKILL as COPY_SKILL, FLASK_TILE, SHIMMER_SOUND, VANISH_SEQUENCE,
@@ -40,6 +41,16 @@ from pop2.terrain import (
 GUARD_POSES = {158, 170, 171}
 STRIKE_POSES = {153, 154}
 BLOCK_POSES = {150, 161}
+
+
+def striking_poses(state):
+    """IsStrikingPos 6:5d60: the poses in which a strike can be parried."""
+    return FLAME_STRIKING_POSES if state.actor_type == 10 else STRIKE_POSES
+
+
+def strike_pose(state):
+    """IsTheStrikePos 6:5e42: the pose that lands (or sounds) the strike."""
+    return FLAME_STRIKE_POSE if state.actor_type == 10 else 154
 PLAYER_COMBAT_TURN_SEQUENCE = 127
 # CheckStab, CODE:6 0x523e-0x5268; these are sequence IDs, not poses.
 FATAL_STAB_SEQUENCES = frozenset((10, 16, 28, 14))
@@ -624,6 +635,8 @@ class CombatEncounter:
                 self._store_opponent_record(actor, view)
             else:
                 self._capture_opponent_record(actor, restart_living=False, cell=opponent_row_cell(actor.row))
+        if previous_room != room:
+            self._take_visible_flame_swords(room)
         self._select_opponent_bank(room)
         art = getattr(self, 'guard_art', None)
         if hasattr(art, 'select_room'):
@@ -638,6 +651,32 @@ class CombatEncounter:
                 if actor.state.actor_type == 6:
                     actor.state.facing = self.rng.randrange(2)
         self.guard = self._nearest_guard() or next(iter(self.active_guards()), None)
+
+    def _take_visible_flame_swords(self, room):
+        """CheckSideRoomsForVisibleOpps 6:2f4e-308a, first in InitOpps 2b7e:
+        a left neighbour's record with native X > 585, or a right one's below
+        331, moves into the entered room (AddOpp 358e, RemoveOpp 3462), X
+        rebased by 510. The flaming sword then wakes and fights there as a
+        record of the Kid's room (4:14f0). Other opponents keep the port's
+        side-bank view (bank_room), which does not move them."""
+        terrain = getattr(self, 'terrain', None)
+        if terrain is None:
+            return
+        for side, offset in (('left', -510), ('right', 510)):
+            source = terrain.neighbor(room, side)
+            if source is None or source == room or source not in self.room_encounters:
+                continue
+            for actor in tuple(self.room_encounters[source][0]):
+                if (actor.flame_sword is None or len(self.guards) >= 5
+                        or not visible_side_opponent(actor.state.target_x, side)):
+                    continue
+                self.room_encounters[source][0].remove(actor)
+                actor.room = room
+                actor.state.target_x += offset
+                actor.state.current_x += offset
+                if actor.terrain_motion is not None:
+                    actor.terrain_motion.room = room
+                self.guards.append(actor)
 
     def _restore_opponent_records(self):
         for actor in self.active_guards():
@@ -1078,7 +1117,8 @@ class CombatEncounter:
             return
         if intent.strike:
             if state.action in (157, 158, 170, 171, 165):
-                select_sequence(guard, 58)
+                # DoStrike 6:27bc-27e4: the flaming sword lunges with SEQS 109.
+                select_sequence(guard, FLAME_STRIKE if state.actor_type == 10 else 58)
             elif state.action in BLOCK_POSES:
                 select_sequence(guard, 66)
             return
@@ -1398,8 +1438,8 @@ class CombatEncounter:
             elif guard.flame_sword is not None and guard.room == self.player.room:
                 # FrameAdv 2:6242-624a runs 4:14c6 for a type-10 bank too.
                 # 4:14f0-151e/13b6 scan only the Kid room's records
-                # (a5-0x4fc2): a sword in a side room never wakes, even
-                # within five columns of the Prince across the cut.
+                # (a5-0x4fc2). A sword lying at a neighbour's visible edge
+                # was moved into his room on entry (6:2f4e) and wakes there.
                 with self._local_opponents(guard):
                     guard.flame_sword.try_wake(self, guard)
 
@@ -2476,11 +2516,11 @@ class CombatEncounter:
         pairs.extend(("player", self.player, "guard", g, index)
                      for index, g in enumerate(guards))
         for fighter in (self.player, *guards):
-            if fighter.state.action not in STRIKE_POSES:
+            if fighter.state.action not in striking_poses(fighter.state):
                 fighter.contact_consumed = False
         consumed = {id(f): f.contact_consumed for f in (self.player, *guards)}
         for name, attacker, target_name, defender, target_id in pairs:
-            if attacker.state.action not in STRIKE_POSES or consumed[id(attacker)]:
+            if attacker.state.action not in striking_poses(attacker.state) or consumed[id(attacker)]:
                 continue
             # AI and drawing already rebase side-room actors. Use the same
             # geometry for contact, but apply wounds/parries to real actors.
@@ -2518,11 +2558,11 @@ class CombatEncounter:
                 # TestStrike 6:5ac6-5adc: with the defender now at 161 the
                 # strike sound 11 is skipped unless the defender is a type
                 # 7/8 actor. The clash itself is AddSFX's sound 10 for the
-                # attacker's pose 167 (scene advance_audio).
-                sound = (FLAME_PARRY_CUE if flame is not None
-                         else 11 if defender.state.actor_type in (7, 8) else 0)
+                # attacker's pose 167 (scene advance_audio). A parried flaming
+                # sword has no TestStrike sound either (its 239 is the miss).
+                sound = 11 if defender.state.actor_type in (7, 8) else 0
                 events.append(CombatEvent("parry", target_name, sound=sound))
-            elif attacker.state.action == 154:
+            elif attacker.state.action == strike_pose(attacker.state):
                 attacker.contact_consumed = True
                 low, high = strike_range(attacker, defender)
                 if low <= distance <= high:

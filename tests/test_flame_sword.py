@@ -94,12 +94,14 @@ class FlameSwordCombatTests(unittest.TestCase):
 
     def test_a_parried_strike_costs_it_a_life_and_pushes_it_back(self):
         # TestStrike 6:5a3c-5a7c -> FlameSwordDecLifePts 4:1c36: SEQS 103,
-        # cue 10, the parry cue 239 (6:5ae6) and no SEQS 69.
+        # cue 10 and no SEQS 69. 6:5ac6-5adc skip the TestStrike sound once
+        # the Prince is at 161 (239 is its miss, 6:5ae6); the port played
+        # 239 on every parry before.
         c = self.encounter()
-        c.guard.state.action = 154
+        c.guard.state.action = 224
         c.player.state.action = 150
         events = c.resolve_contacts()
-        self.assertEqual([(e.kind, e.actor, e.sound) for e in events], [('parry', 'player', 239)])
+        self.assertEqual([(e.kind, e.actor, e.sound) for e in events], [('parry', 'player', 0)])
         self.assertEqual((c.guard.life, c.guard.state.sequence_id), (5, 103))
         self.assertIn(10, c.guard.state.sound_events)
         self.assertEqual((c.player.life, c.player.state.action, c.parry_timer), (3, 161, 4))
@@ -110,7 +112,7 @@ class FlameSwordCombatTests(unittest.TestCase):
             with self.subTest(gap=gap):
                 c = self.encounter(player_x=200 + gap - 21)
                 c.guard.state.facing = 1
-                c.guard.state.action = 154
+                c.guard.state.action = 224
                 c.player.state.action = 150
                 events = c.resolve_contacts()
                 self.assertEqual(any(e.kind == 'parry' for e in events), parried)
@@ -127,7 +129,7 @@ class FlameSwordCombatTests(unittest.TestCase):
                 c = self.encounter(player_x=x)
                 c.guard.state.facing = 1
                 c.player.state.action = 171
-                c.guard.state.action = 154
+                c.guard.state.action = 224
                 distance = opponent_distance(c.guard, c.player)
                 events = c.resolve_contacts()
                 self.assertEqual(any(e.kind == 'hit' for e in events), hit, distance)
@@ -135,12 +137,43 @@ class FlameSwordCombatTests(unittest.TestCase):
                 if hit:
                     self.assertEqual(c.player.life, 2)
 
+    def test_it_strikes_with_seqs_109_and_lands_at_pose_224(self):
+        # DoStrike 6:27c8-27e0 selects SEQS 109 for actor 10 (58 for others);
+        # IsStrikingPos 6:5d9a-5db8 makes 223/224 parryable and IsTheStrikePos
+        # 6:5e4a-5e64 lands the strike at 224. Before, it struck with the
+        # guard's SEQS 58 (poses 151-157 carry other pieces), so the raised,
+        # tilted and lunging flame of 218-227 was never drawn.
+        from pop2.combat import GuardIntent
+
+        c = self.encounter(player_x=240, sword_x=200)
+        c.guard.state.facing = 1
+        c.apply_guard_intent(GuardIntent(strike=True))
+        self.assertEqual(c.guard.state.sequence_id, 109)
+        poses = []
+        for _ in range(10):
+            poses.append(c.guard.runtime.next_frame().action)
+        self.assertEqual(poses, list(range(218, 228)))
+        for pose, parried in ((153, False), (154, False), (222, False), (223, True), (224, True)):
+            with self.subTest(pose=pose):
+                c = self.encounter(player_x=220)
+                c.guard.state.facing = 1
+                c.guard.state.action = pose
+                c.player.state.action = 150
+                self.assertEqual(any(e.kind == 'parry' for e in c.resolve_contacts()), parried)
+        for pose, hit in ((154, False), (223, False), (224, True)):
+            with self.subTest(pose=pose):
+                c = self.encounter(player_x=220)
+                c.guard.state.facing = 1
+                c.guard.state.action = pose
+                c.player.state.action = 171
+                self.assertEqual(any(e.kind == 'hit' for e in c.resolve_contacts()), hit)
+
     def test_the_last_parry_drops_it_for_480_frames(self):
         # 4:1c9e: SEQS 107, SetSkelTimer(480), song 238, ALIVE 0.
         c = self.encounter()
         c.guard.life = 1
         c.guard.state.current_y = 7  # The hovering sword can bob above/below its floor.
-        c.guard.state.action = 154
+        c.guard.state.action = 224
         c.player.state.action = 150
         c.resolve_contacts()
         flame = c.guard.flame_sword
@@ -255,7 +288,10 @@ class LevelTwelveFlameSwordTests(unittest.TestCase):
         self.assertEqual((sword.state.sequence_id, sword.life, sword.alert_mode), (106, 6, 3))
         self.assertEqual(sword.state.facing, 0)
         self.assertTrue(sword.flame_sword.native_alive)
-        self.tick(30)
+        # SEQS 109 lands at its seventh pose (224), about 24 frames after the
+        # wake here; SEQS 58 landed two frames sooner. 40 leaves a margin for
+        # the hidden scene's AI phase.
+        self.tick(40)
         self.assertLess(self.scene.combat.player.life, 3)
 
     def test_arriving_in_landing_recovery_does_not_leave_the_awakened_sword_waiting(self):
@@ -286,25 +322,49 @@ class LevelTwelveFlameSwordTests(unittest.TestCase):
         self.assertGreater(sword.life, 0)
         self.assertIsNone(self.scene.combat.health_opponent())
 
-    def test_it_does_not_wake_from_a_side_room(self):
-        # 4:14f0-151e/13b6 scan only the Kid room's records (a5-0x4fc2).
-        # Before, the side-room view put the Prince in its room, so it rose
-        # with full life as he stepped into room 12 within five columns.
-        sword = self.enter(480)
+    def test_a_fallen_sword_at_the_edge_moves_into_room_12_rises_and_fights(self):
+        # The user's Macintosh capture: six parries drop the sword at room
+        # 7's right edge, the Prince walks into room 12, and the sword rises
+        # at room 12's left edge and strikes him there. InitOpps 6:2b7e first
+        # runs CheckSideRoomsForVisibleOpps 6:2f4e: a left neighbour's record
+        # with native X > 585 moves into the entered room at X - 510, so the
+        # Kid-room wake (4:14f0) finds it and its timer is cleared (6:2e34).
+        # Before, it stayed a room-7 record: it never rose (2026-11-19 rule),
+        # and earlier it rose there and hovered with alert 0.
+        sword = self.enter(290)
         combat = self.scene.combat
+        self.tick(3)
+        sword.flame_sword.fall(sword)
+        self.tick(12)
+        self.assertEqual((sword.state.action, sword.flame_sword.timer > 400), (213, True))
         sword.state.target_x = sword.state.current_x = 505
         combat.enter_room(11, 0)
         combat.player.state.target_x = combat.player.state.current_x = 40
-        self.assertIn(sword, combat.active_guards())
+        self.assertEqual((sword.room, sword.state.target_x, sword.flame_sword.timer), (11, -5, 0))
+        self.assertIn(sword, combat.guards)
+        life = combat.player.life
+        self.tick(40)
+        self.assertTrue(sword.flame_sword.native_alive)
+        self.assertEqual(sword.alert_mode, 3)
+        self.assertLess(combat.player.life, life)
+
+    def test_a_side_sword_away_from_the_edge_stays_in_its_room(self):
+        # 6:2fce-2fd6: X <= 585 (scene 378) stays in the left neighbour.
+        sword = self.enter(480)
+        combat = self.scene.combat
+        sword.state.target_x = sword.state.current_x = 378
+        combat.enter_room(11, 0)
+        combat.player.state.target_x = combat.player.state.current_x = 40
         self.assertEqual(sword.room, 6)
         self.tick(20)
         self.assertEqual((sword.state.sequence_id, sword.life), (105, 0))
-        self.assertFalse(sword.flame_sword.native_alive)
 
     def test_an_awake_sword_follows_across_the_cut_and_a_fallen_one_stays(self):
         # CutAllOpponents 6:4582-45fa with 463c's type-10 row test (46a8):
         # engaged, ALIVE, on the Kid's row and X >= 385 going right. Before,
-        # only actors 2 and 4 were carried.
+        # only actors 2 and 4 were carried. The fallen one is placed where the
+        # cut alone would carry an awake one (X 385..) but where 6:2f4e does
+        # not move it (scene X <= 378); past 378 see the room-12 test above.
         for fallen in (False, True):
             with self.subTest(fallen=fallen):
                 sword = self.enter(290)
@@ -313,7 +373,9 @@ class LevelTwelveFlameSwordTests(unittest.TestCase):
                 self.assertTrue(sword.flame_sword.native_alive)
                 if fallen:
                     sword.flame_sword.fall(sword)
-                sword.state.target_x = sword.state.current_x = 450
+                    sword.state.target_x = sword.state.current_x = 378
+                else:
+                    sword.state.target_x = sword.state.current_x = 450
                 combat.enter_room(11, 0)
                 self.assertEqual(sword.room, 6 if fallen else 11)
                 if not fallen:
