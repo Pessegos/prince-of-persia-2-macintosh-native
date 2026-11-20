@@ -9,9 +9,9 @@ from pop2.animation_data import (
     character_collision_bounds, parse_aframe_records, parse_frame_records, shape_id_for_action,
 )
 from pop2.render_opening import (
-    ROOM_ORIGIN_X, actor_foreground_column, character_sprite_top, decode_ctbl, decode_shap,
+    ROOM_ORIGIN_X, character_sprite_top, decode_ctbl, decode_shap,
 )
-from pop2.terrain import character_row
+from pop2.object_order import DrawObject, character_kind
 
 
 def sword_palette_for_level(prince, level_kind):
@@ -56,19 +56,16 @@ def guard_artwork_file(level):
     return 'Skeleton.rsrc' if level.kind == 3 else 'Guard.rsrc'
 
 
-def actor_draw_order(state, record, bounds, row):
-    """IndexChar/DrawObjs/CompareObj ordering for Prince and ordinary opponents."""
-    if state.animation_state == 1:
-        row = character_row(bounds[3])
-        if row == -1:
-            row = 3
-    column = actor_foreground_column(state, record, bounds)
-    # IndexCell1 assigns offscreen actors to bucket 30, visited first.
-    # Visible cells follow bottom-up, left-right. Ordinary character kinds
-    # share priority 127 and sort by shape bottom, then anchor within a cell.
-    cell = 1 + (2 - row) * 10 + column if 0 <= row < 3 and 0 <= column < 10 else 0
+def actor_draw_object(state, bounds, item=None):
+    """The character's entry in DrawObjs' object table (AddCharObj 3:0130).
+
+    The bottom is the shape's (Y + frame dy, 3:0b4a); X is the drawing point,
+    the mirrored shape's right edge or the plain one's left. The inert
+    skeleton pile's FRAM offset adds ten to its bottom, so its bones cover
+    the Prince's feet. pop2.object_order sorts these with the moving objects.
+    """
     anchor = bounds[2] + 1 if state.facing else bounds[0]
-    return cell, bounds[3], anchor
+    return DrawObject(anchor, bounds[3], character_kind(state.actor_type), state.action, item)
 
 
 def slab_crush_draw_state(actor, previous_poses):

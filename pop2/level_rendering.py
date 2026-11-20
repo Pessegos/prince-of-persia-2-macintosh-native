@@ -243,7 +243,14 @@ class LevelRenderer:
             return self.ambience.draw(frame)
         return frame
 
-    def animated_layer(self, frame, room_id, harbor, front=False, frame_number=0, desert=None, caverns=None):
+    def animated_layer(self, frame, room_id, harbor, front=False, frame_number=0, desert=None, caverns=None,
+                       falling=None):
+        """The room's moving scenery behind (or, with ``front``, over) the characters.
+
+        ``falling``, when a list, receives each falling slab as (MOB type, X,
+        bottom, layer): the pixels its drawing changed, which the characters
+        it is sorted after (pop2.object_order) are covered with again.
+        """
         if self.level.kind == 6 and caverns is not None:
             # The final tower's flasks (native rooms 7, 8 and 10, and room
             # 3's drops) are front commands like the caverns' own; the static
@@ -288,8 +295,15 @@ class LevelRenderer:
             frame = draw_cavern_spikes(frame, room_id, caverns, self.cavern_map,
                                         level_number=self.level.number)
             frame = draw_bridge_planks(frame, room_id, caverns, level_number=self.level.number)
-            return draw_cavern_falling(frame, room_id, caverns, self.level.data,
-                                       self.room(room_id, caverns), level_number=self.level.number)
+            if falling is None or not caverns.loose.falling:
+                return draw_cavern_falling(frame, room_id, caverns, self.level.data,
+                                           self.room(room_id, caverns), level_number=self.level.number)
+            before, drawn = frame.copy(), []
+            frame = draw_cavern_falling(frame, room_id, caverns, self.level.data,
+                                        self.room(room_id, caverns), level_number=self.level.number,
+                                        drawn=drawn)
+            falling.extend(falling_layers(before, frame, drawn))
+            return frame
         if room_id in self.desert_rooms:
             return self.desert_rooms[room_id].draw(frame, frame_number, desert, front)
         if harbor is None:
@@ -339,3 +353,25 @@ class LevelRenderer:
         if secret in available and secret not in route:
             entries[f"Room {len(entries) + 1}"] = secret
         return entries
+
+
+def falling_layers(before, after, drawn):
+    """(MOB type, X, bottom, layer) for each drawn slab: ``after``'s pixels
+    inside the slab's pieces that its drawing changed, transparent elsewhere."""
+    from PIL import Image, ImageChops
+
+    layers = []
+    for mob_type, x, y, area in drawn:
+        box = (max(0, area[0]), max(0, area[1]), min(after.width, area[2]), min(after.height, area[3]))
+        if box[0] >= box[2] or box[1] >= box[3]:
+            continue
+        changed = ImageChops.difference(before.crop(box), after.crop(box))
+        red, green, blue, alpha = changed.split()
+        mask = ImageChops.lighter(ImageChops.lighter(red, green), ImageChops.lighter(blue, alpha))
+        mask = mask.point(lambda value: 255 if value else 0)
+        if mask.getbbox() is None:
+            continue
+        layer = Image.new('RGBA', after.size)
+        layer.paste(after.crop(box), box[:2], mask)
+        layers.append((mob_type, x, y, layer))
+    return layers

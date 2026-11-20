@@ -1,36 +1,87 @@
 import unittest
 from types import SimpleNamespace
 
-from pop2.combat_art import actor_draw_order, slab_crush_draw_state
+from pop2.combat_art import actor_draw_object, slab_crush_draw_state
+from pop2.object_order import DrawObject, mob_kind, sort_objects
+from pop2.scene_prototype import ScenePrototype
 from pop2.sequence_runtime import SequenceState
 
 
 class ActorLayeringTests(unittest.TestCase):
-    def key(self, x=100, bottom=346, row=2, facing=0, mode=0, action=15):
-        state = SequenceState(2, target_x=x, facing=facing, animation_state=mode, action=action)
-        record = SimpleNamespace(offset_x=4, aux=70)
-        return actor_draw_order(state, record, (x - 4, bottom - 78, x + 13, bottom), row)
+    """DrawObjs' one sort of the whole object table (3:39e6, 3:3b62, 3:3bec)."""
 
-    def test_cells_are_painted_bottom_up_then_left_to_right(self):
-        self.assertLess(self.key(row=2), self.key(row=1))
-        self.assertLess(self.key(x=70), self.key(x=130))
+    def actor(self, name, x=100, bottom=346, facing=0, action=15, actor_type=2):
+        state = SequenceState(2, target_x=x, facing=facing, action=action, actor_type=actor_type)
+        return actor_draw_object(state, (x - 4, bottom - 78, x + 13, bottom), name)
 
-    def test_same_cell_uses_shape_bottom_then_draw_anchor(self):
-        self.assertLess(self.key(bottom=346), self.key(bottom=356))
-        self.assertLess(self.key(x=95), self.key(x=100))
-        self.assertLess(self.key(facing=0), self.key(facing=1))
+    def order(self, *objects):
+        return [item.item for item in sort_objects(list(objects))]
 
-    def test_airborne_index_uses_drawn_bottom_and_climb_offsets_the_column(self):
-        self.assertGreaterEqual(self.key(bottom=226, mode=1)[0], 11)
-        self.assertEqual(self.key(bottom=4, mode=1)[0], 0)
-        self.assertEqual(self.key(mode=2)[0], self.key()[0] + 1)
-        self.assertEqual(self.key(mode=2, facing=1)[0], self.key(facing=1)[0] - 1)
+    def test_the_lower_bottom_is_drawn_later_whatever_the_cells(self):
+        # The level-10 room-11 birdhead (bottom 349, cell 7) and the crouching
+        # Prince to its right (343, cell 8): the old cell order put the Prince
+        # in front.
+        guard = self.actor('guard', x=367, bottom=349)
+        prince = self.actor('prince', x=370, bottom=343, actor_type=0)
+        self.assertEqual(self.order(prince, guard), ['prince', 'guard'])
+        self.assertEqual(self.order(guard, prince), ['prince', 'guard'])
+        # A body on the row above is drawn before one on the floor below.
+        upper = self.actor('upper', x=100, bottom=226)
+        lower = self.actor('lower', x=300, bottom=346, actor_type=0)
+        self.assertEqual(self.order(lower, upper), ['upper', 'lower'])
 
-    def test_offscreen_actors_share_the_first_bucket(self):
-        self.assertEqual(self.key(x=0)[0], 0)
-        self.assertEqual(self.key(x=560)[0], 0)
-        self.assertEqual(self.key(row=3)[0], 0)
-        self.assertLess(self.key(x=0), self.key(x=100))
+    def test_equal_bottoms_go_left_to_right_by_drawing_point(self):
+        left, right = self.actor('left', x=95), self.actor('right', x=100, actor_type=0)
+        self.assertEqual(self.order(right, left), ['left', 'right'])
+        # Facing right, the drawing point is the mirrored shape's right edge.
+        mirrored = self.actor('mirrored', x=90, facing=1)
+        self.assertEqual(self.order(mirrored, left), ['left', 'mirrored'])
+
+    def test_offscreen_bodies_have_no_first_bucket(self):
+        offscreen = self.actor('offscreen', x=560, bottom=390, actor_type=0)
+        visible = self.actor('visible', x=500, bottom=346)
+        self.assertEqual(self.order(offscreen, visible), ['visible', 'offscreen'])
+
+    def test_heads_in_their_back_poses_go_behind_the_others(self):
+        prince = self.actor('prince', bottom=346, actor_type=0)
+        for pose in (166, 181):
+            head = self.actor('head', bottom=360, action=pose, actor_type=7)
+            self.assertEqual(self.order(prince, head), ['head', 'prince'], pose)
+        hovering = self.actor('head', bottom=360, action=165, actor_type=8)
+        self.assertEqual(self.order(prince, hovering), ['prince', 'head'])
+
+    def test_a_falling_slab_above_the_feet_is_drawn_over_the_body(self):
+        prince = self.actor('prince', bottom=346, actor_type=0)
+        for y, expected in ((300, ['prince', 'slab']), (346, ['prince', 'slab']),
+                            (360, ['slab', 'prince'])):
+            slab = DrawObject(120, y, mob_kind(0), 0, 'slab')
+            self.assertEqual(self.order(prince, slab), expected, y)
+            self.assertEqual(self.order(slab, prince), expected, y)
+
+    def test_priorities_put_flames_and_bursts_in_front_and_the_shadow_flame_behind(self):
+        shadow = self.actor('shadow', bottom=346, actor_type=6)
+        burst = DrawObject(100, 200, 5, 0, 'burst')
+        behind = DrawObject(100, 400, 14, 0, 'flame')
+        self.assertEqual(self.order(burst, shadow, behind), ['flame', 'shadow', 'burst'])
+
+    def test_a_slab_sorted_after_a_body_covers_only_his_pixels(self):
+        from PIL import Image
+
+        body = Image.new('RGBA', (20, 20))
+        body.paste((255, 255, 255, 255), (0, 0, 10, 20))
+        slab = Image.new('RGBA', (20, 20))
+        slab.paste((157, 114, 98, 255), (5, 0, 15, 20))
+        state = SequenceState(2, target_x=4, action=15, actor_type=0)
+        actor = (state, None, (0, 0, 9, 19), 2, body)
+        scene = SimpleNamespace(composite_actor=lambda frame, layer, *_args: Image.alpha_composite(frame, layer))
+        drawn = ScenePrototype.draw_objects(scene, Image.new('RGBA', (20, 20), (0, 0, 0, 255)),
+                                            [actor], [(0, 4, 10, slab)])
+        self.assertEqual(drawn.getpixel((7, 5)), (157, 114, 98, 255))   # slab over the body
+        self.assertEqual(drawn.getpixel((2, 5)), (255, 255, 255, 255))  # the body elsewhere
+        self.assertEqual(drawn.getpixel((12, 5)), (0, 0, 0, 255))       # not repainted outside him
+        below = ScenePrototype.draw_objects(scene, Image.new('RGBA', (20, 20), (0, 0, 0, 255)),
+                                            [actor], [(0, 4, 30, slab)])
+        self.assertEqual(below.getpixel((7, 5)), (255, 255, 255, 255))
 
 
 class SlabCrushPresentationTests(unittest.TestCase):

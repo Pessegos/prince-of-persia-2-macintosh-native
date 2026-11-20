@@ -16,8 +16,9 @@ from pop2.combat import (
     PLAYER_COMBAT_TURN_SEQUENCE, contact_allowed, strike_pose,
 )
 from pop2.flame_sword import SWING_CUE as FLAME_SWING_CUE
+from pop2.object_order import DrawObject, mob_kind, sort_objects
 from pop2.combat_art import (
-    HealthArtwork, HitArtwork, _CurrentFrames, actor_draw_order, opponent_artwork,
+    HealthArtwork, HitArtwork, _CurrentFrames, actor_draw_object, opponent_artwork,
     slab_crush_draw_state, sword_palette_for_level,
 )
 from pop2.control_mapping import (
@@ -3686,6 +3687,13 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
     def attachment_frames(self, frames):
         self.ordinary_attachment_frames = frames
 
+    def attachment_is_flame(self):
+        """Whether sword_sprite gives SetupFlame's flame (poses 306-318)."""
+        frames = getattr(self, 'ordinary_attachment_frames', None)
+        if frames is None or getattr(self.game, 'caverns', None) is None:
+            return False
+        return self.attachment_frames[self.frames[self.action].afrm_index][0] == 4
+
     def sword_sprite(self):
         attachment_type, shape_index, dx, dy = self.attachment_frames[
             self.frames[self.action].afrm_index
@@ -3766,15 +3774,31 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
             # Only the struck floor's repaint is deferred. The statue mask
             # above and the following frame's detached slab retain their order.
             frame = room.draw_actor_foreground(frame, state, bounds, floor_exclusion)
-            if (state.actor_type in (0, 2, 4) and record is not None
-                    and actor_draw_order(state, record, bounds, row)[0] == 0):
-                # IndexCell1 maps offscreen actors to bucket30, drawn before
-                # visible debris. Preserve that order where a falling actor
-                # still overlaps the last visible slab at the room boundary.
-                from pop2.caverns import draw_cavern_falling
+        return frame
 
-                frame = draw_cavern_falling(frame, self.room_id, self.game.caverns,
-                    self.game.level.data, room, level_number=self.game.level.number, actor_bounds=bounds)
+    def draw_objects(self, frame, actors, falling):
+        """The characters and falling slabs in DrawObjs' order (pop2.object_order).
+
+        A slab is drawn with the scenery behind everything; one sorted after a
+        character covers it again with its own pixels, inside his.
+        """
+        objects = [actor_draw_object(actor[0], actor[2], ('actor', actor)) for actor in actors]
+        objects.extend(DrawObject(x, y, mob_kind(mob_type), 0, ('slab', layer))
+                       for mob_type, x, y, layer in falling)
+        covered = None
+        for item in sort_objects(objects):
+            what, value = item.item
+            if what == 'actor':
+                state, record, bounds, row, layer = value
+                frame = self.composite_actor(frame, layer, row, bounds[3], state, bounds, record)
+                alpha = layer.getchannel('A')
+                covered = alpha if covered is None else ImageChops.lighter(covered, alpha)
+            elif covered is not None:
+                mask = ImageChops.multiply(covered.point(lambda level: 255 if level else 0),
+                                           value.getchannel('A'))
+                if mask.getbbox() is not None:
+                    frame = frame.copy()
+                    frame.paste(value, (0, 0), mask)
         return frame
 
     def draw_cutscene_pause(self, viewport):
@@ -3875,9 +3899,11 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
             return
         environment = environment_for(self)
         frame = self.background.copy()
+        falling = []
         frame = self.level_renderer.animated_layer(frame, self.room_id, self.harbor,
                     frame_number=self.combat.world_frame if self.combat is not None else 0,
-                    desert=getattr(self.game, "desert", None), caverns=self.game.caverns)
+                    desert=getattr(self.game, "desert", None), caverns=self.game.caverns,
+                    falling=falling)
         opening = getattr(self, "opening", None)
         show_opening = opening is not None and (
             getattr(self, "level_map", None) is None or self.room_id == self.level_map.start_room)
@@ -3924,6 +3950,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         sprite = self.player_sprite(draw_action,
                                     ctbl=player_palette() if player_palette is not None else None)
         drawn_bounds = None
+        flame_layer = None
         if sprite is not None:
             record = self.frames[draw_action]
             if draw_height is not None and draw_height != sprite.height:
@@ -3958,22 +3985,31 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
                 else:
                     sword_x = x - dx
                 sword_y = y + sprite.height + dy - sword.height
-                player_layer.paste(sword, (sword_x, sword_y), sword)
+                if self.attachment_is_flame():
+                    # SetupFlame 10:2fbe adds the flame as its own object of
+                    # kind 5, priority 50 (3:3e24): over every character.
+                    flame_layer = Image.new("RGBA", frame.size)
+                    flame_layer.paste(sword, (sword_x, sword_y), sword)
+                else:
+                    player_layer.paste(sword, (sword_x, sword_y), sword)
 
         motion = getattr(self, "terrain_motion", None)
         player_bounds = self.player_bounds() if motion is not None else None
         draw_bounds = drawn_bounds if draw_height is not None else player_bounds
         if motion is not None and draw_bounds is not None:
-            actors.append((draw_state, self.frames[draw_action], draw_bounds, motion.row, player_layer))
-            actors.sort(key=lambda actor: actor_draw_order(*actor[:4]))
-            for state, record, bounds, row, layer in actors:
-                frame = self.composite_actor(frame, layer, row, bounds[3], state, bounds, record)
+            # The Prince is added first; only equal bottoms and X depend on it.
+            actors.insert(0, (draw_state, self.frames[draw_action], draw_bounds, motion.row, player_layer))
+            frame = self.draw_objects(frame, actors, falling)
         else:
             for state, record, bounds, row, layer in actors:
                 frame = self.composite_actor(frame, layer, row, bounds[3], state, bounds, record)
             frame = self.composite_actor(frame, player_layer)
         if motion is not None:
             frame = environment.after_actors(frame, player_bounds)
+        if flame_layer is not None:
+            frame = self.composite_actor(frame, flame_layer, motion.row if motion is not None else None,
+                                         player_bounds[3] if player_bounds is not None else None,
+                                         self.sequence_state, player_bounds, self.frames[self.action])
 
         if combat is not None:
             for guard in (() if hide_guards else (*combat.visible_guards(), *combat.visible_ruins())):

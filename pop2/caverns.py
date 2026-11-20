@@ -1016,12 +1016,15 @@ def cavern_scene_signature(program, room_id, state):
     return ''.join(indices)
 
 
-def draw_cavern_falling(frame, room_id, state, level, art, *, level_number=3, actor_bounds=None):
+def draw_cavern_falling(frame, room_id, state, level, art, *, level_number=3, drawn=None):
+    """The falling slabs (MOBs) of this room and the ones above and below.
+
+    ``drawn``, when a list, receives each slab's (MOB type, X, Y, rectangle
+    of its pieces) in this room's coordinates, for its place in DrawObjs'
+    order among the characters (pop2.object_order).
+    """
     from pop2.terrain import LevelMap
 
-    original = frame
-    if actor_bounds is not None:
-        frame = frame.copy()
     _program, resources, palette, shapes = room_assets(level_number, room_id)
     terrain = LevelMap(level)
     redraw = []
@@ -1041,6 +1044,7 @@ def draw_cavern_falling(frame, room_id, state, level, art, *, level_number=3, ac
                   else ((3528, y), (3529, y)) if level_number in TEMPLE_LEVELS
                   else ((3557, y - 18), (3604, y)))
         width, height = block.size
+        area = None
         for index, bottom in pieces:
             sprite = cavern_command_sprite(['back', index, block.x, bottom, 16],
                                             resources, palette, shapes)
@@ -1050,6 +1054,8 @@ def draw_cavern_falling(frame, room_id, state, level, art, *, level_number=3, ac
             # AddImgObj3:0302-030c stores top = bottom - height + 1.
             # Unlike static room commands, a MOB's bottom is inclusive.
             rect = (block.x, bottom - sprite.height + 1, block.x + sprite.width, bottom + 1)
+            area = rect if area is None else (min(area[0], rect[0]), min(area[1], rect[1]),
+                                              max(area[2], rect[2]), max(area[3], rect[3]))
             cover = art.foreground.crop(rect).getchannel('A')
             sprite = sprite.copy()
             sprite.putalpha(ImageChops.multiply(sprite.getchannel('A'), ImageChops.invert(cover)))
@@ -1059,14 +1065,10 @@ def draw_cavern_falling(frame, room_id, state, level, art, *, level_number=3, ac
             width = max(width, sprite.width)
             height = max(height, y - bottom + sprite.height)
         redraw.append((block.x, y, (width, height)))
+        if drawn is not None and area is not None:
+            drawn.append((getattr(block, 'mob_type', 0), block.x, y, area))
     for x, y, size in redraw:
         art.draw_falling_foreground(frame, x, y, size)
-    if actor_bounds is not None:
-        left, top, right, bottom = actor_bounds
-        clip = (max(0, left), max(0, top), min(frame.width, right + 1), min(frame.height, bottom + 1))
-        if clip[0] < clip[2] and clip[1] < clip[3]:
-            original.paste(frame.crop(clip), clip[:2])
-        return original
     return frame
 
 

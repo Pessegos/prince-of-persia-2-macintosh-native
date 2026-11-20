@@ -513,17 +513,28 @@ keeps the left neighbor's gate and a gate from the room below behind the
 Prince in room 4, without removing the real foreground stone in rooms
 17/23. Static scenery and gate movement/collision rules are unchanged.
 
-Ordinary opponents and the Prince also follow IndexChar (4:4558),
-IndexCell1 (4:2a38) and DrawObjs (3:39d6), rather than always painting the
-Prince last. Offscreen bucket 30 precedes bottom-up, left-to-right visible
-cells. SortObjTable/CompareObj (3:3b62/3bec) assigns their ordinary object
-kinds the same priority 127, then orders by shape bottom and draw anchor.
-The inert skeleton pile's FRAM offset adds ten to its shape bottom, so
-its bones correctly cover the Prince's feet when they share a cell.
-Original instruction execution matched 512 ordinary actor pairs. Regression
-tests cover room 4's background gates, bones and foreground pillar, plus
-cell ordering and the offscreen bucket. Other special object priorities
-are outside this character-only ordering helper.
+Characters and falling slabs are drawn in DrawObjs' order
+(`pop2/object_order.py`). DrawObjs 3:39d6 draws only when called with -1
+(3:39e6): the calls per redrawn cell (3:1ed6) and for bucket 30 (3:326a)
+return at once, and one call after every cell (3:3326) sorts and draws the
+whole object table. SortObjTable/CompareObj (3:3b62/3bec) compare
+GetObjForePriority (3:3e24: DATA a5-0x44e0 by character kind, 127 for
+characters, 50 for the hit burst and SetupFlame's flame 10:2fbe, 200 for the
+shadow's flame; a5-0x44c2 by MOB type), then the bottom, then X. Against a
+moving object the lower bottom goes first, so a falling slab above a body's
+feet is drawn over it. Heads (kinds 7/8) in poses 166/181 go behind the
+other objects. Cells decide which scenery is redrawn, not the order. An
+earlier reading drew cells bottom-up and left to right; it put the crouching
+Prince over the level-10 birdhead to his left (bottom 349 against 343) and
+inverted 338 of 1,700 overlapping pairs on the hostile temple routes. The
+inert skeleton pile's FRAM offset adds ten to its bottom, so its bones cover
+the Prince's feet. `tools/probe_object_sort.py` runs the original sort on
+20,000 random tables of two to eight objects (characters, attachments,
+heads in back poses, kind 5/14 and MOB types 0-13): zero mismatches. A
+slab is still drawn with the scenery; one sorted after a character covers
+it again with its own changed pixels inside his. Not covered: DrawObj's
+attachment links, other MOBs' own painters and the per-cell foreground
+peel.
 
 Original instruction execution confirmed 6,144 climb selections, 512 gate
 catch admissions and 80 foreground-admission cases. Real-terrain tests replay
