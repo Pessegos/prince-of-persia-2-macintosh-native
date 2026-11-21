@@ -880,12 +880,19 @@ def _prepare_caverns(program, caverns, prince, progress, recover, *, level_numbe
               'torches': {room: scene['torches'] for room, scene in scenes.items()}}
     if definition.kind == 6:
         result['fills'] = {room: scene['fills'] for room, scene in scenes.items() if scene['fills']}
-    result['climb_redraw'], result['floor_redraw'] = {}, {}
+    result['climb_redraw'], result['floor_redraw'], result['border_redraw'] = {}, {}, {}
     for room in range(32):
         progress(f'Cavern climbing layers: room {room + 1}/32')
         result['climb_redraw'][str(room)] = recover_climbing(program, caverns, prince, level, room, recover)
         result['floor_redraw'][str(room)] = recover(
             program, caverns, level, room, prince, floor_redraw=True)['commands']
+        if not customized_room(level, room):
+            # RedrawTopFast 3:1f4e repaints a marked border cell (MarkTop
+            # 5:16f2) whole: back passes 0, 5 and 11, then the front, each
+            # clipped to the cell's 0-5 strip, after the characters.
+            result['border_redraw'][str(room)] = recover(
+                program, caverns, level, room, prince, cell_redraw=True,
+                only={(-1, column, draw_pass) for column in range(10) for draw_pass in (0, 5, 11, 1)})['commands']
     terrain = LevelMap(level)
     if definition.kind == 3:
         result['lava'] = lava_tables(program, caverns)

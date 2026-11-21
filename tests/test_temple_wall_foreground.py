@@ -83,8 +83,10 @@ class BorderRowTests(unittest.TestCase):
                 ['front', 3529, 0, 5, 16, -1, [0, 0, 5, 102], 4, 0, -1],
                 ['front', 3530, 102, 60, 16, 0, [0, 102, 60, 153], 4, 2, 0]]
 
-    def art(self, customized):
+    def art(self, customized, border=None):
         program = {'version': 6, 'level': 13, 'rooms': {'25': self.COMMANDS}}
+        if border is not None:
+            program['border_redraw'] = {'25': border}
         shapes = {3528: Image.new('RGBA', (90, 5), 'blue'), 3529: Image.new('RGBA', (102, 5), 'red'),
                   3530: Image.new('RGBA', (51, 60), 'gray')}
         with (patch('pop2.caverns.room_assets', return_value=(program, {}, {}, shapes)),
@@ -95,7 +97,8 @@ class BorderRowTests(unittest.TestCase):
 
     def test_the_border_row_hides_a_head_only_in_its_own_strip_and_cell(self):
         # MarkTop 5:16f2 marks the border cell; RedrawTopFast 3:1f4e redraws
-        # its front clipped to it, after row 0's redraw stops at Y 5.
+        # it clipped to it, after row 0's redraw stops at Y 5. An import
+        # without `border_redraw` keeps only the border's front pieces.
         cells = self.art(False).actor_cell_occlusion
         mask, position = cells[(0, -1)]
         self.assertEqual((position, mask.size), ((0, 0), (51, 5)))
@@ -107,6 +110,27 @@ class BorderRowTests(unittest.TestCase):
         self.assertEqual(head.getpixel((60, 2)), 0)
         self.assertEqual(head.getpixel((110, 2)), 0)
         self.assertEqual(head.getpixel((110, 5)), 255)
+
+    def test_the_border_redraw_repaints_its_back_pieces_over_the_head(self):
+        # RedrawTopFast 3:1f4e draws back passes 0, 5 and 11 (3:1fa4-1fc4)
+        # and then the front, after the rows' RedrawCell drew the
+        # characters (3:32e0-3312): cell 1's dirty redraw of the floor that
+        # the room's drawing files under cell 0 hides him there too.
+        border = [['back', 3528, 0, 5, 16, -1, [0, 51, 5, 90], 4, 1, -1],
+                  ['front', 3529, 0, 5, 16, -1, [0, 0, 5, 51], 4, 0, -1]]
+        art = self.art(False, border)
+        head = art.actor_mask(0, bounds=(30, 0, 120, 40))
+        self.assertEqual((head.getpixel((30, 2)), head.getpixel((60, 2))), (255, 255))
+        # Past the piece, and row 0's own pieces, the strip shows him.
+        self.assertEqual((head.getpixel((95, 2)), head.getpixel((110, 2))), (0, 0))
+        self.assertEqual(head.getpixel((110, 5)), 255)
+        # The full room's border pieces alone do not stand for the redraw.
+        art = self.art(False, [])
+        head = art.actor_mask(0, bounds=(30, 0, 120, 40))
+        self.assertEqual((head.getpixel((30, 2)), head.getpixel((60, 2))), (0, 0))
+        # A customized room has no border redraw at all.
+        art = self.art(True, border)
+        self.assertNotIn((1, -1), art.actor_cell_occlusion)
 
     def test_a_customized_room_has_no_border_row(self):
         # IsCustomizedRoom 3:1310: RedrawCellFast 3:1cb0-1cb4 skips the
@@ -145,8 +169,9 @@ class NativeForegroundCellTests(unittest.TestCase):
 
         with patch('pop2.caverns.temple_wall_redraws', return_value=frozenset()):
             report = run_probe(RECOVERY, levels=(10,), rooms={(10, 2), (10, 20)})
-        # 255 of them in 10:20's border cell (9, -1).
-        self.assertEqual(report['totals']['missing_pixels'], 6375)
+        # 24 cells of 255. 10:20's border cell (9, -1) is now the exported
+        # RedrawTopFast 3:1f4e redraw (`border_redraw`), not this patch's.
+        self.assertEqual(report['totals']['missing_pixels'], 6120)
 
     def test_a_border_row_in_a_customized_room_is_rejected(self):
         from tools.probe_foreground_cells import run_probe
