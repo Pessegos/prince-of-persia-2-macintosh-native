@@ -620,7 +620,9 @@ class TowerFlightTests(unittest.TestCase):
         self.assertIsNone(difference.crop((0, 0, 26, 225)).getbbox())
         self.assertIsNotNone(difference.crop((26, 36, 60, 225)).getbbox())
 
-    def test_the_flight_never_leaves_a_trail_on_the_right_edge(self):
+    def test_the_flight_animates_the_last_column_without_leaving_a_trail(self):
+        from PIL import Image, ImageOps
+
         from pop2.intro import IntroAssets, IntroPlayer
 
         player = IntroPlayer(IntroAssets(program_name='tower.json'))
@@ -628,11 +630,35 @@ class TowerFlightTests(unittest.TestCase):
                          if item.get('pc') == 0x73f6 and item['op'] == 'wait']
         self.assertGreater(len(flight_frames), 90)
         player.seek_operation(flight_frames[0])
+        first = next(index for index, item in enumerate(player.operations) if item.get('pc') == 0x73f6)
+        animated, blank = 0, 0
         for index in flight_frames:
+            # Start with fresh sky each frame and sample just the portion of
+            # each current sprite that can cover the rightmost column.
+            expected = Image.new('L', (1, 165), 93)
+            for item in player.operations[first:index]:
+                if item['op'] != 'shape':
+                    continue
+                shape_id, x, y, flags = item['args']
+                shape = player.assets.shapes[shape_id]
+                column = 509 - x
+                if 0 <= column < shape.width:
+                    if flags & 256:
+                        shape = ImageOps.mirror(shape)
+                    strip = shape.crop((column, 0, column + 1, shape.height))
+                    mask = strip.point([0] + [255] * 255) if flags & 16 else None
+                    expected.paste(strip, (0, y - 81), mask)
             while player.position <= index:
                 player.advance(player.wait_until - player.time)
             self.assertEqual(player.position, index + 1)
-            self.assertEqual(player.display.crop((509, 81, 510, 246)).getcolors(), [(165, 93)])
+            self.assertEqual(player.display.crop((509, 81, 510, 246)).tobytes(), expected.tobytes(), index)
+            if expected.getcolors() == [(165, 93)]:
+                blank += 1
+            else:
+                animated += 1
+            first = index + 1
+        self.assertGreater(animated, 0)
+        self.assertGreater(blank, 0)
 
     def test_the_existing_white_flash_brightens_the_rendered_statue(self):
         from pop2.intro import IntroAssets, IntroPlayer
