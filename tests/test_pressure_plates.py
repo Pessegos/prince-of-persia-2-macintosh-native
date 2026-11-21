@@ -380,6 +380,19 @@ class PressurePlateTests(unittest.TestCase):
         self.assertEqual(self.terrain.tile(0, 5, 1).foreground & 255, 255)
         self.assertNotIn((0, 15), self.plates.active)
 
+    def test_the_rubble_on_a_struck_plate_keeps_its_own_foreground(self):
+        # MakeRubble 5:2c36: PushPlate (5:2d06-2d10) runs before the rubble's
+        # words are written (5:2e1e-2edc, word 0 in environments 2 and 3), so
+        # the cell does not keep the plate's depression bit (0x2001).
+        self.caverns.loose.tiles[0, 14] = (14, 0)
+        self.assertEqual(self.plates.impact(self.terrain, 0, 14, 34, rubble=0), ())
+        tile = self.terrain.tile(0, 4, 1)
+        self.assertEqual((tile.kind, tile.foreground), (14, 0))
+        for _ in range(200):
+            self.plates.advance(self.terrain)
+        self.assertEqual(self.terrain.tile(0, 5, 1).foreground & 255, 255)
+        self.assertEqual(self.terrain.tile(0, 4, 1).foreground, 0)
+
 
 class CaveBarsTests(unittest.TestCase):
     """TriggerCaveBars 8:1672 and the bars animation 8:1508 (level five, room 3)."""

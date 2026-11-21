@@ -90,11 +90,19 @@ class PressurePlates:
                          action=state.action, shut_only=shut_only, sword_type=sword_type,
                          gate_permanent=gate_permanent, block_gate_close=block_gate_close)
 
-    def impact(self, terrain, room, cell, kind, *, sword_type=None):
+    def impact(self, terrain, room, cell, kind, *, sword_type=None, rubble=None):
+        """A falling slab lands on a plate. `rubble`, when given, is the
+        foreground word the slab's rubble leaves in the cell."""
         value = struct.unpack_from('>H', terrain.level, 0x780 + room * 120 + cell * 4)[0]
         value = self.foreground.get((room, cell), value)
         tile = replace(terrain.tile(room, cell % 10, cell // 10), kind=kind, foreground=value)
-        return self.push(terrain, tile, permanent=True, impact=True, sword_type=sword_type)
+        cues = self.push(terrain, tile, permanent=True, impact=True, sword_type=sword_type)
+        if rubble is not None:
+            # MakeRubble presses the plate first (PushPlate, 5:2d06-2d10)
+            # and writes the rubble's words afterwards (5:2e1e-2edc), so the
+            # depression bit PushPlate sets does not survive in the cell.
+            self.foreground[room, cell] = rubble
+        return cues
 
     def push(self, terrain, tile, permanent=False, action=15, impact=False, shut_only=False,
              *, sword_type=None, gate_permanent=False, block_gate_close=False):

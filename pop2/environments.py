@@ -1320,8 +1320,10 @@ class Caverns(Environment):
                     scene.run_active = scene.run_stop_requested = scene.run_cycle_boundary_pending = False
                     scene.action, scene.player_x = state.action, state.target_x
         for room, cell, kind in caverns.loose.plate_events:
+            rubble = caverns.loose.tiles.get((room, cell))
             scene.sequence_state.sound_events.extend(caverns.plates.impact(
-                scene.level_map, room, cell, kind, sword_type=scene.game.sword_type))
+                scene.level_map, room, cell, kind, sword_type=scene.game.sword_type,
+                rubble=rubble[1] if rubble is not None else None))
         caverns.loose.plate_events.clear()
         caverns.loose.advance_tiles(scene.level_map)
         scene.sequence_state.sound_events.extend(caverns.scythes.advance(scene.level_map))
