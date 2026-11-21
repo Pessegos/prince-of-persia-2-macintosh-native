@@ -126,6 +126,29 @@ class CavernExitTests(unittest.TestCase):
             record=SimpleNamespace(offset_x=0, aux=0))
         self.assertEqual(frame.getchannel('A').getbbox(), (0, 131, 331, 365))
 
+    @unittest.skipUnless((ASSET_DIR / 'enemy_profiles.json').is_file(),
+                         'Scene compositor import requires imported enemy profiles')
+    def test_scene_compositor_applies_the_top_recrop_in_the_temple(self):
+        # ClipChar's recrop 4:4230-43de has no environment test; the port
+        # left the temple (2) out, and a fall in level 12 room 30 kept its
+        # head above the row's top.
+        from unittest.mock import patch
+
+        from PIL import Image
+        from pop2.scene_prototype import ScenePrototype
+
+        state = SequenceState(7, action=106, animation_state=4, target_x=350, facing=0,
+                              actor_type=0, level_kind=2)
+        host = SimpleNamespace(room_cache={}, room_id=29, level_map=self.terrain,
+                               foreground=Image.new('RGBA', (510, 365)))
+        layer = Image.new('RGBA', (510, 365), 'white')
+        with patch('pop2.scene_prototype.cavern_clip_top', return_value=245) as clip:
+            frame = ScenePrototype.composite_actor(host, Image.new('RGBA', layer.size), layer,
+                row=2, state=state, bounds=(334, 218, 367, 288),
+                record=SimpleNamespace(offset_x=0, aux=0))
+        clip.assert_called_once()
+        self.assertEqual(frame.getchannel('A').getbbox()[1], 245)
+
 
 @unittest.skipUnless((ASSET_DIR / 'caverns_entry.json').is_file(), 'Imported game resources required')
 class ImportedCavernExitTests(unittest.TestCase):

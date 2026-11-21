@@ -27,6 +27,7 @@ class CavernClipTests(unittest.TestCase):
     def setUp(self):
         level = bytearray(0x49ca)
         struct.pack_into('>H', level, 0x218a, 3)
+        struct.pack_into('>H', level, 0x2180, 32)
         self.terrain = SimpleNamespace(level=level, tile=lambda *args: Tile(1))
 
     def state(self, action=136, mode=1, facing=1, actor_type=0):
@@ -80,6 +81,22 @@ class CavernClipTests(unittest.TestCase):
             with self.subTest(room=room):
                 result = cavern_clip_top(self.terrain, room, 2, self.state(), (106, 218, 125, 302))
                 self.assertEqual(result, 0 if room in (2, 5) else 245)
+
+    def test_a_room_past_the_room_count_reads_the_undefined_cell(self):
+        # ReadCell 4:2844-2852: a room above LEVL 0x2180 reads as
+        # GetUndefineCellId 4:28b6. Level 12 counts 26 rooms but plays in
+        # native room 30, whose empty cells clip a fall as walls (20).
+        struct.pack_into('>H', self.terrain.level, 0x2180, 26)
+        self.terrain.undefined_cell = lambda room, column, row: 20
+        state = self.state(106, 4, 0)
+        for room, expected in ((25, 0), (29, 245)):
+            self.terrain.tile = lambda r, col, row, room=room: Tile(0, room=room)
+            with self.subTest(room=room):
+                self.assertEqual(cavern_clip_top(self.terrain, room, 2, state, (334, 218, 367, 288)), expected)
+        # The final tower's undefined cells are mostly air: no clip there.
+        self.terrain.undefined_cell = lambda room, column, row: 0
+        self.terrain.tile = lambda r, col, row: Tile(20, room=29)
+        self.assertEqual(cavern_clip_top(self.terrain, 29, 2, state, (334, 218, 367, 288)), 0)
 
     def test_final_cells_of_native_rooms_seven_and_eight_clip_only_the_jump_up(self):
         # ClipChar 4:42a2-42c4: the drawn first cell's room (ReadCell) 7 or 8

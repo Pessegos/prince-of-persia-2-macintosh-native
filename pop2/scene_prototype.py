@@ -3776,7 +3776,9 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         layer.putalpha(ImageChops.multiply(layer.getchannel("A"), ImageChops.invert(mask)))
         level = getattr(getattr(self, 'game', None), 'level', None)
         level_kind = getattr(state, 'level_kind', getattr(level, 'kind', None))
-        if level_kind in (3, 4, 6) and state is not None and bounds is not None and row is not None:
+        # ClipChar's recrop 4:4230-43de has no environment test: the temple
+        # (2) takes it too.
+        if level_kind in (2, 3, 4, 6) and state is not None and bounds is not None and row is not None:
             clip_top = cavern_clip_top(self.level_map, self.room_id, row, state, bounds)
             if clip_top > 0:
                 layer.paste((0, 0, 0, 0), (0, 0, layer.width, clip_top))

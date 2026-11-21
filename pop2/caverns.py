@@ -334,7 +334,7 @@ def cavern_clip_top(terrain, room, row, state, bounds):
         first, last = drawn_actor_columns(bounds, state.facing)
         top_row = character_row(char_top)
         first_tile = terrain.tile(room, first, top_row)
-        if first_tile.kind in EMPTY_TILES:
+        if clip_cell_kind(terrain, room, first, top_row, first_tile) in EMPTY_TILES:
             return 0
         if first_tile.room == 0 and level_number == 14:
             return 0
@@ -344,9 +344,19 @@ def cavern_clip_top(terrain, room, row, state, bounds):
                 and getattr(state, 'source_sequence_id', None) != 14):
             return 0
         if not (state.animation_state == 0 and state.action in (79, 81)):
-            if terrain.tile(room, last, top_row).kind in EMPTY_TILES:
+            if clip_cell_kind(terrain, room, last, top_row) in EMPTY_TILES:
                 return 0
     return boundary
+
+
+def clip_cell_kind(terrain, room, column, row, tile=None):
+    """The cell kind ReadCell 4:27ee gives ClipChar: a cell whose room is
+    past the level's room count (LEVL 0x2180, 4:2844-2852) reads as
+    GetUndefineCellId 4:28b6 gives it, like one past a missing link."""
+    tile = tile if tile is not None else terrain.tile(room, column, row)
+    if tile.room is not None and tile.room + 1 > struct.unpack_from('>H', terrain.level, 0x2180)[0]:
+        return terrain.undefined_cell(room, column, row)
+    return tile.kind
 
 
 # Levels whose scenery is the original renderer's export, by LEVL environment:
