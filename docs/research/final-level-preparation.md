@@ -242,6 +242,26 @@ the original fixed strip and a wider clip without a wider erase. Comparing
 all 1,426 ticks of portable playback changed only column 509 in the sky
 animation area, on 294 ticks, with the same sound events and deadlines.
 
+### Resting pose and moving fades (2026-11-21)
+
+At the user's request, the dismounted Prince takes the same resting pose as
+the first playable frame. The last shot's standing Horse SHAP 25314 becomes
+Kid SHAP 25016, the level-14 entry action 15 from SEQS 2. Gameplay's mirrored
+18-by-79 shape at X277, Y148 fits in the earlier drawing rectangle. The tilt
+in the forearms disappears at the handoff because both sides use the same
+shape, palette and anchor. An offscreen campaign transition compares the
+rendered Prince and parapet at the last cutscene and first gameplay frames.
+
+The two 25-tick `fade_both` darkenings and the middle shot's 25-tick reveal
+use the carpet scene's overlapping animation and palette timing. The opening
+reveal still shows the empty balcony before song 25009's cue. The existing
+cue holds the entrance until the music reaches it. The picture comparison
+finds five animation states within each of the three fades between shots.
+Overlap shortens the whole scene by 75 ticks (about 1.25 s); it retains the
+fades' durations and the individual animation intervals. The scene's music
+and final input handoff were checked through the portable player, with no
+new native audiovisual comparison.
+
 ## Jaffar generation block (2026-11-10)
 
 The preserved `LEVL` 2013 is environment 6, opponent set 0, with an empty

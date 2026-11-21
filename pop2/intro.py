@@ -127,6 +127,12 @@ def read_program(path):
             data['operations'].insert(first_wait, {
                 'op': 'fade_in_all', 'args': [0x40001], 'pc': 0x63cc})
     elif data.get('kind') == 'tower':
+        # After the dismount, use the level-14 entry's mirrored Kid SHAP
+        # 25016 (action 15) at the gameplay anchor. The old pose's copy and
+        # restore rectangles already enclose it.
+        operations = [{**item, 'args': [925016, 277, 148, 16 | 256]}
+                      if (item['op'] == 'shape' and item.get('pc') == 0x7522
+                          and item['args'][0] == 725314) else item for item in operations]
         data['operations'] = clip_tower_flight(align_tower_statue_flash(operations))
     return data
 
@@ -384,7 +390,7 @@ def game_song(cue, directory=ASSET_DIR):
     return {"duration": manifest[str(cue)]["duration"], "markers": markers, "kind": 0}
 
 
-# Drawing steps that may run while a carpet-scene fade changes the palette.
+# Drawing steps that may run while a cutscene fade changes the palette.
 ANIMATION_OPS = frozenset(("shape", "copy", "restore", "wait", "fill", "clip"))
 
 
@@ -396,9 +402,13 @@ def animated_fade_outs(operations):
     """
     starts = {}
     for index, item in enumerate(operations):
-        if item["op"] != "fade" or item["args"][1]:
+        if item["op"] == "fade_both":
+            flags = item["args"][0]
+        elif item["op"] == "fade" and not item["args"][1]:
+            flags = item["args"][2]
+        else:
             continue
-        duration, remaining = fade_ticks(item["args"][2]) / MAC_TICKS_PER_SECOND, 0.0
+        duration, remaining = fade_ticks(flags) / MAC_TICKS_PER_SECOND, 0.0
         for before in range(index - 1, -1, -1):
             step = operations[before]
             if step["op"] not in ANIMATION_OPS:
@@ -483,9 +493,8 @@ class IntroPlayer:
         self.inserted = []
         self.happy = {"offset": 0, "line": 0, "delay": 0, "ending": False}
         self.blend_palette = None
-        # QoL (the carpet scene): the Mac fades block, freezing the clouds; here
-        # fade-ins and fade-outs overlap the drawing steps, as in the DOS port.
-        self.animated_fades = self.program_kind == "carpet"
+        # Keep drawing through the carpet and tower palette fades.
+        self.animated_fades = self.program_kind in ("carpet", "tower")
         self.early_fades = animated_fade_outs(self.operations) if self.animated_fades else {}
         self.started_fades = set()
         self.advance(0)
@@ -575,6 +584,13 @@ class IntroPlayer:
         self.transition = ("fade", start, duration, source, target)
         if blocking:
             self.wait_until = start + duration
+
+    def fade_parameters(self, op, args):
+        if op == "fade":
+            palette, into, flags = args
+            return self.assets.palettes.get(palette, {}), into, flags
+        colors = {index: color for colors in self.loaded.values() for index, color in colors.items()}
+        return colors, op == "fade_in_both", args[0]
 
     def update_transition(self):
         if self.transition is None:
@@ -775,8 +791,8 @@ class IntroPlayer:
             early = self.early_fades.get(self.position - 1)
             if early is not None:
                 fade, offset = early
-                fade_args = self.operations[fade]["args"]
-                self.fade(self.assets.palettes.get(fade_args[0], {}), False, fade_args[2],
+                item = self.operations[fade]
+                self.fade(*self.fade_parameters(item["op"], item["args"]),
                           start=self.time + offset, blocking=False)
                 self.started_fades.add(fade)
         elif op == "cue":
@@ -843,17 +859,15 @@ class IntroPlayer:
                 for index, color in colors.items():
                     self.palette[index] = (0, 0, 0) if flags & 4 else color
                 self.changed()
-        elif op == "fade":
+        elif op in ("fade", "fade_both", "fade_in_both"):
             if self.position - 1 in self.started_fades:
                 # Started early (animated_fade_outs); it ends here.
                 self.wait_until = max(self.time, self.transition[1] + self.transition[2]
                                       if self.transition is not None else self.time)
             else:
-                self.fade(self.assets.palettes.get(args[0], {}), args[1], args[2],
-                          blocking=not (self.animated_fades and args[1]))
-        elif op in ("fade_both", "fade_in_both"):
-            colors = {index: color for colors in self.loaded.values() for index, color in colors.items()}
-            self.fade(colors, op == "fade_in_both", args[0])
+                colors, into, flags = self.fade_parameters(op, args)
+                self.fade(colors, into, flags,
+                          blocking=not (self.animated_fades and op == "fade" and into))
         elif op == "brightness":
             flags, percent = args
             if not flags & 3 and flags & 0x6000:

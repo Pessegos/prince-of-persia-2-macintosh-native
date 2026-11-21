@@ -117,13 +117,17 @@ class LevelTenArrivalTests(unittest.TestCase):
         if not all((ASSET_DIR / name).is_file() for name in
                    ('tower.json', 'TowerNIS.rsrc', 'Final.rsrc', 'final_level14.json')):
             self.skipTest('Imported tower scene and final scenery required')
+        from PIL import ImageChops
+
         from pop2.environments import Temple
+        from pop2.render_opening import ROOM_ORIGIN_X
 
         scene = self.scene
         scene.load_level(13)
         scene.sequence_state.sequence_mode = 13
         Temple(scene).finish_exit()
         self.assertEqual(scene.status.get(), 'The flight to the tower')
+        flight = scene.intro
         for _ in range(400):
             self.tick()
             if scene.game.level.number == 14:
@@ -131,6 +135,12 @@ class LevelTenArrivalTests(unittest.TestCase):
         self.assertEqual((scene.game.level.number, scene.room_id,
                           scene.sequence_state.sequence_mode), (14, 0, 13))
         self.assertFalse(scene.level_complete)
+        # Include both of the Prince's old and new bounds and the parapet
+        # that occludes his feet at the handoff.
+        rider = flight.frame().crop((276, 148, 297, 227)).convert('RGB')
+        arrival = scene.native_viewport.crop((276 + ROOM_ORIGIN_X, 148,
+                                              297 + ROOM_ORIGIN_X, 227)).convert('RGB')
+        self.assertIsNone(ImageChops.difference(rider, arrival).getbbox())
 
     def test_level_thirteen_completion_dispatches_the_temple_song_and_flight(self):
         if not all((ASSET_DIR / name).is_file() for name in
@@ -619,6 +629,27 @@ class TowerFlightTests(unittest.TestCase):
         difference = ImageChops.difference(background, player.display)
         self.assertIsNone(difference.crop((0, 0, 26, 225)).getbbox())
         self.assertIsNotNone(difference.crop((26, 36, 60, 225)).getbbox())
+
+    def test_rider_and_clouds_keep_moving_during_the_shot_transitions(self):
+        from pop2.intro import IntroAssets, IntroPlayer, MAC_TICKS_PER_SECOND
+
+        player = IntroPlayer(IntroAssets(program_name='tower.json'))
+        pictures = {}
+        for _ in range(1500):
+            player.advance(1 / MAC_TICKS_PER_SECOND)
+            if player.transition is not None:
+                _, start, _, _, _ = player.transition
+                # Compare palette indices to detect movement independently
+                # of the brightness changes on every refresh.
+                pictures.setdefault(start, set()).add(player.display.tobytes())
+            if player.done:
+                break
+        self.assertTrue(player.done)
+        opening, *transitions = pictures.values()
+        self.assertEqual(len(opening), 1)  # The door is held for the music cue.
+        self.assertEqual(len(transitions), 3)
+        for frames in transitions:
+            self.assertGreater(len(frames), 2)
 
     def test_the_flight_animates_the_last_column_without_leaving_a_trail(self):
         from PIL import Image, ImageOps
