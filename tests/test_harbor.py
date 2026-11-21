@@ -69,7 +69,8 @@ class HarborRulesTests(unittest.TestCase):
         for room_id, column in ((15, 3), (18, 7)):
             room = build_opening_room(False, room_id)
             plank = next(p for p in room.pieces if (p.row, p.column) == (1, column))
-            isolated = replace(room, pieces=(plank,), ledges=())
+            # The border strip (RooftopRoom.border_cover) is not the plank's.
+            isolated = replace(room, pieces=(plank,), ledges=(), border_cover=None)
             for action in range(135, 149):
                 with self.subTest(room=room_id, action=action):
                     row = 2 if action < 141 else 1

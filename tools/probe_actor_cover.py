@@ -41,9 +41,9 @@ overlaps the Prince (`moving_object`: objects drawn over the characters,
 not modelled here), frames where he overlaps a flask ('item': both sides
 draw it over him, but this painter does not mirror the bubbles of phases
 14-23), the exit's frame over him on the stairs ('exit': drawn by the
-exit's object, 8:1cfe-1d48 and 7:27c0) or level 10's horse statue
-('statue': native room 22, DrawHorse 3:23f0-2414 through 3:4572/4608,
-which recover_room does not run). Not covered: opponents, the sword's
+exit's object, 8:1cfe-1d48 and 7:27c0) or an arrival horse statue
+('statue': level 10's native room 22 and level 14's room 1, DrawHorse
+3:23f0-2414 through 3:4572/4608, which recover_room does not run). Not covered: opponents, the sword's
 extension of the floor rectangle (a5-0x521a, QuickFloor 2:6996) and the
 sword and flame objects.
 """
@@ -420,9 +420,13 @@ def moving_object(scene, bounds):
         for cover, (x, y) in art.gate_occlusion.values():
             if x <= right and left < x + cover.width and y <= bottom and top < y + cover.height:
                 return 'object'
-    # Level 10's horse statue (native room 22): DrawHorse 3:23f0-2414 adds it
-    # to the front pass through 3:4572/4608, which recover_room does not run.
-    if scene.game.level.number == 10 and scene.room_id == 21 and getattr(art, 'custom_occlusion', None):
+    # The arrival horse statues (level 10's native room 22, level 14's room
+    # 1): DrawHorse 3:23f0-2414 adds them to the front pass through
+    # 3:4572/4608, which recover_room does not run.
+    from pop2.caverns import ARRIVAL_HORSE_POSITIONS
+
+    if ((scene.game.level.number, scene.room_id) in ARRIVAL_HORSE_POSITIONS
+            and getattr(art, 'custom_occlusion', None)):
         box = art.custom_occlusion.getbbox()
         if box is not None and box[0] <= right and left < box[2] and box[1] <= bottom and top < box[3]:
             return 'statue'

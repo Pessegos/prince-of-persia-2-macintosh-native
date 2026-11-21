@@ -43,7 +43,10 @@ class RuinsTunnelMaskTests(unittest.TestCase):
                         art = cavern_room(room, animated=True, level_number=number, loose_key=key,
                             redrawn=frozenset(state.loose.redrawn) if incremental else frozenset())
                         ghosts = ImageChops.subtract(merged_cell_mask(art), art.foreground.getchannel('A'))
-                        self.assertIsNone(ghosts.getbbox())
+                        # The border row (Y 0-4) also hides a character with
+                        # its back pieces (RedrawTopFast 3:1fa4-1fc4), which
+                        # are painted but not in the front layer.
+                        self.assertIsNone(ghosts.crop((0, 5, ghosts.width, ghosts.height)).getbbox())
                         checked += 1
         self.assertEqual(checked, 62)
 
