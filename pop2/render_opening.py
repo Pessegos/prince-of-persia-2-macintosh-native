@@ -273,7 +273,9 @@ class OpeningRoom:
                             and (climbing and (indexed or state.action < 141 and overlaps)
                                  or near_facade_climb
                                  or hanging and overlaps))
-            if piece.row < row and not (climbed_roof or airborne_foreground or pillar_foreground):
+            above_foreground = overlaps and not climbing and not hanging
+            if piece.row < row and not (climbed_roof or airborne_foreground or pillar_foreground
+                                        or above_foreground):
                 continue
             if (column is None or indexed and piece.row >= indexed_row or climbed_roof or airborne_foreground
                     or pillar_foreground or piece.kind == 20 or piece.decoration
@@ -628,6 +630,12 @@ def build_opening_room(include_curtain=True, room_id=None, level_resource_id=200
             shape, dx, dy, draw_pass = ROOF_DECORATIONS[decoration_id - 1]
             draw_shape(3 if draw_pass == 1 else 1, 3500 + shape, tile_x, tile_y,
                        dx, dy, decoration=True)
+            if decoration_id == 2:
+                # DrawRoofDecoration 23:021a-023e: the second decoration's
+                # front pass draws the first one's piece (SHAP 3559, the
+                # 4-pixel edge at X 47) in front as well.
+                shape, dx, dy, _pass = ROOF_DECORATIONS[0]
+                draw_shape(3, 3500 + shape, tile_x, tile_y, dx, dy, decoration=True)
 
     # Neighbor rows can overlap the top/bottom five pixels of the room clip.
     tile_rows = range(3, -2, -1) if custom is None else ()

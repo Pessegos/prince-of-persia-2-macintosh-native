@@ -374,6 +374,26 @@ class OpeningRoomTests(unittest.TestCase):
         self.assertIsNone(foreground.getbbox())
         self.assertIsNotNone(room.background.crop((x, y, x + shape.width, y + shape.height)).getbbox())
 
+    def test_second_decoration_also_draws_the_first_piece_in_front(self):
+        # DrawRoofDecoration 23:021a-023e: decoration 2's front pass draws
+        # decoration 1's SHAP 3559 too (room 0 column 5 row 2, X 47).
+        room = build_opening_room(room_id=0)
+        shape = rooftop_scene_data()[1][3559]
+        piece = next(p for p in room.pieces if p.decoration and (p.column, p.row) == (5, 2))
+        self.assertEqual((piece.x, piece.y, piece.alpha.size), (302, 292, shape.size))
+        self.assertEqual(room.actor_mask(2).crop((302, 292, 306, 309)).tobytes(),
+                         shape.getchannel("A").tobytes())
+
+    def test_jump_up_keeps_the_row_above_floor_in_front(self):
+        # MarkBufsForRect 5:19f8 marks every cell the rectangle covers, so a
+        # jump's head under row 1's slab is redrawn below its front piece.
+        room = build_opening_room(room_id=5)
+        state = SequenceState(14, action=79, animation_state=0, target_x=175, facing=0)
+        mask = room.actor_mask(2, state=state, bounds=(160, 230, 190, 360), record=self.frames[79])
+        slab = next(p for p in room.pieces if (p.column, p.row, p.kind) == (3, 1, 1))
+        self.assertIsNone(ImageChops.subtract(slab.alpha, mask.crop(
+            (slab.x, slab.y, slab.x + slab.alpha.width, slab.y + slab.alpha.height))).getbbox())
+
     def test_right_facing_hang_retains_upper_corner_decoration_in_front(self):
         for room_id, x in ((0, 332), (2, 281)):
             with self.subTest(room=room_id):
