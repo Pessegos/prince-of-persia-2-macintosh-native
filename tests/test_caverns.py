@@ -9,7 +9,7 @@ from pathlib import Path
 from PIL import Image, ImageChops
 
 from pop2.caverns import (CavernRoom, cavern_clip_top, cavern_room, flask_shape,
-                         flask_assets, floor_redraw_cells)
+                         flask_assets, floor_redraw_cells, ruins_clip_right)
 from pop2.cavern_state import CavernState
 from pop2.level_data import LevelDefinition
 from pop2.level_rendering import LevelRenderer
@@ -97,6 +97,26 @@ class CavernClipTests(unittest.TestCase):
         self.terrain.undefined_cell = lambda room, column, row: 0
         self.terrain.tile = lambda r, col, row: Tile(20, room=29)
         self.assertEqual(cavern_clip_top(self.terrain, 29, 2, state, (334, 218, 367, 288)), 0)
+
+    def test_ruins_clip_the_right_side_at_a_wall_in_both_rows(self):
+        # ClipChar 4:4408 -> 7:3576 (environment 4): the column of the right
+        # edge (GetColumn 5:48b0 of working X) walled in the character's row
+        # and in the drawn top row, in his own room, ends the clip at its left
+        # edge. Level 8 room 10, SEQS 45 pose 104 (native rect 65,392-134,431,
+        # clip right 408): the port drew 42 pixels past the wall.
+        struct.pack_into('>H', self.terrain.level, 0x2186, 4)
+        state = self.state(104, 5, 1)
+        bounds = (392, 65, 430, 133)
+        cells = {}
+        self.terrain.tile = lambda room, col, row: Tile(cells.get((col, row), 0), room=room, column=col, row=row)
+        cells.update({(8, 0): 20})
+        self.assertIsNone(ruins_clip_right(self.terrain, 9, 1, state, bounds))
+        cells.update({(8, 1): 20})
+        self.assertEqual(ruins_clip_right(self.terrain, 9, 1, state, bounds), 408)
+        cells.update({(8, 0): 7})  # IsWall, but the top row's kind 7 is excluded.
+        self.assertIsNone(ruins_clip_right(self.terrain, 9, 1, state, bounds))
+        cells.update({(8, 0): 20})
+        self.assertIsNone(ruins_clip_right(self.terrain, 9, 1, self.state(104, 9, 1), bounds))
 
     def test_final_cells_of_native_rooms_seven_and_eight_clip_only_the_jump_up(self):
         # ClipChar 4:42a2-42c4: the drawn first cell's room (ReadCell) 7 or 8

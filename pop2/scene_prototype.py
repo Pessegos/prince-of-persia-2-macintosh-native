@@ -64,7 +64,7 @@ from pop2.game_session import GameResources, GameSession
 from pop2.level_rendering import LevelRenderer
 from pop2.environments import environment_for
 from pop2.carpet import carpet_room
-from pop2.caverns import cavern_clip_top, cavern_exit_clip, loose_contact_floor_cell
+from pop2.caverns import cavern_clip_top, cavern_exit_clip, loose_contact_floor_cell, ruins_clip_right
 from pop2.render_opening import (
     OPENING_FLOOR_Y,
     ROOF_GLASS_OFFSETS,
@@ -3782,6 +3782,10 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
             clip_top = cavern_clip_top(self.level_map, self.room_id, row, state, bounds)
             if clip_top > 0:
                 layer.paste((0, 0, 0, 0), (0, 0, layer.width, clip_top))
+        if level_kind == 4 and state is not None and bounds is not None and row is not None:
+            clip_right = ruins_clip_right(self.level_map, self.room_id, row, state, bounds)
+            if clip_right is not None:
+                layer.paste((0, 0, 0, 0), (clip_right, 0, layer.width, layer.height))
         if level_kind in (2, 3, 4, 6) and state is not None and bounds is not None and row is not None:
             exit_clip = cavern_exit_clip(self.level_map, self.room_id, row, state, record)
             if exit_clip is not None:

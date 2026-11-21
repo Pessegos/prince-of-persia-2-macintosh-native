@@ -349,6 +349,36 @@ def cavern_clip_top(terrain, room, row, state, bounds):
     return boundary
 
 
+def ruins_clip_right(terrain, room, row, state, bounds):
+    """The right edge ClipChar's ruins leaf 7:3576 (4:4408, environment 4)
+    gives a character, or None. Column = GetColumn 5:48b0 of GetCharEdges'
+    right edge (a5-0x3566, working X, exclusive); when ReadCell 4:27ee finds
+    a wall (IsWall 3:4ef2) there in the character's row (a5-0x5048) and in
+    the drawn top row (a5-0x34a0), that one not kind 7 and in his own room,
+    the clip ends at that column's left edge (7:35b0-35f2). ClipChar skips
+    the leaf for mode 9 and the exit's stair poses (4:416a-420c, 4:4210).
+    The second part (7:35f6-3696) is for types 7 and 8 only, not modelled."""
+    if state.animation_state == 9:
+        return None
+    if (state.actor_type == 0 and 217 <= state.action <= 226
+            and getattr(state, 'current_y', 0) < -24):
+        return None  # The stair rectangle's branch, as cavern_exit_clip.
+    working = bounds[2] + 1 + 207
+    column = (working - 4) // 51 - 4
+    if clip_cell_kind(terrain, room, column, row) not in RUINS_CLIP_WALLS:
+        return None
+    top_row = character_row(min(365, bounds[1]))
+    tile = terrain.tile(room, column, top_row)
+    kind = clip_cell_kind(terrain, room, column, top_row, tile)
+    if kind not in RUINS_CLIP_WALLS or kind == 7 or tile.room != room:
+        return None
+    return tile.column * 51
+
+
+# IsWall 3:4ef2.
+RUINS_CLIP_WALLS = (20, 2, 7, 25, 43)
+
+
 def clip_cell_kind(terrain, room, column, row, tile=None):
     """The cell kind ReadCell 4:27ee gives ClipChar: a cell whose room is
     past the level's room count (LEVL 0x2180, 4:2844-2852) reads as
