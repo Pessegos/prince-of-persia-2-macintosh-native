@@ -1258,18 +1258,20 @@ class RooftopSceneTests(unittest.TestCase):
         self.assertEqual((scene.action, scene.room_id, scene.terrain_motion.row,
                           scene.player_x), (15, 0, 2, 379))
 
-    def test_downward_room_cut_joins_the_landing_and_next_drop_without_a_second_dip(self):
+    def test_soft_landing_below_the_room_cut_leaves_one_normal_crouch_step_to_the_edge(self):
         scene = self.scene
-        for level, room, x, facing, takeoff_x in (
-                (3, 0, 234, 1, 462), (8, 12, 466, 0, 297)):
+        for level, room, x, facing, impact_x, takeoff_x in (
+                (3, 0, 234, 1, 422, 460), (8, 12, 466, 0, 337, 299)):
             with self.subTest(level=level):
+                direction = 1 if facing else -1
                 scene.clear_keys(None)
                 scene.load_level(level)
                 scene.peaceful = True
                 scene.jump_to_room(room, row=1, x=x, facing=facing)
                 scene.in_animation_tick = True
-                scene.horizontal_key(None, 1 if facing else -1, True)
+                scene.horizontal_key(None, direction, True)
                 traces = []
+                step = []
                 with patch.object(scene, 'render'), patch.object(scene, 'advance_audio'):
                     for _ in range(60):
                         self.tick()
@@ -1283,13 +1285,18 @@ class RooftopSceneTests(unittest.TestCase):
                                 self.assertEqual((scene.room_id, scene.terrain_motion.row), (3, 0))
                         if traces:
                             traces[-1].append(state.action)
-                        if len(traces) == 2 and scene.terrain_motion.falling:
-                            break
+                        if len(traces) == 2:
+                            if scene.terrain_motion.falling:
+                                break
+                            step.append((state.source_sequence_id, state.target_x))
                 self.assertEqual(traces, [
                     [107, 108, 109, 110, 111, 112, 108, 109, 109, 110, 111, 112,
                      102, 103, 104, 105, 106],
                     [107, 108, 109, 110, 111, 112, 102],
                 ])
+                self.assertEqual(step, [(sequence, impact_x + dx * direction)
+                                        for sequence, dx in ((17, 0), (17, 6), (17, 13),
+                                                             (79, 16), (79, 18), (79, 20))])
                 self.assertEqual(scene.player_x, takeoff_x)
                 self.assertEqual(scene.combat.player.life, 3)
 

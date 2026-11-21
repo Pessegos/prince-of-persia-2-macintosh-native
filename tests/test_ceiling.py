@@ -184,6 +184,9 @@ class VerticalJumpTests(unittest.TestCase):
                     with self.subTest(facing=facing, distance=distance, kind=kind):
                         self.assertEqual(self.terrain.landing_offset(
                             0, 1, self.state, self.record), expected)
+                        crouch_offset = min(0, distance - 20) * direction if kind in (0, 9) else expected
+                        self.assertEqual(self.terrain.landing_offset(
+                            0, 1, self.state, self.record, crouch_drop=True), crouch_offset)
 
     def test_landing_alignment_preserves_native_actor_and_special_floor_exclusions(self):
         self.state.target_x = 420

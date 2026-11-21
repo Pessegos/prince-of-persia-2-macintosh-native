@@ -96,6 +96,57 @@ class TemplePlaytestTests(unittest.TestCase):
         return harness
 
     @unittest.skipUnless((ASSET_DIR / 'temple_level11.json').is_file(), 'Imported level 11 required')
+    def test_room4_right_turn_extends_the_spikes_before_ledge_alignment(self):
+        harness = Harness(11)
+        self.addCleanup(harness.close)
+        scene = harness.scene
+        scene.audio = None
+        room, row = 3, 1
+
+        for x, delay in ((372, 0), (394, 0), (394, 10)):
+            with self.subTest(x=x, delay=delay):
+                scene.jump_to_room(room, row, x, 0, redraw=False)
+                spikes = scene.game.caverns.spikes
+                spikes.foreground.clear()
+                spikes.active.clear()
+
+                press(harness, 'R', True)
+                press(harness, 'R', False)
+                self.assertEqual((scene.action, scene.player_x), (45, x + 12))
+                self.assertEqual(scene.level_map.tile(room, 5, row).foreground & 255, 1)
+                harness.tick(delay)
+                press(harness, 'up', True)
+                try:
+                    for _ in range(16):
+                        harness.tick()
+                        if scene.sequence_state.source_sequence_id == 24:
+                            break
+                    self.assertEqual(scene.sequence_state.source_sequence_id, 24)
+                    self.assertEqual(scene.player_x, 360)
+                    self.assertEqual(scene.level_map.tile(room, 5, row).foreground & 255, 143)
+                    for _ in range(75):
+                        harness.tick()
+                        if scene.terrain_motion.row == 0 and scene.action == 15:
+                            break
+                    self.assertEqual((scene.room_id, scene.terrain_motion.row, scene.action), (room, 0, 15))
+                    self.assertEqual(scene.combat.player.life, 3)
+                finally:
+                    press(harness, 'up', False)
+
+    @unittest.skipUnless((ASSET_DIR / 'temple_level11.json').is_file(), 'Imported level 11 required')
+    def test_room4_turn_outside_ledge_reach_leaves_spikes_retracted(self):
+        harness = Harness(11)
+        self.addCleanup(harness.close)
+        scene = harness.scene
+        scene.jump_to_room(3, 1, 400, 0, redraw=False)
+        press(harness, 'R', True)
+        press(harness, 'R', False)
+        self.assertEqual(scene.action, 45)
+        for _ in range(10):
+            self.assertEqual(scene.level_map.tile(3, 5, 1).foreground & 255, 0)
+            harness.tick()
+
+    @unittest.skipUnless((ASSET_DIR / 'temple_level11.json').is_file(), 'Imported level 11 required')
     def test_down_from_room32_ledge_lands_on_room29_plate(self):
         harness = Harness(11)
         self.addCleanup(harness.close)

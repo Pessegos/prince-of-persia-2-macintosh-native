@@ -126,7 +126,50 @@ def read_program(path):
             # black, then use the exterior's 25-tick fade while they animate.
             data['operations'].insert(first_wait, {
                 'op': 'fade_in_all', 'args': [0x40001], 'pc': 0x63cc})
+    elif data.get('kind') == 'tower':
+        data['operations'] = clip_tower_flight(align_tower_statue_flash(operations))
     return data
+
+
+def clip_tower_flight(operations):
+    # PlayTheAnimation 16:118c-11b6 intersects the ANI bounds with the
+    # game rect and installs that clip before drawing the layers. The
+    # flattened programs preserved the positions and erase rectangles.
+    for pc, bounds in ((0x7302, [36, 26, 225, 510]), (0x73f6, [81, 0, 246, 509])):
+        indices = [index for index, item in enumerate(operations) if item.get('pc') == pc]
+        if indices:
+            first, last = indices[0], indices[-1] + 1
+            operations = [*operations[:first],
+                          {'op': 'clip', 'args': [bounds], 'pc': pc},
+                          *operations[first:last],
+                          {'op': 'clip', 'args': [[0, 0, SIZE[1], SIZE[0]]], 'pc': pc},
+                          *operations[last:]]
+    return operations
+
+
+def align_tower_statue_flash(operations):
+    # The flattened callbacks can load and restore the white palette while
+    # the animated horse still uses inks 32–46. Present the existing flash
+    # on the statue's inks instead, without changing animation or sound waits.
+    flash = {item.get('pc'): (index, item) for index, item in enumerate(operations)
+             if item['op'] == 'palette' and item.get('pc') in (0x761a, 0x7638)}
+    statue = next((index for index, item in enumerate(operations)
+                   if item['op'] == 'shape' and item['args'][0] == 825360), None)
+    if len(flash) != 2 or statue is None or max(index for index, _ in flash.values()) >= statue:
+        return operations
+    waits = [index for index in range(statue + 1, len(operations))
+             if operations[index]['op'] == 'wait' and operations[index].get('pc') == 0x7522]
+    if len(waits) < 3:
+        return operations
+    white, gold = flash[0x761a], flash[0x7638]
+    before_wait = {waits[1]: white[1], waits[2]: gold[1]}
+    result = []
+    for index, item in enumerate(operations):
+        if index in before_wait:
+            result.append(before_wait[index])
+        if index not in (white[0], gold[0]):
+            result.append(item)
+    return result
 
 
 def indexed_shape(data, allow_trailing=False):

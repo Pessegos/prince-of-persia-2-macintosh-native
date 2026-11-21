@@ -157,6 +157,80 @@ plates or events reach them.
   comparison remain open. The native drawing harness supplies only the
   specified rectangle fill endpoint; it is not an independent pixel check.
 
+### Tower arrival statue (2026-11-21)
+
+The two supplied recordings show the gold horse in the final shot. At the
+first frame with the life meter, it disappears in the port and stays on the
+tower in the Macintosh recording. The room renderer now places the imported
+statue in the first playable room's front plane and includes it in the actor
+occlusion mask, using the same path as the level-ten arrival statue.
+
+GetHorsePtInPlane `3:45a0-45e8`, called by the drawing-list builder at
+`3:23f0-2414`, selects the point at `a5-0x4aee`. A bounded original-code call
+with the original LEVL 2013 header `(6, 5, 14)`, native room 1, plane 1, and
+`a5-0x5000=-1` returned top-left `(141,78)`. Switching to plane 0, room 2, or
+setting `a5-0x5000=0` independently returned null. The probe supplied the
+level record and those arguments/globals and stopped at the helper's return.
+`DrawHorse` `3:468a-46d2` files masked Prince SHAP 25360, unmirrored, and
+palette selection `3:10a6-10c0` loads Prince CTBL 25363 at entry 1.
+
+### Tower playback follow-up (2026-11-21)
+
+The overlap check now includes the entire statue. The supplied Macintosh
+capture keeps the parapet in front of the rear hooves at the gameplay handoff.
+The first room draws its existing front piece over the statue and includes both
+in the actor mask. The test compares all statue pixels, including those covered
+by the parapet, with the last replayed shot and checks entry and re-entry.
+
+All 1,471 Macintosh frames and 1,591 port frames were decoded in presentation
+order. Monitoring the statue region found the white flash at capture times
+23.387–23.470 s in the Macintosh video and no matching white frame in the port
+recording. This reproduces in the current portable player. `TransFunc11`
+`15:75e2-7642` emits gold, white, and gold palette operations. In the flattened
+program they affect inks 1–14 while the displayed horse still uses inks 32–46.
+An isolated execution of original `runScript` `16:08ee-0ada` with ANI/SCRP
+25023 and LEVL 2012 header `(2,22,13)` returns horse shapes 359, 358, 357 on
+calls 40–42 and statue shape 360 on call 48, each with interval 6. The probe
+steps one script interval per call with a supplied animation object and
+resource handle, no-op HLock/HUnlock, and event sinks for sound and notify.
+It excludes PlayTheAnimation's event loop, frame batching and QuickDraw.
+The read-time fix retains the existing palettes and presents the white then
+gold operations on the second and third frames that display the statue. The
+rendered RGB regression samples a statue pixel in all three frames. This is
+an alignment within the portable player, with no change to animation or audio
+waits. Native frame-counter scheduling, fades and audio timing remain unverified.
+
+Using the first reveal's blue-channel threshold as the zero point in each
+recording, the rider's first visible movement occurs at 3.349/3.333 s
+(Macintosh/port). The first and second fades cross the same darkening threshold
+at 7.515/7.500 s and 17.749/17.799 s. The life meter appears at 23.832/23.683 s.
+These are sampled capture times and do not establish native script deadlines.
+
+### Doorway and flight clipping (2026-11-21)
+
+The supplied recordings show the horse emerging from the doorway on Macintosh
+while the port draws it over the stone at the left. The reported vertical streak
+also reproduces in the port's second shot. Its animation draws outside the sky
+erase rectangle, leaving cloud or horse indices in column 509 as they move.
+
+The animation calls at `15:7302` and `15:73f6` use TowerNIS ANI 25021 and
+25022. The original resource bounds (top, left, bottom, right) are
+`(36,26,225,511)` and `(81,0,246,509)`. `PlayTheAnimation` `16:118c-11b6`
+intersects those bounds with the game rectangle and installs the result on
+the drawing port. In the portable player, the two animation spans now enforce
+those clips on shape writes. The second clip's exclusive right edge matches
+its existing erase rectangle, and the paint outside both clips remains intact.
+This applies at read time to existing imports and both playback entry points.
+
+The rendered regression checks that the first rider pose touches the opening
+without covering its left edge. The flight check visits each displayed pose
+and verifies that column 509 keeps the sky index. The old player changed that
+column on 66 poses. A playback comparison at the Macintosh tick rate found
+451 earlier frames with changes and 331 identical displayed frames in the
+final shot. The portable player kept the same sound events and finish time.
+These checks use imported resources and do not execute QuickDraw or compare
+the native event loop or audio timing.
+
 ## Jaffar generation block (2026-11-10)
 
 The preserved `LEVL` 2013 is environment 6, opponent set 0, with an empty

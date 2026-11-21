@@ -1467,16 +1467,16 @@ def draw_carpet(frame, room_id, state, prince=None, *, level_number=3):
 # masked, in Prince CTBL 25360 at entry 1 (3:1004-1022).
 HORSE_ROOM = (9, 1)
 HORSE_TOP_LEFT = (252, 40)
-# GetHorsePtInPlane 3:45ce-45e4, a5-0x4af2; DrawHorse uses the same
-# Prince SHAP 25360, unmirrored, with CTBL 25361 (3:1058-1076).
-ARRIVAL_HORSE_ROOM = (10, 21)
-ARRIVAL_HORSE_TOP_LEFT = (74, 198)
+# GetHorsePtInPlane 3:45a0-45e8 gives the two arrival statues in plane 1.
+ARRIVAL_HORSE_POSITIONS = {(10, 21): (74, 198), (14, 0): (141, 78)}
 
 
-@lru_cache(maxsize=2)
+@lru_cache(maxsize=3)
 def horse_sprite(level_number=9):
     resources = load_resource_file('Prince.rsrc')
-    palette = decode_ctbl(resources['CTBL'][25360 if level_number == 9 else 25361]['data'])
+    # Room palette selection in CODE 3 loads 25360, 25361 and 25363 at entry 1.
+    palette_id = {9: 25360, 10: 25361, 14: 25363}[level_number]
+    palette = decode_ctbl(resources['CTBL'][palette_id]['data'])
     sprite = decode_shap(resources['SHAP'][25360]['data'], palette)
     return ImageOps.mirror(sprite) if level_number == 9 else sprite
 
@@ -2033,12 +2033,19 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
         # Drawn after the room's back pieces (3:23ca-23e2), before the front.
         sprite = horse_sprite()
         background.paste(sprite, HORSE_TOP_LEFT, sprite)
-    elif (level_number, room_id) == ARRIVAL_HORSE_ROOM:
-        # The statue remains after NIS 2, in the room's front plane.
-        sprite = horse_sprite(10)
-        foreground.paste(sprite, ARRIVAL_HORSE_TOP_LEFT, sprite)
+    elif (level_number, room_id) in ARRIVAL_HORSE_POSITIONS:
+        # Arrival scenes leave the statue in the playable room's front plane.
+        position = ARRIVAL_HORSE_POSITIONS[level_number, room_id]
+        sprite = horse_sprite(level_number)
+        if level_number == 14:
+            # The tower parapet overlaps the statue's rear hooves.
+            x, y = position
+            parapet = foreground.crop((x, y, x + sprite.width, y + sprite.height))
+            foreground.paste(Image.alpha_composite(sprite, parapet), position)
+        else:
+            foreground.paste(sprite, position, sprite)
         horse_mask = Image.new('L', background.size)
-        horse_mask.paste(sprite.getchannel('A'), ARRIVAL_HORSE_TOP_LEFT)
+        horse_mask.paste(sprite.getchannel('A'), position)
         custom_mask = (ImageChops.lighter(custom_mask, horse_mask)
                        if custom_mask is not None else horse_mask)
     redraw = {}
