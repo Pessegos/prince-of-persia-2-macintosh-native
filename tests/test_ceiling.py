@@ -95,24 +95,25 @@ class CampaignCeilingMaskTests(unittest.TestCase):
         self.assertIsNone(room.actor_mask(1, state=replace(state, selected_sequence_id=28)).getbbox())
 
     def test_short_jump_uses_the_overhead_contour_in_each_scenery_family(self):
-        from PIL import ImageChops
-
-        from tools.audit_temple_routes import Harness, press
-
         cases = (
             # The rooftop's existing front beam fills its contour already.
             (1, 'Rooftops.rsrc', 21, 1, 292, {}),
-            (2, 'Desert.rsrc', 1, 1, 39, {78: 12, 79: 108}),
+            (2, 'Desert.rsrc', 1, 1, 39, {}),
             (3, 'caverns_entry.json', 16, 1, 60, {79: 49}),
             (4, 'caverns_level4.json', 7, 1, 162, {79: 73}),
             (5, 'caverns_level5.json', 14, 1, 213, {79: 47}),
             (6, 'ruins_level6.json', 8, 1, 61, {79: 66}),
             (10, 'temple_level10.json', 7, 1, 163, {79: 56}),
-            (14, 'final_level14.json', 6, 1, 179, {78: 15, 79: 268}),
-            (14, 'final_level14.json', 6, 2, 214, {78: 15, 79: 262}),
+            (14, 'final_level14.json', 6, 1, 179, {}),
+            (14, 'final_level14.json', 6, 2, 214, {}),
         )
-        if not all((ASSET_DIR / name).is_file() for _, name, *_ in cases):
+        resources = ('Prince.rsrc', 'Kid.rsrc', 'enemy_profiles.json', *(case[1] for case in cases))
+        if not all((ASSET_DIR / name).is_file() for name in resources):
             self.skipTest('Imported campaign scenery required')
+
+        from PIL import ImageChops
+
+        from tools.audit_temple_routes import Harness, press
 
         for level, _, native_room, row, x, expected in cases:
             with self.subTest(level=level, room=native_room, row=row):
@@ -123,6 +124,8 @@ class CampaignCeilingMaskTests(unittest.TestCase):
                 scene.present_viewport = lambda: None
                 try:
                     scene.jump_to_room(native_room - 1, row=row, x=x, facing=1, redraw=False)
+                    if level in (2, 14):
+                        self.assertFalse(scene.room_cache[native_room - 1].ceiling_covers)
                     press(harness, 'up', True)
                     poses, changed = [], {}
                     for tick in range(12):

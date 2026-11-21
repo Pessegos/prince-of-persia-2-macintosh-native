@@ -12,7 +12,7 @@ from PIL import Image, ImageChops, ImageOps
 from pop2.paths import ASSET_DIR
 from pop2.cavern_retouch import retouched_door_sprite, retouched_room_commands, retouched_sprite
 from pop2.opponent_generation import EMPTY_TILES, character_column
-from pop2.render_opening import (OpeningRoom, add_ceiling_cover, add_ceiling_outline, decode_ctbl, decode_shap,
+from pop2.render_opening import (OpeningRoom, add_ceiling_cover, decode_ctbl, decode_shap,
                                  load_resource_file, ledge_surface_clip, native_buffer_cells)
 from pop2.terrain import LevelMap, character_row, floor_contact_x
 
@@ -401,17 +401,6 @@ FINAL_LEVELS = SCENERY_LEVELS[6]
 CAVERN_CEILINGS = frozenset((*range(3525, 3529), *range(3550, 3558), 3568, 3614, 4226, 4227, 4228))
 RUINS_CEILINGS = frozenset((*range(3514, 3518), 3520, 3521, 3523, 3525, 3526, 3552, 3553, 3554, 3576))
 TEMPLE_CEILINGS = frozenset((3521, 3528, 3541, 3542, 3543, 3544))
-# The crystal hall's CUST background bakes its platforms and distant
-# crystals into one opaque image. Trace the near shelves in that SHAP's
-# local coordinates so the open gaps and the distant facets remain visible.
-FINAL_CEILING_EDGES = {
-    4125: (
-        (1, ((46, 124), (56, 113), (78, 104), (145, 103), (223, 103), (240, 124))),
-        (1, ((298, 124), (313, 111), (328, 104), (430, 104), (440, 124))),
-        (2, ((0, 244), (7, 224), (70, 224), (77, 229), (89, 244))),
-        (2, ((139, 244), (187, 222), (200, 224), (259, 224), (272, 229), (277, 244))),
-    ),
-}
 # DrawCaveTorch 8:2ae8 and DrawTempTorch 10:1196-11cc, library 4.
 TEMPLE_TORCH_SHAPES = range(3596, 3602)
 # CUST room enter hooks loading a CTBL over the room palette (S03_508A):
@@ -1979,12 +1968,8 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
             for alpha, top in ceilings.values():
                 alpha.paste(ImageChops.multiply(alpha, uncovered.crop(
                     (0, top, alpha.width, top + alpha.height))))
-        if layer == 'back' and library == 4:
-            if command[4] == 16 and index in ceiling_shapes:
-                add_ceiling_cover(ceilings, row + 1, sprite.getchannel('A'), *position)
-            if level_number in FINAL_LEVELS and index in FINAL_CEILING_EDGES and command[2:5] == [0, 365, 0]:
-                for ceiling_row, edge in FINAL_CEILING_EDGES[index]:
-                    add_ceiling_outline(ceilings, ceiling_row, edge)
+        if layer == 'back' and library == 4 and command[4] == 16 and index in ceiling_shapes:
+            add_ceiling_cover(ceilings, row + 1, sprite.getchannel('A'), *position)
         cell = tuple(command[8:10])
         if (level_number, room_id, layer, library, index) == (8, 8, 'back', 4, 4206):
             # DrawRuinGateMovable7:2b22-2b4a ->7:383a temporarily promotes

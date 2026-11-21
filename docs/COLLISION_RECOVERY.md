@@ -621,23 +621,17 @@ The approved port improvement applies only to the Prince's SEQS:14. The
 room renderer takes the opaque pixels of structural roof, floor and wall
 pieces in the row above, restricted to the strip between the jump apex
 and the physical row boundary. Cavern, ruins and temple room variants
-build cover from their current draw commands. The desert cave mouth
-(CUST SHAP 4000) and the final tower's crystal platforms (CUST SHAP 4125)
-use traced contours for structural surfaces baked into the back image.
-Custom foreground already covers the spider's near leg and the foreground
-pieces of the final tower's arches. The slot masks and full foreground
-still apply normally.
+build cover from their current draw commands. The shore cave mouth and
+crystal hall use their original custom drawing after playtesting rejected
+the proposed contours for their opaque CUST backgrounds. Custom foreground
+also covers the spider's near leg and the foreground pieces of the tower's
+arches. The slot masks and full foreground still apply normally.
 
 Hidden replays of the original two starts change 5 pixels in pose 78 to
-the left and 59 in pose 79 to the right. Other replays cover the shore,
-caverns, ruins, temples and the two rows of the crystal hall. The rooftop
-beam fixture already shows the correct contour with ordinary cover.
-The short jump retains its poses, sound and upper-row shake request. The
-native drawing probe compared 204 frames across all 14 levels, using the
-port's poses, bounds and alpha as inputs to the native drawing setup.
-The contour covers 1,509 pixels visible to that setup. The 71 pixels of
-additional masking in two crystal hall frames were reproduced with the
-new cover disabled. The replays supply stand positions and normal Up input.
+the left and 59 in pose 79 to the right. Other replays cover caverns,
+ruins and temples, with the rooftop beam, shore and crystal hall as
+controls. The short jump retains its poses, sound and upper-row shake
+request. The replays supply stand positions and normal Up input.
 
 ### Sequence And Physical Row In Barrier Checks
 

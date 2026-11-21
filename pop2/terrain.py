@@ -1088,9 +1088,9 @@ class LevelMap:
                 # CheckBarr 4:4f8a-4fb4 only raises a gate side collision
                 # when that edge's mask changes. Already underneath it,
                 # leave crouching/crushing to CheckGateForKid instead.
-                native_gate = (ruins_gate and state is not None and state.actor_type in (0, None)
+                native_gate = ((desert_exit or ruins_gate) and state is not None and state.actor_type in (0, None)
                                and (state.source_sequence_id in (14, 28)
-                                    or facing is not None
+                                    or ruins_gate and facing is not None
                                     and ((tile.room, tile.row * 10 + tile.column) in gate_passages
                                          or state.source_sequence_id == 1
                                          and struct.unpack_from('>H', self.level, 0x2186)[0] == 2)))

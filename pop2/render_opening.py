@@ -76,15 +76,6 @@ def add_ceiling_cover(covers, row, alpha, x, y):
     add_alpha(covers[row][0], part, left, above - top)
 
 
-def add_ceiling_outline(covers, row, points):
-    """Add a contour traced from a solid surface in an opaque CUST bitmap."""
-    xs, ys = zip(*points)
-    left, top = min(xs), min(ys)
-    outline = Image.new('L', (max(xs) - left + 1, max(ys) - top + 1))
-    ImageDraw.Draw(outline).polygon([(x - left, y - top) for x, y in points], fill=255)
-    add_ceiling_cover(covers, row, outline, left, top)
-
-
 @dataclass(frozen=True)
 class RoofForeground:
     row: int

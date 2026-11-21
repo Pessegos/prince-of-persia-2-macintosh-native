@@ -7,7 +7,7 @@ from PIL import Image
 
 from pop2.desert_retouch import retouched_background
 from pop2.render_opening import (
-    OpeningRoom, ROOM_HEIGHT, ROOM_WIDTH, add_ceiling_outline, decode_ctbl, decode_shap,
+    OpeningRoom, ROOM_HEIGHT, ROOM_WIDTH, decode_ctbl, decode_shap,
 )
 
 
@@ -99,15 +99,7 @@ class DesertScene:
         if retouch:
             background = retouched_background(room_id, background)
         masks = {row: foreground.getchannel('A') for row in range(-1, 5)}
-        ceilings = {}
-        if first_shape == 4000:
-            # The cave mouth's right lip is painted into the beach backdrop.
-            # Follow that rock edge and leave the dark tunnel opening clear.
-            add_ceiling_outline(ceilings, 1, (
-                (60, 102), (60, 106), (57, 110), (52, 115),
-                (51, 118), (56, 124), (98, 124), (98, 102),
-            ))
-        room = OpeningRoom(background, foreground, masks, (), (), room_id, 1, ceiling_covers=ceilings)
+        room = OpeningRoom(background, foreground, masks, (), (), room_id, 1)
         return cls(room, records, shapes, kind, first_shape)
 
     def draw(self, frame, frame_number, state, front=False):

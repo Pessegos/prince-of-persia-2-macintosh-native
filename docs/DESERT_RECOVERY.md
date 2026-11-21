@@ -76,6 +76,30 @@ The desert controller owns the outer shore boundaries rather than following
 dummy room links. Restart and F3 placement reset the puzzle; disabling the
 manual challenge never changes its solution or gate state.
 
+### Turning and jumping beside the closed door
+
+The playtest recording crosses behind the closed door while facing away
+from it. A hidden replay supplies X119 facing left on native room 1's
+middle row. Two short Left inputs settle at X80. Right turns the Prince
+to X89, and Up selects SEQS:28. On pose 72 his collision edges are
+60..95. Pose 73 widens them to 58..96. The port's overlap recovery treated
+the right edge's growth as a fresh approach to the gate's left face at
+X62, pushing the Prince to X38 with the first bump pose.
+
+The original LoadFrame 4:2a72, SetupSword 3:0ac8, GetCharEdges 4:5cbc,
+CheckBarr 4:4e34 and CheckCollide1 4:54da request no bump for the warm
+pose-15, 67..79 traces at phases 0, 18 and 19. The probe supplies each
+pose, SEQS:28 X offsets, the room and gate word, empty MOB bank and zero
+float timer. It uses original frame records and SHAP header sizes, a
+QuickDraw rectangle stand-in and a recording stub for Collide. A control
+from X100 to X75 facing left calls Collide(+2, front) at phases 0 and 18
+and passes at phase 19.
+
+The port uses its existing edge-crossing admission for the desert gate
+during the Prince's SEQS:14/28. The replay completes the jump on the
+shore at closed phases 0 and 18. A separate gate control checks the
+front-side correction and phase-19 opening threshold.
+
 ## Manual Challenge
 
 The original COPY:8005 resource supplies nineteen page/symbol pairs.

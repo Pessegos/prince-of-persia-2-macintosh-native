@@ -614,6 +614,15 @@ class OriginalDesertTests(unittest.TestCase):
                 self.scene.game.desert.gate = gate
                 self.assertEqual(terrain.wall_correction(0, 90, 80, bounds, facing=0), expected)
 
+        # A new approach from the front during SEQS 28 still meets the door
+        # until phase 19 (native CheckCollide1 at pose 68).
+        jump = SimpleNamespace(actor_type=0, source_sequence_id=28)
+        for phase, expected in ((18, 77), (19, 75)):
+            with self.subTest(jump_phase=phase):
+                self.scene.game.desert.gate = phase
+                self.assertEqual(terrain.wall_correction(
+                    0, 100, 75, (70, 160, 88, 226), (96, 160, 113, 226), 0, 1, jump), expected)
+
     def test_cave_music_and_puzzle_effects_use_separate_audio_channels(self):
         from unittest.mock import Mock
 
@@ -781,3 +790,46 @@ class OriginalDesertTests(unittest.TestCase):
         self.assertTrue(scene.terrain_motion.dead)
         self.assertEqual(scene.death.method, 8)
         self.assertGreater(scene.player_x, 100)
+
+
+@unittest.skipUnless((ASSET_DIR / 'Desert.rsrc').is_file(), 'Imported desert resources required')
+class DesertDoorJumpTests(unittest.TestCase):
+    def test_turn_and_jump_beside_the_closed_door_stays_on_the_shore(self):
+        from tools.audit_temple_routes import Harness, press
+
+        harness = Harness(2)
+        scene = harness.scene
+        scene.audio = None
+
+        def tap(key, ticks, settle):
+            press(harness, key, True)
+            harness.tick(ticks)
+            press(harness, key, False)
+            harness.tick(settle)
+
+        try:
+            for phase in (0, 18):
+                with self.subTest(phase=phase):
+                    scene.jump_to_room(0, row=1, x=119, facing=0, redraw=False)
+                    scene.game.desert.gate = phase
+                    tap('L', 2, 12)
+                    tap('L', 2, 12)
+                    self.assertEqual((scene.action, scene.player_x), (15, 80))
+                    tap('R', 1, 10)
+                    self.assertEqual((scene.action, scene.player_x, scene.sequence_state.facing), (15, 89, 1))
+                    poses = []
+                    press(harness, 'up', True)
+                    for tick in range(16):
+                        harness.tick()
+                        if tick == 1:
+                            press(harness, 'up', False)
+                        self.assertEqual(scene.sequence_state.source_sequence_id, 28)
+                        self.assertGreaterEqual(scene.player_x, 89)
+                        self.assertEqual((scene.game.level.number, scene.room_id, scene.terrain_motion.row),
+                                         (2, 0, 1))
+                        poses.append(scene.action)
+                    self.assertEqual(poses, [*range(68, 79), *([79] * 5)])
+                    harness.tick(8)
+                    self.assertEqual((scene.action, scene.game.desert.gate), (15, phase))
+        finally:
+            harness.close()
