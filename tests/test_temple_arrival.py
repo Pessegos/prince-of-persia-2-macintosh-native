@@ -604,6 +604,39 @@ class TowerFlightTests(unittest.TestCase):
         player.seek_operation(len(operations) - 1)
         self.assertTrue(player.done or player.position >= len(operations) - 1)
 
+    @unittest.skipUnless((ASSET_DIR / 'final_level14.json').is_file(), 'Imported final scenery required')
+    def test_the_gold_statue_survives_the_transition_to_the_playable_room(self):
+        from PIL import Image, ImageChops
+
+        from pop2.game_session import GameResources, GameSession
+        from pop2.intro import IntroAssets, IntroPlayer
+        from pop2.level_rendering import LevelRenderer
+
+        player = IntroPlayer(IntroAssets(program_name='tower.json'))
+        player.advance(60)
+        self.assertTrue(player.done)
+        shape = player.assets.shapes[825360]
+        mask = shape.point([0] + [255] * 255)
+        x, y = 141, 78
+        bounds = (x, y, x + shape.width, y + shape.height)
+        # The cutscene draws the parapet over the lowest part of the horse.
+        above_parapet = (0, 0, shape.width, 193 - y)
+        visible = mask.crop(above_parapet)
+
+        game = GameSession.load(GameResources.load(), 14)
+        renderer = LevelRenderer(game.level)
+        for room_id in (game.room_id, 1, game.room_id):
+            room = renderer.enter_room(room_id, game.caverns)
+            if room_id == game.room_id:
+                foreground = room.foreground.crop(bounds).crop(above_parapet).convert('RGB')
+                last_shot = player.frame().crop(bounds).crop(above_parapet).convert('RGB')
+                difference = ImageChops.difference(foreground, last_shot)
+                self.assertIsNone(Image.composite(difference, Image.new('RGB', visible.size), visible).getbbox())
+                uncovered = ImageChops.subtract(mask, room.actor_mask(0).crop(bounds))
+                self.assertIsNone(uncovered.getbbox())
+            else:
+                self.assertIsNotNone(ImageChops.subtract(mask, room.actor_mask(0).crop(bounds)).getbbox())
+
 
 class TowerExitTests(unittest.TestCase):
     def test_leaving_level_thirteen_plays_the_flight_then_enters_fourteen(self):

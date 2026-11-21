@@ -157,6 +157,27 @@ plates or events reach them.
   comparison remain open. The native drawing harness supplies only the
   specified rectangle fill endpoint; it is not an independent pixel check.
 
+### Tower arrival statue (2026-11-21)
+
+The two supplied recordings show the gold horse in the final shot. At the
+first frame with the life meter, it disappears in the port and stays on the
+tower in the Macintosh recording. The room renderer now places the imported
+statue in the first playable room's front plane and includes it in the actor
+occlusion mask, using the same path as the level-ten arrival statue.
+
+GetHorsePtInPlane `3:45a0-45e8`, called by the drawing-list builder at
+`3:23f0-2414`, selects the point at `a5-0x4aee`. A bounded original-code call
+with the original LEVL 2013 header `(6, 5, 14)`, native room 1, plane 1, and
+`a5-0x5000=-1` returned top-left `(141,78)`. Switching to plane 0, room 2, or
+setting `a5-0x5000=0` independently returned null. The probe supplied the
+level record and those arguments/globals and stopped at the helper's return.
+`DrawHorse` `3:468a-46d2` files masked Prince SHAP 25360, unmirrored, and
+palette selection `3:10a6-10c0` loads Prince CTBL 25363 at entry 1.
+
+The portable regression compares the statue above the parapet with the existing
+cutscene's last shot and checks the front mask on entry and re-entry. Full
+native rasterization, parapet overlap, sound and cutscene timing were excluded.
+
 ## Jaffar generation block (2026-11-10)
 
 The preserved `LEVL` 2013 is environment 6, opponent set 0, with an empty
