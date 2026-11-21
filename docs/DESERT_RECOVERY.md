@@ -56,7 +56,13 @@ StartFall (4:4d94-4db2) selects SEQS:27 and death method 8 for desert falls,
 calling 18:0d06 to sink both the remembered and current foot-contact stones.
 SEQS:27 supplies all sinking displacements without ordinary fall gravity.
 SetupSand (18:051e-0666) uses CUST 4/5 at bottom 243, centered on the actor,
-and the sand surface conceals the submerged body.
+and the sand surface conceals the submerged body. ClipChar 4:4146 calls
+18:0026 for every desert character: its clip ends at Y 240 (bottom =
+min(bottom, 240)), sinking or not, so the peel alone fills rows 240-242.
+`tools.probe_actor_cover --level 2` runs the original GetCharEdges,
+QuickFloor, ClipChar and MarkBufsForRect for the Prince's frames of every
+room and draws the cells they mark; the port's covers and clip match them,
+the sand peel (not drawn natively) excluded.
 
 The importer prepares original MIDI cues 46-50, including failure and quicksand
 death songs. AnimDsrtStone (18:0a3c-0a56) starts song 50 when the last rise ends.

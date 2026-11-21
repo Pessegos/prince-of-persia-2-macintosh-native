@@ -62,6 +62,26 @@ The near reflection also retains its two upper sprite rows, which complete
 the submerged post foot. Cropping those to the reflection strip left a
 straight, severed waterline on every near post; all four phases are tested.
 
+`tools.probe_actor_cover --level 1` runs the original GetCharEdges,
+QuickFloor, ClipChar (23:0826's water clip in native rooms 19 and 16) and
+MarkBufsForRect for the Prince's frames of every rooftop
+and harbor room and draws the marked cells with the rooftop drawers
+(DrawRoofFloor 23:0248, its ledge strip unless the ledge test 23:0614 holds;
+GetBGSetImgSize 3:533a measures the next SHAP, 3501 + the one-based item).
+Three port differences were fixed: a front piece of the row above that the
+Prince's rectangle overlaps is in front of him unless he climbs or hangs
+(MarkBufsForRect marks every covered cell), decoration 2 also draws
+decoration 1's SHAP 3559 in front (DrawRoofDecoration 23:021a-023e), and
+the border row hides a head above Y 5: MarkTop 5:16f2 marks the border
+cells and RedrawTopFast 3:1f4e repaints them after the characters, so the
+sky (SHAP 3501), the upper room's last row or row 0's pieces reaching the
+strip cover him there (`RooftopRoom.border_cover`; native room 21 paints
+only row 0's SHAP 3510, native rooms 15 (CUST) and 20 nothing). 22
+frames still differ (of 8,975), all in the harbor's native room 19: the
+animated waves, the ship (objects the probe does not model) and 60 pixels
+of a foot tip's floor redraw. The climb's `ledge_surface_clip` (SEQS 10/68, actions 135-144) is
+the user's approved exception.
+
 ## Ship
 
 - KeepTime 2:5374 triggers the ship when entering native room 19.

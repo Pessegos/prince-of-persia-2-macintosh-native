@@ -621,11 +621,17 @@ before).
 The top five pixels are the border row, the upper room's last row. A
 character reaching above Y 5 marks its cells through MarkTop 5:16f2 (their
 own table at a5-0x43e4), and RedrawTopFast 3:1f4e redraws them with the
-upper room's back passes and DrawForeImg, clipped to the strip and the
-cell; row 0's own redraw starts at Y 5. So the border row's front pieces
-cover a head there like any other cell's, the upper room's wall faces
-included (10:20, 12:18 and 13:0 repeat a two-column face in a border cell,
-255 pixels each, now in `temple_wall_redraws`). A customized room, one
+upper room's back passes 0, 5 and 11 (3:1fa4-1fc4) and DrawForeImg,
+clipped to the strip and the cell (and the marking rectangle); row 0's own
+redraw starts at Y 5. The dirty pass 3:32e0-3312 runs it after every row's
+RedrawCell, so after the characters are drawn: the border's back pieces
+hide a head there too, not only its front pieces. The full room's drawing
+files most strip pieces under row 0 or the cell to the left, so the export
+keeps each border cell's own dirty redraw (`border_redraw`, back and front)
+and `cavern_room` builds the border masks from it; an earlier import keeps
+the border's front pieces. The upper room's wall faces are included (10:20,
+12:18 and 13:0 repeat a two-column face in a border cell, 255 pixels each;
+`temple_wall_redraws` covers them in an earlier import). A customized room, one
 with a foreground word carrying 0xc000 (IsCustomizedRoom 3:1310, kept at
 a5-0x4fb0, with or without a CUST record), has no border row at all:
 RedrawCellFast 3:1cb0-1cb4 and the dirty pass 3:32c8-32cc skip it, and
@@ -634,7 +640,10 @@ the border anyway; only level 13 room 25 (native 26, customized without a
 CUST record) had one, a default floor strip the original never draws, and
 its masks hid 2,550 pixels. The export now skips it (`customized_room`),
 and `cavern_room` leaves an earlier import's border commands out. With the
-border row the probe covers 15,280 cells, none different.
+border row the probe covers 15,280 cells, none different; its border cells
+compare the back passes too. Masks taken from the full room's pieces that
+reach the strip instead missed 4,162 pixels and added 525 (ruins and
+temple border cells).
 
 Rooms in motion keep the same agreement. `--variants` sets each slot
 unit's other states one at a time, the others at rest (loose floors
@@ -1066,6 +1075,38 @@ rendering regression checks that this upper slice contains scenery only.
 Pose 137 is not clipped by that branch, so this is not a blanket hide-during-
 climb workaround.
 
+The recrop has no environment test, so the temple (2) takes it as well; the
+compositor had left it to environments 3, 4 and 6, and a fall in level 12's
+native rooms 27-32 kept its head above the row's top. ReadCell 4:27ee
+also reads a room above the level's room count (LEVL 0x2180, 4:2844-2852)
+as GetUndefineCellId 4:28b6 gives it, like one past a missing link
+(`clip_cell_kind`): level 12 counts 26 rooms, so those rooms' empty cells
+read as walls (20) and clip; level 14 counts 11, and its rooms 12-22 read
+as the tower's air and take none. The final tower also skips the recrop in
+native rooms 3 and 6 (4:4346-435c) and when the drawn first cell lies in
+native room 7 or 8 outside SEQS 14 (4:42a2-42c4). `tools.probe_actor_cover`
+runs GetCharEdges, QuickFloor, ClipChar and MarkBufsForRect on the
+executable for the Prince's frames of every room of levels 1-14 (short
+macros from floor positions, the port's live gates, plates, loose floors
+and flasks) and draws the cells they mark. It found one more leaf: ClipChar
+calls 7:3576 for every ruins character (4:4408, environment 4) except mode 9
+and the exit's stair poses. When the column of GetCharEdges' right edge
+(GetColumn 5:48b0 of a5-0x3566) is a wall (IsWall 3:4ef2: 20, 2, 7, 25,
+43) in the character's row and in the drawn top row, the top one not kind 7
+and in his own room, the clip ends at that column's left edge
+(7:35b0-35f2; `ruins_clip_right`). A drop past a wall in levels 7 and 8
+(SEQS 45, pose 104) drew 42-82 pixels inside it. Its second part
+(7:35f6-3696) only concerns types 7 and 8 and is not modelled. With these
+rules no clip pixel differs in levels 3-14. Of 142,758 compared frames
+(2026-11-21), levels 3, 4, 6, 8, 9, 10 and 13 have none different; level 5
+has 18, the bridge room's planks (native room 10), which the probe keeps at
+rest while the port's move, so the whole body shifts (5,831 pixels each
+way); levels 7, 11, 12 and 14 have one or two frames each, 4-36 pixels
+the port hides of a fall's foot (SEQS 19 pose 102, SEQS 7 pose 103) or of a
+jump's arm in 14:5, not yet explained. Counted apart are the approved
+exceptions, moving objects, flasks, the exit frame, level 8's throne bars
+and level 10's horse statue, which the probe does not draw.
+
 This verifies the ordinary top-clip branch, not complete frame parity. The
 user's subsequent recording showed a separate defect at pose 137: red pixels
 were still visible through the near floor at Y 231-236. Comparing equal poses
@@ -1187,6 +1228,18 @@ had hidden it, niche and flame, once the floor landed (fixed 2026-11-07). ATM To
 (5:1446-1498) writes each new frame into the cell's foreground word without looking
 at its kind, so the flame also goes on flickering there; the port had drawn it still
 at the frame it had when the floor landed (fixed 2026-11-08).
+A floor landing on a plate presses it first (PushPlate, 5:2d06-2d10, which
+sets the depression bit 0x2000) and writes the rubble's words afterwards
+(5:2e1e-2edc): kind 14 and, in environments 2 and 3, foreground 0. The port
+pressed the plate after writing the rubble, so the cell kept the plate's
+pressed word (level 3 room 13's cell 28 read 0x2a1d) and the original's
+drawers, given it, drew the hanging piece SHAP 3604 under the fallen floor
+of cell 18 that the original never draws there (fixed 2026-11-21,
+`PressurePlates.impact(rubble=...)`). In the ruins (4) the same code writes
+the cell's reloaded foreground with 0x40 (0x40 alone for kinds 1 and 10),
+and the native drawers change with that bit (level 7 room 9's cell 2 adds a
+back SHAP 3514); `rubble_tile` keeps 0 or the old word there. That ruins
+word is not yet verified by running MakeRubble and stays open.
 
 DrawMob (5:3128-32e0) also marks the next column's floor for repaint at the
 object's bottom row and, when different, its top row. ComputeMobRect uses
