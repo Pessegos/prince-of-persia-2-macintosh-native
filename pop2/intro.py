@@ -133,9 +133,19 @@ def read_program(path):
 
 def clip_tower_flight(operations):
     # PlayTheAnimation 16:118c-11b6 intersects the ANI bounds with the
-    # game rect and installs that clip before drawing the layers. The
-    # flattened programs preserved the positions and erase rectangles.
-    for pc, bounds in ((0x7302, [36, 26, 225, 510]), (0x73f6, [81, 0, 246, 509])):
+    # game rect and installs that clip before drawing the layers.
+    sky_pc = 0x73f6
+    sky_erase = [81, 0, 246, 509]
+    sky_bounds = [81, 0, 246, 510]
+    # Let the middle shot animate through the last visible column. The
+    # erase and its copy must cover that column too, including empty frames.
+    operations = [
+        {**item, 'args': [*item['args'][:-1], sky_bounds]}
+        if (item.get('pc') == sky_pc and item['op'] in ('fill', 'copy')
+            and item['args'][-1] == sky_erase) else item
+        for item in operations
+    ]
+    for pc, bounds in ((0x7302, [36, 26, 225, 510]), (sky_pc, sky_bounds)):
         indices = [index for index, item in enumerate(operations) if item.get('pc') == pc]
         if indices:
             first, last = indices[0], indices[-1] + 1

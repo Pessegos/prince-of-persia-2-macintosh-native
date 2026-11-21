@@ -231,6 +231,17 @@ final shot. The portable player kept the same sound events and finish time.
 These checks use imported resources and do not execute QuickDraw or compare
 the native event loop or audio timing.
 
+The user then pointed out that the Macintosh recording itself shows the last
+column of sky between the rider and the border. For the port, extend only the
+middle shot's animation clip, sky clear and matching display copy from the
+exclusive right edge 509 to 510. This deliberately lets the horse and clouds
+reach the last visible column and clears their pixels as soon as they leave.
+The regression builds an independent one-column composite of the current
+sprites over fresh sky and checks it against every displayed pose. It rejects
+the original fixed strip and a wider clip without a wider erase. Comparing
+all 1,426 ticks of portable playback changed only column 509 in the sky
+animation area, on 294 ticks, with the same sound events and deadlines.
+
 ## Jaffar generation block (2026-11-10)
 
 The preserved `LEVL` 2013 is environment 6, opponent set 0, with an empty
