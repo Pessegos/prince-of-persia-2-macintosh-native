@@ -398,9 +398,9 @@ TEMPLE_LEVELS = SCENERY_LEVELS[2]
 FINAL_LEVELS = SCENERY_LEVELS[6]
 # Masked structural back pieces: floors and the side faces of solid walls.
 # Opaque fills, far walls, columns, and moving doors are separate pieces.
-CAVERN_CEILINGS = frozenset((*range(3525, 3529), *range(3550, 3555), 3556, 3557, 3568, 3614, 4226))
-RUINS_CEILINGS = frozenset((*range(3514, 3518), 3520, 3521, 3523, 3525, 3526, 3552, 3553, 3576))
-TEMPLE_CEILINGS = frozenset((3521, 3528, 3541, 3542))
+CAVERN_CEILINGS = frozenset((*range(3525, 3529), *range(3550, 3558), 3568, 3614, 4226, 4227, 4228))
+RUINS_CEILINGS = frozenset((*range(3514, 3518), 3520, 3521, 3523, 3525, 3526, 3552, 3553, 3554, 3576))
+TEMPLE_CEILINGS = frozenset((3521, 3528, 3541, 3542, 3543, 3544))
 # The crystal hall's CUST background bakes its platforms and distant
 # crystals into one opaque image. Trace the near shelves in that SHAP's
 # local coordinates so the open gaps and the distant facets remain visible.
