@@ -127,8 +127,24 @@ def read_program(path):
             data['operations'].insert(first_wait, {
                 'op': 'fade_in_all', 'args': [0x40001], 'pc': 0x63cc})
     elif data.get('kind') == 'tower':
-        data['operations'] = align_tower_statue_flash(operations)
+        data['operations'] = clip_tower_flight(align_tower_statue_flash(operations))
     return data
+
+
+def clip_tower_flight(operations):
+    # PlayTheAnimation 16:118c-11b6 intersects the ANI bounds with the
+    # game rect and installs that clip before drawing the layers. The
+    # flattened programs preserved the positions and erase rectangles.
+    for pc, bounds in ((0x7302, [36, 26, 225, 510]), (0x73f6, [81, 0, 246, 509])):
+        indices = [index for index, item in enumerate(operations) if item.get('pc') == pc]
+        if indices:
+            first, last = indices[0], indices[-1] + 1
+            operations = [*operations[:first],
+                          {'op': 'clip', 'args': [bounds], 'pc': pc},
+                          *operations[first:last],
+                          {'op': 'clip', 'args': [[0, 0, SIZE[1], SIZE[0]]], 'pc': pc},
+                          *operations[last:]]
+    return operations
 
 
 def align_tower_statue_flash(operations):

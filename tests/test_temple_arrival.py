@@ -604,6 +604,36 @@ class TowerFlightTests(unittest.TestCase):
         player.seek_operation(len(operations) - 1)
         self.assertTrue(player.done or player.position >= len(operations) - 1)
 
+    def test_the_opening_doorway_hides_the_approaching_rider(self):
+        from PIL import ImageChops
+
+        from pop2.intro import IntroAssets, IntroPlayer
+
+        player = IntroPlayer(IntroAssets(program_name='tower.json'))
+        opening = next(index for index, item in enumerate(player.operations) if item.get('pc') == 0x7302)
+        first_rider = next(index for index, item in enumerate(player.operations)
+                           if item['op'] == 'shape' and item['args'][0] == 725326)
+        player.seek_operation(opening)
+        background = player.display.copy()
+        player.seek_operation(first_rider)
+        difference = ImageChops.difference(background, player.display)
+        self.assertIsNone(difference.crop((0, 0, 26, 225)).getbbox())
+        self.assertIsNotNone(difference.crop((26, 36, 60, 225)).getbbox())
+
+    def test_the_flight_never_leaves_a_trail_on_the_right_edge(self):
+        from pop2.intro import IntroAssets, IntroPlayer
+
+        player = IntroPlayer(IntroAssets(program_name='tower.json'))
+        flight_frames = [index for index, item in enumerate(player.operations)
+                         if item.get('pc') == 0x73f6 and item['op'] == 'wait']
+        self.assertGreater(len(flight_frames), 90)
+        player.seek_operation(flight_frames[0])
+        for index in flight_frames:
+            while player.position <= index:
+                player.advance(player.wait_until - player.time)
+            self.assertEqual(player.position, index + 1)
+            self.assertEqual(player.display.crop((509, 81, 510, 246)).getcolors(), [(165, 93)])
+
     def test_the_existing_white_flash_brightens_the_rendered_statue(self):
         from pop2.intro import IntroAssets, IntroPlayer
 

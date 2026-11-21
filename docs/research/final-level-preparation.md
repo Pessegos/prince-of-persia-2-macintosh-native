@@ -206,6 +206,31 @@ recording, the rider's first visible movement occurs at 3.349/3.333 s
 at 7.515/7.500 s and 17.749/17.799 s. The life meter appears at 23.832/23.683 s.
 These are sampled capture times and do not establish native script deadlines.
 
+### Doorway and flight clipping (2026-11-21)
+
+The supplied recordings show the horse emerging from the doorway on Macintosh
+while the port draws it over the stone at the left. The reported vertical streak
+also reproduces in the port's second shot. Its animation draws outside the sky
+erase rectangle, leaving cloud or horse indices in column 509 as they move.
+
+The animation calls at `15:7302` and `15:73f6` use TowerNIS ANI 25021 and
+25022. The original resource bounds (top, left, bottom, right) are
+`(36,26,225,511)` and `(81,0,246,509)`. `PlayTheAnimation` `16:118c-11b6`
+intersects those bounds with the game rectangle and installs the result on
+the drawing port. In the portable player, the two animation spans now enforce
+those clips on shape writes. The second clip's exclusive right edge matches
+its existing erase rectangle, and the paint outside both clips remains intact.
+This applies at read time to existing imports and both playback entry points.
+
+The rendered regression checks that the first rider pose touches the opening
+without covering its left edge. The flight check visits each displayed pose
+and verifies that column 509 keeps the sky index. The old player changed that
+column on 66 poses. A playback comparison at the Macintosh tick rate found
+451 earlier frames with changes and 331 identical displayed frames in the
+final shot. The portable player kept the same sound events and finish time.
+These checks use imported resources and do not execute QuickDraw or compare
+the native event loop or audio timing.
+
 ## Jaffar generation block (2026-11-10)
 
 The preserved `LEVL` 2013 is environment 6, opponent set 0, with an empty
