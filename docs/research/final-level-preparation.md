@@ -188,6 +188,12 @@ order. Monitoring the statue region found the white flash at capture times
 recording. This reproduces in the current portable player. `TransFunc11`
 `15:75e2-7642` emits gold, white, and gold palette operations. In the flattened
 program they affect inks 1–14 while the displayed horse still uses inks 32–46.
+An isolated execution of original `runScript` `16:08ee-0ada` with ANI/SCRP
+25023 and LEVL 2012 header `(2,22,13)` returns horse shapes 359, 358, 357 on
+calls 40–42 and statue shape 360 on call 48, each with interval 6. The probe
+steps one script interval per call with a supplied animation object and
+resource handle, no-op HLock/HUnlock, and event sinks for sound and notify.
+It excludes PlayTheAnimation's event loop, frame batching and QuickDraw.
 The read-time fix retains the existing palettes and presents the white then
 gold operations on the second and third frames that display the statue. The
 rendered RGB regression samples a statue pixel in all three frames. This is
