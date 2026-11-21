@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
 import struct
 
@@ -58,6 +58,31 @@ CLIMB_FOREGROUND_RECTS = (
 def add_alpha(mask, alpha, x, y):
     rect = (x, y, x + alpha.width, y + alpha.height)
     mask.paste(ImageChops.lighter(mask.crop(rect), alpha), (x, y))
+
+
+def add_ceiling_cover(covers, row, alpha, x, y):
+    # Between the highest SEQS:14 pose and the top of its physical row.
+    top = max(0, row * TILE_HEIGHT - 18)
+    bottom = row * TILE_HEIGHT + SCENERY_Y_OFFSET
+    above, below = max(y, top), min(y + alpha.height, bottom)
+    left, right = max(0, x), min(ROOM_WIDTH, x + alpha.width)
+    if row not in range(3) or above >= below or left >= right:
+        return
+    part = alpha.crop((left - x, above - y, right - x, below - y))
+    if part.getbbox() is None:
+        return
+    if row not in covers:
+        covers[row] = Image.new('L', (ROOM_WIDTH, bottom - top)), top
+    add_alpha(covers[row][0], part, left, above - top)
+
+
+def add_ceiling_outline(covers, row, points):
+    """Add a contour traced from a solid surface in an opaque CUST bitmap."""
+    xs, ys = zip(*points)
+    left, top = min(xs), min(ys)
+    outline = Image.new('L', (max(xs) - left + 1, max(ys) - top + 1))
+    ImageDraw.Draw(outline).polygon([(x - left, y - top) for x, y in points], fill=255)
+    add_ceiling_cover(covers, row, outline, left, top)
 
 
 @dataclass(frozen=True)
@@ -172,11 +197,28 @@ class OpeningRoom:
     room_id: int
     level_kind: int = 5
     actor_cell_occlusion: dict[tuple[int, int], tuple[Image.Image, tuple[int, int]]] | None = None
+    ceiling_covers: dict[int, tuple[Image.Image, int]] | None = field(default=None, kw_only=True)
 
     def flattened(self):
         return Image.alpha_composite(self.background, self.foreground)
 
+    def short_jump_ceiling(self, row, state):
+        if (self.ceiling_covers and getattr(state, 'actor_type', None) == 0
+                and getattr(state, 'source_sequence_id', None) == 14):
+            return self.ceiling_covers.get(row)
+        return None
+
     def actor_mask(self, row, bottom=None, state=None, bounds=None, record=None):
+        mask = self._actor_mask(row, bottom, state, bounds, record)
+        ceiling = self.short_jump_ceiling(row, state)
+        if ceiling is not None:
+            cover, top = ceiling
+            if bounds is None or (bounds[1] < top + cover.height and bounds[3] >= top):
+                mask = mask.copy()
+                add_alpha(mask, cover, 0, top)
+        return mask
+
+    def _actor_mask(self, row, bottom, state, bounds, record):
         if self.level_kind != 5:
             if bounds is None:
                 return self.actor_occlusion[max(-1, min(4, row))]
@@ -545,6 +587,7 @@ def build_opening_room(include_curtain=True, room_id=None, level_resource_id=200
     ledges = []
     foreground_pieces = []
     border = Image.new("L", (ROOM_WIDTH, ROOM_HEIGHT), 0)
+    ceilings = {}
 
     # CUST records own the full background and foreground of native room 15.
     custom = load_resource_file("Rooftops.rsrc").get("CUST", {}).get(3975 + (room_id + 1) * 25)
@@ -574,6 +617,10 @@ def build_opening_room(include_curtain=True, room_id=None, level_resource_id=200
         anchor_x = tile_x * TILE_WIDTH + dx
         anchor_y = (tile_y + 1) * TILE_HEIGHT + SCENERY_Y_OFFSET + dy
         layers[layer_index].paste(shape, (anchor_x, anchor_y - shape.height), shape)
+        if ledge or floor_redraw or (layer_index == 3 and not decoration
+                                     and tile_info(tile_x, tile_y)[0] in (1, 20)):
+            add_ceiling_cover(ceilings, tile_y + 1, shape.getchannel("A"),
+                              anchor_x, anchor_y - shape.height)
         if tile_y <= 0 and anchor_y - shape.height < SCENERY_Y_OFFSET:
             # What the border row's redraw (RedrawTopFast 3:1f4e) paints
             # in the 0-5 strip: the upper room's last row, and the pieces
@@ -700,7 +747,8 @@ def build_opening_room(include_curtain=True, room_id=None, level_resource_id=200
                      for cell in range(30))
     return RooftopRoom(background, layers[3], occlusion,
                        tuple(ledges), tuple(foreground_pieces), room_id,
-                       border_cover=None if custom is not None or customized else border)
+                       border_cover=None if custom is not None or customized else border,
+                       ceiling_covers=ceilings)
 
 
 def draw_harbor(frame, room_id, harbor, front=False, level_resource_id=2000):

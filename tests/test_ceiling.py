@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 from pop2.mac_input import StepBoundary
 from pop2.paths import ASSET_DIR
+from pop2.render_opening import OpeningRoom, add_ceiling_cover
 from pop2.sequence_runtime import SequenceRuntime, SequenceState
 from pop2.terrain import (LevelMap, RooftopPhysics, TerrainMotion, character_column,
                          floor_y, floor_contact_x)
@@ -16,7 +17,6 @@ class RoomNineCeilingMaskTests(unittest.TestCase):
     def test_short_jump_hides_only_the_hand_pixels_behind_the_rock(self):
         from PIL import ImageChops
 
-        from pop2.caverns import CavernRoom
         from tools.audit_temple_routes import Harness, press
 
         harness = Harness(5, draw=True)
@@ -48,7 +48,7 @@ class RoomNineCeilingMaskTests(unittest.TestCase):
                                 self.assertEqual([call.args[2:4] for call in shake.call_args_list], [(8, 0)])
                             snapshot = replace(state)
                             fixed = scene.native_viewport.crop((1, 0, 511, 365)).convert('RGB')
-                            with patch.object(CavernRoom, 'short_jump_ceiling', return_value=None, create=True):
+                            with patch.object(OpeningRoom, 'short_jump_ceiling', return_value=None):
                                 scene.render()
                                 ordinary = scene.native_viewport.crop((1, 0, 511, 365)).convert('RGB')
                             self.assertEqual(state, snapshot)
@@ -71,6 +71,81 @@ class RoomNineCeilingMaskTests(unittest.TestCase):
                         scene.clear_keys(None)
         finally:
             harness.close()
+
+
+class CampaignCeilingMaskTests(unittest.TestCase):
+    def test_cover_keeps_alpha_gaps_and_applies_to_the_princes_short_jump_only(self):
+        from PIL import Image
+
+        background = Image.new('RGBA', (510, 365))
+        ordinary = Image.new('L', background.size)
+        alpha = Image.new('L', (3, 4), 255)
+        alpha.putpixel((1, 2), 0)
+        covers = {}
+        add_ceiling_cover(covers, 1, alpha, 51, 122)
+        room = OpeningRoom(background, background, {0: ordinary, 1: ordinary},
+                           (), (), 0, 3, ceiling_covers=covers)
+        state = SequenceState(14, actor_type=0, selected_sequence_id=14)
+        mask = room.actor_mask(1, state=state)
+        self.assertEqual(mask.getbbox(), (51, 122, 54, 125))
+        self.assertEqual(mask.getpixel((52, 124)), 0)
+        self.assertIsNone(ordinary.getbbox())
+        self.assertIsNone(room.actor_mask(0, state=state).getbbox())
+        self.assertIsNone(room.actor_mask(1, state=replace(state, actor_type=2)).getbbox())
+        self.assertIsNone(room.actor_mask(1, state=replace(state, selected_sequence_id=28)).getbbox())
+
+    def test_short_jump_uses_the_overhead_contour_in_each_scenery_family(self):
+        from PIL import ImageChops
+
+        from tools.audit_temple_routes import Harness, press
+
+        cases = (
+            # The rooftop's existing front beam fills its contour already.
+            (1, 'Rooftops.rsrc', 21, 1, 292, {}),
+            (2, 'Desert.rsrc', 1, 1, 39, {78: 12, 79: 108}),
+            (3, 'caverns_entry.json', 16, 1, 60, {79: 49}),
+            (4, 'caverns_level4.json', 7, 1, 162, {79: 73}),
+            (5, 'caverns_level5.json', 14, 1, 213, {79: 47}),
+            (6, 'ruins_level6.json', 8, 1, 61, {79: 66}),
+            (10, 'temple_level10.json', 7, 1, 163, {79: 56}),
+            (14, 'final_level14.json', 6, 1, 179, {78: 15, 79: 268}),
+            (14, 'final_level14.json', 6, 2, 214, {78: 15, 79: 262}),
+        )
+        if not all((ASSET_DIR / name).is_file() for _, name, *_ in cases):
+            self.skipTest('Imported campaign scenery required')
+
+        for level, _, native_room, row, x, expected in cases:
+            with self.subTest(level=level, room=native_room, row=row):
+                harness = Harness(level, draw=True)
+                scene = harness.scene
+                scene.audio = None
+                scene.cave_ambience_enabled = False
+                scene.present_viewport = lambda: None
+                try:
+                    scene.jump_to_room(native_room - 1, row=row, x=x, facing=1, redraw=False)
+                    press(harness, 'up', True)
+                    poses, changed = [], {}
+                    for tick in range(12):
+                        harness.tick()
+                        if tick == 1:
+                            press(harness, 'up', False)
+                        state = scene.sequence_state
+                        self.assertEqual(state.source_sequence_id, 14)
+                        poses.append(state.action)
+                        fixed = scene.native_viewport.crop((1, 0, 511, 365)).convert('RGB')
+                        with patch.object(OpeningRoom, 'short_jump_ceiling', return_value=None):
+                            scene.render()
+                        ordinary = scene.native_viewport.crop((1, 0, 511, 365)).convert('RGB')
+                        difference = ImageChops.difference(fixed, ordinary)
+                        region = difference.getbbox()
+                        if region is not None:
+                            self.assertLessEqual(region[3], row * 120 + 5)
+                            changed[state.action] = sum(count for count, rgb in
+                                                        difference.crop(region).getcolors(510 * 365) if any(rgb))
+                    self.assertEqual(poses, list(range(68, 80)))
+                    self.assertEqual(changed, expected)
+                finally:
+                    harness.close()
 
 
 class VerticalJumpTests(unittest.TestCase):

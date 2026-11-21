@@ -499,15 +499,16 @@ def compare(native, port, totals, cases, digest, number, room, macro, examples):
             totals[f'{kind}_frames'] += 1
     digest.update(struct.pack('>4h', number, room, state.action, state.animation_state))
     digest.update(np.packbits(expected).tobytes())
-    if number == 5 and room == 8:
-        ceiling = port.scene.room_cache[room].short_jump_ceiling(row, state)
-        if ceiling is not None:
-            approved = expected & (np.asarray(ceiling) > 0)
-            hidden = int((approved & ~shown).sum())
-            if hidden:
-                totals['jump_ceiling_frames'] += 1
-                totals['jump_ceiling_extra'] += hidden
-            expected &= ~approved
+    ceiling = port.scene.room_cache[port.scene.room_id].short_jump_ceiling(row, state)
+    if ceiling is not None:
+        cover, top = ceiling
+        visible_strip = expected[top:top + cover.height]
+        approved = visible_strip & (np.asarray(cover) > 0)
+        hidden = int((approved & ~shown[top:top + cover.height]).sum())
+        if hidden:
+            totals['jump_ceiling_frames'] += 1
+            totals['jump_ceiling_extra'] += hidden
+        visible_strip &= ~approved
     missing, extra = int((shown & ~expected).sum()), int((expected & ~shown).sum())
     totals['missing_pixels'] += missing
     totals['extra_pixels'] += extra

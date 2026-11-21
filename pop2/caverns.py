@@ -12,8 +12,8 @@ from PIL import Image, ImageChops, ImageOps
 from pop2.paths import ASSET_DIR
 from pop2.cavern_retouch import retouched_door_sprite, retouched_room_commands, retouched_sprite
 from pop2.opponent_generation import EMPTY_TILES, character_column
-from pop2.render_opening import (OpeningRoom, decode_ctbl, decode_shap, load_resource_file,
-                                 ledge_surface_clip, native_buffer_cells)
+from pop2.render_opening import (OpeningRoom, add_ceiling_cover, add_ceiling_outline, decode_ctbl, decode_shap,
+                                 load_resource_file, ledge_surface_clip, native_buffer_cells)
 from pop2.terrain import LevelMap, character_row, floor_contact_x
 
 
@@ -79,21 +79,11 @@ class CavernRoom(OpeningRoom):
     torch_occlusion: dict | None = None
     exit_foreground: tuple = ()
     platform_contours: dict | None = None
-    jump_ceiling_mask: Image.Image | None = None
-
-    def short_jump_ceiling(self, row, state):
-        if (self.jump_ceiling_mask is not None and row == 1 and state is not None
-                and state.actor_type == 0 and state.source_sequence_id == 14):
-            return self.jump_ceiling_mask
-        return None
 
     def actor_mask(self, row, bottom=None, state=None, bounds=None, record=None, peel=None):
         """`peel`, when given, is the frame's `gate_clips`: the stones the
         original draws over every character inside each clip."""
         mask = super().actor_mask(row, bottom, state, bounds, record)
-        ceiling = self.short_jump_ceiling(row, state)
-        if ceiling is not None:
-            mask = ImageChops.lighter(mask, ceiling)
         if self.custom_occlusion is not None:
             # Global front items: DrawCustomRoomImgs 3:239e-23b2 repeats
             # CUST for every dirty cell; DrawHorse 3:23f0-2414 adds the
@@ -406,6 +396,22 @@ SCENERY_LEVELS = {3: (3, 4, 5), 4: (6, 7, 8, 9), 2: (10, 11, 12, 13), 6: (14,)}
 RUINS_LEVELS = SCENERY_LEVELS[4]
 TEMPLE_LEVELS = SCENERY_LEVELS[2]
 FINAL_LEVELS = SCENERY_LEVELS[6]
+# Masked structural back pieces: floors and the side faces of solid walls.
+# Opaque fills, far walls, columns, and moving doors are separate pieces.
+CAVERN_CEILINGS = frozenset((*range(3525, 3529), *range(3550, 3555), 3556, 3557, 3568, 3614, 4226))
+RUINS_CEILINGS = frozenset((*range(3514, 3518), 3520, 3521, 3523, 3525, 3526, 3552, 3553, 3576))
+TEMPLE_CEILINGS = frozenset((3521, 3528, 3541, 3542))
+# The crystal hall's CUST background bakes its platforms and distant
+# crystals into one opaque image. Trace the near shelves in that SHAP's
+# local coordinates so the open gaps and the distant facets remain visible.
+FINAL_CEILING_EDGES = {
+    4125: (
+        (1, ((46, 124), (56, 113), (78, 104), (145, 103), (223, 103), (240, 124))),
+        (1, ((298, 124), (313, 111), (328, 104), (430, 104), (440, 124))),
+        (2, ((0, 244), (7, 224), (70, 224), (77, 229), (89, 244))),
+        (2, ((139, 244), (187, 222), (200, 224), (259, 224), (272, 229), (277, 244))),
+    ),
+}
 # DrawCaveTorch 8:2ae8 and DrawTempTorch 10:1196-11cc, library 4.
 TEMPLE_TORCH_SHAPES = range(3596, 3602)
 # CUST room enter hooks loading a CTBL over the room palette (S03_508A):
@@ -1896,7 +1902,10 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
                   3545 if level_number in RUINS_LEVELS else
                   3579 if level_number in TEMPLE_LEVELS else None)
     platform_contours = {}
-    jump_ceiling_mask = None
+    ceilings = {}
+    ceiling_shapes = (CAVERN_CEILINGS if level_number in SCENERY_LEVELS[3] else
+                      RUINS_CEILINGS if level_number in RUINS_LEVELS else
+                      TEMPLE_CEILINGS if level_number in TEMPLE_LEVELS else ())
     # A crevice reveal's redraw paints over the displayed screen: its back
     # pieces also cover the earlier front pieces (slot_variant `redrawn`).
     redraw_start = variant.get('redraw_start', len(commands)) if variant is not None else len(commands)
@@ -1922,12 +1931,6 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
         sprite, position = clipped
         destination = background if layer == 'back' else foreground
         destination.paste(sprite, position, sprite)
-        if ((level_number, room_id, library) == (5, 8, 4)
-                and command[:6] == ['back', 3550, 51, 125, 16, 0]):
-            # The user-approved short-jump cover follows this rock's silhouette
-            # into the air cell beside the solid ceiling (native room 9).
-            jump_ceiling_mask = Image.new('L', background.size)
-            jump_ceiling_mask.paste(sprite.getchannel('A'), position)
         if layer == 'back' and library == 4 and index == exit_shape:
             if index == 3545:
                 # The promoted ruins record comes from the moving-door
@@ -1973,6 +1976,15 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
                         cell_masks[key] = cover, (x, y)
             if custom_mask is not None:
                 custom_mask = ImageChops.multiply(custom_mask, uncovered)
+            for alpha, top in ceilings.values():
+                alpha.paste(ImageChops.multiply(alpha, uncovered.crop(
+                    (0, top, alpha.width, top + alpha.height))))
+        if layer == 'back' and library == 4:
+            if command[4] == 16 and index in ceiling_shapes:
+                add_ceiling_cover(ceilings, row + 1, sprite.getchannel('A'), *position)
+            if level_number in FINAL_LEVELS and index in FINAL_CEILING_EDGES and command[2:5] == [0, 365, 0]:
+                for ceiling_row, edge in FINAL_CEILING_EDGES[index]:
+                    add_ceiling_outline(ceilings, ceiling_row, edge)
         cell = tuple(command[8:10])
         if (level_number, room_id, layer, library, index) == (8, 8, 'back', 4, 4206):
             # DrawRuinGateMovable7:2b22-2b4a ->7:383a temporarily promotes
@@ -2120,4 +2132,4 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
             visible_contours.setdefault(cell, []).append((cover, (x, y)))
     return CavernRoom(background, foreground, masks, (), (), room_id, 3, cell_masks,
                       redraw, floors, retained, gate_masks, custom_mask, torch_occlusion, tuple(visible_exits),
-                      visible_contours or None, jump_ceiling_mask=jump_ceiling_mask)
+                      visible_contours or None, ceiling_covers=ceilings)
