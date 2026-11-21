@@ -1,5 +1,6 @@
 import struct
 import unittest
+from dataclasses import replace
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -8,6 +9,68 @@ from pop2.paths import ASSET_DIR
 from pop2.sequence_runtime import SequenceRuntime, SequenceState
 from pop2.terrain import (LevelMap, RooftopPhysics, TerrainMotion, character_column,
                          floor_y, floor_contact_x)
+
+
+@unittest.skipUnless((ASSET_DIR / 'caverns_level5.json').is_file(), 'Imported level 5 artwork required')
+class RoomNineCeilingMaskTests(unittest.TestCase):
+    def test_short_jump_hides_only_the_hand_pixels_behind_the_rock(self):
+        from PIL import ImageChops
+
+        from pop2.caverns import CavernRoom
+        from tools.audit_temple_routes import Harness, press
+
+        harness = Harness(5, draw=True)
+        scene = harness.scene
+        scene.audio = None
+        scene.cave_ambience_enabled = False
+        scene.present_viewport = lambda: None
+        try:
+            for facing, x, expected in ((0, 69, [(78, 5)]), (1, 62, [(79, 59)])):
+                with self.subTest(facing=facing):
+                    scene.load_level(5)
+                    scene.jump_to_room(8, row=1, x=x, facing=facing, redraw=False)
+                    loose = scene.game.caverns.loose
+                    changed = []
+                    poses = []
+                    with patch.object(type(loose), 'shake_row', autospec=True,
+                                      side_effect=type(loose).shake_row) as shake:
+                        press(harness, 'up', True)
+                        for tick in range(18):
+                            harness.tick()
+                            if tick == 1:
+                                press(harness, 'up', False)
+                            state = scene.sequence_state
+                            pose = state.action
+                            if state.source_sequence_id == 14:
+                                poses.append(pose)
+                            if pose == 79:
+                                self.assertEqual(state.sound_events, [20])
+                                self.assertEqual([call.args[2:4] for call in shake.call_args_list], [(8, 0)])
+                            snapshot = replace(state)
+                            fixed = scene.native_viewport.crop((1, 0, 511, 365)).convert('RGB')
+                            with patch.object(CavernRoom, 'short_jump_ceiling', return_value=None, create=True):
+                                scene.render()
+                                ordinary = scene.native_viewport.crop((1, 0, 511, 365)).convert('RGB')
+                            self.assertEqual(state, snapshot)
+                            difference = ImageChops.difference(ordinary, fixed)
+                            region = difference.getbbox()
+                            if region is not None:
+                                scenery = scene.room_cache[8].flattened().convert('RGB')
+                                left, top, right, bottom = region
+                                pixels = 0
+                                for py in range(top, bottom):
+                                    for px in range(left, right):
+                                        point = (px, py)
+                                        if difference.getpixel(point) != (0, 0, 0):
+                                            self.assertEqual(fixed.getpixel(point), scenery.getpixel(point))
+                                            pixels += 1
+                                changed.append((pose, pixels))
+                        self.assertEqual(poses, list(range(68, 80)))
+                        self.assertEqual(changed, expected)
+                        self.assertEqual((scene.room_id, scene.terrain_motion.row, scene.action), (8, 1, 15))
+                        scene.clear_keys(None)
+        finally:
+            harness.close()
 
 
 class VerticalJumpTests(unittest.TestCase):

@@ -607,6 +607,25 @@ tests cover the entrance's one-frame pose 79, return to the same floor, final X
 and other cavern ceilings. This is jump selection, not complete head collision
 for horizontal jumps or blocked climbing destinations.
 
+#### Cavern ceiling contour in level 5 room 9
+
+In native room 9 (port index 8), the left ceiling's visible outline extends
+into the adjacent air cell. At middle-row starts X69 facing left and X62
+facing right, native DoJumpUp 6:1600 chooses SEQS:14 with zero pre-offset
+(supplied GetBarrDistances result and standing FRAM fields, JumpSeq
+intercepted). For the right-facing pose 79, the drawn bounds fit inside the
+air cell. ClipChar 4:4146 leaves the hands visible, and the cell redraw does
+not cover the overlapping rock.
+
+The approved port improvement uses the alpha of the room's existing
+SHAP 3550 at X51/bottom125 as extra actor cover for the Prince's middle-row
+SEQS:14. It preserves the existing scenery, motion, sound cue and upper-row
+shake request. Hidden replays of the two starts change 5 pixels in pose 78
+to the left and 59 in pose 79 to the right. A native cover comparison of
+those 24 frames and 480 nearby short-jump frames (starts X54–100, both
+facings) found zero differences outside the approved contour. It used the
+port's poses, bounds and sprite alpha as inputs to the native drawing setup.
+
 ### Sequence And Physical Row In Barrier Checks
 
 CheckBarr (4:4e46-4e60) clears its collision candidates and bypasses ordinary

@@ -79,11 +79,21 @@ class CavernRoom(OpeningRoom):
     torch_occlusion: dict | None = None
     exit_foreground: tuple = ()
     platform_contours: dict | None = None
+    jump_ceiling_mask: Image.Image | None = None
+
+    def short_jump_ceiling(self, row, state):
+        if (self.jump_ceiling_mask is not None and row == 1 and state is not None
+                and state.actor_type == 0 and state.source_sequence_id == 14):
+            return self.jump_ceiling_mask
+        return None
 
     def actor_mask(self, row, bottom=None, state=None, bounds=None, record=None, peel=None):
         """`peel`, when given, is the frame's `gate_clips`: the stones the
         original draws over every character inside each clip."""
         mask = super().actor_mask(row, bottom, state, bounds, record)
+        ceiling = self.short_jump_ceiling(row, state)
+        if ceiling is not None:
+            mask = ImageChops.lighter(mask, ceiling)
         if self.custom_occlusion is not None:
             # Global front items: DrawCustomRoomImgs 3:239e-23b2 repeats
             # CUST for every dirty cell; DrawHorse 3:23f0-2414 adds the
@@ -1886,6 +1896,7 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
                   3545 if level_number in RUINS_LEVELS else
                   3579 if level_number in TEMPLE_LEVELS else None)
     platform_contours = {}
+    jump_ceiling_mask = None
     # A crevice reveal's redraw paints over the displayed screen: its back
     # pieces also cover the earlier front pieces (slot_variant `redrawn`).
     redraw_start = variant.get('redraw_start', len(commands)) if variant is not None else len(commands)
@@ -1911,6 +1922,12 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
         sprite, position = clipped
         destination = background if layer == 'back' else foreground
         destination.paste(sprite, position, sprite)
+        if ((level_number, room_id, library) == (5, 8, 4)
+                and command[:6] == ['back', 3550, 51, 125, 16, 0]):
+            # The user-approved short-jump cover follows this rock's silhouette
+            # into the air cell beside the solid ceiling (native room 9).
+            jump_ceiling_mask = Image.new('L', background.size)
+            jump_ceiling_mask.paste(sprite.getchannel('A'), position)
         if layer == 'back' and library == 4 and index == exit_shape:
             if index == 3545:
                 # The promoted ruins record comes from the moving-door
@@ -2103,4 +2120,4 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
             visible_contours.setdefault(cell, []).append((cover, (x, y)))
     return CavernRoom(background, foreground, masks, (), (), room_id, 3, cell_masks,
                       redraw, floors, retained, gate_masks, custom_mask, torch_occlusion, tuple(visible_exits),
-                      visible_contours or None)
+                      visible_contours or None, jump_ceiling_mask=jump_ceiling_mask)

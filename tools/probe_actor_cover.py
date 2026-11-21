@@ -491,17 +491,26 @@ def compare(native, port, totals, cases, digest, number, room, macro, examples):
     for kind, mask in covers.items():
         covered |= mask
     expected = drawn & clip & ~covered
-    missing, extra = int((shown & ~expected).sum()), int((expected & ~shown).sum())
     totals['frames'] += 1
     totals['drawn_pixels'] += int(drawn.sum())
     totals['native_shown_pixels'] += int(expected.sum())
     for kind in ('floor', 'half'):
         if any(mark[0] == kind for mark in setup['marks']):
             totals[f'{kind}_frames'] += 1
-    totals['missing_pixels'] += missing
-    totals['extra_pixels'] += extra
     digest.update(struct.pack('>4h', number, room, state.action, state.animation_state))
     digest.update(np.packbits(expected).tobytes())
+    if number == 5 and room == 8:
+        ceiling = port.scene.room_cache[room].short_jump_ceiling(row, state)
+        if ceiling is not None:
+            approved = expected & (np.asarray(ceiling) > 0)
+            hidden = int((approved & ~shown).sum())
+            if hidden:
+                totals['jump_ceiling_frames'] += 1
+                totals['jump_ceiling_extra'] += hidden
+            expected &= ~approved
+    missing, extra = int((shown & ~expected).sum()), int((expected & ~shown).sum())
+    totals['missing_pixels'] += missing
+    totals['extra_pixels'] += extra
     exception = approved_exception(state, bounds) or moving_object(port.scene, bounds)
     if exception and (missing or extra):
         # Counted apart: the user's approved port exceptions, not failures.
