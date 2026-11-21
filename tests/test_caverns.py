@@ -336,17 +336,19 @@ class CavernDrawingTests(unittest.TestCase):
         self.assertEqual(room.actor_mask(3).getpixel((20, 340)), 255)
 
     def test_export_draws_only_environments_with_a_known_piece_table(self):
-        # a5-0x4aea holds one piece-drawing table per LEVL environment; only
-        # the temple (2, kinds 0-43), caverns (3, kinds 0-44), ruins (4,
-        # kinds 0-23) and final tower (6, kinds 0-42) are decoded.
+        # a5-0x4aea holds one piece-drawing table per LEVL environment; the
+        # desert (1, kinds 0-30, for the native mask probes), temple (2,
+        # kinds 0-43), caverns (3, kinds 0-44), ruins (4, kinds 0-23),
+        # rooftops (5, kinds 0-49, the probes too) and final tower (6, kinds
+        # 0-42) are decoded.
         from tools.extract_caverns import DRAW_KINDS
 
-        self.assertEqual(DRAW_KINDS, {2: 44, 3: 45, 4: 24, 6: 43})
+        self.assertEqual(DRAW_KINDS, {1: 31, 2: 44, 3: 45, 4: 24, 5: 50, 6: 43})
         level = bytearray(0x49ca)
-        struct.pack_into('>H', level, 0x2186, 5)
+        struct.pack_into('>H', level, 0x2186, 7)
         with (patch('tools.extract_caverns.recovery_inputs',
                     return_value=({'CODE': {0: {'data': b''}}}, {}, {}, b'', {})),
-              self.assertRaisesRegex(ValueError, 'environment 5')):
+              self.assertRaisesRegex(ValueError, 'environment 7')):
             recover_room(b'program', b'artwork', bytes(level), _machine=Mock())
 
     def test_export_uses_clean_cut_flag_and_full_clip_for_every_cell(self):

@@ -33,11 +33,13 @@ class TempleGateCoverTests(unittest.TestCase):
 
     def test_the_temple_stone_covers_a_character_in_its_tile_column_or_the_one_before(self):
         # Level 10 room 8's gate at (6, 1): DrawTempGateMovable 10:0976 draws
-        # SHAP 3576 on the tile's right edge (x 356), in cell 7's redraw.
+        # SHAP 3576 on the tile's right edge (x 356), in cell 7's redraw,
+        # whose clip starts at the row's top (125): SectRect(object rect,
+        # clip, clip) 3:28c2-28d8 keeps it, so the 16 rows above stay behind.
         art = self.art([['back', 3576, 356, 235, 16, 1, [109, 356, 235, 386], 4, 6, 1]], [(6, 1)])
         self.assertEqual(set(art.gate_occlusion), {(6, 1)})
         cover, position = art.gate_occlusion[6, 1]
-        self.assertEqual((position, cover.size), ((356, 109), (30, 126)))
+        self.assertEqual((position, cover.size), ((356, 125), (30, 110)))
         for column, covered in ((4, False), (5, True), (6, True), (7, False)):
             with self.subTest(column=column):
                 self.assertEqual(bool(art.gate_peel(column, 1)), covered)
@@ -52,7 +54,7 @@ class TempleGateCoverTests(unittest.TestCase):
         # The temple's clip starts a pixel left of that cell (3:2892-28a0).
         art = self.art([['back', 3576, 340, 235, 16, 1, [109, 340, 235, 370], 4, 6, 1]], [(6, 1)])
         cover, position = art.gate_occlusion[6, 1]
-        self.assertEqual((position, cover.size), ((356, 109), (14, 126)))
+        self.assertEqual((position, cover.size), ((356, 125), (14, 110)))
 
 
 @unittest.skipUnless(unicorn is not None and (RECOVERY / 'resource_forks').is_dir() and TEMPLE_IMPORTED,

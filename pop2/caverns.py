@@ -1927,11 +1927,17 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
             # tile (its left tile a5-0x49d6 is the gate, 3:2706-270e),
             # clipped to that cell; the temple's clip starts one pixel to its
             # left (3:2892-28a0). A gate in the last column has no such cell.
+            # SectRect(object rect, clip, clip) 3:28c2-28d8 keeps the cell's
+            # rows too: the stone above the row's top is not drawn again.
             left = (gate_cell[0] + 1) * 51 - (level_number in TEMPLE_LEVELS)
+            top = dirty_cell_top(gate_cell[1], customized) - position[1]
+            bottom = (gate_cell[1] + 1) * 120 + 5 - position[1]
             alpha = sprite.getchannel('A').copy()
             alpha.paste(0, (0, 0, max(0, min(sprite.width, left - position[0])), sprite.height))
             alpha.paste(0, (max(0, (gate_cell[0] + 2) * 51 - position[0]), 0, sprite.width, sprite.height))
-            if 0 <= gate_cell[0] + 1 < 10:
+            alpha.paste(0, (0, 0, sprite.width, max(0, min(sprite.height, top))))
+            alpha.paste(0, (0, max(0, min(sprite.height, bottom)), sprite.width, sprite.height))
+            if 0 <= gate_cell[0] + 1 < 10 and alpha.getbbox() is not None:
                 gate_masks[gate_cell] = merge_positioned_mask(gate_masks.get(gate_cell), alpha, position)
         if layer == 'front':
             mask = Image.new('L', background.size)

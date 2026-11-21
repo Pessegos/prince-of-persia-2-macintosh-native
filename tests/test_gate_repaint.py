@@ -37,13 +37,15 @@ class GateRepaintCommandsTests(unittest.TestCase):
 class GateRepaintSceneTests(unittest.TestCase):
     def test_open_gate_does_not_reappear_in_floor_or_pose141_repaint(self):
         # This is the strip crossing the head in the user's room3 recording.
+        # RedrawCell clips cell 8's repaint to that cell (408-459), and
+        # DrawTempGateMovable's SectRect(r, clip, clip) keeps it there: the
+        # stone right of the cell is cell 9's to repaint, in every phase.
         for phase in (0, 23, 46):
             art = cavern_room(2, level_number=12, pressure_key=(0, 0, 0, 0, phase, 0, 0))
             for records in (art.floor_redraw[(8, 1)], art.climb_redraw[(141, 8, 1)]):
+                self.assertTrue(all(x + sprite.width <= 459 for sprite, (x, _y) in records))
                 frame = Image.new('RGBA', (510, 365), 'magenta')
                 art.draw_floor_records(frame, records, (459, 170, 488, 235))
-                self.assertEqual(frame.getpixel((480, 190)),
-                                 (255, 0, 255, 255) if phase else (82, 24, 8, 255))
                 if phase == 46:
                     self.assertIsNone(ImageChops.difference(
                         frame.convert('RGB'), Image.new('RGB', frame.size, 'magenta')).getbbox())

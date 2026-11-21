@@ -33,24 +33,38 @@ UNION_RECT_7 = (0x1f48, 0x1fa2)
 # Entries of each environment's piece-drawing table (a5-0x4aea + 4 * env):
 # the caverns' table covers kinds 0-44, the ruins' kinds 0-23 and the
 # temple's (levels 10-13, Temple.rsrc) kinds 0-43, and the final
-# environment's kinds 0-42 (only eight entries are nonzero).
-DRAW_KINDS = {2: 44, 3: 45, 4: 24, 6: 43}
+# environment's kinds 0-42 (only eight entries are nonzero). The desert's
+# (1, kinds 0-30) and the rooftops' (5, kinds 0-49) are only drawn by the
+# native mask probes (tools.probe_actor_cover); the port draws those levels
+# from its own opening and desert scenes.
+DRAW_KINDS = {1: 31, 2: 44, 3: 45, 4: 24, 5: 50, 6: 43}
 # EmptyRect(r): Boolean, the empty test (bottom <= top or right <= left).
 EMPTY_RECT = 0x96000
 EMPTY_RECT_CODE = bytes.fromhex('225f205f3010b06800046c0e30280002b06800066c0442174ed11ebc00014ed1')
-# UnionRect(src1, src2, dst) for EncloseRect 17:6c46 (a5-0x1f5c).
+# UnionRect(src1, src2, dst) for EncloseRect 17:6c46 (a5-0x1f5c), and
+# SectRect(src1, src2, dst): Boolean for the temple and rooftop drawers and
+# GetCharEdges (a5-0x1f58). Both build the result in a scratch rectangle and
+# copy it to dst last, as QuickDraw allows dst to be either source: SectRect
+# (r, clip, clip) at 10:06d8/09be and (fullclip, r, r) at 4:5dc6, 10:24aa,
+# 10:2f78 and 23:06ae.
 UNION_RECT = 0x96040
 UNION_RECT_CODE = bytes.fromhex(
-    '225f205f241f221f2f092241209121690004000422423011b0506c0230803029'
+    '225f205f241f221f2f092f0841f900096210'
+    '2241209121690004000422423011b0506c0230803029'
     '0002b06800026c043140000230290004b06800046f0431400004302900'
-    '06b06800066f04314000064e75')
-# SectRect(src1, src2, dst): Boolean for the temple drawers (a5-0x1f58).
+    '06b06800066f0431400006'
+    '225f2290236800040004'
+    '4e75')
 SECT_RECT = 0x96100
 SECT_RECT_CODE = bytes.fromhex(
-    '225f205f241f221f2f092241209121690004000422423011b0506f0230803029'
+    '225f205f241f221f2f092f0841f900096200'
+    '2241209121690004000422423011b0506f0230803029'
     '0002b06800026f043140000230290004b06800046c043140000430290006b068'
-    '00066c04314000063010b06800046c1230280002b06800066c081f7c00010004'
-    '4e75429042a80004422f00044e75')
+    '00066c0431400006'
+    '72003010b06800046c0e30280002b06800066c04720160064290'
+    '42a80004'
+    '225f2290236800040004'
+    '1f4100044e75')
 # Shape libraries: 0 sword items and 1 flasks (Prince.rsrc), 4 scenery.
 LIBRARY_BASE = {0: 1000, 1: 3000, 4: 3500}
 
@@ -60,7 +74,7 @@ def recovery_inputs(program, caverns, prince):
     resources = parse_resource_fork(program)
     # 3:25ae is DrawForeImg's return from CheckGateInFore (`gate_peel`).
     primitives = {(3, offset) for offset in (4, 0x29e2, 0x29b6, 0x2ac4, 0x06c4, 0x2324, 0x26e4, 0x2482, 0x2438,
-                                            0x25ae)}
+                                            0x25ae, 0x533a)}
     primitives.update((5, offset) for offset in (0x21c, 0x230, 0x08c4, 0x1990))
     primitives.update((8, offset) for offset in (0x176c, 0x20a6, 0x1ca4, 0x1752, 0x1f86))
     # The ruins drawers (CODE 7) call the same SectRect (a5-0x1f58) and
@@ -74,7 +88,7 @@ def recovery_inputs(program, caverns, prince):
     primitives.add((9, 0x1a4c))
     # Every OffsetRect trap (A8A8): bridge and custom-room pieces use it at
     # 8:07fe, 8:085a and 3:120a, besides 5:021c.
-    for segment in (3, 5, 7, 8):
+    for segment in (3, 5, 7, 8, 18, 23):
         code = resources['CODE'].get(segment, {}).get('data', b'')
         primitives.update((segment, offset) for offset in range(0, len(code) - 1, 2)
                           if code[offset:offset + 2] == b'\xa8\xa8')
@@ -264,7 +278,7 @@ class CavernRecovery:
 
 def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=None,
                  floor_redraw=False, *, _machine=None, _native_scene=False, reads=None, only=None,
-                 cell_redraw=False, gate_peel=None):
+                 cell_redraw=False, gate_peel=None, a5_words=None, clips=None):
     """`reads`, when given, collects {slot: {(room, cell)}} the drawers read.
 
     `gate_peel`, when given, runs CheckGateInFore 3:26e4 natively in each
@@ -276,6 +290,12 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
     (top, left, bottom, right))] for the object table GetObjTableType 3:3e7c
     searches (a5-0x4cb2, a5-0x4826). Its commands are returned as 'peel'.
 
+    `a5_words`, {displacement: word}, writes these A5 words (a character's
+    fields, e.g. the Kid's at a5-0x50d0..-0x50a2) before drawing. `clips`,
+    {(row, column, pass): (top, left, bottom, right)}, intersects a slot's
+    dirty-cell clip with that rectangle, as RedrawCell 3:1d3a-1f30 does with
+    the marked floor and front records.
+
     `only`, a set of (row, column, pass) slots, runs just those slots' drawers
     (the other slots' commands are absent). Every slot's drawers start from
     the same per-cell inputs, so a slot's own commands do not change.
@@ -284,7 +304,8 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
         with CavernRecovery(program, caverns, prince, track_reads=reads is not None) as machine:
             return recover_room(program, caverns, level, room_id, prince, climb_action,
                                 floor_redraw, _machine=machine, _native_scene=_native_scene, reads=reads,
-                                only=only, cell_redraw=cell_redraw, gate_peel=gate_peel)
+                                only=only, cell_redraw=cell_redraw, gate_peel=gate_peel,
+                                a5_words=a5_words, clips=clips)
 
     from unicorn.m68k_const import (
         UC_M68K_REG_A5, UC_M68K_REG_A7,
@@ -393,6 +414,8 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
         if not 135 <= climb_action <= 144:
             raise ValueError('DrawHalf requires a native climbing pose')
         put_word(a5 - 0x50c8, climb_action)
+    for displacement, value in (a5_words or {}).items():
+        put_word(a5 + displacement, value)
     for offset in (0x4600, 0x4fec):
         cpu.mem_write(a5 - offset, struct.pack('>4h', 0, 0, 365, 510))
     terrain = LevelMap(level)
@@ -419,15 +442,24 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
     back_items = []
     back_rect = None
 
+    # The next free slot of the back table (a5-0x4ca2) and of the front
+    # table (passes 1 and 2, a5-0x4ca6), ResetNextBFItem 3:29e2-2a62.
+    slots = {'back': info, 'front': info + 0x40}
+
     def reset_item(draw_pass, previous=False):
-        # Words 0-5: library 4, the drawn column and row, 16, 0, the pass.
-        item = bytearray(38)
-        item[0:12] = struct.pack('>H4sHHH', 4, bytes(mem_read(a5 - 0x45f8, 4)), 16, 0, draw_pass & 65535)
+        # Words 0-6 (3:2a66-2aa6): library 4, the drawn column and row, 16,
+        # 0, the pass, 0. The rest of the slot is not written: an item not
+        # yet added (3:0004 moves to the next slot) keeps its fields, which
+        # TransferBFItemMidFields 3:2b5c then copies onto itself (rooftop
+        # floors 23:04aa-04ba). A fresh slot starts empty.
+        table = 'front' if draw_pass in (1, 2) else 'back'
+        slot = slots[table]
+        item = bytearray(mem_read(slot, 38)) if long(a5 - 0x4f8c) == slot else bytearray(38)
+        item[0:14] = struct.pack('>H4sHHHH', 4, bytes(mem_read(a5 - 0x45f8, 4)), 16, 0, draw_pass & 65535, 0)
         if previous:
-            table = 'front' if draw_pass in (1, 2) else 'back'
             item[14:24] = previous_items[table][14:24]
-        cpu.mem_write(info, bytes(item))
-        put_long(a5 - 0x4f8c, info)
+        cpu.mem_write(slot, bytes(item))
+        put_long(a5 - 0x4f8c, slot)
 
     def hook(cpu, address, size, _user):
         nonlocal back_rect
@@ -498,7 +530,7 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
         if segment == 3 and offset == 4 and not long(a5 - 0x4f8c):
             result = 0
         elif segment == 3 and offset == 4:
-            item = bytes(mem_read(info, 38))
+            item = bytes(mem_read(long(a5 - 0x4f8c), 38))
             fields = struct.unpack('>19h', item)
             draw_column, draw_row = struct.unpack('>2h', mem_read(a5 - 0x45f8, 4))
             layer = 'front' if fields[5] in (1, 2) else 'back'
@@ -581,9 +613,27 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
                     layer = 'back' if draw_pass in (0, 5, 11) else 'front'
                     commands.append([layer, shape, x, bottom, mode, word(a5 - 0x45f6), rect, library,
                                      word(a5 - 0x45f8), word(a5 - 0x45f6)])
-                    command_kinds.append(word(info + 0x12) if long(a5 - 0x4f8c) else 0)
+                    command_kinds.append(word(long(a5 - 0x4f8c) + 0x12) if long(a5 - 0x4f8c) else 0)
                     command_slots.append(current_slot[0])
             result = 0
+        elif segment == 3 and offset == 0x533a:
+            # GetBGShapeSize 3:533a(index, &size): the background set's shape
+            # handles (a5-0x4a88) are not loaded here; it returns the
+            # zero-based shape's (height, width) from its SHAP header, or 0.
+            # DrawRoofFloor's ledge test 23:0662 passes the item's one-based
+            # shape, so it measures the next shape, as the original does.
+            index, out = struct.unpack_from('>hI', stacked, 4)
+            entry = artwork['SHAP'].get(3501 + index)
+            result = 0
+            if entry is not None:
+                data = entry['data']
+                if struct.unpack_from('>H', data)[0] & 0x0400:
+                    from pop2.render_opening import unpack_shape_lz
+
+                    data = unpack_shape_lz(data)
+                width, height = struct.unpack_from('>hh', data, 4)
+                cpu.mem_write(out, struct.pack('>2h', height, width))
+                result = out
         elif segment == 3 and offset == 0x2324 and not long(a5 - 0x4c9e):
             # DrawCustomRoomImgs runs natively only for a loaded CUST room.
             result = 0
@@ -739,6 +789,11 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
                         cpu.mem_write(a5 - 0x4600, struct.pack('>4h',
                                       top, draw_column * 51,
                                       (draw_row + 1) * 120 + 5, (draw_column + 1) * 51))
+                    marked = (clips or {}).get((draw_row, draw_column, draw_pass))
+                    if marked is not None:
+                        clip = struct.unpack('>4h', mem_read(a5 - 0x4600, 8))
+                        cpu.mem_write(a5 - 0x4600, struct.pack('>4h', max(clip[0], marked[0]),
+                                      max(clip[1], marked[1]), min(clip[2], marked[2]), min(clip[3], marked[3])))
                     current_slot[0] = (draw_row, draw_column, draw_pass)
                     execute(3, entry, draw_pass)
     finally:
