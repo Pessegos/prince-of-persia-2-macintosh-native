@@ -604,6 +604,24 @@ class TowerFlightTests(unittest.TestCase):
         player.seek_operation(len(operations) - 1)
         self.assertTrue(player.done or player.position >= len(operations) - 1)
 
+    def test_the_existing_white_flash_brightens_the_rendered_statue(self):
+        from pop2.intro import IntroAssets, IntroPlayer
+
+        assets = IntroAssets(program_name='tower.json')
+        player = IntroPlayer(assets)
+        first_statue = next(index for index, item in enumerate(player.operations)
+                            if item['op'] == 'shape' and item['args'][0] == 825360)
+        player.seek_operation(first_statue)
+        colors = []
+        for _ in range(3):
+            # Sample a solid pixel inside the statue, away from the parapet
+            # and the independently animated sparks.
+            self.assertEqual(player.display.getpixel((215, 106)), 2)
+            colors.append(player.frame().getpixel((215, 106))[:3])
+            player.advance(player.wait_until - player.time)
+        gold, white = (assets.palettes[key][2] for key in (825363, 725362))
+        self.assertEqual(colors, [gold, white, gold])
+
     @unittest.skipUnless((ASSET_DIR / 'final_level14.json').is_file(), 'Imported final scenery required')
     def test_the_gold_statue_survives_the_transition_to_the_playable_room(self):
         from PIL import Image, ImageChops
@@ -619,19 +637,15 @@ class TowerFlightTests(unittest.TestCase):
         mask = shape.point([0] + [255] * 255)
         x, y = 141, 78
         bounds = (x, y, x + shape.width, y + shape.height)
-        # The cutscene draws the parapet over the lowest part of the horse.
-        above_parapet = (0, 0, shape.width, 193 - y)
-        visible = mask.crop(above_parapet)
-
         game = GameSession.load(GameResources.load(), 14)
         renderer = LevelRenderer(game.level)
         for room_id in (game.room_id, 1, game.room_id):
             room = renderer.enter_room(room_id, game.caverns)
             if room_id == game.room_id:
-                foreground = room.foreground.crop(bounds).crop(above_parapet).convert('RGB')
-                last_shot = player.frame().crop(bounds).crop(above_parapet).convert('RGB')
+                foreground = room.foreground.crop(bounds).convert('RGB')
+                last_shot = player.frame().crop(bounds).convert('RGB')
                 difference = ImageChops.difference(foreground, last_shot)
-                self.assertIsNone(Image.composite(difference, Image.new('RGB', visible.size), visible).getbbox())
+                self.assertIsNone(Image.composite(difference, Image.new('RGB', shape.size), mask).getbbox())
                 uncovered = ImageChops.subtract(mask, room.actor_mask(0).crop(bounds))
                 self.assertIsNone(uncovered.getbbox())
             else:

@@ -1961,7 +1961,13 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
         # Arrival scenes leave the statue in the playable room's front plane.
         position = ARRIVAL_HORSE_POSITIONS[level_number, room_id]
         sprite = horse_sprite(level_number)
-        foreground.paste(sprite, position, sprite)
+        if level_number == 14:
+            # The tower parapet overlaps the statue's rear hooves.
+            x, y = position
+            parapet = foreground.crop((x, y, x + sprite.width, y + sprite.height))
+            foreground.paste(Image.alpha_composite(sprite, parapet), position)
+        else:
+            foreground.paste(sprite, position, sprite)
         horse_mask = Image.new('L', background.size)
         horse_mask.paste(sprite.getchannel('A'), position)
         custom_mask = (ImageChops.lighter(custom_mask, horse_mask)

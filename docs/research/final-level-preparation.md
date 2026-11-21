@@ -174,9 +174,31 @@ level record and those arguments/globals and stopped at the helper's return.
 `DrawHorse` `3:468a-46d2` files masked Prince SHAP 25360, unmirrored, and
 palette selection `3:10a6-10c0` loads Prince CTBL 25363 at entry 1.
 
-The portable regression compares the statue above the parapet with the existing
-cutscene's last shot and checks the front mask on entry and re-entry. Full
-native rasterization, parapet overlap, sound and cutscene timing were excluded.
+### Tower playback follow-up (2026-11-21)
+
+The overlap check now includes the entire statue. The supplied Macintosh
+capture keeps the parapet in front of the rear hooves at the gameplay handoff.
+The first room draws its existing front piece over the statue and includes both
+in the actor mask. The test compares all statue pixels, including those covered
+by the parapet, with the last replayed shot and checks entry and re-entry.
+
+All 1,471 Macintosh frames and 1,591 port frames were decoded in presentation
+order. Monitoring the statue region found the white flash at capture times
+23.387–23.470 s in the Macintosh video and no matching white frame in the port
+recording. This reproduces in the current portable player. `TransFunc11`
+`15:75e2-7642` emits gold, white, and gold palette operations. In the flattened
+program they affect inks 1–14 while the displayed horse still uses inks 32–46.
+The read-time fix retains the existing palettes and presents the white then
+gold operations on the second and third frames that display the statue. The
+rendered RGB regression samples a statue pixel in all three frames. This is
+an alignment within the portable player, with no change to animation or audio
+waits. Native frame-counter scheduling, fades and audio timing remain unverified.
+
+Using the first reveal's blue-channel threshold as the zero point in each
+recording, the rider's first visible movement occurs at 3.349/3.333 s
+(Macintosh/port). The first and second fades cross the same darkening threshold
+at 7.515/7.500 s and 17.749/17.799 s. The life meter appears at 23.832/23.683 s.
+These are sampled capture times and do not establish native script deadlines.
 
 ## Jaffar generation block (2026-11-10)
 
