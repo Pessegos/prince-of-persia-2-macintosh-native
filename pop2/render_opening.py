@@ -304,7 +304,22 @@ class OpeningRoom:
                     alpha = ledge.alpha.crop((left - ledge.x, top - ledge.y,
                                               right - ledge.x, bottom_edge - ledge.y))
                     add_alpha(mask, alpha, left, top)
+        border_cover = getattr(self, 'border_cover', None)
+        if border_cover is not None:
+            # MarkBufsForRect 5:19f8 marks the border cells a body reaching
+            # above Y 5 covers (MarkTop 5:16f2), and RedrawTopFast 3:1f4e
+            # repaints them after the characters, back passes first: the
+            # rooftop's sky (SHAP 3501), the upper room's last row or row 0's
+            # pieces reaching above Y 5 hide him there.
+            mask = ImageChops.lighter(mask, border_cover)
         return mask
+
+
+@dataclass(frozen=True)
+class RooftopRoom(OpeningRoom):
+    # What the border row's redraw paints in the 0-5 strip (`actor_mask`);
+    # None in a room without one (CUST or customized).
+    border_cover: Image.Image | None = None
 
 
 def character_sprite_top(bottom_y, height):
@@ -529,6 +544,7 @@ def build_opening_room(include_curtain=True, room_id=None, level_resource_id=200
     layers = [Image.new("RGBA", (ROOM_WIDTH, ROOM_HEIGHT), (0, 0, 0, 0)) for _ in range(4)]
     ledges = []
     foreground_pieces = []
+    border = Image.new("L", (ROOM_WIDTH, ROOM_HEIGHT), 0)
 
     # CUST records own the full background and foreground of native room 15.
     custom = load_resource_file("Rooftops.rsrc").get("CUST", {}).get(3975 + (room_id + 1) * 25)
@@ -558,6 +574,11 @@ def build_opening_room(include_curtain=True, room_id=None, level_resource_id=200
         anchor_x = tile_x * TILE_WIDTH + dx
         anchor_y = (tile_y + 1) * TILE_HEIGHT + SCENERY_Y_OFFSET + dy
         layers[layer_index].paste(shape, (anchor_x, anchor_y - shape.height), shape)
+        if tile_y <= 0 and anchor_y - shape.height < SCENERY_Y_OFFSET:
+            # What the border row's redraw (RedrawTopFast 3:1f4e) paints
+            # in the 0-5 strip: the upper room's last row, and the pieces
+            # of row 0 that reach above Y 5.
+            add_alpha(border, shape.getchannel("A"), anchor_x, anchor_y - shape.height)
         if layer_index == 3 or floor_redraw:
             if ledge:
                 ledges.append(RoofLedge(tile_y, anchor_x, anchor_y - shape.height,
@@ -672,8 +693,14 @@ def build_opening_room(include_curtain=True, room_id=None, level_resource_id=200
                                         ledge.row * TILE_HEIGHT + 106)
                 ledge.add_to(mask, width)
         occlusion[row] = mask
-    return OpeningRoom(background, layers[3], occlusion,
-                       tuple(ledges), tuple(foreground_pieces), room_id)
+    # A customized room (a foreground word with 0xc000, IsCustomizedRoom
+    # 3:1310) has no border row (3:32c8-32cc).
+    border.paste(0, (0, SCENERY_Y_OFFSET, ROOM_WIDTH, ROOM_HEIGHT))
+    customized = any(level_map.tile(room_id, cell % 10, cell // 10).foreground & 0xc000
+                     for cell in range(30))
+    return RooftopRoom(background, layers[3], occlusion,
+                       tuple(ledges), tuple(foreground_pieces), room_id,
+                       border_cover=None if custom is not None or customized else border)
 
 
 def draw_harbor(frame, room_id, harbor, front=False, level_resource_id=2000):
