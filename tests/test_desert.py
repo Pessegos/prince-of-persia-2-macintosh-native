@@ -752,6 +752,13 @@ class OriginalDesertTests(unittest.TestCase):
         layer = Image.new('RGBA', scene.background.size, (255, 0, 255, 255))
         composite = scene.composite_actor(scene.background.copy(), layer, state=scene.sequence_state)
         self.assertEqual(composite.getpixel((278, 243)), scene.background.getpixel((278, 243)))
+        # ClipChar 18:0026 ends the clip at 240 for every desert character;
+        # the sand peel, not the Prince, fills rows 240-242.
+        self.assertEqual(composite.getpixel((278, 240)), scene.background.getpixel((278, 240)))
+        self.assertEqual(composite.getpixel((278, 239)), (255, 0, 255, 255))
+        scene.sequence_state.select(2)
+        composite = scene.composite_actor(scene.background.copy(), layer, state=scene.sequence_state)
+        self.assertEqual(composite.getpixel((278, 241)), scene.background.getpixel((278, 241)))
         art = scene.level_renderer.desert_rooms[0]
         for frame in (0, 1):
             actual = art.draw_sand(scene.background.copy(), frame, (264, 200, 283, 270))

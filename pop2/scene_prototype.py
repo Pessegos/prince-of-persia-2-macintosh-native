@@ -3790,10 +3790,11 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         if level_kind == 5 and self.room_id in (15, 18):
             water_y = 354 if state is not None and state.animation_state == 9 else 327
             layer.paste((0, 0, 0, 0), (0, water_y, layer.width, layer.height))
-        if (getattr(state, 'level_kind', None) == 1
-                and getattr(state, 'source_sequence_id', None) == 27):
-            # SetupSand 18:057a draws the surface at bottom 243.
-            layer.paste((0, 0, 0, 0), (0, 243, layer.width, layer.height))
+        if getattr(state, 'level_kind', None) == 1:
+            # ClipChar 4:4414 -> 18:0026 ends every desert character's clip
+            # at Y 240, sinking or not; SetupSand 18:057a's sand peel then
+            # covers him down to its bottom at 243 (after_actors).
+            layer.paste((0, 0, 0, 0), (0, 240, layer.width, layer.height))
         frame = Image.alpha_composite(frame, layer)
         if level_kind in (2, 3, 4, 6) and room is not None and state is not None and bounds is not None:
             # Only the struck floor's repaint is deferred. The statue mask
