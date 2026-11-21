@@ -72,6 +72,28 @@ class CavernClipTests(unittest.TestCase):
                                                  (106, 218, 125, 302))
                         self.assertEqual(result, 245)
 
+    def test_final_environment_rooms_three_and_six_have_no_top_clip(self):
+        # ClipChar 4:4346-435c skips the recrop in native rooms 3 and 6 of
+        # environment 6 (the final tower): a hang's hands stay over the ledge.
+        struct.pack_into('>2H', self.terrain.level, 0x2186, 6, 14)
+        for room in range(1, 8):
+            with self.subTest(room=room):
+                result = cavern_clip_top(self.terrain, room, 2, self.state(), (106, 218, 125, 302))
+                self.assertEqual(result, 0 if room in (2, 5) else 245)
+
+    def test_final_cells_of_native_rooms_seven_and_eight_clip_only_the_jump_up(self):
+        # ClipChar 4:42a2-42c4: the drawn first cell's room (ReadCell) 7 or 8
+        # of environment 6 takes no recrop unless the sequence is SEQS 14.
+        struct.pack_into('>2H', self.terrain.level, 0x2186, 6, 14)
+        for cell_room in (5, 6, 7, 8):
+            self.terrain.tile = lambda room, col, row, cell_room=cell_room: Tile(1, room=cell_room)
+            for sequence in (1, 14):
+                state = self.state()
+                state.source_sequence_id = sequence
+                with self.subTest(cell_room=cell_room, sequence=sequence):
+                    result = cavern_clip_top(self.terrain, 9, 2, state, (106, 218, 125, 302))
+                    self.assertEqual(result, 0 if cell_room in (6, 7) and sequence != 14 else 245)
+
     def test_empty_tile_at_either_body_edge_disables_top_clip(self):
         for empty_column in (1, 2):
             for kind in (0, 9, 27, 47, 49):
@@ -444,7 +466,9 @@ class CavernDrawingTests(unittest.TestCase):
         with patch('pop2.caverns.cavern_assets',
                    return_value=(program, {}, {}, {3563: sprite})):
             art = cavern_room()
-        self.assertEqual(set(art.gate_occlusion), {(7, 2), (-1, 2), (1, 3)})
+        # The row-3 stone lies below its cell's top (365, SectRect 3:28c2-28d8
+        # clips it to row * 120 + 5 .. + 120): CheckGateInFore draws none of it.
+        self.assertEqual(set(art.gate_occlusion), {(7, 2), (-1, 2)})
         state = SimpleNamespace(actor_type=0, animation_state=0, action=15,
                                 source_sequence_id=2, target_x=35, facing=0)
         record = SimpleNamespace(offset_x=4, aux=70)

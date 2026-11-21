@@ -321,8 +321,11 @@ def cavern_clip_top(terrain, room, row, state, bounds):
     if top - 1 >= boundary:
         return 0
     level_number = struct.unpack_from('>H', terrain.level, 0x218a)[0]
+    environment = struct.unpack_from('>H', terrain.level, 0x2186)[0]
+    # 4:431e-436c: no top clip in native rooms 16 of level 9, 27 of level
+    # 6, 3 and 6 of the final environment (6) and 1 of level 14.
     if ((room == 15 and level_number == 9) or (room == 26 and level_number == 6)
-            or (room == 0 and level_number == 14)):
+            or (room in (2, 5) and environment == 6) or (room == 0 and level_number == 14)):
         return 0
     if not (state.facing and 87 <= state.action <= 99):
         # GetCharEdges 4:5d20-5e52 expands width by one before GetCharCol.
@@ -334,6 +337,11 @@ def cavern_clip_top(terrain, room, row, state, bounds):
         if first_tile.kind in EMPTY_TILES:
             return 0
         if first_tile.room == 0 and level_number == 14:
+            return 0
+        # 4:42a2-42c4: in the final environment the cell's native rooms 7
+        # and 8 take no top clip either, except during SEQS 14 (the jump up).
+        if (first_tile.room in (6, 7) and environment == 6
+                and getattr(state, 'source_sequence_id', None) != 14):
             return 0
         if not (state.animation_state == 0 and state.action in (79, 81)):
             if terrain.tile(room, last, top_row).kind in EMPTY_TILES:
