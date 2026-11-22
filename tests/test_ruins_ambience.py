@@ -175,6 +175,11 @@ def blown_sand(ambience, ticks, plain):
     return changed
 
 
+def steady_gust(born=0, **changes):
+    """A gust at full strength over the crest and the plain, crossing the whole room."""
+    return replace(ruins_ambience.Gust(born, -20.0, 10.0 ** 4, ruins_ambience.CREST_FRONT, 1.0), **changes)
+
+
 class DuneTests(unittest.TestCase):
     def test_the_dunes_crest_their_plain_and_a_rock(self):
         dunes = dunes_air().dunes
@@ -203,20 +208,83 @@ class DuneTests(unittest.TestCase):
         ambience.desert_gust_wait = ambience.devil_wait = 10 ** 6
         return ambience
 
-    def test_gusts_come_every_six_to_eight_seconds(self):
+    def test_gusts_come_in_spells_and_lulls_about_as_often_as_before(self):
+        # The user, 2026-11-22: a straight wave each time on the same beat. Before, every
+        # gap was 70 to 100 ticks.
         ambience = RuinsAmbience(11, replace(dunes_air(), stars=()), random.Random(4))
+        ambience.devil_wait = 10 ** 6
         starts = []
-        for _ in range(1200):
-            before = list(ambience.desert_gusts)
+        for _ in range(12 * 60 * 10):
+            before = [gust.born for gust in ambience.desert_gusts]
             ambience.advance()
-            starts += [start for start in ambience.desert_gusts if start not in before]
-        self.assertTrue(ruins_ambience.FIRST_DESERT_GUST[0] <= starts[0] <= ruins_ambience.FIRST_DESERT_GUST[1])
-        low, high = ruins_ambience.TICKS_BETWEEN_DESERT_GUSTS
-        self.assertTrue(all(low <= b - a <= high for a, b in zip(starts, starts[1:])), starts)
+            starts += [gust.born for gust in ambience.desert_gusts if gust.born not in before]
+        self.assertTrue(ruins_ambience.FIRST_DESERT_GUST[0] <= starts[0] <= ruins_ambience.FIRST_DESERT_GUST[1] + 1)
+        gaps = [b - a for a, b in zip(starts, starts[1:])]
+        soon = sum(gap <= ruins_ambience.GUST_SOON[1] for gap in gaps) / len(gaps)
+        self.assertTrue(0.3 <= soon <= 0.6, soon)
+        self.assertGreater(max(gaps), 150)
+        self.assertTrue(70 <= sum(gaps) / len(gaps) <= 105, sum(gaps) / len(gaps))
+
+    def test_each_gust_is_its_own(self):
+        ambience = self.quiet(9)
+        gusts = [ambience.new_gust() for _ in range(400)]
+        strengths = [gust.strength for gust in gusts]
+        self.assertLess(min(strengths), 0.65)
+        self.assertGreater(max(strengths), 1.3)
+        self.assertAlmostEqual(sum(strengths) / len(strengths), 1.0, delta=0.06)
+        self.assertGreater(max(gust.speed for gust in gusts) - min(gust.speed for gust in gusts), 2.5)
+        kinds = [(gust.crest, gust.plain) for gust in gusts]
+        self.assertAlmostEqual(kinds.count((True, True)) / 400, 0.6, delta=0.08)
+        self.assertGreater(kinds.count((True, False)), 30)
+        self.assertGreater(kinds.count((False, True)), 60)
+        # Some die away before they have crossed the room, some come down inside it.
+        self.assertTrue(any(gust.start + gust.reach < WIDTH - 100 for gust in gusts))
+        self.assertTrue(any(gust.start > 80 for gust in gusts))
+        self.assertGreater(sum(gust.start < 0 for gust in gusts), 200)
+
+    def test_a_gust_rises_blows_harder_and_softer_and_dies_away(self):
+        gust = ruins_ambience.Gust(0, 0.0, 400.0, 6.0, 0.8, phase=1.0)
+        self.assertEqual(gust.strength_at(0), 0.0)
+        self.assertEqual(gust.strength_at(400), 0.0)
+        middle = [gust.strength_at(run) for run in range(60, 260, 4)]
+        self.assertTrue(all(0.35 < value <= 0.8 * 1.1 for value in middle))
+        self.assertGreater(max(middle) - min(middle), 0.15)
+        self.assertLess(gust.strength_at(380), min(middle))
+
+    def blown_by(self, gust, ticks=40, seed=10):
+        ambience = self.quiet(seed)
+        ambience.desert_gusts = [gust]
+        count = 0
+        for tick in range(ticks):
+            ambience.tick = tick
+            ambience.blown, ambience.spray = [], []
+            ambience.blow_the_crest()
+            ambience.blow_the_plain()
+            count += len(ambience.blown) + len(ambience.spray)
+        return ambience, count
+
+    def test_a_weak_gust_lifts_less_sand_and_each_blows_only_its_own_part(self):
+        _, strong = self.blown_by(steady_gust(strength=1.45))
+        _, weak = self.blown_by(steady_gust(strength=0.55))
+        self.assertLess(weak, 0.55 * strong)
+        self.assertGreater(weak, 0)
+        crest_only = self.quiet(11)
+        crest_only.desert_gusts = [steady_gust(plain=False)]
+        plain_only = self.quiet(11)
+        plain_only.desert_gusts = [steady_gust(crest=False)]
+        for tick in range(30):
+            for ambience in (crest_only, plain_only):
+                ambience.tick = tick
+                ambience.blow_the_crest()
+                ambience.blow_the_plain()
+        self.assertTrue(crest_only.spray)
+        self.assertEqual(crest_only.blown, [])
+        self.assertTrue(plain_only.blown)
+        self.assertEqual(plain_only.spray, [])
 
     def test_a_gust_blows_sand_off_the_crest_and_along_the_plain_and_never_above_it(self):
         ambience = self.quiet(2)
-        ambience.desert_gust_wait = 1
+        ambience.desert_gusts = [steady_gust(ambience.tick)]
         plain = picture((PURPLE, 70), (DEEP, CREST - 70), (SAND, HEIGHT - CREST))
         plain[ROCK] = STONE
         changed = blown_sand(ambience, 90, plain)
@@ -243,7 +311,7 @@ class DuneTests(unittest.TestCase):
         dunes = ambience.air.dunes
         for tick in range(0, 90, 3):
             ambience.tick = tick
-            ambience.desert_gusts = [0]
+            ambience.desert_gusts = [steady_gust()]
             ambience.blown = []
             ambience.blow_the_plain()
             for grain in ambience.blown:
@@ -263,7 +331,7 @@ class DuneTests(unittest.TestCase):
 
     def test_as_a_gust_reaches_a_big_rock_sand_runs_at_its_foot(self):
         ambience = self.quiet(5)
-        ambience.desert_gusts = [0]
+        ambience.desert_gusts = [steady_gust()]
         ambience.tick = (200 - 20 + 20) // 7
         ambience.run_at_rocks()
         self.assertTrue(ambience.blown)
@@ -271,7 +339,7 @@ class DuneTests(unittest.TestCase):
             self.assertTrue(170 <= grain.x <= 197)
             self.assertTrue(276 <= grain.y <= 281)
         ambience = self.quiet(5)
-        ambience.desert_gusts = [0]
+        ambience.desert_gusts = [steady_gust()]
         ambience.tick = 5
         ambience.run_at_rocks()
         self.assertEqual(ambience.blown, [])
@@ -964,7 +1032,8 @@ class GritTests(unittest.TestCase):
         frame = frame_of(picture((PURPLE, 12)))
         ambience.before_actors = frame.copy()
         shown = ambience.over_actors(frame, (90, 200, 110, 260))
-        self.assertEqual(shown.getpixel((100, 199)), ambience.air.inks[GRIT_HEAD])
+        self.assertEqual(shown.getpixel((100, 199)),
+                         ambience.air.gentle(STONE, ambience.air.inks[GRIT_HEAD][:3], ruins_ambience.GRIT_GENTLE))
 
     def test_his_pixels_are_what_the_actors_changed_within_his_bounds(self):
         ambience = self.ambience()
@@ -1002,10 +1071,27 @@ class GritTests(unittest.TestCase):
         frame = frame_of(picture((PURPLE, 12)))
         canvas = frame.load()
         ambience.put_grit(canvas, [(100, 150, GRIT_HEAD), (250, 150, GRIT_HEAD), (450, 150, GRIT_HEAD)])
-        inks = ambience.air.inks
-        self.assertEqual(frame.getpixel((100, 150)), inks[GRIT_HEAD])
-        self.assertEqual(frame.getpixel((250, 150)), inks[ruins_ambience.GRIT_DIM])
+        inks, air, gentle = ambience.air.inks, ambience.air, ruins_ambience.GRIT_GENTLE
+        self.assertEqual(frame.getpixel((100, 150)), air.gentle(STONE, inks[GRIT_HEAD][:3], gentle))
+        self.assertEqual(frame.getpixel((250, 150)), air.gentle(STONE, inks[ruins_ambience.GRIT_DIM][:3], gentle))
         self.assertEqual(frame.getpixel((450, 150))[:3], STONE)
+
+    def test_the_grit_is_gentler_than_its_own_colours(self):
+        # The user, 2026-11-22: all the ceiling grit "um pouco too much".
+        air = self.ambience().air
+        palette = {tuple(colour[:3]) for colour in PALETTE.values()}
+        for behind in (STONE, PURPLE, DEEP):
+            for shade in ruins_ambience.GRIT_COLOURS:
+                ink = air.inks[shade][:3]
+                softer = air.gentle(behind, ink, ruins_ambience.GRIT_GENTLE)[:3]
+                self.assertIn(softer, palette)
+                self.assertNotEqual(softer, behind)
+                # No further from what is behind it than its own colour is.
+                self.assertLessEqual(sum((a - b) ** 2 for a, b in zip(softer, behind)),
+                                     sum((a - b) ** 2 for a, b in zip(ink, behind)))
+        moved = sum(air.gentle(STONE, air.inks[shade][:3], ruins_ambience.GRIT_GENTLE)[:3] != air.inks[shade][:3]
+                    for shade in ruins_ambience.GRIT_COLOURS)
+        self.assertGreater(moved, 0)
 
     def test_a_painting_sheds_no_grit(self):
         rgb = picture((PURPLE, 12))

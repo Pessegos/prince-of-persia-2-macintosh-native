@@ -36,15 +36,17 @@ land and some lie a moment. A blow shakes grit down from the ceilings, most near
 the Prince bumping his head jumping up, stamping, landing hard, a gate slamming or
 shutting, a loose floor landing; the strongest bring down a pebble or two. Grit falling
 on the Prince bounces off his head and shoulders, and a streak of wind passing carries
-the grains along its way. Over pale stone the grit is a step darker so that it shows.
+the grains along its way. Over pale stone the grit is a step darker so that it shows,
+and all of it is a little gentler than its own colours.
 The paintings (the start room, the throne room, the horse and the desert) shed none.
 
 The puffs. Whatever comes down knocks up a puff of dust from the floor, as in the caves:
 the Prince's steps, skids and landings, a loose floor landing, a gate or a door coming
 down. They are the caves' own puffs, in the pale rose of the ruins' grit.
 
-The desert. Over the dunes of level nine the wind comes in gusts, every six to eight
-seconds or so. Each runs along the crest of the near dune and blows a low spray of sand
+The desert. Over the dunes of level nine the wind comes in gusts, now and then two or
+three close together, then a lull, each its own strength, speed and stretch of the room,
+blowing harder and softer as it goes. Each runs along the crest of the near dune and blows a low spray of sand
 off it, sweeps loose sand up off the plain, runs streams of sand along the ground, hits
 the rocks (sand runs at a big rock's foot, grains bounce up its face, and the ground
 lies still in its lee) and now and then a small dust devil of sand grains spins along
@@ -188,7 +190,10 @@ NEAR_CURL = 16
 BODY_PALER, END_PALER = (52, 50, 62), (26, 25, 31)
 FADE_STEP = 2
 
-# The grit's colours, as RGB, each shown as the nearest of the room's palette.
+# The grit's colours, as RGB, each shown as the nearest of the room's palette, and then,
+# as the desert's sand, this much of the way back toward the colour behind it: at full
+# strength it was a little too much.
+GRIT_GENTLE = 0.4
 GRIT_PALE, GRIT_HEAD, GRIT_TAIL, GRIT_DIM = (173, 141, 141), (166, 131, 131), (135, 110, 110), (113, 87, 113)
 # The puffs' steps, thinnest first, as the caves' (CLOUD_SHADES): the colour, and how
 # much of what is behind it the step hides at full strength. The ruins' warm light
@@ -278,9 +283,26 @@ ON_PALE = {GRIT_PALE: GRIT_TAIL, GRIT_HEAD: GRIT_DIM, GRIT_TAIL: PEBBLE_DARK, GR
 # column; a room is dunes when the crest runs right across it this flat.
 CREST_SOLID = 4
 DUNE_CREST_SPREAD = 40
-# Gusts: the first comes this soon, then one every so often.
+# Gusts. The user, 2026-11-22: the same straight wave each time, on the same beat, looked
+# made. Each gust is its own now: they come in spells of two or three close together
+# (SPELL_CHANCE that another follows soon) and lulls, about as often as before overall;
+# each has its own strength, speed and stretch of the room, its sands only off the crest,
+# only off the plain or both, and blows harder and softer as it goes. The first comes
+# this soon.
 FIRST_DESERT_GUST = (10, 60)
-TICKS_BETWEEN_DESERT_GUSTS = (70, 100)
+GUST_SOON, GUST_LULL, SPELL_CHANCE = (18, 45), (70, 190), 0.45
+# Its strength scales the sand it lifts: about as much on the whole as before, when every
+# gust lifted the same.
+GUST_STRENGTH = (0.55, 1.45)
+GUST_SPEED = (4.5, 7.5)
+# Where its front comes down, most often off the left edge, now and then a way in (the
+# share of the way GUST_FROM's range, squared), and how far it runs, rising over the
+# first GUST_RISE pixels and dying away over the last share.
+GUST_FROM = (-60, 150)
+GUST_REACH = (200, 640)
+GUST_RISE, GUST_DIES = 40, 0.35
+# Of the gusts: both the crest and the plain, the crest only, the plain only.
+GUST_KINDS = ((0.6, True, True), (0.15, True, False), (0.25, False, True))
 # The crest's spray: its sands, palest first; how fast the gust's front runs along the
 # crest (pixels a tick), the grains leaving by it a tick, and their flight.
 SAND = ((166, 120, 104), (148, 98, 90), (125, 88, 68))
@@ -500,11 +522,12 @@ class RuinsAir:
             self.paler[key] = (*paler(behind, amount, self.palette), 255)
         return self.paler[key]
 
-    def gentle(self, behind, drawn):
-        """The sand drawn over behind, GENTLE of the way back toward it."""
-        key = behind, drawn
+    def gentle(self, behind, drawn, amount=GENTLE):
+        """The sand drawn over behind, amount of the way back toward it, never behind
+        itself."""
+        key = behind, drawn, amount
         if key not in self.gentler:
-            wanted = numpy.array(behind) + (numpy.array(drawn) - numpy.array(behind)) * (1 - GENTLE)
+            wanted = numpy.array(behind) + (numpy.array(drawn) - numpy.array(behind)) * (1 - amount)
             distance = (((self.palette - wanted) * (2, 3, 2)) ** 2).sum(axis=1)
             colour = next((tuple(int(value) for value in self.palette[i]) for i in distance.argsort(kind='stable')
                            if tuple(int(value) for value in self.palette[i]) != behind), behind)
@@ -994,6 +1017,44 @@ class Blown:
     life: int
     age: int = 0
     bounced: bool = False
+
+
+@dataclass
+class Gust:
+    """One gust over the dunes: when and where its front came down, how far it runs, how
+    fast, how strong, what it blows sand off, and the phase of its stronger and weaker
+    stretches."""
+
+    born: int
+    start: float
+    reach: float
+    speed: float
+    strength: float
+    crest: bool = True
+    plain: bool = True
+    phase: float = 0.0
+
+    def run(self, tick, speed):
+        """How far its front has gone at this speed (the crest's or the plain's)."""
+        return (tick - self.born) * speed * self.speed / CREST_FRONT
+
+    def over(self, tick):
+        return self.run(tick, GROUND_FRONT) > self.reach or self.start + self.run(tick, CREST_FRONT) > WIDTH + 45
+
+    def strength_at(self, run):
+        """Its strength where its front has run this far: rising, gusting and dying away."""
+        if run < 0 or run > self.reach:
+            return 0.0
+        rise = min(1.0, run / GUST_RISE)
+        dies = min(1.0, (self.reach - run) / (GUST_DIES * self.reach))
+        gusting = 0.8 + 0.3 * math.sin(run / 37 + self.phase) * math.sin(run / 89 + 2 * self.phase)
+        return self.strength * min(rise, dies) * gusting
+
+
+def some(rng, counts, strength):
+    """A count from the range, at this strength, the fraction left to chance."""
+    wanted = rng.randint(*counts) * strength
+    return int(wanted) + (rng.random() < wanted % 1)
 
 
 @dataclass
@@ -1596,13 +1657,14 @@ class RuinsAmbience:
                 yield x, y - 2, GRIT_DIM
 
     def put_grit(self, canvas, pixels):
-        """Grit behind the foreground; over pale stone a step darker, so that it shows."""
+        """Grit behind the foreground; over pale stone a step darker, so that it shows,
+        and gentler than its own colours."""
         air, inks, luminance = self.air, self.air.inks, self.air.luminance
         for x, y, shade in pixels:
             if 0 <= x < WIDTH and 0 <= y < HEIGHT and not air.is_covered(x, y):
                 if shade in ON_PALE and luminance is not None and luminance[y, x] >= PALE_STONE:
                     shade = ON_PALE[shade]
-                canvas[x, y] = inks[shade]
+                canvas[x, y] = air.gentle(tuple(canvas[x, y][:3]), inks[shade][:3], GRIT_GENTLE)
 
     def over_actors(self, frame, player_bounds):
         """Where the Prince was drawn, for the grit to fall on, and the bits bouncing off
@@ -1625,7 +1687,7 @@ class RuinsAmbience:
         for bit in self.bits:
             x, y = int(bit.x), int(bit.y)
             if 0 <= x < WIDTH and 0 <= y < HEIGHT:
-                canvas[x, y] = self.air.inks[bit.shade]
+                canvas[x, y] = self.air.gentle(tuple(canvas[x, y][:3]), self.air.inks[bit.shade][:3], GRIT_GENTLE)
         return frame
 
     # The desert
@@ -1634,17 +1696,19 @@ class RuinsAmbience:
         rng, dunes, tick = self.rng, self.air.dunes, self.tick
         self.desert_gust_wait -= 1
         if self.desert_gust_wait <= 0:
-            self.desert_gust_wait = rng.randint(*TICKS_BETWEEN_DESERT_GUSTS)
-            self.desert_gusts.append(tick)
-            for _ in range(rng.randint(*STREAMS)):
-                near = rng.random() ** 0.7
-                self.streams.append(Stream(tick + rng.randrange(STREAM_DELAY), near,
-                                           int(dunes.ground_top + near * (HEIGHT - 6 - dunes.ground_top)),
-                                           rng.uniform(-40, 160), rng.uniform(*STREAM_FRONT),
-                                           rng.uniform(*STREAM_TRAVEL), rng.uniform(0, 6.3)))
-        # A gust is over once its fronts have crossed the room.
-        self.desert_gusts = [start for start in self.desert_gusts
-                             if (tick - start) * min(CREST_FRONT, GROUND_FRONT) - 20 <= WIDTH + 45]
+            self.desert_gust_wait = rng.randint(*(GUST_SOON if rng.random() < SPELL_CHANCE else GUST_LULL))
+            gust = self.new_gust()
+            self.desert_gusts.append(gust)
+            if gust.plain:
+                for _ in range(some(rng, STREAMS, gust.strength)):
+                    near = rng.random() ** 0.7
+                    self.streams.append(Stream(tick + rng.randrange(STREAM_DELAY), near,
+                                               int(dunes.ground_top + near * (HEIGHT - 6 - dunes.ground_top)),
+                                               rng.uniform(gust.start - 20, gust.start + 0.4 * gust.reach),
+                                               rng.uniform(*STREAM_FRONT),
+                                               rng.uniform(*STREAM_TRAVEL) * min(1.0, gust.reach / 400),
+                                               rng.uniform(0, 6.3)))
+        self.desert_gusts = [gust for gust in self.desert_gusts if not gust.over(tick)]
         self.blow_the_crest()
         self.blow_the_plain()
         self.run_at_rocks()
@@ -1652,16 +1716,32 @@ class RuinsAmbience:
         self.advance_blown()
         self.advance_devil()
 
-    def fronts(self, speed, behind=-20, ahead=20):
-        for start in self.desert_gusts:
-            front = (self.tick - start) * speed - 20
-            if behind <= front <= WIDTH + ahead:
-                yield front
+    def new_gust(self):
+        rng = self.rng
+        pick, share = rng.random(), 0.0
+        for chance, crest, plain in GUST_KINDS:
+            share += chance
+            if pick < share:
+                break
+        start = GUST_FROM[0] + (GUST_FROM[1] - GUST_FROM[0]) * rng.random() ** 2
+        return Gust(self.tick, start, rng.uniform(*GUST_REACH), rng.uniform(*GUST_SPEED),
+                    rng.uniform(*GUST_STRENGTH), crest, plain, rng.uniform(0, 6.3))
+
+    def fronts(self, speed, part, behind=-20, ahead=20):
+        """(x, strength) of each gust's front blowing this part ('crest' or 'plain')."""
+        for gust in self.desert_gusts:
+            if not getattr(gust, part):
+                continue
+            run = gust.run(self.tick, speed)
+            front = gust.start + run
+            strength = gust.strength_at(run)
+            if behind <= front <= WIDTH + ahead and strength > 0:
+                yield front, strength
 
     def blow_the_crest(self):
         rng, crest = self.rng, self.air.dunes.crest
-        for front in self.fronts(CREST_FRONT):
-            for _ in range(rng.randint(*CREST_GRAINS)):
+        for front, strength in self.fronts(CREST_FRONT, 'crest'):
+            for _ in range(some(rng, CREST_GRAINS, strength)):
                 x = int(front - rng.uniform(0, CREST_BEHIND))
                 if 0 <= x < WIDTH and crest[x] > 0:
                     self.spray.append(Blown(float(x), float(crest[x] - 1), float(crest[x] - 1), 0.0,
@@ -1682,8 +1762,8 @@ class RuinsAmbience:
 
     def blow_the_plain(self):
         rng, dunes = self.rng, self.air.dunes
-        for front in self.fronts(GROUND_FRONT, ahead=40):
-            for _ in range(rng.randint(*GROUND_GRAINS)):
+        for front, strength in self.fronts(GROUND_FRONT, 'plain', ahead=40):
+            for _ in range(some(rng, GROUND_GRAINS, strength)):
                 x = int(front - rng.uniform(0, GROUND_REACH))
                 y = int(dunes.ground_top + rng.random() ** 0.8 * (HEIGHT - 4 - dunes.ground_top))
                 if not (0 <= x < WIDTH and 0 <= y < HEIGHT and dunes.open_sand[y, x]):
@@ -1700,9 +1780,9 @@ class RuinsAmbience:
             if len(rock.foot) < 4 or rock.mask.sum() < BIG_ROCK:
                 continue
             left = rock.left
-            for front in self.fronts(GROUND_FRONT, behind=-10 ** 6, ahead=10 ** 6):
+            for front, strength in self.fronts(GROUND_FRONT, 'plain', behind=-10 ** 6, ahead=10 ** 6):
                 if left - 45 <= front <= left + 5:
-                    for _ in range(rng.randint(*AT_ROCK)):
+                    for _ in range(some(rng, AT_ROCK, strength)):
                         y = rock.foot.get(left + 2, rock.foot[left]) + rng.randint(-3, 2)
                         near = (y - dunes.ground_top) / (HEIGHT - dunes.ground_top)
                         self.blown.append(Blown(rng.uniform(left - 30, left - 3), float(y), float(y), near,
