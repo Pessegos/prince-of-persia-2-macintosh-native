@@ -154,9 +154,18 @@ class Environment:
             # bridge rooms 7, 10 and 12.
             if special is None:
                 special = 119 if bridge_checked(scene.game.level.number, scene.room_id) else None
+            column = character_column(int(contact))
             options = {'special_when_idle': True} if special_when_idle else {}
-            audio.ambient(scene.room_id, motion.row, max(0, min(9, int(contact // 51))),
-                          fighting, scene.combat.player.alive, special=special, **options)
+            if not fighting and not scene.peaceful:
+                # 5:5602-56be checks the current room's generation points and
+                # NPC cue flags before admitting a return from combat music.
+                guards, points = scene.combat.room_encounters.get(scene.room_id, ((), ()))
+                if (any(point.active(motion.row, column) for point in points)
+                        or any(guard.row == motion.row and guard.death_song_pending
+                               and guard.death_song_frames < 7 for guard in guards)):
+                    options['combat_pending'] = True
+            audio.ambient(scene.room_id, motion.row, column, fighting, scene.combat.player.alive,
+                          special=special, **options)
 
     # Drawing, in ScenePrototype.render order.
 
@@ -859,7 +868,7 @@ class Rooftops(Environment):
         scene = self.scene
         if scene.level_complete:
             return
-        fighting = not scene.peaceful and scene.combat.opponent_to_fight()
+        fighting = not scene.peaceful and scene.combat.opponent_to_fight(native_alive=True)
         contact = floor_contact_x(scene.sequence_state.target_x,
                                  scene.sequence_state.facing, scene.frames[scene.action])
         self.room_ambient(audio, motion, fighting, contact)
@@ -1703,7 +1712,7 @@ class Caverns(Environment):
         caverns.potions.songs.clear()
         caverns.bridge.songs.clear()
 
-    def ambient_audio(self, audio, motion):
+    def ambient_audio(self, audio, motion, *, special=None):
         scene = self.scene
         in_carpet_room = carpet_room(scene.game.level.number, scene.room_id)
         # CUST entry 8:0d50 requests 114 once; leave 8:0d5c -> 14f0 stops it.
@@ -1711,7 +1720,7 @@ class Caverns(Environment):
                         ROOM_SONG if in_carpet_room and scene.game.caverns.carpet.counter == 0 else None)
         if scene.level_complete:
             return
-        fighting = not scene.peaceful and scene.combat.opponent_to_fight()
+        fighting = not scene.peaceful and scene.combat.opponent_to_fight(native_alive=True)
         contact = floor_contact_x(scene.sequence_state.target_x,
                                  scene.sequence_state.facing, scene.frames[scene.action])
         for guard in scene.combat.guards:
@@ -1733,7 +1742,8 @@ class Caverns(Environment):
                 if not audio.song_playing(112):
                     audio.add_song(112)
                 skeleton.rise_song_pending = False
-        self.room_ambient(audio, motion, fighting, contact)
+        self.room_ambient(audio, motion, fighting, contact,
+                          special=special, special_when_idle=special is not None)
 
     def player_died(self):
         scene = self.scene
@@ -1759,7 +1769,7 @@ class Ruins(Caverns):
         scene = self.scene
         if scene.level_complete:
             return
-        fighting = not scene.peaceful and scene.combat.opponent_to_fight()
+        fighting = not scene.peaceful and scene.combat.opponent_to_fight(native_alive=True)
         contact = floor_contact_x(scene.sequence_state.target_x,
                                  scene.sequence_state.facing, scene.frames[scene.action])
         # SpecialMusic 5:5418-5436: Throne1 replaces ordinary ambience even
@@ -1955,6 +1965,16 @@ class Temple(Caverns):
 
     # GetEndSong 5:4e0c-4e3e selects LvTemple for environment 2.
     end_song = 187
+
+    def ambient_audio(self, audio, motion):
+        scene = self.scene
+        special = None
+        if scene.game.level.number == 13 and scene.room_id in (3, 28):
+            player = scene.combat.player
+            # SpecialMusic 5:53ec-545c uses saved actor type and HP here.
+            is_shadow = player.state.actor_type == 1 and player.life > 2
+            special = 252 if scene.room_id == 3 and is_shadow else 253
+        super().ambient_audio(audio, motion, special=special)
 
     def entered_room(self):
         scene = self.scene

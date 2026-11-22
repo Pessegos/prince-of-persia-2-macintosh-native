@@ -26,9 +26,9 @@ clip), and compared, per cell, with the port's masks:
 - `own_extra`: port pixels in a cell's own mask that its redraw does not draw.
 
 Row -1 is the border row, the upper room's last row in the top five
-pixels: MarkTop 5:16f2 marks its cells and RedrawTopFast 3:1f4e repaints
-them whole, back passes 0, 5 and 11 and then the front pass, after the
-rows' redraws have drawn the characters (recover_room's row -1). A customized room
+pixels: MarkTop 5:16f2 marks its cells and RedrawTopFast 3:1f4e queues
+their pieces. DumpTable draws the border's back passes before the
+characters and its front pass after them (3:3362-3378). A customized room
 (any foreground word with 0xc000, IsCustomizedRoom 3:1310) has no border
 row (3:32c8-32cc), and its row 0's clip reaches the top (5:01ba-01c4).
 
@@ -84,10 +84,10 @@ def animated_scenery(number, room, command):
                 and command[1] in FINAL_MOVING_SHAPES.get(room, ()))
 
 
-def native_cell(commands, art, custom, number, room, layers=('front',)):
+def native_cell(commands, art, custom, number, room):
     covered = np.zeros(SIZE, bool)
     for command in commands:
-        if (command[0] not in layers or not animated_scenery(number, room, command)
+        if (command[0] != 'front' or not animated_scenery(number, room, command)
                 or tuple(command[1:5]) in custom):
             continue
         decoded = clipped_sprite(cavern_command_sprite(command, *art), command)
@@ -130,13 +130,10 @@ def compare_room(machine, sources, level, number, room, room_art, totals, digest
             # 3:32c8-32cc: no border redraw (RedrawTopFast 3:1f4e).
             native = np.zeros(SIZE, bool)
         else:
-            # RedrawTopFast 3:1f4e repaints a border cell's back passes 0, 5
-            # and 11 (3:1fa4-1fc4) before its front, over the characters.
-            passes = (0, 5, 11, 1) if row == -1 else (1,)
-            commands = recover_room(executable, scenery, level, room, prince, _machine=machine, cell_redraw=True,
-                                    only={(row, column, draw_pass) for draw_pass in passes})['commands']
-            native = native_cell(commands, art, custom, number, room,
-                                 ('back', 'front') if row == -1 else ('front',))
+            # RedrawTopFast queues pass 1 for DumpTable's front table.
+            commands = recover_room(executable, scenery, level, room, prince, _machine=machine,
+                                    cell_redraw=True, only={(row, column, 1)})['commands']
+            native = native_cell(commands, art, custom, number, room)
         top, left, bottom, right = cell_clip(column, row, customized)
         outside = native.copy()
         outside[top:bottom, left:right] = False

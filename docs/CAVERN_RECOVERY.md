@@ -608,7 +608,7 @@ level words. `tools/probe_foreground_cells.py` runs the original drawers
 for every cell of levels 3-14 in dirty-cell mode against the port's
 masks: of 11,460 cells none draws a pixel the port's mask for that cell
 lacks (195,534 temple pixels without the rule). Each cell's mask is also
-clipped to its own cell (`clip_cell_masks`, row 0 keeping its border rows):
+clipped to its own cell (`clip_cell_masks`):
 the unclipped masks hid 57,163 pixels the original never repaints, pieces a
 few pixels past their own cell (5-7 pixel pillar, statue and arch rims in
 the ruins and temple) and three temple faces whose right cell redraws the
@@ -618,32 +618,37 @@ either way, and the six temple test routes draw all 41,709 characters with
 the same masks as the native per-cell redraw (six lost up to 33 pixels
 before).
 
-The top five pixels are the border row, the upper room's last row. A
-character reaching above Y 5 marks its cells through MarkTop 5:16f2 (their
-own table at a5-0x43e4), and RedrawTopFast 3:1f4e redraws them with the
-upper room's back passes 0, 5 and 11 (3:1fa4-1fc4) and DrawForeImg,
-clipped to the strip and the cell (and the marking rectangle); row 0's own
-redraw starts at Y 5. The dirty pass 3:32e0-3312 runs it after every row's
-RedrawCell, so after the characters are drawn: the border's back pieces
-hide a head there too, not only its front pieces. The full room's drawing
-files most strip pieces under row 0 or the cell to the left, so the export
-keeps each border cell's own dirty redraw (`border_redraw`, back and front)
-and `cavern_room` builds the border masks from it; an earlier import keeps
-the border's front pieces. The upper room's wall faces are included (10:20,
-12:18 and 13:0 repeat a two-column face in a border cell, 255 pixels each;
-`temple_wall_redraws` covers them in an earlier import). A customized room, one
-with a foreground word carrying 0xc000 (IsCustomizedRoom 3:1310, kept at
-a5-0x4fb0, with or without a CUST record), has no border row at all:
-RedrawCellFast 3:1cb0-1cb4 and the dirty pass 3:32c8-32cc skip it, and
-ComputeClipRect lifts row 0's clip to Y 0 (5:01ba-01c4). The export drew
-the border anyway; only level 13 room 25 (native 26, customized without a
-CUST record) had one, a default floor strip the original never draws, and
-its masks hid 2,550 pixels. The export now skips it (`customized_room`),
-and `cavern_room` leaves an earlier import's border commands out. With the
-border row the probe covers 15,280 cells, none different; its border cells
-compare the back passes too. Masks taken from the full room's pieces that
-reach the strip instead missed 4,162 pixels and added 525 (ruins and
-temple border cells).
+The top five pixels are the border row, which draws from the upper room's
+last row. MarkTop 5:16f2 marks its cells in the table at a5-0x43e4.
+RedrawTopFast 3:1f4e queues back passes 0, 5 and 11 and DrawForeImg
+(3:1fa4-1fc6) with the border cell's clip. 3:3302 queues those records
+before the global DrawObjs at 3:3326. The per-cell DrawObjs calls return
+without adding objects (3:39e6-39ec). The back and front records go to
+separate tables (3:00dc-00f6), and DrawObjs files the sprites in the mid
+table (3:40b2 and 3:031c-0360). DumpTable draws back, mid, front
+(3:3362-3378). The border backdrop therefore sits behind the Prince.
+
+`cavern_room` builds the border masks from the same live front commands
+as the rest of the room, clipped to each cell. Older imports may contain
+a static `border_redraw` section with both kinds of record. Using it for
+occlusion covered openings with backdrop and kept fallen floors in the
+mask. The upper room's right-hand wall faces still repeat in a border
+cell (10:20, 12:18 and 13:0, each 255 pixels via `temple_wall_redraws`).
+A customized room (foreground word 0xc000, IsCustomizedRoom 3:1310) has
+no border row (3:1cb0-1cb4 and 3:32c8-32cc). ComputeClipRect lifts its
+row 0 clip to Y 0 (5:01ba-01c4).
+
+The level 6 native room 17 replay starts at X111 facing right, below
+native room 4. Up plays SEQS 14. Pose 78 has a solid cell above and
+ClipChar 4:4146 returns a top of 5. The floor breaks on pose 79, the cell
+becomes air, and ClipChar returns 0. The original's marked front draw
+has no overlap with the sprite in the strip on that pose. The hidden port
+replay shows 42 Prince pixels there after the separate falling slabs draw,
+up from zero with the old mask. It also checks the intact pose still has
+zero. The probe runs the original setup and cell drawers with supplied
+actor fields, live level words, shape sizes and rectangle endpoints. It
+uses the port's SHAP decoder and excludes falling objects from the
+per-character cover comparison.
 
 Rooms in motion keep the same agreement. `--variants` sets each slot
 unit's other states one at a time, the others at rest (loose floors

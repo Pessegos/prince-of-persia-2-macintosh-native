@@ -249,10 +249,14 @@ for the LEVL cell groups 0/1, and 105-108 for combat group 2. Inclusive
 counts are 15, 15 and 3; these are 36 original MIDI tracks, not a guessed
 loop. `AudioEngine.configure_level` reads bank and cell groups from the
 current LEVL rather than reusing level one's rooftop selection everywhere.
-TimeForNewAmbient 5:557e-5634 permits exploration/combat transitions while
-an ambient track plays; foreground songs (potions, exits, victory and
-death) are never interrupted by that transition. Disabling ambient music
-does not suppress these foreground event songs.
+Ambient admission (5:550c-56c8) permits a transition from exploration to
+combat on `OppToFight`. The return to exploration checks for reinforcement
+points and pending NPC cues on the Prince's row. The admission check runs
+before `SpecialMusic`, and its scripted results use group -1, as do songs
+started by `AddSong` and `UpdateAmbient` (5:5122/571c). The port retains
+these cues while playing and keeps its ambient toggle independent of
+foreground events. The temple route and native fixtures are recorded in
+[level 13 music](research/level13-music-continuity.md).
 
 Level five's carpet chamber requests RugRoom114 once on entry (8:0d50),
 not continuously. After that track ends, ordinary ambient admission5:550c

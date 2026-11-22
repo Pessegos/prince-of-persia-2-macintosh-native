@@ -372,9 +372,12 @@ class CueTests(unittest.TestCase):
         audio.ambient(3, 1, 8, fighting=True, special=119)
         self.assertEqual(audio.pending_song, 119)
         audio.flush()
-        self.assertEqual((audio.current_music, audio.current_music_group), (119, 2))
+        self.assertEqual((audio.current_music, audio.current_music_group), (119, None))
         audio.ambient(3, 1, 8, fighting=True, special=119)
         self.assertIsNone(audio.pending_song)
+        audio.ambient(3, 1, 8, special=119)
+        self.assertIsNone(audio.pending_song)
+        self.busy['music'] = False
         audio.ambient(3, 1, 8, special=119)
         self.assertEqual(audio.pending_song, 41)
 

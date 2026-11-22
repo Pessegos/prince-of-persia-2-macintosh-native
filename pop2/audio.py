@@ -587,36 +587,32 @@ class AudioEngine:
                 setattr(self, f'current_{bus}', None)
 
     def ambient(self, room, row, column, fighting=False, alive=True, special=None,
-                *, special_when_idle=False):
-        if not self.music_enabled or not alive:
+                *, special_when_idle=False, combat_pending=False):
+        if not self.music_enabled or not alive or self.pending_song is not None:
             return
         level = self.level_music or self.manifest["level_one"]
         bank = self.manifest["ambient"][level["bank"]]
+        combat = bank['combat_group']
         # PlayAmbient 5:4fd0-4ff4 disables combat selection for bank 5.
-        fighting = fighting and bank["combat_group"] != -1
-        if special is not None and (fighting or special_when_idle):
-            # SpecialMusic 5:5388 replaces the combat group with one song,
-            # e.g. BrgFight (119) on level five's bridge (5:5398-53bc).
-            if self.music_busy and (self.current_music == special or self.pending_song is not None
-                                    or not self.current_music_ambient):
+        fighting = bool(fighting and combat >= 0)
+        if self.playback.busy('music'):
+            # 5:553c-56be arbitrates before SpecialMusic or the LEVL cell
+            # lookup. An active scripted cue has no ordinary ambient group.
+            current = self.current_music_group
+            if (not self.current_music_ambient or current is None or combat < 0
+                    or fighting == (current >= combat)
+                    or (not fighting and combat_pending)):
                 return
+        if special is not None and (fighting or special_when_idle):
+            # 5:50f4 marks a SpecialMusic result with the same group sentinel
+            # as AddSong's UpdateAmbient (5:571c).
             self.add_song(special, ambient=True)
-            if self.pending_song == special:
-                self.pending_music_group = bank["combat_group"] if fighting else None
             return
-        group = (bank["combat_group"] if fighting else
+        group = (combat if fighting else
                  level["groups"][room * 30 + row * 10 + column]
                  if 0 <= room < 32 and 0 <= row < 3 and 0 <= column < 10 else 0)
         if not 0 <= group < len(bank["starts"]):
             return
-        if self.music_busy:
-            # TimeForNewAmbient 5:557e-5634 changes between exploration and
-            # combat groups, but never interrupts a foreground song.
-            combat = bank['combat_group']
-            if (not self.current_music_ambient or self.pending_song is not None
-                    or self.current_music_group is None or combat < 0
-                    or (self.current_music_group >= combat) == (group >= combat)):
-                return
         first, count = bank["starts"][group], bank["counts"][group]
         # Rnd 17:6e06 is inclusive. PlayAmbient 5:50c2 skips a repeat by
         # advancing one song, wrapping at the last index rather than rerolling.

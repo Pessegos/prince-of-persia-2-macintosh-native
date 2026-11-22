@@ -2019,28 +2019,8 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
                     merged = merge_positioned_mask(cell_masks.get(cell), sprite.getchannel('A'), position)
                     if merged is not None:
                         cell_masks[cell] = merged
-    border_commands = program.get('border_redraw', {}).get(str(room_id))
-    if cell_masks is not None and border_commands is not None and not customized:
-        # RedrawTopFast 3:1f4e repaints a marked border cell whole: its back
-        # passes 0, 5 and 11 (3:1fa4-1fc4), then its front pieces (DrawForeImg
-        # 3:2598), after every row's RedrawCell has drawn the characters
-        # (3:32e0-3312), so its back pieces hide them too. The export keeps
-        # each border cell's own dirty redraw; older imports keep the front.
-        for column in range(10):
-            cell_masks.pop((column, -1), None)
-        for command in border_commands:
-            library = command[7] if len(command) >= 8 else 4
-            if library in (0, 1, 5) or (level_number in FINAL_LEVELS
-                                        and command[1] in FINAL_MOVING_SHAPES.get(room_id, ())):
-                continue
-            if level_number in SCENERY_LEVELS[3] and library == 4 and 3581 <= command[1] <= 3589:
-                continue  # The torches' frames are drawn with their flames.
-            clipped = clipped_sprite(scenery_sprite(command), command)
-            if clipped is not None:
-                merged = merge_positioned_mask(cell_masks.get((command[8], -1)),
-                                               clipped[0].getchannel('A'), clipped[1])
-                if merged is not None:
-                    cell_masks[command[8], -1] = merged
+    # RedrawTopFast queues the border's back pieces before DrawObjs. Use
+    # the live front commands above, including changes to the upper room.
     if cell_masks is not None:
         cell_masks = clip_cell_masks(cell_masks, customized)
     if (level_number, room_id) == HORSE_ROOM:

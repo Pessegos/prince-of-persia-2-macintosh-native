@@ -394,15 +394,15 @@ class OpeningRoomTests(unittest.TestCase):
         self.assertIsNone(ImageChops.subtract(slab.alpha, mask.crop(
             (slab.x, slab.y, slab.x + slab.alpha.width, slab.y + slab.alpha.height))).getbbox())
 
-    def test_the_border_row_hides_a_head_above_y_five(self):
-        # MarkTop 5:16f2 marks the border cells the rectangle reaches and
-        # RedrawTopFast 3:1f4e repaints them after the characters: the sky
-        # (SHAP 3501) or the upper room's last row fills the 0-5 strip.
-        room = build_opening_room(room_id=4)
+    def test_the_border_row_keeps_sky_behind_the_prince_and_walls_in_front(self):
         state = SequenceState(28, action=78, animation_state=1, target_x=370, facing=0)
-        mask = room.actor_mask(0, state=state, bounds=(356, 1, 379, 93), record=self.frames[78])
-        self.assertEqual(mask.crop((0, 0, 510, 5)).getextrema(), (255, 255))
-        self.assertEqual(mask.getpixel((365, 5)), 0)
+        sky = build_opening_room(room_id=4)
+        wall = build_opening_room(room_id=5)
+        for room, expected in ((sky, 0), (wall, 255)):
+            with self.subTest(room=room.room_id):
+                mask = room.actor_mask(0, state=state, bounds=(356, 1, 379, 93), record=self.frames[78])
+                self.assertEqual(mask.getpixel((365, 2)), expected)
+        self.assertEqual(sky.background.getpixel((365, 2))[3], 255)
 
     def test_right_facing_hang_retains_upper_corner_decoration_in_front(self):
         for room_id, x in ((0, 332), (2, 281)):

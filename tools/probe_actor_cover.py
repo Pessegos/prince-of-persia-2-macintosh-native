@@ -11,8 +11,9 @@ border row through MarkTop 5:16f2). RedrawCell 3:1d3a then draws, per cell,
 the floor records (DrawFloorBuf 3:371c clipped to the cell and the floor
 rectangle) or the half records (DrawHalf 3:3480, the cell), and the front
 pieces (DrawForeImg 3:2598, the cell and the front rectangle, with
-CheckGateInFore 3:26e4's stone); RedrawTopFast 3:1f4e draws the border
-row's back and front pieces in its strip and the rectangle.
+CheckGateInFore 3:26e4's stone). RedrawTopFast 3:1f4e queues front pieces
+in the border strip and the marked rectangle. Its back passes enter the
+back table (3:00f6), dumped before the object and front tables (3:3362-3378).
 
 `tools.native_character` runs that setup on the executable and
 `recover_room` each marked cell's drawers with the Prince's fields. The
@@ -202,9 +203,9 @@ class NativeCover:
             strip = section((0, column * 51, 5, (column + 1) * 51), marked)
             if strip[0] >= strip[2] or strip[1] >= strip[3]:
                 continue
-            passes = {(-1, column, draw_pass) for draw_pass in (0, 5, 11, 1)}
-            result = self.redraw(room, words, cell_redraw=True, only=passes,
-                                 clips={slot: strip for slot in passes})
+            slot = (-1, column, 1)
+            result = self.redraw(room, words, cell_redraw=True, only={slot},
+                                 clips={slot: strip})
             self.paint(result['commands'], covers['top'])
         return setup, covers
 

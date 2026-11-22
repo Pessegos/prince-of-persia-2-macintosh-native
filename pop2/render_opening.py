@@ -339,18 +339,16 @@ class OpeningRoom:
                     add_alpha(mask, alpha, left, top)
         border_cover = getattr(self, 'border_cover', None)
         if border_cover is not None:
-            # MarkBufsForRect 5:19f8 marks the border cells a body reaching
-            # above Y 5 covers (MarkTop 5:16f2), and RedrawTopFast 3:1f4e
-            # repaints them after the characters, back passes first: the
-            # rooftop's sky (SHAP 3501), the upper room's last row or row 0's
-            # pieces reaching above Y 5 hide him there.
+            # MarkTop 5:16f2 marks the border cells the body reaches.
+            # RedrawTopFast 3:1f4e queues their foreground for the front
+            # table. Its back passes draw before the characters.
             mask = ImageChops.lighter(mask, border_cover)
         return mask
 
 
 @dataclass(frozen=True)
 class RooftopRoom(OpeningRoom):
-    # What the border row's redraw paints in the 0-5 strip (`actor_mask`);
+    # Foreground redrawn in the 0–5 strip (`actor_mask`);
     # None in a room without one (CUST or customized).
     border_cover: Image.Image | None = None
 
@@ -612,10 +610,7 @@ def build_opening_room(include_curtain=True, room_id=None, level_resource_id=200
                                      and tile_info(tile_x, tile_y)[0] in (1, 20)):
             add_ceiling_cover(ceilings, tile_y + 1, shape.getchannel("A"),
                               anchor_x, anchor_y - shape.height)
-        if tile_y <= 0 and anchor_y - shape.height < SCENERY_Y_OFFSET:
-            # What the border row's redraw (RedrawTopFast 3:1f4e) paints
-            # in the 0-5 strip: the upper room's last row, and the pieces
-            # of row 0 that reach above Y 5.
+        if layer_index == 3 and tile_y <= 0 and anchor_y - shape.height < SCENERY_Y_OFFSET:
             add_alpha(border, shape.getchannel("A"), anchor_x, anchor_y - shape.height)
         if layer_index == 3 or floor_redraw:
             if ledge:
