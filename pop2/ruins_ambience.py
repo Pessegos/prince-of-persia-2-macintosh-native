@@ -411,6 +411,11 @@ def is_sky(colour):
     return colour[1] == 0 and colour[2] >= SKY_LEAST_BLUE and colour[0] <= SKY_MOST_RED
 
 
+def is_painted_sky(colour):
+    red, green, blue = colour[:3]
+    return (blue > red) & (blue > green)
+
+
 def blueness(rgb):
     """[y, x]: 1 in the deep blue of the upper sky, 0 in the purple by the horizon."""
     return numpy.clip(1 - (rgb[..., 0].astype(numpy.float32) - BLUE_FROM_RED) / BLUE_OVER_RED, 0, 1)
@@ -430,10 +435,10 @@ def clear_of(sky, margin):
     return clear
 
 
-def place_stars(sky, blue, rng):
+def place_stars(sky, blue, rng, *, density=STARS_PER_SKY):
     """[(x, y, kind)], more of them where the sky is bluest."""
     weight = clear_of(sky, STAR_CLEAR) * blue ** 2
-    wanted = int(round(STARS_PER_SKY * float(weight.sum()) / (WIDTH * HEIGHT)))
+    wanted = int(round(density * float(weight.sum()) / (WIDTH * HEIGHT)))
     ys, xs = numpy.nonzero(weight > 0)
     stars = []
     for _ in range(wanted * 40):
@@ -797,12 +802,18 @@ def read_room(level_number, room, rgb, palette, covered=None, terrain=None, pain
     cliff_wind_sky = None
     if place == OPENING_CLIFF:
         # The painted gradient is blue without matching the night-sky palette.
-        red, green, blue_channel = (rgb[..., channel] for channel in range(3))
-        cliff_wind_sky = (blue_channel > red) & (blue_channel > green)
+        cliff_wind_sky = is_painted_sky(numpy.moveaxis(rgb, -1, 0))
+        sky = numpy.zeros_like(sky)
+        sky[8:114, 234:-8] = cliff_wind_sky[8:114, 234:-8]
+        if covered is not None:
+            sky &= ~covered
+        blue = numpy.maximum(blue, 0.6)
     windy = not (desert or chasm) and (open_sky >= OPEN_SKY or place in (OPENING_CLIFF, OPEN_COURTYARD))
     seed = level_number * 100 + room
     if desert:
         stars = place_desert_stars(sky, random.Random(seed + 41))
+    elif cliff_wind_sky is not None:
+        stars = place_stars(sky, blue, random.Random(seed), density=120)
     else:
         stars = warm_some(place_stars(sky, blue, random.Random(seed)), random.Random(seed + 7))
         stars += place_haze_stars(sky, blue, stars, random.Random(seed + 13))
@@ -857,7 +868,7 @@ def horse_shooting_star():
 
 def shooter_path(air, kind, rng):
     """(x, y, dx, dy) of a random shooting star over clear sky, outside the desert."""
-    if air.desert:
+    if air.desert or air.cliff_wind_sky is not None:
         return None
     ys, xs = numpy.nonzero(air.sky[:, SHOOTER_LEFT:WIDTH - SHOOTER_LEFT])
     if not len(xs):
@@ -2119,8 +2130,9 @@ class RuinsAmbience:
         air, inks = self.air, self.air.inks
         canvas = frame.load()
         drawn = set()
+        matches_sky = is_painted_sky if air.cliff_wind_sky is not None else is_sky
         for x, y, colour in self.sky_pixels():
-            if air.in_sky(x, y) and ((x, y) in drawn or is_sky(canvas[x, y])):
+            if air.in_sky(x, y) and ((x, y) in drawn or matches_sky(canvas[x, y])):
                 canvas[x, y] = inks[colour]
                 drawn.add((x, y))
         if self.clouds:
@@ -2131,7 +2143,7 @@ class RuinsAmbience:
         self.put_grit(canvas, self.grit_pixels())
         self.draw_wind(canvas)
         if self.wind is not None and air.cliff_sand is not None:
-            grains = ledge_fall_pixels(self.wind.tick, air.cliff_sand, OPENING_LEDGES)
+            grains = opening_sand_pixels(self.wind.tick, air.cliff_sand)
             draw_sand_pixels(canvas, air, grains)
         self.put_grit(canvas, self.pebble_pixels())
         # Kept to find the Prince in once he is drawn, while anything could fall on him.
@@ -2148,22 +2160,28 @@ def chasm_fall_pixels(tick, sand):
     return ledge_fall_pixels(tick, sand, CHASM_LEDGES)
 
 
-def ledge_fall_pixels(tick, sand, ledges):
+def opening_sand_pixels(tick, sand):
+    return ledge_fall_pixels(tick, sand, OPENING_LEDGES, approach_ticks=26, slope=0.14)
+
+
+def ledge_fall_pixels(tick, sand, ledges, *, approach_ticks=0, slope=0.0):
     """Grains slide up to a painted lip, then accelerate down past it."""
     colours = (NEAR_SANDS[0], SAND[0], FAR_SANDS[1])
     for ledge, (lip_x, lip_y, grains, shortest_fall) in enumerate(ledges):
         for index in range(grains):
             life = shortest_fall + index * 7 % 10
-            age = (tick + ledge * 13 + index * 17) % (54 + index * 11 % 25)
-            run = 6 + index * 3 % 9
+            period = 54 + index * 11 % 25 + approach_ticks
+            age = (tick + approach_ticks + ledge * 13 + index * 17) % period
+            run = 6 + index * 3 % 9 + approach_ticks
             fall = age - run
             ridge = lip_y + index * 5 % 7 - 3
             if fall >= life:
                 continue
             if fall < 0:
                 x = lip_x + round(1.65 * fall)
-                if sand[ridge, x]:
-                    yield x, ridge, SAND[0]
+                y = ridge + round((x - lip_x) * slope)
+                if sand[y, x]:
+                    yield x, y, SAND[0]
                 continue
             x = lip_x - 1 + index * 3 % 7 + round((0.21 + 0.09 * (index % 5)) * fall)
             y = ridge + round(0.35 * fall + (0.07 + 0.009 * (index % 4)) * fall ** 2)

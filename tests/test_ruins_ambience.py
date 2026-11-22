@@ -1364,7 +1364,7 @@ class EveryRuinsRoomTests(unittest.TestCase):
     def test_stars_where_the_sky_is_deep_blue_and_over_the_desert(self):
         starry = {place for place, air in self.rooms.items()
                   if any(kind not in HAZE for *_, kind in air.stars) and not air.desert}
-        self.assertEqual(starry, {(6, 1), (6, 11), (6, 12), (6, 14), (7, 24), (7, 25), (7, 26), (8, 12)})
+        self.assertEqual(starry, {(6, 1), (6, 11), (6, 12), (6, 14), (6, 26), (7, 24), (7, 25), (7, 26), (8, 12)})
         for place, air in self.rooms.items():
             if air.desert:
                 self.assertEqual(len(air.stars), DESERT_STARS, place)
@@ -1372,13 +1372,15 @@ class EveryRuinsRoomTests(unittest.TestCase):
 
     def test_faint_stars_in_the_purple_of_every_room_with_much_sky(self):
         for place, air in self.rooms.items():
-            if not air.desert and air.sky.mean() > 0.1:
+            if not air.desert and air.cliff_wind_sky is None and air.sky.mean() > 0.1:
                 self.assertTrue(any(kind in HAZE for *_, kind in air.stars), place)
 
     def test_shooting_stars_in_every_room_with_much_sky_but_the_desert(self):
         rng = random.Random(1)
         for place, air in self.rooms.items():
-            if not air.desert and air.sky.mean() > 0.1:
+            if air.cliff_wind_sky is not None:
+                self.assertIsNone(shooter_path(air, FAINT, rng), place)
+            elif not air.desert and air.sky.mean() > 0.1:
                 self.assertIsNotNone(shooter_path(air, FAINT, rng), place)
 
     def test_the_horizontal_wind_blows_in_open_ruins_outside_the_desert_and_chasm(self):
@@ -1608,7 +1610,7 @@ class EveryRuinsRoomTests(unittest.TestCase):
 class RealSceneTests(unittest.TestCase):
     """The same inputs with the toggle off and on, in the hidden real scene."""
 
-    def test_the_opening_cliff_has_distant_wind_and_falling_sand_on_its_first_tick(self):
+    def test_the_opening_cliff_draws_wind_stars_and_sand_on_its_first_tick(self):
         from tools.audit_temple_routes import Harness
 
         harness = Harness(6, peaceful=True, draw=True, god=True)
@@ -1629,13 +1631,20 @@ class RealSceneTests(unittest.TestCase):
             self.assertFalse(changed[:, :250].any())
             self.assertFalse(changed[~sky].any())
 
-            with_sand = ambience.draw(scenery.copy())
-            grains = (numpy.asarray(with_sand) != numpy.asarray(frame)).any(axis=2)
-            self.assertTrue(grains[279:319, 387:].any())
-            self.assertTrue(grains[319:, 375:387].any())
-            self.assertLessEqual(int(grains.sum()), 16)
-            self.assertFalse(grains[:275].any())
-            self.assertFalse(grains[:, :350].any())
+            full = ambience.draw(scenery.copy())
+            stars_and_sand = (numpy.asarray(full) != numpy.asarray(frame)).any(axis=2)
+            stars = ambience.air.stars
+            self.assertGreaterEqual(len(stars), 6)
+            self.assertLessEqual(len(stars), 12)
+            self.assertTrue(all(stars_and_sand[y, x] and y < 114 for x, y, _ in stars))
+            self.assertFalse(stars_and_sand[114:265].any())
+
+            grains = stars_and_sand[265:]
+            self.assertTrue(stars_and_sand[265:325, 315:350].any())
+            self.assertTrue(stars_and_sand[279:319, 387:].any())
+            self.assertTrue(stars_and_sand[319:, 375:387].any())
+            self.assertLessEqual(int(grains.sum()), 18)
+            self.assertFalse(grains[:, :310].any())
         finally:
             harness.close()
 
