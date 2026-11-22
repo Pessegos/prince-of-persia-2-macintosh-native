@@ -176,7 +176,7 @@ class LevelRenderer:
             return ruins_air, RuinsAmbience
         return None
 
-    def advance_ambience(self, room_id, terrain, footing=None, thuds=()):
+    def advance_ambience(self, room_id, terrain, footing=None, thuds=(), shakes=()):
         """One game tick of the optional cave or ruins ambience; pixels only."""
         kind = self.ambience_kind()
         if kind is None:
@@ -193,7 +193,7 @@ class LevelRenderer:
                     self.ambience_air[room_id] = room_air(self.level.number, room_id, self.rooms[room_id], terrain,
                                                           lambda: self.room_with_gates_up(room_id))
             self.ambience = ambience(room_id, self.ambience_air[room_id])
-        self.ambience.advance(terrain, footing, thuds)
+        self.ambience.advance(terrain, footing, thuds, shakes)
 
     def read_ambience_ahead(self, room_id, caverns, terrain):
         """Read one room next to this one that the ambience has not read yet, while the

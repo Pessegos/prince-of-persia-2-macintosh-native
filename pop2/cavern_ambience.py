@@ -1502,8 +1502,9 @@ class CavernAmbience:
                 flecks.append(fleck)
         self.flecks = flecks
 
-    def advance(self, terrain=None, footing=None, thuds=()):
-        """One game tick."""
+    def advance(self, terrain=None, footing=None, thuds=(), shakes=()):
+        """One game tick. The Prince's shakes are for the ruins' grit: no dust falls
+        from the caves' rock."""
         self.tick += 1
         self.tread(footing)
         for thud in thuds:

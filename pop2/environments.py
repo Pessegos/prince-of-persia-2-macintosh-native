@@ -1160,6 +1160,8 @@ class Caverns(Environment):
                 row = motion.row - int(shakes[-1][0] == -12)
                 state.sound_events.extend(loose.shake_row(scene.level_map, motion.room, row,
                                                          state, motion, scene.frames[state.action]))
+                # The ruins' grit feels it too (pixels only).
+                self.ambience_shakes = ((motion.room, 'bump' if shakes[-1][0] == -12 else 'stamp', motion.row),)
                 for event in shakes:
                     state.sequence_events.remove(event)
         for room, row in loose.shake_events:
@@ -1183,7 +1185,7 @@ class Caverns(Environment):
         scene = self.scene
         if getattr(scene, 'cave_ambience_enabled', False):
             scene.level_renderer.advance_ambience(scene.room_id, scene.level_map, self.prince_footing(),
-                                                  self.thuds())
+                                                  self.thuds(), getattr(self, 'ambience_shakes', ()))
 
     def prince_footing(self):
         """Where the Prince's feet are, for the dust they raise. Only read."""
@@ -1765,6 +1767,15 @@ class Ruins(Caverns):
                   and scene.game.sword_type != 1)
         self.room_ambient(audio, motion, fighting, contact,
                           special=180 if throne else None, special_when_idle=throne)
+
+    def after_actors(self, frame, player_bounds):
+        """The optional ambience's grit bouncing off the Prince, over him (pixels only)."""
+        scene = self.scene
+        ambience = scene.level_renderer.ambience
+        if (not getattr(scene, 'cave_ambience_enabled', False) or ambience is None
+                or ambience.room != scene.room_id or not hasattr(ambience, 'over_actors')):
+            return frame
+        return ambience.over_actors(frame, player_bounds)
 
     def entered_room(self):
         super().entered_room()

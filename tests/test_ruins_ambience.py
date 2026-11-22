@@ -11,10 +11,12 @@ from unittest.mock import patch
 import numpy
 from PIL import Image
 
+from pop2.cavern_ambience import SHUT_PUFF, SLAM_PUFF, STEP_PUFF, TILE_PUFF, Footing, Thud
 from pop2.paths import ASSET_DIR
+from pop2 import ruins_ambience
 from pop2.ruins_ambience import (
-    ALL_COLOURS, BODY_PALER, BRIGHT, CURL_RADIUS, CURL_RISE, CURL_SPEED, DESERT_STAR_APART, DESERT_STAR_CLEAR,
-    DESERT_STARS, DIM, DIP_TICKS, FAINT, FIREBALL, FIRST_SHOOTER, GOLD_BRIGHT, GRAZER, GUST_TICKS, HEIGHT, MID,
+    BODY_PALER, BRIGHT, CURL_RADIUS, CURL_RISE, CURL_SPEED, DESERT_STAR_APART, DESERT_STAR_CLEAR, DESERT_STARS,
+    DIM, DIP_TICKS, FAINT, FIREBALL, FIRST_SHOOTER, GOLD_BRIGHT, GRAZER, GRIT_HEAD, GUST_TICKS, HEIGHT, MID,
     NORMAL, ROSE_BRIGHT, ROSE_MID, SECOND_STREAK_BELOW, SHOOTERS, STAR_APART, STAR_CLEAR, STARS_PER_SKY,
     STREAK_SPEED, TICKS_BETWEEN_GUSTS, TICKS_BETWEEN_SHOOTERS, WIDTH, RuinsAmbience, Shooter, blueness, new_streak,
     paler, read_room, ribbon, shooter_path, shooter_pixels, sky_mask, streak_pixels,
@@ -29,7 +31,7 @@ STONE = (96, 92, 104)
 SAND = (166, 120, 104)
 WARM = (ROSE_MID, ROSE_BRIGHT, GOLD_BRIGHT)
 PALETTE = {index: (*colour, 255)
-           for index, colour in enumerate(sorted({DEEP, MIDDLE, PURPLE, STONE, SAND, *ALL_COLOURS}))}
+           for index, colour in enumerate(sorted({DEEP, MIDDLE, PURPLE, STONE, SAND, *ruins_ambience.INK_COLOURS}))}
 
 
 def picture(*bands):
@@ -396,6 +398,257 @@ class WindTests(unittest.TestCase):
                 self.assertGreater(sum(colour), sum(behind))
 
 
+class Floor:
+    def __init__(self, kind):
+        self.kind = kind
+
+
+class FloorBelow:
+    """A level map with a floor along the bottom row only."""
+
+    def tile(self, room, column, row):
+        return Floor(1 if row == 2 else 0)
+
+
+TERRAIN = FloorBelow()
+GROUND = 346
+
+
+def grit_air(**changes):
+    """A dark room under three ceilings, with two cracks."""
+    lines = tuple(tuple(c * 120 + 7 if 20 <= x < 490 else -1 for x in range(WIDTH)) for c in range(3))
+    air = replace(night(6, 4, (PURPLE, 12)), stars=(),
+                  grit=(ruins_ambience.Crack(100, 130, GROUND), ruins_ambience.Crack(300, 130, GROUND)), ceilings=lines)
+    return replace(air, **changes)
+
+
+def run_out(ambience, ticks=400):
+    for _ in range(ticks):
+        ambience.advance(TERRAIN)
+        if not ambience.trickles:
+            return
+
+
+class GritTests(unittest.TestCase):
+    def ambience(self, seed=1, **changes):
+        ambience = RuinsAmbience(4, grit_air(**changes), random.Random(seed))
+        ambience.quiet_wait = 10 ** 6
+        return ambience
+
+    def test_the_room_sheds_a_little_every_few_seconds_now_and_then_a_pour(self):
+        ambience = self.ambience()
+        ambience.quiet_wait = 1
+        seen = []
+        for _ in range(12 * 200):
+            ambience.advance(TERRAIN)
+            seen.extend(trickle for trickle in ambience.trickles if all(trickle is not other for other in seen))
+        self.assertGreater(len(seen), 40)
+        self.assertLess(len(seen), 100)
+        self.assertAlmostEqual(sum(trickle.pour for trickle in seen) / len(seen), ruins_ambience.POUR_CHANCE,
+                               delta=0.12)
+        self.assertEqual({trickle.source.x for trickle in seen}, {100, 300})
+
+    def test_a_pour_falls_straight_down_from_its_crack(self):
+        # It used to sway a pixel aside, and to be two pixels wide under the crack.
+        for seed in range(6):
+            ambience = self.ambience(seed)
+            ambience.start(100, 130, 26, 0, True, TERRAIN)
+            thread_at_crack = False
+            for _ in range(200):
+                ambience.advance(TERRAIN)
+                # Not the bits that come away from the crack first, or kick up on landing.
+                flecks, ambience.flecks = ambience.flecks, []
+                pixels = list(ambience.grit_pixels())
+                ambience.flecks = flecks
+                for x, y, _shade in pixels:
+                    if 130 <= y < GROUND - 10:
+                        self.assertEqual(x, 100, (seed, y))
+                    thread_at_crack |= (x, y) == (100, 130)
+                if not ambience.trickles:
+                    break
+            self.assertTrue(thread_at_crack)
+
+    def test_one_trickle_at_a_crack(self):
+        ambience = self.ambience()
+        ambience.start(100, 130, 20, 0, True, TERRAIN)
+        ambience.start(101, 130, 20, 0, True, TERRAIN)
+        ambience.start(102, 130, 4, 0, False, TERRAIN)
+        self.assertEqual(len(ambience.trickles), 1)
+        ambience.start(300, 130, 4, 0, False, TERRAIN)
+        ambience.start(301, 130, 4, 0, False, TERRAIN)
+        self.assertEqual(len(ambience.trickles), 3)
+        ambience.start(299, 130, 20, 0, True, TERRAIN)
+        self.assertEqual(len(ambience.trickles), 3)
+
+    def test_the_rhythm_picks_a_crack_that_is_free(self):
+        ambience = self.ambience()
+        ambience.start(100, 130, 20, 0, True, TERRAIN)
+        for _ in range(10):
+            ambience.quiet_wait = 1
+            ambience.quiet_trickle(TERRAIN)
+        self.assertEqual({trickle.source.x for trickle in ambience.trickles[1:]}, {300})
+
+    def test_a_pour_heaps_a_small_mound_that_wears_away(self):
+        ambience = self.ambience(3)
+        ambience.start(100, 130, 26, 0, True, TERRAIN)
+        run_out(ambience)
+        self.assertEqual(len(ambience.mounds), 1)
+        mound = ambience.mounds[0]
+        self.assertTrue(all(height <= most for height, most in zip(mound.heights, ruins_ambience.MOUND)))
+        self.assertGreater(sum(mound.heights), 4)
+        stays = ruins_ambience.MOUND_STAYS[1] + 20 * (ruins_ambience.MOUND_WEARS[1] + 1)
+        for _ in range(stays):
+            ambience.advance(TERRAIN)
+        self.assertEqual(ambience.mounds, [])
+
+    def test_mostly_specks_some_chips_and_a_few_crumbs_that_break_in_two(self):
+        ambience = self.ambience()
+        sizes = []
+        for _ in range(300):
+            trickle = ruins_ambience.Trickle(ruins_ambience.Crack(100, 130, GROUND), 0, 1)
+            ambience.release(trickle)
+            sizes.append(trickle.grains[0].size)
+        self.assertAlmostEqual(sizes.count('speck') / 300, 0.7, delta=0.08)
+        self.assertAlmostEqual(sizes.count('chip') / 300, 0.25, delta=0.08)
+        self.assertGreater(sizes.count('crumb'), 0)
+        landed = []
+        ambience.land = lambda x, bottom, pour, trickle=None: landed.append(x)
+        trickle = ruins_ambience.Trickle(ruins_ambience.Crack(100, 130, GROUND), 0, 0)
+        trickle.grains = [ruins_ambience.Grain(GROUND - 1.0, 3.0, 100.0, GRIT_HEAD, size='crumb')]
+        ambience.trickles = [trickle]
+        ambience.advance_trickles()
+        self.assertEqual(landed, [100.0, 101.0])
+
+    def test_a_bump_shakes_grit_down_right_over_his_hands(self):
+        for seed in range(10):
+            ambience = self.ambience(seed)
+            ambience.shake(250, 1, 1.0, 'bump', TERRAIN)
+            over = [trickle for trickle in ambience.trickles
+                    if abs(trickle.source.x - 250) <= 14 and trickle.source.top == 127 and trickle.wait <= 2]
+            self.assertGreaterEqual(len(over), 3, seed)
+            self.assertTrue(all(trickle.shaken for trickle in ambience.trickles))
+
+    def test_a_harder_blow_shakes_more_and_further_off_later(self):
+        # One short ceiling, so that no blow opens as many cracks as it may.
+        line = tuple(127 if 150 <= x < 350 else -1 for x in range(WIDTH))
+        lines = ((-1,) * WIDTH, line, (-1,) * WIDTH)
+
+        def spots(strength, name):
+            counts = []
+            for seed in range(30):
+                ambience = self.ambience(seed, ceilings=lines)
+                ambience.shake(250, 1, strength, name, TERRAIN)
+                counts.append(len(ambience.trickles))
+                for trickle in ambience.trickles:
+                    far = abs(trickle.source.x - 250) - 3
+                    self.assertGreaterEqual(trickle.wait, int(max(0, far) / ruins_ambience.SHAKE_SPREAD))
+            return sum(counts) / len(counts)
+
+        self.assertGreater(spots(0.9, 'slam'), 1.5 * spots(0.35, 'shut'))
+
+    def test_only_a_strong_blow_brings_down_pebbles(self):
+        shut = slam = 0
+        for seed in range(30):
+            ambience = self.ambience(seed)
+            ambience.shake(250, 1, ruins_ambience.STRENGTH['shut'], 'shut', TERRAIN)
+            shut += len(ambience.pebbles)
+            ambience = self.ambience(seed)
+            ambience.shake(250, 1, ruins_ambience.STRENGTH['slam'], 'slam', TERRAIN)
+            slam += len(ambience.pebbles)
+        self.assertEqual(shut, 0)
+        self.assertGreater(slam, 20)
+
+    def test_what_shakes_the_ceilings(self):
+        ambience = self.ambience()
+
+        def footing(falling, speed=0):
+            return Footing(250, 252, 226, True, falling, speed)
+
+        ambience.footing = footing(True, 17)
+        self.assertEqual(ambience.hits(footing(False), (), ()), [])
+        ambience.footing = footing(True, 27)
+        self.assertEqual(ambience.hits(footing(False), (), ()), [(252, 1, 0.75, 'landing')])
+        ambience.footing = footing(True, 40)
+        self.assertEqual(ambience.hits(footing(False), (), ())[0][2], 1.0)
+        thuds = [Thud(100, 120, 226, 226, kind) for kind in (SLAM_PUFF, TILE_PUFF, SHUT_PUFF, STEP_PUFF)]
+        self.assertEqual([name for *_, name in ambience.hits(None, thuds, ())], ['slam', 'tile', 'shut'])
+        self.assertEqual(ambience.hits(footing(False), (), ((4, 'bump', 1), (5, 'stamp', 1))),
+                         [(252, 1, 1.0, 'bump')])
+
+    def test_one_blow_in_a_place_a_tick(self):
+        ambience = self.ambience()
+        shaken = []
+        ambience.shake = lambda x, row, strength, name, terrain: shaken.append(name)
+        ambience.footing = Footing(250, 252, 226, True, True, 30)
+        ambience.advance(TERRAIN, Footing(250, 252, 226, True, False), (), ((4, 'stamp', 1),))
+        self.assertEqual(shaken, ['landing'])
+
+    def test_grit_bounces_off_the_prince_and_is_drawn_over_him(self):
+        ambience = self.ambience()
+        mask = numpy.zeros((HEIGHT, WIDTH), dtype=bool)
+        mask[200:260, 90:111] = True
+        ambience.prince_mask = mask
+        trickle = ruins_ambience.Trickle(ruins_ambience.Crack(100, 130, GROUND), 0, 0)
+        trickle.grains = [ruins_ambience.Grain(198.0, 3.0, 100.0, GRIT_HEAD)]
+        ambience.trickles = [trickle]
+        ambience.advance_trickles()
+        self.assertEqual(trickle.grains, [])
+        self.assertEqual(len(ambience.bits), 1)
+        bit = ambience.bits[0]
+        self.assertEqual(bit.y, 199)
+        self.assertLess(bit.dy, 0)
+        frame = frame_of(picture((PURPLE, 12)))
+        ambience.before_actors = frame.copy()
+        shown = ambience.over_actors(frame, (90, 200, 110, 260))
+        self.assertEqual(shown.getpixel((100, 199)), ambience.air.inks[GRIT_HEAD])
+
+    def test_his_pixels_are_what_the_actors_changed_within_his_bounds(self):
+        ambience = self.ambience()
+        before = frame_of(picture((PURPLE, 12)))
+        ambience.before_actors = before
+        frame = before.copy()
+        frame.paste((200, 30, 30, 255), (95, 205, 105, 255))
+        frame.paste((200, 30, 30, 255), (300, 205, 310, 255))
+        ambience.over_actors(frame, (90, 200, 112, 258))
+        ys, xs = numpy.nonzero(ambience.prince_mask)
+        self.assertEqual((xs.min(), xs.max(), ys.min(), ys.max()), (95, 104, 205, 254))
+        ambience.before_actors = None
+        ambience.over_actors(frame, (90, 200, 112, 258))
+        self.assertIsNone(ambience.prince_mask)
+
+    def test_a_streak_passing_carries_the_grains_along_its_way(self):
+        ambience = self.ambience()
+        streak = new_streak(random.Random(1))
+        streak.pixels = [(x, 150) for x in range(100, 300)]
+        streak.curl, streak.length, streak.head = (500, 510), 60, 150
+        ambience.streaks = [streak]
+        # It shows from x 190 to 249.
+        push_x, push_y = ambience.streak_push(220, 155)
+        self.assertAlmostEqual(push_x, ruins_ambience.STREAK_PUSH * (1 - 5 / ruins_ambience.STREAK_REACH))
+        self.assertAlmostEqual(push_y, 0)
+        self.assertEqual(ambience.streak_push(220, 170), (0.0, 0.0))
+        self.assertEqual(ambience.streak_push(150, 155), (0.0, 0.0))
+
+    def test_over_pale_stone_the_grit_is_a_step_darker_and_behind_the_foreground(self):
+        luminance = numpy.zeros((HEIGHT, WIDTH), dtype=numpy.uint8)
+        luminance[:, 200:] = 200
+        covered = numpy.zeros((HEIGHT, WIDTH), dtype=bool)
+        covered[:, 400:] = True
+        ambience = self.ambience(luminance=luminance, covered=covered)
+        frame = frame_of(picture((PURPLE, 12)))
+        canvas = frame.load()
+        ambience.put_grit(canvas, [(100, 150, GRIT_HEAD), (250, 150, GRIT_HEAD), (450, 150, GRIT_HEAD)])
+        inks = ambience.air.inks
+        self.assertEqual(frame.getpixel((100, 150)), inks[GRIT_HEAD])
+        self.assertEqual(frame.getpixel((250, 150)), inks[ruins_ambience.GRIT_DIM])
+        self.assertEqual(frame.getpixel((450, 150))[:3], STONE)
+
+    def test_a_painting_sheds_no_grit(self):
+        rgb = picture((PURPLE, 12))
+        self.assertEqual(read_room(6, 4, rgb, PALETTE, terrain=TERRAIN, painted=True).grit, ())
+        self.assertEqual(read_room(6, 4, rgb, PALETTE, terrain=TERRAIN, painted=True).ceilings, ())
+
+
 class RendererTests(unittest.TestCase):
     def renderer(self, number, kind):
         from pop2.level_rendering import LevelRenderer
@@ -477,6 +730,25 @@ class EveryRuinsRoomTests(unittest.TestCase):
                          | {(7, room) for room in (13, 15, 16, 18, 19, 24, 25, 26, 27)}
                          | {(8, 12)} | {(9, room) for room in (3, 4, 5, 7, 15)})
 
+    def test_grit_comes_from_cracks_in_the_undersides_of_stone(self):
+        from pop2.caverns import customized_rooms
+
+        for place, air in self.rooms.items():
+            if place[1] in customized_rooms(place[0]):
+                self.assertEqual((air.grit, air.ceilings), ((), ()), place)
+                continue
+            self.assertLessEqual(len(air.grit), ruins_ambience.MOST_GRIT, place)
+            for crack in air.grit:
+                self.assertTrue((air.luminance[crack.top - 6:crack.top, crack.x] >= 72).all(), place)
+                self.assertGreaterEqual(crack.bottom - crack.top, ruins_ambience.GRIT_SHORTEST_FALL - 3, place)
+                for other in air.grit:
+                    if other is not crack:
+                        self.assertGreaterEqual(abs(other.x - crack.x), ruins_ambience.GRIT_APART, place)
+        # The rooms of the approved clips.
+        self.assertTrue(self.rooms[7, 4].grit)
+        self.assertTrue(self.rooms[7, 19].grit)
+        self.assertGreater(sum(bool(air.grit) for air in self.rooms.values()), 40)
+
     def test_level_six_room_twelve_has_the_sky_that_was_approved(self):
         stars = self.rooms[6, 11].stars
         self.assertEqual(len(stars), 19)
@@ -532,6 +804,39 @@ class RealSceneTests(unittest.TestCase):
         changed = (before != after).any(axis=2)
         self.assertTrue(changed.any())
         self.assertFalse(changed[365:].any())
+
+    def bump(self, enabled):
+        from tools.audit_temple_routes import Harness, press
+
+        random.seed(77)
+        harness = Harness(7, peaceful=True, draw=True)
+        try:
+            scene = harness.scene
+            scene.audio = None
+            scene.cave_ambience_enabled = enabled
+            scene.jump_to_room(4, row=1, x=250, facing=1)
+            harness.tick(24)
+            press(harness, 'up', True)
+            harness.tick(3)
+            press(harness, 'up', False)
+            shaken = 0
+            for _ in range(40):
+                harness.tick()
+                ambience = scene.level_renderer.ambience
+                if ambience is not None:
+                    shaken = max(shaken, sum(trickle.shaken for trickle in ambience.trickles))
+            state = scene.sequence_state
+            return dict(random=random.getstate(), room=scene.room_id, x=scene.player_x, action=scene.action,
+                        sequence=state.sequence_id, y=state.current_y, shaken=shaken,
+                        scenery=scene.level_renderer.cavern_scenery.tobytes())
+        finally:
+            harness.close()
+
+    def test_jumping_up_against_the_ceiling_shakes_grit_down_and_nothing_else(self):
+        off, on = self.bump(False), self.bump(True)
+        self.assertEqual(off.pop('shaken'), 0)
+        self.assertGreaterEqual(on.pop('shaken'), 3)
+        self.assertEqual(off, on)
 
 
 class SourceTests(unittest.TestCase):

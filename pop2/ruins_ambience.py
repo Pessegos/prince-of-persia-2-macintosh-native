@@ -26,6 +26,17 @@ of air across it, over the ruins too: a long wavy line a few shades paler than w
 behind it, which runs in, rolls one small curl that comes out a little higher than it
 went in, and runs out. It slows down to wind its curl and fades in and out in three
 steps of the palette, as a game of the time would. The desert has its own wind.
+
+The grit. Every few seconds a little grit trickles from a crack in the underside of a
+block or a ledge, now and then a thin pour that heaps a small mound on the floor and
+wears away later. Its grains are mostly specks, some chips and a few crumbs that
+tumble as they fall and break in two when they land; a few bits jump up where they
+land and some lie a moment. A blow shakes grit down from the ceilings, most near it:
+the Prince bumping his head jumping up, stamping, landing hard, a gate slamming or
+shutting, a loose floor landing; the strongest bring down a pebble or two. Grit falling
+on the Prince bounces off his head and shoulders, and a streak of wind passing carries
+the grains along its way. Over pale stone the grit is a step darker so that it shows.
+The paintings (the start room, the throne room, the horse and the desert) shed none.
 """
 
 from dataclasses import dataclass, field
@@ -34,6 +45,11 @@ import random
 
 import numpy
 from PIL import Image
+
+from pop2.cavern_ambience import (
+    EMPTY_TILES, FLOOR_STRIP, LANDING_DEPTH, SHUT_PUFF, SLAM_PUFF, TILE_HEIGHT, TILE_PUFF, TILE_WIDTH,
+    TIP_LUMINANCE, Fleck, floor_y, landing, open_air,
+)
 
 WIDTH, HEIGHT = 510, 365
 
@@ -152,6 +168,89 @@ NEAR_CURL = 16
 BODY_PALER, END_PALER = (52, 50, 62), (26, 25, 31)
 FADE_STEP = 2
 
+# The grit's colours, as RGB, each shown as the nearest of the room's palette.
+GRIT_PALE, GRIT_HEAD, GRIT_TAIL, GRIT_DIM = (173, 141, 141), (166, 131, 131), (135, 110, 110), (113, 87, 113)
+PEBBLE_DARK = (82, 62, 86)
+GRIT_COLOURS = (GRIT_PALE, GRIT_HEAD, GRIT_TAIL, GRIT_DIM, PEBBLE_DARK)
+# Where grit comes from: the underside of stone this many pixels thick, with this much
+# clear air below, at most GRIT_UNDERSIDE above the bottom of its row, never a door's
+# arch, falling at least GRIT_SHORTEST_FALL onto a floor with most of the way clear.
+GRIT_STONE_ABOVE = 6
+GRIT_CLEAR_BELOW = 10
+GRIT_UNDERSIDE = 30
+GRIT_NOT_FROM = (16, 17)
+GRIT_SHORTEST_FALL = 48
+GRIT_PATH_CLEAR = 0.9
+# The room's own cracks: how many and how far apart.
+MOST_GRIT, GRIT_APART = 4, 60
+# Ceiling c is the underside over row c: within these pixels of c * TILE_HEIGHT + 5,
+# with this much clear air below.
+CEILING_ABOVE, CEILING_BELOW, CEILING_CLEAR = 25, 7, 6
+# The room's rhythm: ticks between trickles, a sprinkle's grains, how often one is a pour
+# instead, and its grains.
+TICKS_BETWEEN_TRICKLES = (24, 60)
+SPRINKLE = (3, 6)
+POUR_CHANCE, POUR = 0.25, (14, 26)
+SPRINKLE_GAP = (0, 1)
+GRIT_GRAVITY, GRIT_FASTEST = 0.8, 6.0
+# A new trickle this close to one still running is not started.
+SAME_CRACK = 2
+# A blow: how strong each kind is, from what speed a landing is one (1.0 from twice
+# that), grains right over the hands of a bump, how far a shake reaches (rows count 0.7
+# of their height), how fast it spreads (pixels a tick) and the most cracks it opens.
+STRENGTH = dict(bump=1.0, stamp=0.45, slam=0.9, tile=0.9, shut=0.35)
+HARD_LANDING = 18
+BUMP_REACH, BUMP_SPOTS, BUMP_GRAINS = 14, (3, 5), (4, 8)
+SHAKE_REACH, SHAKE_SPREAD, SHAKE_EVERY, MOST_SPOTS = 120, 50, 12, 12
+ONE_BLOW_APART = 40
+# Pebbles: from blows this strong, how many, their fall, bounce and rest.
+PEBBLE_FROM, PEBBLES = 0.7, (1, 3)
+PEBBLE_GRAVITY, PEBBLE_FASTEST, PEBBLE_BOUNCE = 1.0, 7.0, 0.3
+PEBBLE_REST = (8, 16)
+# A grain's head, by chance (the middle shades most), and the two steps of its tail.
+HEADS = (GRIT_PALE, GRIT_HEAD, GRIT_HEAD, GRIT_TAIL)
+TAILS = {GRIT_PALE: (GRIT_HEAD, GRIT_TAIL), GRIT_HEAD: (GRIT_TAIL, GRIT_DIM), GRIT_TAIL: (GRIT_DIM, GRIT_DIM)}
+# A sprinkle's grains: how often each size, and the turns of a chip and a crumb as they
+# tumble (one turn every TUMBLE ticks, either way round), lit at the top left.
+SIZES = (('speck', 0.7), ('chip', 0.25), ('crumb', 0.05))
+TURNS = {'chip': (((0, 0), (0, 1)), ((0, 0), (1, 1)), ((0, 0), (1, 0)), ((1, 0), (0, 1))),
+         'crumb': (((0, 0), (1, 0), (0, 1)), ((0, 0), (1, 0), (1, 1)), ((1, 0), (0, 1), (1, 1)),
+                   ((0, 0), (0, 1), (1, 1)))}
+TUMBLE = 2
+SHADES = {GRIT_PALE: (GRIT_PALE, GRIT_HEAD, GRIT_TAIL), GRIT_HEAD: (GRIT_HEAD, GRIT_TAIL, GRIT_DIM),
+          GRIT_TAIL: (GRIT_TAIL, GRIT_DIM, PEBBLE_DARK)}
+# A pour's thread: grains this close are joined, its dither running down, and its grains
+# spaced at its start and end.
+THREAD_GAP = 4
+THREAD = (GRIT_HEAD, GRIT_PALE, GRIT_TAIL, GRIT_HEAD)
+POUR_THIN_START, POUR_THIN_END = 3, 4
+# Landing: the chance a grain kicks bits up (a pour's less), how many, how high and how
+# far aside (pixels a tick), how fast they fall back, how long they last; and the
+# chance it lies on the floor a moment, and how long.
+SPLASH_CHANCE, POUR_SPLASH_CHANCE = 0.45, 0.25
+SPLASH_BITS, SPLASH_LIFT, SPLASH_SIDE = (1, 2), (0.8, 1.6), (0.4, 1.1)
+SPLASH_PULL, SPLASH_LIFE = 0.45, (3, 5)
+REST_CHANCE, POUR_REST_CHANCE = 0.5, 0.2
+REST_LIFE = (6, 12)
+# A pour's mound: its heights (offsets -3..3 from where it lands), the chance a grain
+# stays on it, how long it stays after the pour and how often it then loses a grain.
+MOUND = (1, 2, 3, 4, 3, 2, 1)
+HEAP_CHANCE = 0.75
+MOUND_STAYS, MOUND_WEARS = (72, 144), (4, 8)
+# Off the Prince: how far aside and up a bit is thrown, how fast it falls back, how many
+# times it may bounce again, and the most ticks it flies.
+OFF_SIDE, OFF_UP, OFF_PULL, OFF_BOUNCES = (0.5, 1.3), (0.6, 1.5), 0.5, 2
+OFF_LIFE = 30
+# The streak's own wind: how near the grit must be, its strongest push (pixels a tick),
+# how quickly a grain takes it up, and how much of an upward push lifts it.
+STREAK_REACH, STREAK_PUSH, STREAK_TAKE, STREAK_LIFT = 14.0, 6.0, 0.5, 0.6
+# Background this bright (0-255) counts as pale stone: there the grit steps darker.
+PALE_STONE = 140
+ON_PALE = {GRIT_PALE: GRIT_TAIL, GRIT_HEAD: GRIT_DIM, GRIT_TAIL: PEBBLE_DARK, GRIT_DIM: PEBBLE_DARK}
+
+# Every colour the effects use, each shown as the nearest of the room's palette.
+INK_COLOURS = ALL_COLOURS | frozenset(GRIT_COLOURS)
+
 
 def sky_mask(rgb):
     """[y, x] of the night sky in an RGB picture of the room."""
@@ -259,6 +358,11 @@ class RuinsAir:
     palette: numpy.ndarray | None = None
     # {(RGB behind, how much paler): RGBA}, filled as it is wanted.
     paler: dict = field(default_factory=dict)
+    # The room's own cracks, and for each ceiling [x] the y grit leaves it at, or -1.
+    grit: tuple = ()
+    ceilings: tuple = ()
+    # [y, x] of the scenery's brightness (0-255).
+    luminance: numpy.ndarray | None = None
 
     def in_sky(self, x, y):
         return 0 <= x < WIDTH and 0 <= y < HEIGHT and bool(self.sky[y, x])
@@ -284,9 +388,87 @@ def paler(behind, amount, palette):
     return tuple(behind)
 
 
-def read_room(level_number, room, rgb, palette, covered=None):
-    """The air of a room from an RGB picture of its scenery, its palette and [y, x] of
-    what its foreground covers."""
+@dataclass(frozen=True)
+class Crack:
+    """Where grit comes out of the underside of stone, and the floor it lands on."""
+
+    x: int
+    top: int
+    bottom: int
+
+
+def runs(picked, length, upward):
+    """[y, x]: picked for all of the length rows above (upward) or from (not) each pixel."""
+    count = numpy.zeros((picked.shape[0] + 1, picked.shape[1]), dtype=numpy.int32)
+    count[1:] = numpy.cumsum(picked, axis=0)
+    height = picked.shape[0]
+    rows = numpy.arange(height)
+    if upward:
+        low, high = rows - length, rows
+    else:
+        low, high = rows, rows + length
+    valid = (low >= 0) & (high <= height)
+    low, high = low.clip(0, height), high.clip(0, height)
+    return (count[high] - count[low] == length) & valid[:, None]
+
+
+def grit_sources(air, clear, stone, terrain, room, rng):
+    """Cracks in the undersides of stone with open air below and a floor to land on."""
+    candidates = (runs(stone, GRIT_STONE_ABOVE, True) & runs(clear, GRIT_CLEAR_BELOW, False))
+    candidates[1:] &= ~air[:-1]
+    candidates[:3] = False
+    candidates[HEIGHT - GRIT_SHORTEST_FALL:] = False
+    found = []
+    for x in range(10, WIDTH - 10, 2):
+        for y in numpy.nonzero(candidates[:, x])[0]:
+            y = int(y)
+            # Only from the underside of a block or a ledge, not from a door's arch or
+            # a carving painted on the wall.
+            above = (y - 1 - 5) // TILE_HEIGHT
+            if not 0 <= above < 3:
+                continue
+            kind = terrain.tile(room, x // TILE_WIDTH, above).kind
+            if kind in EMPTY_TILES or kind in GRIT_NOT_FROM or (above + 1) * TILE_HEIGHT + 5 - y > GRIT_UNDERSIDE:
+                continue
+            ground = landing(terrain, room, x, y)
+            if ground is None or ground - y < GRIT_SHORTEST_FALL:
+                continue
+            path = clear[y:ground - FLOOR_STRIP, x]
+            if path.size and path.mean() >= GRIT_PATH_CLEAR:
+                found.append(Crack(x, y, ground + rng.randint(*LANDING_DEPTH)))
+    rng.shuffle(found)
+    chosen = []
+    for crack in found:
+        if len(chosen) < MOST_GRIT and all(abs(crack.x - other.x) >= GRIT_APART for other in chosen):
+            chosen.append(crack)
+    return tuple(sorted(chosen, key=lambda crack: crack.x))
+
+
+def ceilings(air, clear, stone, terrain, room):
+    """For each of the three ceilings, [x] the y grit leaves its underside at, or -1."""
+    leaves = numpy.zeros_like(stone)
+    leaves[1:] = stone[:-1] & ~air[:-1] & runs(clear, CEILING_CLEAR, False)[1:]
+    found = []
+    for c in range(3):
+        line = [-1] * WIDTH
+        top = max(1, c * TILE_HEIGHT + 5 - CEILING_ABOVE)
+        bottom = min(HEIGHT - 6, c * TILE_HEIGHT + 5 + CEILING_BELOW)
+        for x in range(WIDTH):
+            if c > 0:
+                kind = terrain.tile(room, x // TILE_WIDTH, c - 1).kind
+                if kind in EMPTY_TILES or kind in GRIT_NOT_FROM:
+                    continue
+            # The lowest underside in reach.
+            hits = numpy.nonzero(leaves[top:bottom + 1, x])[0]
+            if len(hits):
+                line[x] = top + int(hits[-1])
+        found.append(tuple(line))
+    return tuple(found)
+
+
+def read_room(level_number, room, rgb, palette, covered=None, terrain=None, painted=False):
+    """The air of a room from an RGB picture of its scenery, its palette, [y, x] of what
+    its foreground covers and its tiles; a painted room sheds no grit."""
     sky, blue = sky_mask(rgb), blueness(rgb)
     open_sky = float(sky.mean())
     desert = bool(open_sky >= DESERT_SKY and sand_mask(rgb).mean() >= DESERT_SAND)
@@ -295,18 +477,27 @@ def read_room(level_number, room, rgb, palette, covered=None):
         stars = place_desert_stars(sky, random.Random(seed + 41))
     else:
         stars = warm_some(place_stars(sky, blue, random.Random(seed)), random.Random(seed + 7))
-    return RuinsAir(sky, blue, tuple(stars), nearest_colours(palette, ALL_COLOURS), desert,
-                    windy=open_sky >= OPEN_SKY and not desert, covered=covered, palette=palette_rgb(palette))
+    luminance = numpy.asarray(Image.fromarray(numpy.ascontiguousarray(rgb, dtype=numpy.uint8)).convert('L'))
+    grit = lines = ()
+    if terrain is not None and not painted:
+        air = numpy.frombuffer(open_air(luminance, terrain, room), dtype=numpy.uint8).reshape(HEIGHT, WIDTH) != 0
+        clear = air if covered is None else air & ~covered
+        stone = luminance >= TIP_LUMINANCE
+        grit = grit_sources(air, clear, stone, terrain, room, random.Random(seed))
+        lines = ceilings(air, clear, stone, terrain, room)
+    return RuinsAir(sky, blue, tuple(stars), nearest_colours(palette, INK_COLOURS), desert,
+                    windy=open_sky >= OPEN_SKY and not desert, covered=covered, palette=palette_rgb(palette),
+                    grit=grit, ceilings=lines, luminance=luminance)
 
 
 def ruins_air(level_number, room, art, terrain=None, raised=None):
     """The air of a room as the game draws it (terrain and raised as in room_air)."""
-    from pop2.caverns import room_assets
+    from pop2.caverns import customized_rooms, room_assets
 
     palette = room_assets(level_number, room)[2]
     rgb = numpy.asarray(Image.alpha_composite(art.background, art.foreground).convert('RGB'))
     covered = numpy.asarray(art.foreground.getchannel('A')) > 0
-    return read_room(level_number, room, rgb, palette, covered)
+    return read_room(level_number, room, rgb, palette, covered, terrain, room in customized_rooms(level_number))
 
 
 @dataclass
@@ -483,6 +674,88 @@ def streak_pixels(streak):
 
 
 @dataclass
+class Grain:
+    y: float
+    speed: float
+    x: float
+    shade: tuple
+    wind: float = 0.0
+    size: str = 'speck'
+    turn: int = 0
+    spin: int = 1
+
+
+@dataclass
+class Mound:
+    """A pour's heap: its heights, the grains rolling down it to their place, and how
+    long it stays once the pour is over (None while it runs)."""
+
+    x: int
+    bottom: int
+    heights: list = field(default_factory=lambda: [0] * len(MOUND))
+    rolling: list = field(default_factory=list)
+    stays: int | None = None
+    wear: int = 0
+
+
+@dataclass
+class Trickle:
+    source: Crack
+    wait: int
+    left: int
+    pour: bool = False
+    gap: int = 0
+    grains: list = field(default_factory=list)
+    shaken: bool = False
+    crumbled: bool = False
+    released: int = 0
+    mound: Mound | None = None
+
+    @property
+    def running(self):
+        return self.wait > 0 or self.left > 0
+
+
+@dataclass
+class Pebble:
+    x: float
+    y: float
+    bottom: int
+    wait: int
+    vx: float = 0.0
+    vy: float = 0.3
+    bounced: bool = False
+    rest: int = 0
+
+
+@dataclass
+class Bit:
+    """A bit of grit thrown off the Prince, drawn over him."""
+
+    x: float
+    y: float
+    dx: float
+    dy: float
+    shade: tuple
+    floor: int
+    bounces: int = 0
+    age: int = 0
+
+
+def tangents(pixels):
+    found = []
+    for i in range(len(pixels)):
+        (ax, ay), (bx, by) = pixels[max(0, i - 2)], pixels[min(len(pixels) - 1, i + 2)]
+        length = math.hypot(bx - ax, by - ay) or 1.0
+        found.append(((bx - ax) / length, (by - ay) / length))
+    return found
+
+
+def row_of(floor):
+    return max(0, min(2, round((floor - floor_y(0)) / TILE_HEIGHT)))
+
+
+@dataclass
 class RuinsAmbience:
     room: int
     air: RuinsAir
@@ -494,23 +767,470 @@ class RuinsAmbience:
     streaks: list = field(default_factory=list)
     gust: int = 0
     gust_wait: int = 0
+    trickles: list = field(default_factory=list)
+    mounds: list = field(default_factory=list)
+    pebbles: list = field(default_factory=list)
+    flecks: list = field(default_factory=list)
+    bits: list = field(default_factory=list)
+    quiet_wait: int = 0
+    footing: object = None
+    # [y, x] of the Prince as last drawn, and the frame just before the actors.
+    prince_mask: numpy.ndarray | None = None
+    before_actors: Image.Image | None = None
     tick: int = 0
 
     def __post_init__(self):
         self.twinkles = [[0, 0] for _ in self.air.stars]
         self.shooter_wait = self.rng.randint(*FIRST_SHOOTER)
         self.gust_wait = self.rng.randint(*TICKS_BETWEEN_GUSTS)
+        self.quiet_wait = self.rng.randint(*TICKS_BETWEEN_TRICKLES)
 
     def see_gates(self, art):
         """The caves' torches watch the gates; nothing here does."""
 
-    def advance(self, terrain=None, footing=None, thuds=()):
-        """One game tick."""
+    def advance(self, terrain=None, footing=None, thuds=(), shakes=()):
+        """One game tick. shakes: (room, 'bump' or 'stamp', row) of the Prince's own
+        blows on the ceiling and the floor this tick."""
         self.tick += 1
         self.twinkle()
         self.advance_shooter()
+        blows = self.hits(footing, thuds, shakes)
+        self.advance_flecks()
+        # One blow in a place a tick: a stamp on landing is one shake, not two.
+        done = []
+        for x, row, strength, name in sorted(blows, key=lambda blow: -blow[2]):
+            if all(abs(x - other) > ONE_BLOW_APART or row != other_row for other, other_row in done):
+                done.append((x, row))
+                self.shake(x, row, strength, name, terrain)
+        self.quiet_trickle(terrain)
         self.blow()
+        self.advance_trickles()
+        self.advance_mounds()
+        self.advance_pebbles()
+        self.advance_bits()
         self.advance_streaks()
+
+    # The grit
+
+    def hits(self, footing, thuds, shakes):
+        """(x, row, strength, name) of what hit the ceilings or the floor this tick."""
+        last, self.footing = self.footing, footing
+        blows = []
+        if last is not None and footing is not None and last.falling and not footing.falling:
+            if last.speed >= HARD_LANDING:
+                blows.append((footing.foot, row_of(footing.floor), min(1.0, last.speed / (2 * HARD_LANDING)),
+                              'landing'))
+        for thud in thuds:
+            for name, kind in (('slam', SLAM_PUFF), ('tile', TILE_PUFF), ('shut', SHUT_PUFF)):
+                if thud.kind is kind:
+                    blows.append(((thud.left + thud.right) / 2, row_of(thud.left_floor), STRENGTH[name], name))
+        for room, name, row in shakes:
+            if room == self.room:
+                where = footing.foot if footing is not None else WIDTH / 2
+                blows.append((where, row, STRENGTH[name], name))
+        return blows
+
+    def busy(self, x, pour=True):
+        """Whether a crack near x is pouring, or for a new pour, running at all."""
+        return any(abs(trickle.source.x - x) <= SAME_CRACK and trickle.running and (pour or trickle.pour)
+                   for trickle in self.trickles)
+
+    def start(self, x, top, grains, wait, pour=False, terrain=None):
+        if self.busy(x, pour):
+            return
+        ground = landing(terrain, self.room, int(x), top) if terrain is not None else None
+        bottom = HEIGHT if ground is None else ground + self.rng.randint(*LANDING_DEPTH)
+        self.trickles.append(Trickle(Crack(int(x), top, bottom), wait, grains, pour))
+
+    def shake(self, x, row, strength, name, terrain):
+        """Grit shaken down from the ceilings, most near the blow, a little further off a
+        few ticks later; a strong blow brings down a pebble or two."""
+        rng, lines = self.rng, self.air.ceilings
+        if not lines:
+            return
+        before = len(self.trickles)
+        spots = 0
+        if name == 'bump':
+            # Right over his hands, at once.
+            line = lines[row]
+            near = [c for c in range(max(0, int(x) - BUMP_REACH), min(WIDTH, int(x) + BUMP_REACH + 1))
+                    if line[c] >= 0]
+            for c in rng.sample(near, min(len(near), rng.randint(*BUMP_SPOTS))):
+                self.start(c, line[c], rng.randint(*BUMP_GRAINS), rng.randint(0, 2), terrain=terrain)
+                spots += 1
+        candidates = []
+        for c, line in enumerate(lines):
+            for column in range(rng.randrange(SHAKE_EVERY), WIDTH, SHAKE_EVERY):
+                if line[column] < 0:
+                    continue
+                distance = math.hypot(column - x, (c - row) * TILE_HEIGHT * 0.7)
+                chance = strength * math.exp(-distance / SHAKE_REACH)
+                if rng.random() < chance:
+                    candidates.append((distance, column, line[column], chance))
+        candidates.sort()
+        for distance, column, top, chance in candidates[:MOST_SPOTS - spots]:
+            grains = 1 + int(5 * chance * rng.random() + 2 * chance)
+            self.start(column + rng.randint(-3, 3), top, grains, int(distance / SHAKE_SPREAD) + rng.randint(0, 3),
+                       terrain=terrain)
+        for trickle in self.trickles[before:]:
+            trickle.shaken = True
+        if strength < PEBBLE_FROM:
+            return
+        near = self.trickles[before:before + 4]
+        for trickle in rng.sample(near, min(len(near), rng.randint(*PEBBLES))):
+            source = trickle.source
+            self.pebbles.append(Pebble(float(source.x), float(source.top), source.bottom,
+                                       trickle.wait + rng.randint(0, 3)))
+
+    def quiet_trickle(self, terrain):
+        """The room's own rhythm: now a sprinkle, now a pour, from one of its cracks."""
+        rng, sources = self.rng, self.air.grit
+        self.quiet_wait -= 1
+        if not sources or self.quiet_wait > 0:
+            return
+        self.quiet_wait = rng.randint(*TICKS_BETWEEN_TRICKLES)
+        source = rng.choice([crack for crack in sources if not self.busy(crack.x)] or sources)
+        pour = rng.random() < POUR_CHANCE
+        self.start(source.x, source.top, rng.randint(*(POUR if pour else SPRINKLE)), 0, pour, terrain)
+
+    def release(self, trickle):
+        """The next grain out of a crack."""
+        rng, source = self.rng, trickle.source
+        if not trickle.grains and not trickle.crumbled:
+            # Pixels come away from the underside first: one, or a few when shaken.
+            trickle.crumbled = True
+            for offset in rng.sample((-1, 0, 1), 3 if trickle.shaken else 1):
+                self.flecks.append(Fleck(source.x + offset, source.top, 0.0, 0.0, 0.0, (GRIT_DIM,),
+                                         rng.randint(2, 3), HEIGHT))
+        trickle.left -= 1
+        trickle.released += 1
+        if trickle.pour:
+            # Straight down from the crack, thinner at its start and end.
+            trickle.gap = 1 if trickle.released < POUR_THIN_START or trickle.left < POUR_THIN_END else 0
+            x, shade, size = source.x, GRIT_HEAD, 'speck'
+        else:
+            trickle.gap = rng.randint(*SPRINKLE_GAP)
+            x = source.x + (rng.random() < 0.25) * rng.choice((-1, 1))
+            shade = rng.choice(HEADS)
+            size = rng.choices([name for name, _ in SIZES], [share for _, share in SIZES])[0]
+        trickle.grains.append(Grain(float(source.top), 0.3, float(x), shade, 0.0, size, rng.randrange(4),
+                                    rng.choice((-1, 1))))
+
+    def advance_trickles(self):
+        kept = []
+        for trickle in self.trickles:
+            source, mound = trickle.source, trickle.mound
+            if trickle.wait > 0:
+                trickle.wait -= 1
+            elif trickle.left > 0:
+                if trickle.gap > 0:
+                    trickle.gap -= 1
+                else:
+                    self.release(trickle)
+            grains = []
+            for grain in trickle.grains:
+                was = grain.y
+                # A streak passing by carries the grain along its way, up in its curl.
+                push_x, push_y = self.streak_push(grain.x, grain.y)
+                grain.speed = min(GRIT_FASTEST, grain.speed + GRIT_GRAVITY + push_y * STREAK_LIFT)
+                grain.y += grain.speed
+                grain.wind += (push_x - grain.wind) * STREAK_TAKE
+                grain.x += grain.wind
+                hit = self.on_prince(int(grain.x), was, grain.y)
+                if hit is not None:
+                    self.bounce_off(grain.x, hit - 1, grain.shade, source.bottom)
+                    continue
+                bottom = source.bottom
+                if mound is not None:
+                    # On top of the mound, where it has grown under the thread.
+                    column = int(grain.x) - mound.x + len(MOUND) // 2
+                    if 0 <= column < len(MOUND):
+                        bottom -= mound.heights[column]
+                if grain.y < bottom:
+                    grains.append(grain)
+                else:
+                    self.land(grain.x, bottom, trickle.pour, trickle)
+                    if grain.size == 'crumb':
+                        # It breaks in two.
+                        self.land(grain.x + 1, bottom, False)
+            trickle.grains = grains
+            if trickle.running or trickle.grains:
+                kept.append(trickle)
+            elif trickle.mound is not None:
+                trickle.mound.stays = self.rng.randint(*MOUND_STAYS)
+        self.trickles = kept
+
+    def heap(self, trickle, x):
+        """A grain of a pour settles on its mound, rolling off a side that is full."""
+        mound = trickle.mound
+        if mound is None:
+            mound = trickle.mound = Mound(int(x), trickle.source.bottom)
+            self.mounds.append(mound)
+        rng, heights, middle = self.rng, mound.heights, len(MOUND) // 2
+        c = max(0, min(len(MOUND) - 1, middle + round(rng.gauss(0, 1.2))))
+        for _ in range(len(MOUND)):
+            if heights[c] + sum(1 for target, _ in mound.rolling if target == c) < MOUND[c]:
+                # It lands on the top and rolls down to its place.
+                mound.rolling.append([c, middle])
+                return True
+            c = max(0, min(len(MOUND) - 1, c + rng.choice((-1, 1))))
+        return False
+
+    def land(self, x, bottom, pour, trickle=None):
+        rng = self.rng
+        if bottom >= HEIGHT:
+            return
+        if pour and trickle is not None and rng.random() < HEAP_CHANCE and self.heap(trickle, x):
+            return
+        if rng.random() < (POUR_SPLASH_CHANCE if pour else SPLASH_CHANCE):
+            for _ in range(rng.randint(*SPLASH_BITS)):
+                self.flecks.append(Fleck(x, bottom - 1, rng.choice((-1, 1)) * rng.uniform(*SPLASH_SIDE),
+                                         -rng.uniform(*SPLASH_LIFT), SPLASH_PULL, (GRIT_HEAD, GRIT_TAIL),
+                                         rng.randint(*SPLASH_LIFE), bottom))
+        if rng.random() < (POUR_REST_CHANCE if pour else REST_CHANCE):
+            self.flecks.append(Fleck(x + rng.choice((-1, 0, 0, 1)), bottom - rng.randint(0, 2), 0.0, 0.0, 0.0,
+                                     (GRIT_TAIL, GRIT_DIM), rng.randint(*REST_LIFE), HEIGHT))
+
+    def advance_mounds(self):
+        rng, kept = self.rng, []
+        for mound in self.mounds:
+            for roller in list(mound.rolling):
+                target, place = roller
+                if place == target:
+                    mound.heights[target] += 1
+                    mound.rolling.remove(roller)
+                else:
+                    roller[1] += 1 if target > place else -1
+            if mound.rolling:
+                kept.append(mound)
+                continue
+            if mound.stays is not None:
+                if mound.stays > 0:
+                    mound.stays -= 1
+                elif mound.wear > 0:
+                    mound.wear -= 1
+                else:
+                    # The wind takes a grain off the top.
+                    tallest = max(mound.heights)
+                    c = rng.choice([i for i, height in enumerate(mound.heights) if height == tallest])
+                    mound.heights[c] -= 1
+                    mound.wear = rng.randint(*MOUND_WEARS)
+            if any(mound.heights):
+                kept.append(mound)
+        self.mounds = kept
+
+    def advance_pebbles(self):
+        rng, kept = self.rng, []
+        for pebble in self.pebbles:
+            if pebble.wait > 0:
+                pebble.wait -= 1
+                kept.append(pebble)
+                continue
+            if pebble.rest:
+                pebble.rest -= 1
+                if pebble.rest:
+                    kept.append(pebble)
+                continue
+            pebble.vy = min(PEBBLE_FASTEST, pebble.vy + PEBBLE_GRAVITY)
+            pebble.y += pebble.vy
+            pebble.x += pebble.vx
+            if pebble.y >= pebble.bottom:
+                if pebble.bottom >= HEIGHT:
+                    continue
+                pebble.y = pebble.bottom - 1
+                if not pebble.bounced:
+                    pebble.bounced = True
+                    pebble.vy = -pebble.vy * PEBBLE_BOUNCE
+                    pebble.vx = rng.choice((-1, 1)) * rng.uniform(0.5, 1.0)
+                else:
+                    pebble.vx = pebble.vy = 0.0
+                    pebble.rest = rng.randint(*PEBBLE_REST)
+            kept.append(pebble)
+        self.pebbles = kept
+
+    def advance_flecks(self):
+        kept = []
+        for fleck in self.flecks:
+            fleck.age += 1
+            fleck.x += fleck.dx
+            fleck.y += fleck.dy
+            fleck.dy += fleck.pull
+            if fleck.age < fleck.life and fleck.y <= fleck.floor:
+                kept.append(fleck)
+        self.flecks = kept
+
+    # Grit on the Prince
+
+    def on_prince(self, x, was, now):
+        """The first row of the Prince a grain falling from was to now meets, or None."""
+        mask = self.prince_mask
+        if mask is None or not 0 <= x < WIDTH:
+            return None
+        for y in range(max(0, int(was) + 1), min(HEIGHT, int(now) + 1)):
+            if mask[y, x]:
+                return y
+        return None
+
+    def bounce_off(self, x, y, shade, floor):
+        rng = self.rng
+        self.bits.append(Bit(float(x), float(y), rng.choice((-1, 1)) * rng.uniform(*OFF_SIDE), -rng.uniform(*OFF_UP),
+                             shade, floor))
+
+    def advance_bits(self):
+        rng, kept = self.rng, []
+        for bit in self.bits:
+            was = bit.y
+            bit.dy += OFF_PULL
+            bit.x += bit.dx
+            bit.y += bit.dy
+            hit = self.on_prince(int(bit.x), was, bit.y) if bit.dy > 0 else None
+            if hit is not None and bit.bounces < OFF_BOUNCES:
+                # Again, off a shoulder or an arm, with less to it.
+                bit.bounces += 1
+                bit.y = hit - 1
+                bit.dy = -abs(bit.dy) * 0.35
+                bit.dx = (bit.dx or rng.choice((-1, 1))) * 1.2
+            if bit.y >= bit.floor:
+                self.land(bit.x, bit.floor, False)
+            elif bit.age < OFF_LIFE:
+                bit.age += 1
+                kept.append(bit)
+        self.bits = kept
+
+    def watches_the_prince(self):
+        """Whether anything is falling that could land on him."""
+        return bool(self.bits) or any(trickle.grains for trickle in self.trickles)
+
+    def streak_push(self, x, y):
+        """The push (x, y, pixels a tick) of the nearest streak showing within reach."""
+        best, push = STREAK_REACH, (0.0, 0.0)
+        for streak in self.streaks:
+            showing = streak.showing()
+            if not len(showing):
+                continue
+            if streak.tangents is None:
+                streak.tangents = tangents(streak.pixels)
+            for i in showing:
+                px, py = streak.pixels[i]
+                if abs(px - x) >= best or abs(py - y) >= best:
+                    continue
+                distance = math.hypot(px - x, py - y)
+                if distance < best:
+                    best = distance
+                    tx, ty = streak.tangents[i]
+                    strength = STREAK_PUSH * (1 - distance / STREAK_REACH)
+                    push = tx * strength, ty * strength
+        return push
+
+    def grit_pixels(self):
+        """(x, y, RGB) of the grit, its cracks and its mounds."""
+        for fleck in self.flecks:
+            yield (int(fleck.x), int(fleck.y),
+                   fleck.inks[min(len(fleck.inks) - 1, fleck.age * len(fleck.inks) // fleck.life)])
+        for trickle in self.trickles:
+            source = trickle.source
+            if trickle.wait == 0 and trickle.left > 0:
+                # The crack the grit comes out of.
+                yield source.x, source.top - 1, PEBBLE_DARK
+                if trickle.pour and trickle.released > 1:
+                    # The thread starts at the crack, not a row below it.
+                    yield source.x, source.top, THREAD[(-self.tick) % len(THREAD)]
+            previous = None
+            for grain in trickle.grains:
+                y, x = int(grain.y), int(round(grain.x))
+                if (trickle.pour and previous is not None and 0 < previous[0] - y <= THREAD_GAP
+                        and abs(previous[1] - x) <= 3):
+                    # Join the thread up to the grain below, its dither running down; in the
+                    # wind the two may be a pixel or two apart, so the join leans.
+                    low_y, low_x = previous
+                    for between in range(y + 1, low_y):
+                        lean = round(x + (low_x - x) * (between - y) / (low_y - y))
+                        yield lean, between, THREAD[(between - self.tick) % len(THREAD)]
+                tails = TAILS.get(grain.shade, (GRIT_DIM, GRIT_DIM))
+                if grain.size == 'speck':
+                    yield x, y, grain.shade
+                    for step in range(min(2, int(grain.speed // 2.5))):
+                        yield x, y - 1 - step, tails[step]
+                else:
+                    turns = TURNS[grain.size]
+                    cells = turns[(grain.turn + grain.spin * (self.tick // TUMBLE)) % len(turns)]
+                    lit, middle, dark = SHADES.get(grain.shade, SHADES[GRIT_HEAD])
+                    first = min(cells, key=lambda cell: (cell[1], cell[0]))
+                    for cx, cy in cells:
+                        yield x + cx, y + cy, lit if (cx, cy) == first else middle if cy == 0 else dark
+                    if grain.speed >= 2.5:
+                        # Falling fast: a pixel of its own dust above it.
+                        yield x + first[0], y - 1, tails[1]
+                previous = y, x
+        middle = len(MOUND) // 2
+        for mound in self.mounds:
+            heights = mound.heights
+            for c, height in enumerate(heights):
+                for k in range(height):
+                    if k == height - 1:
+                        shade = GRIT_PALE if c <= middle else GRIT_HEAD
+                    else:
+                        shade = GRIT_HEAD if c < middle else GRIT_TAIL
+                    yield mound.x + c - middle, mound.bottom - 1 - k, shade
+                # The speckled floor swallows a mound of its own colours, so its shaded
+                # right slope gets a dark edge, light coming from the upper left.
+                lower = heights[c + 1] if c + 1 < len(heights) else 0
+                if c >= middle:
+                    for k in range(lower, height):
+                        yield mound.x + c - middle + 1, mound.bottom - 1 - k, PEBBLE_DARK
+            for _target, place in mound.rolling:
+                yield mound.x + place - middle, mound.bottom - 1 - heights[place], GRIT_PALE
+            # Its shadow, on the floor at the foot of the right slope.
+            last = max((c for c, height in enumerate(heights) if height), default=None)
+            if last is not None:
+                yield mound.x + last - middle + 2, mound.bottom - 1, GRIT_DIM
+
+    def pebble_pixels(self):
+        for pebble in self.pebbles:
+            if pebble.wait > 0:
+                continue
+            x, y = int(pebble.x), int(pebble.y)
+            yield x, y - 1, GRIT_PALE
+            yield x + 1, y - 1, GRIT_TAIL
+            yield x, y, GRIT_TAIL
+            yield x + 1, y, PEBBLE_DARK
+            if pebble.vy > 4:
+                yield x, y - 2, GRIT_DIM
+
+    def put_grit(self, canvas, pixels):
+        """Grit behind the foreground; over pale stone a step darker, so that it shows."""
+        air, inks, luminance = self.air, self.air.inks, self.air.luminance
+        for x, y, shade in pixels:
+            if 0 <= x < WIDTH and 0 <= y < HEIGHT and not air.is_covered(x, y):
+                if shade in ON_PALE and luminance is not None and luminance[y, x] >= PALE_STONE:
+                    shade = ON_PALE[shade]
+                canvas[x, y] = inks[shade]
+
+    def over_actors(self, frame, player_bounds):
+        """Where the Prince was drawn, for the grit to fall on, and the bits bouncing off
+        him, drawn over him."""
+        before = self.before_actors
+        self.prince_mask = None
+        if before is not None and player_bounds is not None:
+            # His pixels: what the characters changed, within his bounds.
+            left, top, right, bottom = (int(value) for value in player_bounds)
+            box = (max(0, left - 4), max(0, top - 4), min(WIDTH, right + 5), min(HEIGHT, bottom + 2))
+            if box[0] < box[2] and box[1] < box[3]:
+                mask = numpy.zeros((HEIGHT, WIDTH), dtype=bool)
+                mask[box[1]:box[3], box[0]:box[2]] = (numpy.asarray(frame.crop(box))
+                                                      != numpy.asarray(before.crop(box))).any(axis=2)
+                self.prince_mask = mask
+        if not self.bits:
+            return frame
+        frame = frame.copy()
+        canvas = frame.load()
+        for bit in self.bits:
+            x, y = int(bit.x), int(bit.y)
+            if 0 <= x < WIDTH and 0 <= y < HEIGHT:
+                canvas[x, y] = self.air.inks[bit.shade]
+        return frame
+
+    # The sky and the wind
 
     def twinkle(self):
         rng = self.rng
@@ -583,9 +1303,13 @@ class RuinsAmbience:
             if air.in_sky(x, y) and ((x, y) in drawn or is_sky(canvas[x, y])):
                 canvas[x, y] = inks[colour]
                 drawn.add((x, y))
+        self.put_grit(canvas, self.grit_pixels())
         # The wind, behind what the foreground covers, paler than what it crosses.
         for streak in self.streaks:
             for x, y, amount in streak_pixels(streak):
                 if 0 <= x < WIDTH and 0 <= y < HEIGHT and not air.is_covered(x, y):
                     canvas[x, y] = air.paler_than(tuple(canvas[x, y][:3]), amount)
+        self.put_grit(canvas, self.pebble_pixels())
+        # Kept to find the Prince in once he is drawn, while anything could fall on him.
+        self.before_actors = frame.copy() if self.watches_the_prince() else None
         return frame
