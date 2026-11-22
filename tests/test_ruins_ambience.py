@@ -1382,8 +1382,8 @@ class EveryRuinsRoomTests(unittest.TestCase):
         higher = list(ruins_ambience.chasm_updraft_pixels(period - phase + 22))
         self.assertLess(max(y for _, y, _ in higher), min(y for _, y, _ in lower))
         for frame in (lower, higher):
-            self.assertGreaterEqual(len(frame), 19)
-            self.assertLessEqual(len(frame), 21)
+            self.assertGreaterEqual(len(frame), 26)
+            self.assertLessEqual(len(frame), 28)
             self.assertLessEqual(max(x for x, _, _ in frame) - min(x for x, _, _ in frame), 2)
             peak = max(max(amount) for _, _, amount in frame)
             self.assertGreaterEqual(peak, 36)
@@ -1408,8 +1408,8 @@ class EveryRuinsRoomTests(unittest.TestCase):
         late = list(ruins_ambience.chasm_crosswind_pixels(period - phase + 22))
         self.assertLess(max(x for x, _, _ in early), min(x for x, _, _ in late))
         for frame in (early, late):
-            self.assertGreaterEqual(len(frame), 19)
-            self.assertLessEqual(len(frame), 21)
+            self.assertGreaterEqual(len(frame), 26)
+            self.assertLessEqual(len(frame), 28)
             self.assertTrue(all(210 <= y <= 228 for _, y, _ in frame))
         for cycle, (path, turn) in enumerate(ruins_ambience.CHASM_CROSSWIND_PATHS, start=3):
             self.assertTrue(all(first[0] <= second[0] for first, second in zip(path[:turn], path[1:turn])))
@@ -1430,12 +1430,13 @@ class EveryRuinsRoomTests(unittest.TestCase):
             for cycle, (path, turn) in enumerate(paths, start=3):
                 start = cycle * period - phase + ruins_ambience.CHASM_WISP_GLIDE_TICKS
                 coil = set(path[turn:])
-                self.assertLessEqual(max(x for x, _ in coil) - min(x for x, _ in coil), 6)
-                self.assertLessEqual(max(y for _, y in coil) - min(y for _, y in coil), 6)
-                frames = [list(pixels(start + offset)) for offset in (0, 2, 4, 5, 6)]
+                self.assertLessEqual(max(x for x, _ in coil) - min(x for x, _ in coil), 5)
+                self.assertLessEqual(max(y for _, y in coil) - min(y for _, y in coil), 5)
+                frames = [list(pixels(start + offset)) for offset in (0, 4, 8, 11, 13, 14)]
                 counts = list(map(len, frames))
                 self.assertTrue(all(first > second for first, second in zip(counts, counts[1:])))
-                self.assertTrue({(x, y) for x, y, _ in frames[2]} <= coil)
+                self.assertTrue(any((x, y) not in coil for x, y, _ in frames[2]))
+                self.assertTrue({(x, y) for x, y, _ in frames[3]} <= coil)
                 self.assertFalse(frames[-1])
 
     def test_no_random_shooting_star_over_the_desert(self):
