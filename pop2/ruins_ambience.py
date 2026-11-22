@@ -20,6 +20,12 @@ are warm, rose or pale gold. Once in a long while a shooting star crosses the sk
 faint quick one, an ordinary one, one grazing low and slow, or most rarely a fireball
 that bursts at the end and leaves its trail a moment. Over the desert of level nine
 the sky has only a few stars, middling and bright.
+
+The wind. In a room open to the sky a gust now and then sends one or two thin streaks
+of air across it, over the ruins too: a long wavy line a few shades paler than what is
+behind it, which runs in, rolls one small curl that comes out a little higher than it
+went in, and runs out. It slows down to wind its curl and fades in and out in three
+steps of the palette, as a game of the time would. The desert has its own wind.
 """
 
 from dataclasses import dataclass, field
@@ -122,6 +128,30 @@ TICKS_BETWEEN_SHOOTERS = (240, 540)
 
 ALL_COLOURS = frozenset((*(colour for kind in STAR_KINDS for colour in kind.steps), *LILAC, WHITE))
 
+# The wind blows in rooms with this much sky. A gust: ticks between gusts (counted once
+# the last is over), how long one lasts, its streaks, and how far below the first the
+# second runs.
+OPEN_SKY = 0.04
+TICKS_BETWEEN_GUSTS = (90, 160)
+GUST_TICKS = 44
+STREAKS_A_GUST = (1, 2)
+SECOND_STREAK_BELOW = (16, 32)
+# A streak: where it may start, its run in and out, its wave, its curl's first radius
+# and how much higher it comes out, and how many pixels of it show at once.
+STREAK_TOP, STREAK_BOTTOM = 20, 300
+STREAK_LEFT, STREAK_RIGHT = -30, WIDTH - 260
+RUN_IN, RUN_OUT = (90, 140), (60, 110)
+WAVE, WAVE_LENGTH = (1.0, 2.5), (60, 90)
+CURL_RADIUS, CURL_RISE = (4.0, 4.5), 2.0
+STREAK_LENGTH = (40, 60)
+# Pixels of its path its head runs a tick, slower near its curl and slower still in it.
+STREAK_SPEED, NEAR_CURL_SPEED, CURL_SPEED = 8, 5, 3
+NEAR_CURL = 16
+# How much paler than what is behind it: its body, and its two ends; and the ticks of
+# each of its three steps of fading in and out.
+BODY_PALER, END_PALER = (52, 50, 62), (26, 25, 31)
+FADE_STEP = 2
+
 
 def sky_mask(rgb):
     """[y, x] of the night sky in an RGB picture of the room."""
@@ -199,9 +229,13 @@ def place_desert_stars(sky, rng):
     return stars
 
 
+def palette_rgb(palette):
+    return numpy.array(sorted({tuple(colour[:3]) for colour in palette.values()}), dtype=numpy.int64)
+
+
 def nearest_colours(palette, wanted):
     """{RGB: the nearest RGBA of the palette} by the weighted distance the caves use."""
-    rgb = numpy.array(sorted({tuple(colour[:3]) for colour in palette.values()}), dtype=numpy.int64)
+    rgb = palette_rgb(palette)
     found = {}
     for colour in wanted:
         distance = (((rgb - numpy.array(colour)) * (2, 3, 2)) ** 2).sum(axis=1)
@@ -218,21 +252,51 @@ class RuinsAir:
     stars: tuple
     inks: dict
     desert: bool = False
+    # Wind only where the room is open to the sky; never in the desert.
+    windy: bool = False
+    # [y, x] of what the foreground covers.
+    covered: numpy.ndarray | None = None
+    palette: numpy.ndarray | None = None
+    # {(RGB behind, how much paler): RGBA}, filled as it is wanted.
+    paler: dict = field(default_factory=dict)
 
     def in_sky(self, x, y):
         return 0 <= x < WIDTH and 0 <= y < HEIGHT and bool(self.sky[y, x])
 
+    def is_covered(self, x, y):
+        return self.covered is not None and bool(self.covered[y, x])
 
-def read_room(level_number, room, rgb, palette):
-    """The air of a room from an RGB picture of its scenery and its palette."""
+    def paler_than(self, behind, amount):
+        key = behind, amount
+        if key not in self.paler:
+            self.paler[key] = (*paler(behind, amount, self.palette), 255)
+        return self.paler[key]
+
+
+def paler(behind, amount, palette):
+    """The palette colour nearest to a few steps paler than behind, never behind itself."""
+    wanted = numpy.minimum(255, numpy.array(behind) + amount)
+    distance = (((palette - wanted) * (2, 3, 2)) ** 2).sum(axis=1)
+    for index in distance.argsort(kind='stable'):
+        colour = tuple(int(value) for value in palette[index])
+        if colour != tuple(behind) and sum(colour) > sum(behind):
+            return colour
+    return tuple(behind)
+
+
+def read_room(level_number, room, rgb, palette, covered=None):
+    """The air of a room from an RGB picture of its scenery, its palette and [y, x] of
+    what its foreground covers."""
     sky, blue = sky_mask(rgb), blueness(rgb)
-    desert = bool(sky.mean() >= DESERT_SKY and sand_mask(rgb).mean() >= DESERT_SAND)
+    open_sky = float(sky.mean())
+    desert = bool(open_sky >= DESERT_SKY and sand_mask(rgb).mean() >= DESERT_SAND)
     seed = level_number * 100 + room
     if desert:
         stars = place_desert_stars(sky, random.Random(seed + 41))
     else:
         stars = warm_some(place_stars(sky, blue, random.Random(seed)), random.Random(seed + 7))
-    return RuinsAir(sky, blue, tuple(stars), nearest_colours(palette, ALL_COLOURS), desert)
+    return RuinsAir(sky, blue, tuple(stars), nearest_colours(palette, ALL_COLOURS), desert,
+                    windy=open_sky >= OPEN_SKY and not desert, covered=covered, palette=palette_rgb(palette))
 
 
 def ruins_air(level_number, room, art, terrain=None, raised=None):
@@ -241,7 +305,8 @@ def ruins_air(level_number, room, art, terrain=None, raised=None):
 
     palette = room_assets(level_number, room)[2]
     rgb = numpy.asarray(Image.alpha_composite(art.background, art.foreground).convert('RGB'))
-    return read_room(level_number, room, rgb, palette)
+    covered = numpy.asarray(art.foreground.getchannel('A')) > 0
+    return read_room(level_number, room, rgb, palette, covered)
 
 
 @dataclass
@@ -302,6 +367,121 @@ def shooter_pixels(shooter):
         yield x, y + 1 if abs(shooter.dx) > abs(shooter.dy) else y, kind.colours[0]
 
 
+def clean_line(points):
+    """The pixels of a path, one each, without the corner pixel of a diagonal step."""
+    pixels = []
+    for px, py in points:
+        pixel = (int(round(px)), int(round(py)))
+        if not pixels or pixels[-1] != pixel:
+            pixels.append(pixel)
+    clean = [pixels[0]]
+    for i in range(1, len(pixels) - 1):
+        a, b = clean[-1], pixels[i + 1]
+        if abs(a[0] - b[0]) == 1 and abs(a[1] - b[1]) == 1:
+            continue
+        clean.append(pixels[i])
+    clean.append(pixels[-1])
+    return clean
+
+
+def curl(bx, by, r0, rise):
+    """A curl from (bx, by), heading right: up by the right, over the top, down the left
+    and back under, its radius shrinking by rise so that it ends rise higher than it
+    began and does not close."""
+    cx, cy = bx, by - r0
+    points, steps = [], 720
+    for i in range(1, steps + 1):
+        turn = i / steps
+        angle = -math.pi / 2 + 2 * math.pi * turn
+        r = r0 - rise * turn
+        points.append((cx + r * math.cos(angle), cy - r * math.sin(angle)))
+    return points
+
+
+@dataclass
+class Streak:
+    """A streak of wind: its path's pixels, where its curl begins and ends among them,
+    how many show at once, and how far its head has run."""
+
+    pixels: list
+    curl: tuple
+    length: int
+    y: float
+    head: float = 0.0
+    shown: int = 0
+    tangents: list | None = None
+
+    @property
+    def gone(self):
+        return self.head - self.length >= len(self.pixels)
+
+    def step(self):
+        """How far its head runs this tick: slower about its curl."""
+        begin, end = self.curl
+        if begin - 2 <= self.head <= end + 2:
+            return CURL_SPEED
+        if begin - NEAR_CURL <= self.head <= end + NEAR_CURL:
+            return NEAR_CURL_SPEED
+        return STREAK_SPEED
+
+    def strength(self):
+        """How much of its paleness shows: a third, two thirds or all of it."""
+        left = (len(self.pixels) + self.length - self.head) / STREAK_SPEED
+        level = min(3, self.shown // FADE_STEP + 1, math.ceil(max(0.0, left) / FADE_STEP))
+        return max(1, level) / 3
+
+    def showing(self):
+        head = int(self.head)
+        return range(max(0, head - self.length), min(head, len(self.pixels)))
+
+
+def ribbon(x0, y0, rng):
+    """(pixels, (curl begin, curl end)) of a streak's path from (x0, y0)."""
+    run_in, run_out = rng.uniform(*RUN_IN), rng.uniform(*RUN_OUT)
+    wave, wave_length = rng.uniform(*WAVE), rng.uniform(*WAVE_LENGTH)
+    phase = rng.uniform(0, 2 * math.pi)
+    r0 = rng.uniform(*CURL_RADIUS)
+    points, x = [], 0.0
+    while x < run_in:
+        points.append((x0 + x, y0 + wave * math.sin(phase + 2 * math.pi * x / wave_length)))
+        x += 0.25
+    bx, by = points[-1]
+    run = len(points)
+    points += curl(bx, by, r0, CURL_RISE)
+    ex, ey = points[-1]
+    start = wave * math.sin(phase + 2 * math.pi * run_in / wave_length)
+    x = 0.25
+    while x < run_out:
+        points.append((ex + x, ey + wave * math.sin(phase + 2 * math.pi * (run_in + x) / wave_length) - start))
+        x += 0.25
+    path = clean_line(points)
+    # The pixels nearest where the curl begins and ends: cleaning may drop the very ones.
+    near = len(clean_line(points[:run]))
+    begin = min(range(max(0, near - 4), min(len(path), near + 4)),
+                key=lambda i: math.hypot(path[i][0] - bx, path[i][1] - by))
+    end = min(range(begin + 5, min(len(path), begin + 80)),
+              key=lambda i: math.hypot(path[i][0] - ex, path[i][1] - ey))
+    return path, (begin, end)
+
+
+def new_streak(rng, gust_y=None):
+    y0 = gust_y + rng.uniform(*SECOND_STREAK_BELOW) if gust_y is not None else rng.uniform(STREAK_TOP, STREAK_BOTTOM)
+    x0 = rng.uniform(STREAK_LEFT, STREAK_RIGHT)
+    pixels, bends = ribbon(x0, y0, rng)
+    return Streak(pixels, bends, rng.randint(*STREAK_LENGTH), y0)
+
+
+def streak_pixels(streak):
+    """(x, y, how much paler) of what shows of a streak, its ends less pale."""
+    showing = streak.showing()
+    strength = streak.strength()
+    last = max(1, len(showing) - 1)
+    for i, index in enumerate(showing):
+        share = i / last
+        amount = END_PALER if share < 0.25 or share > 0.9 else BODY_PALER
+        yield (*streak.pixels[index], tuple(round(value * strength) for value in amount))
+
+
 @dataclass
 class RuinsAmbience:
     room: int
@@ -311,11 +491,15 @@ class RuinsAmbience:
     twinkles: list = field(default_factory=list)
     shooter: Shooter | None = None
     shooter_wait: int = 0
+    streaks: list = field(default_factory=list)
+    gust: int = 0
+    gust_wait: int = 0
     tick: int = 0
 
     def __post_init__(self):
         self.twinkles = [[0, 0] for _ in self.air.stars]
         self.shooter_wait = self.rng.randint(*FIRST_SHOOTER)
+        self.gust_wait = self.rng.randint(*TICKS_BETWEEN_GUSTS)
 
     def see_gates(self, art):
         """The caves' torches watch the gates; nothing here does."""
@@ -325,6 +509,8 @@ class RuinsAmbience:
         self.tick += 1
         self.twinkle()
         self.advance_shooter()
+        self.blow()
+        self.advance_streaks()
 
     def twinkle(self):
         rng = self.rng
@@ -353,6 +539,30 @@ class RuinsAmbience:
         if path is not None:
             self.shooter = Shooter(kind, *path)
 
+    def blow(self):
+        """Now and then a gust, with its streaks: only in rooms open to the sky."""
+        if not self.air.windy:
+            return
+        if self.gust:
+            self.gust -= 1
+            return
+        self.gust_wait -= 1
+        if self.gust_wait > 0:
+            return
+        rng = self.rng
+        self.gust, self.gust_wait = GUST_TICKS, rng.randint(*TICKS_BETWEEN_GUSTS)
+        gust_y = None
+        for _ in range(rng.randint(*STREAKS_A_GUST)):
+            streak = new_streak(rng, gust_y)
+            gust_y = streak.y
+            self.streaks.append(streak)
+
+    def advance_streaks(self):
+        for streak in self.streaks:
+            streak.head += streak.step()
+            streak.shown += 1
+        self.streaks = [streak for streak in self.streaks if not streak.gone]
+
     def sky_pixels(self):
         """(x, y, RGB) of the stars and the shooting star, the later over the earlier."""
         for (x, y, kind), (dipped, flared) in zip(self.air.stars, self.twinkles):
@@ -373,4 +583,9 @@ class RuinsAmbience:
             if air.in_sky(x, y) and ((x, y) in drawn or is_sky(canvas[x, y])):
                 canvas[x, y] = inks[colour]
                 drawn.add((x, y))
+        # The wind, behind what the foreground covers, paler than what it crosses.
+        for streak in self.streaks:
+            for x, y, amount in streak_pixels(streak):
+                if 0 <= x < WIDTH and 0 <= y < HEIGHT and not air.is_covered(x, y):
+                    canvas[x, y] = air.paler_than(tuple(canvas[x, y][:3]), amount)
         return frame
