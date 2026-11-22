@@ -1355,15 +1355,28 @@ class EveryRuinsRoomTests(unittest.TestCase):
                 for kind in SHOOTERS:
                     self.assertIsNone(shooter_path(air, kind, rng), place)
 
-    def test_the_horse_arrival_star_fits_the_sky_above_the_dunes(self):
+    def test_the_horse_arrival_star_leaves_a_line_and_falling_sparks(self):
         air = self.rooms[9, ruins_ambience.HORSE_ROOM]
         shooter = ruins_ambience.horse_shooting_star()
-        self.assertGreater(shooter.at(shooter.kind.speed * (shooter.kind.ticks - 1))[0] - shooter.x, 190)
-        for age in range(shooter.kind.lasts):
-            shooter.age = age
-            for x, y, _ in shooter_pixels(shooter):
-                self.assertTrue(air.in_sky(x, y), (age, x, y))
-                self.assertFalse(air.is_covered(x, y), (age, x, y))
+        distance = int(shooter.kind.speed * (shooter.kind.ticks - 1))
+        self.assertGreater(shooter.x - shooter.at(distance)[0], 275)
+        line = {shooter.at(step) for step in range(distance + 1)}
+        self.assertTrue(all(air.in_sky(x, y) and not air.is_covered(x, y) for x, y in line))
+
+        shooter.age = shooter.kind.ticks + 9
+        pixels = {(x, y) for x, y, _ in shooter_pixels(shooter)}
+        self.assertTrue(line <= pixels)
+        fallen = {(x, y) for x, y in pixels
+                  if y > shooter.y + (x - shooter.x) * shooter.dy / shooter.dx + 8}
+        self.assertGreaterEqual(sum(air.in_sky(x, y) for x, y in fallen), 10)
+        self.assertTrue(any(not air.in_sky(x, y) for x, y in fallen))
+
+        rgb = numpy.where(air.sky[..., None], DEEP, STONE).astype(numpy.uint8)
+        frame = frame_of(rgb)
+        ambience = RuinsAmbience(ruins_ambience.HORSE_ROOM, replace(air, stars=()))
+        ambience.shooter = shooter
+        ambience.draw(frame)
+        self.assertTrue(numpy.array_equal(numpy.asarray(frame)[~air.sky, :3], rgb[~air.sky]))
 
 
 @unittest.skipUnless(RUINS_INSTALLED, 'Imported ruins resources required')
@@ -1563,7 +1576,7 @@ class RealSceneTests(unittest.TestCase):
             scene = harness.scene
             scene.audio = None
             scene.cave_ambience_enabled = True
-            scene.jump_to_room(10, row=2, x=435, facing=1)
+            scene.jump_to_room(7, row=2, x=112, facing=0)
             renderer = scene.level_renderer
 
             def run_to(room, direction, opposite):
@@ -1575,14 +1588,14 @@ class RealSceneTests(unittest.TestCase):
                         return
                 self.fail(f'Prince did not reach room {room}')
 
-            run_to(horse, 'R', 'L')
+            run_to(horse, 'L', 'R')
             star = renderer.ambience.shooter
             self.assertIsNotNone(star)
             self.assertIs(star.kind, ruins_ambience.HORSE_STAR)
             self.assertEqual(star.age, 0)
-            run_to(10, 'L', 'R')
+            run_to(7, 'R', 'L')
             self.assertIsNone(renderer.ambience.shooter)
-            run_to(horse, 'R', 'L')
+            run_to(horse, 'L', 'R')
             self.assertIsNone(renderer.ambience.shooter)
         finally:
             harness.close()

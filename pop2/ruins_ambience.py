@@ -20,8 +20,8 @@ moment, and a bright one flares a small cross. A few of the middling and bright 
 are warm, rose or pale gold. Once in a long while a shooting star crosses the sky: a
 faint quick one, an ordinary one, one grazing low and slow, or most rarely a fireball
 that bursts at the end and leaves its trail a moment. Over the desert of level nine
-the sky has only a few stars, middling and bright. A large shooting star passes
-above the horse on the first visit to its room.
+the sky has only a few stars, middling and bright. On the first visit to the horse's
+room, a large shooting star leaves a glowing line that sheds sparks.
 
 The wind. In a room open to the sky a gust now and then sends one or two thin streaks
 of air across it, over the ruins too: a long wavy line a few shades paler than what is
@@ -158,8 +158,8 @@ FAINT = ShooterKind('faint', 12.0, 4, 6, LILAC[2::-1], LILAC[2], (25, 40), 40)
 NORMAL = ShooterKind('normal', 11.0, 7, 11, LILAC[3::-1], LILAC[4], (20, 35), 35)
 GRAZER = ShooterKind('grazer', 6.0, 16, 18, LILAC[3::-1], LILAC[4], (6, 12), 18)
 FIREBALL = ShooterKind('fireball', 9.0, 10, 14, (LILAC[4], *LILAC[3::-1]), WHITE, (12, 20), 7, burst=2, linger=3)
-HORSE_STAR = ShooterKind('horse arrival', 11.0, 19, 44, (GOLD_BRIGHT.steps[-1], *LILAC[4:0:-1]),
-                         WHITE, (11, 11), 0, burst=4, linger=7)
+HORSE_STAR = ShooterKind('horse arrival', 24.0, 13, 0, (GOLD_BRIGHT.steps[-1], *LILAC[4:0:-1]),
+                         WHITE, (9, 9), 0, burst=3, linger=32)
 SHOOTERS = (FAINT, NORMAL, GRAZER, FIREBALL)
 STAR_CROSS = ((1, 0), (-1, 0), (0, 1), (0, -1))
 # How far back along its path the fireball's trail stays.
@@ -817,9 +817,9 @@ class Shooter:
 
 
 def horse_shooting_star():
-    """A long flight through the clear sky to the left of the horse's silhouette."""
+    """A fast flight from the right, through the clear sky above the horse."""
     angle = math.radians(HORSE_STAR.angle[0])
-    return Shooter(HORSE_STAR, 52, 16, math.cos(angle), math.sin(angle))
+    return Shooter(HORSE_STAR, 384, 12, -math.cos(angle), math.sin(angle))
 
 
 def shooter_path(air, kind, rng):
@@ -845,12 +845,15 @@ def shooter_path(air, kind, rng):
 def shooter_pixels(shooter):
     """(x, y, RGB) of a shooting star at its age, the later over the earlier."""
     kind, age = shooter.kind, shooter.age
+    if kind is HORSE_STAR:
+        yield from horse_star_pixels(shooter)
+        return
     travelled = kind.speed * min(age, kind.ticks - 1)
-    # A bright meteor leaves its trail behind for a moment.
+    # The fireball's trail stays a moment, dimmest, where it has just been.
     if kind.linger and age >= 2:
         fading = max(0, age - kind.ticks)
         if fading < kind.linger:
-            for step in range(max(0, int(travelled) - max(LINGER_REACH, kind.tail)), int(travelled)):
+            for step in range(max(0, int(travelled) - LINGER_REACH), int(travelled)):
                 if (step * 7 + age) % 3 or fading < 2:
                     yield (*shooter.at(step), kind.colours[-1])
     if age >= kind.ticks:
@@ -859,27 +862,55 @@ def shooter_pixels(shooter):
             yield x, y, kind.head
             for ox, oy in STAR_CROSS:
                 yield x + ox, y + oy, kind.colours[0]
-                if kind is HORSE_STAR and age < kind.ticks + 2:
-                    yield x + 2 * ox, y + 2 * oy, kind.colours[1]
         return
     # The tail shortens as it burns out.
     length = max(2, int(kind.tail * (1.15 - age / kind.ticks)))
     for step in range(length, 0, -1):
         share = step / length
-        x, y = shooter.at(travelled - step)
         shade = min(len(kind.colours) - 1, int(share * len(kind.colours)))
-        yield x, y, kind.colours[shade]
-        if kind is HORSE_STAR and share < 0.45:
-            yield x, y + 1, kind.colours[shade + 1]
+        yield (*shooter.at(travelled - step), kind.colours[shade])
     yield (*shooter.at(travelled), kind.head)
-    if kind is HORSE_STAR:
-        x, y = shooter.at(travelled)
-        for ox, oy in STAR_CROSS:
-            yield x + ox, y + oy, kind.colours[0]
-    elif kind is FIREBALL:
+    if kind is FIREBALL:
         # A head two pixels across: the second one dimmer, beside it on the slope.
         x, y = shooter.at(travelled)
         yield x, y + 1 if abs(shooter.dx) > abs(shooter.dy) else y, kind.colours[0]
+
+
+def horse_star_pixels(shooter):
+    """An afterglow along the full flight path, with sparks falling from it."""
+    kind, age = shooter.kind, shooter.age
+    distance = int(kind.speed * min(age, kind.ticks - 1))
+    shades = len(kind.colours)
+    for step in range(distance + 1):
+        since = age - step / kind.speed
+        if since >= kind.linger:
+            continue
+        shade = int(since * shades / kind.linger)
+        x, y = shooter.at(step)
+        yield x, y, kind.colours[shade]
+        if since < 2:
+            yield x, y + 1, kind.colours[shade + 1]
+
+    # Stagger the release, acceleration and fade so the sparks separate from the line.
+    for index, step in enumerate(range(5, distance + 1, 6)):
+        fall = age - step / kind.speed - (3 + index * 5 % 8)
+        life = 14 + index * 3 % 8
+        if not 0 <= fall < life:
+            continue
+        x, y = shooter.at(step)
+        drift = round((index % 5 - 2) * fall / 10)
+        drop = 1 + round(0.22 * fall + (0.055 + 0.012 * (index % 4)) * fall ** 2)
+        shade = int((fall / life) ** 1.65 * shades)
+        yield x + drift, y + drop, kind.colours[shade]
+        if shade < 3 and index % 3 == 0:
+            yield x + drift, y + drop - 1, kind.colours[shade + 1]
+
+    if age < kind.ticks + kind.burst:
+        x, y = shooter.at(distance)
+        yield x, y, kind.head
+        for ox, oy in STAR_CROSS:
+            yield x + ox, y + oy, kind.colours[0]
+            yield x + 2 * ox, y + 2 * oy, kind.colours[1]
 
 
 def clean_line(points):
