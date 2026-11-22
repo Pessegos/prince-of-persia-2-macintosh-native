@@ -39,8 +39,16 @@ The harness supplies the starting Prince placement and key latches (2:55d2),
 resource lookups (4:3098, 17:330e), rectangle intersection and the harness's
 random service. It bypasses the room transition (2:532c), timer, display and
 audio services and the temple-specific callbacks in CODE 10. The trace ends
-at the takeoff or brake. The video and hidden port replay establish the
-crossing itself.
+at the takeoff or brake.
+
+An extended trace from the frame-34 turn starts the Prince's standing jump
+with Up+Left on frame 43. On frame 50 the Prince is in pose 23 at scene X144
+and the guard is in pose 209 at X170, reversing their order from the previous
+frame (X151 and X130). The Prince finishes at scene X15 in pose 15 with life
+3. This extension also supplies OffsetRect at 5:021c and skips redraw
+marking at 5:19f8. It runs the original movement and contact checks.
+With the same turn, inputs at frames 45 and 46 hit the later guard contact
+window and lose one life in this setup.
 
 ## Port replay and scope
 
