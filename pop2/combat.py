@@ -1858,9 +1858,14 @@ class CombatEncounter:
         climb_changed_row = generation_player is not None and generation_player.row != self.player.row
         for point in self.generation_points:
             player = generation_player if climb_changed_row and point.flags >= 1 else self.player
-            if not point.advance(player, blockers, self.world_frame, self.level):
+            column = self._supporting_column(player)
+            if not point.active(player.row, column):
                 continue
-            armed = abs(point.column - character_column(player.state.target_x)) <= 3 and point.life >= 6
+            # CheckOppGenPts 6:3a2a selects the first active point through
+            # GetOppGenPtOnRow 6:3d28 before checking its corridor and timer.
+            if not point.advance(player, blockers, self.world_frame, self.level, player_column=column):
+                break
+            armed = abs(point.column - column) <= 3 and point.life >= 6
             state = SequenceState(90 if armed else 84, current_x=point.x,
                                   target_x=point.x, facing=point.facing,
                                   actor_type=2, level_kind=self.level_kind)
@@ -1875,7 +1880,7 @@ class CombatEncounter:
             guard.native_alive = True
             guard.bank_room, guard.bank_slot = self.player.room, len(self.active_guards())
             self.guards.append(guard)
-            blockers.append(guard)
+            break
         self.refresh_target()
 
     def _generate_final_jaffar(self):
@@ -2041,6 +2046,9 @@ class CombatEncounter:
                 guard.entry_x = None
             if guard.recovering and guard.state.sequence_id == 227:
                 guard.recovering = False
+        # FrameAdv 2:6740-6742 clears this frame's noise even when the
+        # bank ends with a corpse or an armed guard (or is empty).
+        self.player.state.callback_flag = 0
         self._present_flame_swords()
 
     def final_prince_view(self):

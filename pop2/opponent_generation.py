@@ -141,17 +141,20 @@ class OpponentGenerationPoint:
         # IsOppGenPtWithTumbleOn, CODE:6 0x40b6: packed LIFE, not flags.
         return bool(self.life_word & 0x80)
 
-    def eligible(self, player, guards, frame, level):
-        # IsActiveOppGenPt 0x3daa and IsTimeToGenOpp 0x3e0a.
-        # 6:3e56-3e68 uses DIVU/SWAP/TST.L, not a remainder-only test:
-        # the quotient also survives, so only a zero 16-bit counter fails.
+    def active(self, row, column):
+        # IsActiveOppGenPt 6:3daa checks the row, cached foot column and quota.
+        return (self.remaining != 0 and row in (self.row, self.alternate_row)
+                and abs(self.column - column) > 2)
+
+    def eligible(self, player, guards, frame, level, *, player_column=None):
+        # IsTimeToGenOpp 6:3e0a. DIVU/SWAP/TST.L at 6:3e56 also retains
+        # the quotient, so only a zero 16-bit counter fails.
         if (not player.alive or player.state.actor_type == 1
-                or player.room != self.room or len(guards) >= 5
-                or frame & 0xffff == 0 or self.remaining == 0
-                or player.row not in (self.row, self.alternate_row)):
+                or player.room != self.room or len(guards) >= 5 or frame & 0xffff == 0):
             return False
-        player_column = character_column(player.state.target_x)
-        if abs(self.column - player_column) <= 2:
+        if player_column is None:
+            player_column = character_column(player.state.target_x)
+        if not self.active(player.row, player_column):
             return False
         wall = first_wall_column(level, self.room, self.column, self.row,
                                  1 if self.column < 5 else -1)
@@ -168,13 +171,15 @@ class OpponentGenerationPoint:
             if between >= self.max_between:
                 return False
             guard_column = character_column(guard.state.target_x)
+            # The blocking column is at or outside the entry point on its
+            # own side (6:3f68–3f80), mirrored for the right-hand point.
             if (self.column < player_column and self.column >= guard_column
-                    or self.column > player_column and self.column > guard_column):
+                    or self.column > player_column and self.column <= guard_column):
                 return False
         return True
 
-    def advance(self, player, guards, frame, level):
-        if not self.eligible(player, guards, frame, level):
+    def advance(self, player, guards, frame, level, *, player_column=None):
+        if not self.eligible(player, guards, frame, level, player_column=player_column):
             return False
         # CheckOppGenPts 0x3a48-0x3a68 only counts eligible world frames.
         if self.countdown:

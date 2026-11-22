@@ -737,11 +737,13 @@ selects skill 0. The guard starts at native X=105 / scene X=-102, facing right.
 - `IsActiveOppGenPt`, CODE:6 `0x3daa`: matching current/alternate row,
   nonzero remaining count and Prince more than two columns from the point.
 - `IsTimeToGenOpp`, `0x3e0a`: living Prince, ordinary player type, current
-  room, fewer than five NPC records (including corpses), every-third-frame
-  exclusion, and generation-side living-NPC/wall checks.
-- `CheckOppGenPts`, `0x3a0c`: only eligible world frames decrement the
-  countdown. At zero, generate, reload and decrement the remaining count.
-  Repeated keyboard callbacks cannot run this world-frame clock faster.
+  room, fewer than five NPC records (including corpses), a nonzero
+  16-bit frame counter, and generation-side living-NPC/wall checks.
+- `CheckOppGenPts`, `0x3a0c`: 6:3d28 picks the first active point before
+  testing the corridor. Only that point can decrement its countdown or
+  spawn this frame. A blocked first point leaves later timers untouched.
+  At zero, generate, reload and decrement the remaining count. Repeated
+  keyboard callbacks cannot run this world-frame clock faster.
 - `GenerateOpponent`, `0x3a84`: entry position/facing/skill and packed life.
   This one-life point enters unarmed using `84`, then loops through `208`.
   It is not spawned directly into a sword pose at a guessed onscreen position.
@@ -1128,9 +1130,12 @@ imports but excluding unselected records still owned by the source room.
 The struck actor's geometry and generator permission use the current bank's
 room, without moving its canonical object. Original ordinary-controller
 DoOppTumbleSeq/LoadShad/death-count instructions match 4,000 supplied bank
-cases; 90 original 6:4f60 noise-consumption cases confirm that only the last
-active unarmed slot consumes the signal. A later armed/dead slot does not
-cause an earlier unarmed actor to clear it. Generator lookup, cached support
+cases. In 90 original 6:4f60 noise-consumption cases, only the last active
+unarmed slot consumed the signal inside AutoCtrl. FrameAdv independently
+clears it after the entire opponent pass (2:6740–6742), including when the
+last slot is armed, a corpse or absent. Without that reset an entry footstep
+could keep the resident of level 13 room 2 unarmed indefinitely.
+Generator lookup, cached support
 columns, tile queries, random results and unarmed decisions are supplied
 endpoints in this audit. Special-environment corpse predicates remain open.
 Same-facing kills and specific tiles under/behind reject the tumble. This
