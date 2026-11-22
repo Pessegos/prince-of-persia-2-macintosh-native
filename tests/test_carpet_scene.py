@@ -182,6 +182,58 @@ class CarpetSceneTests(unittest.TestCase):
         self.assertEqual(scene.game.level.number, 6)
         self.assertIsNone(scene.intro)
 
+    def test_cliff_stars_follow_the_fade_and_the_ambience_toggle_at_handoff(self):
+        import random
+        from unittest.mock import patch
+
+        from pop2.intro import CARPET_CLIFF_PALETTE
+        from pop2.ruins_ambience import RuinsWind
+        from tools.audit_temple_routes import Harness
+
+        harness = Harness(5, draw=True, god=True)
+        try:
+            scene = harness.scene
+            scene.audio = None
+            scene.cave_ambience_enabled = False
+            scene.finish_level_via_story(5, 6)
+            player = scene.intro
+            player.advance(1)
+            sea = player.frame()
+            scene.cave_ambience_enabled = True
+            self.assertEqual(player.frame().tobytes(), sea.tobytes())
+
+            fade = next(i for i, item in enumerate(player.operations)
+                        if item['op'] == 'fade' and item['args'][:2] == [CARPET_CLIFF_PALETTE, True])
+            player.advance(60, stop_position=fade + 1)
+            self.assertEqual(player.transition[0], 'fade')
+            player.advance(player.transition[2] / 2)
+            fading = player.frame()
+            self.assertEqual(len(player.carpet_stars), 9)
+            for x, y, _, index in player.carpet_stars:
+                self.assertEqual(fading.getpixel((x, y))[:3], player.palette[index])
+                self.assertLess(sum(player.palette[index]), sum(player.assets.palettes[CARPET_CLIFF_PALETTE][index]))
+
+            player.advance(60)
+            self.assertTrue(player.done)
+            lit = player.frame()
+            scene.cave_ambience_enabled = False
+            clear = player.frame()
+            self.assertTrue(all(lit.getpixel((x, y)) != clear.getpixel((x, y))
+                                for x, y, _, _ in player.carpet_stars))
+            scene.cave_ambience_enabled = True
+            with patch('pop2.ruins_ambience.RuinsWind', return_value=RuinsWind(random.Random(2))):
+                scene.finish_tree()
+            self.assertEqual((scene.game.level.number, scene.room_id), (6, 26))
+            self.assertEqual(scene.level_renderer.ambience.tick, 0)
+            for x, y, _, _ in player.carpet_stars:
+                self.assertEqual(scene.screenshot_viewport.getpixel((x + 1, y)), lit.getpixel((x, y)))
+            scene.cave_ambience_enabled = False
+            scene.render()
+            for x, y, _, _ in player.carpet_stars:
+                self.assertEqual(scene.screenshot_viewport.getpixel((x + 1, y)), clear.getpixel((x, y)))
+        finally:
+            harness.close()
+
     def test_skipping_the_carpet_scene_stops_its_carried_song_on_the_cliff(self):
         from unittest.mock import Mock
         from tests.test_terrain import RooftopSceneTests

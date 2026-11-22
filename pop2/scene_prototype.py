@@ -3046,7 +3046,8 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         self.tree_variant = None
         if self.audio is not None and music is None:
             self.audio.reset()
-        self.intro = IntroPlayer(self.carpet_assets, self.audio, music)
+        self.intro = IntroPlayer(self.carpet_assets, self.audio, music,
+                                 ambience=lambda: getattr(self, 'cave_ambience_enabled', False))
         self.last_intro_at = time.perf_counter()
         self.status.set('Carpet')
         self.watch_cutscene('carpet')

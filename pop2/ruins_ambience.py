@@ -416,6 +416,19 @@ def is_painted_sky(colour):
     return (blue > red) & (blue > green)
 
 
+def opening_star_mask(painted_sky, covered=None):
+    sky = numpy.zeros_like(painted_sky)
+    sky[8:114, 234:-8] = painted_sky[8:114, 234:-8]
+    if covered is not None:
+        sky &= ~covered
+    return sky
+
+
+def opening_stars(rgb, sky):
+    seed = OPENING_CLIFF[0] * 100 + OPENING_CLIFF[1]
+    return place_stars(sky, numpy.maximum(blueness(rgb), 0.6), random.Random(seed), density=120)
+
+
 def blueness(rgb):
     """[y, x]: 1 in the deep blue of the upper sky, 0 in the purple by the horizon."""
     return numpy.clip(1 - (rgb[..., 0].astype(numpy.float32) - BLUE_FROM_RED) / BLUE_OVER_RED, 0, 1)
@@ -803,17 +816,13 @@ def read_room(level_number, room, rgb, palette, covered=None, terrain=None, pain
     if place == OPENING_CLIFF:
         # The painted gradient is blue without matching the night-sky palette.
         cliff_wind_sky = is_painted_sky(numpy.moveaxis(rgb, -1, 0))
-        sky = numpy.zeros_like(sky)
-        sky[8:114, 234:-8] = cliff_wind_sky[8:114, 234:-8]
-        if covered is not None:
-            sky &= ~covered
-        blue = numpy.maximum(blue, 0.6)
+        sky = opening_star_mask(cliff_wind_sky, covered)
     windy = not (desert or chasm) and (open_sky >= OPEN_SKY or place in (OPENING_CLIFF, OPEN_COURTYARD))
     seed = level_number * 100 + room
     if desert:
         stars = place_desert_stars(sky, random.Random(seed + 41))
     elif cliff_wind_sky is not None:
-        stars = place_stars(sky, blue, random.Random(seed), density=120)
+        stars = opening_stars(rgb, sky)
     else:
         stars = warm_some(place_stars(sky, blue, random.Random(seed)), random.Random(seed + 7))
         stars += place_haze_stars(sky, blue, stars, random.Random(seed + 13))
@@ -2153,7 +2162,21 @@ class RuinsAmbience:
 
 # Each painted ledge has its own lip, grain count and shortest time in free fall.
 CHASM_LEDGES = ((132, 241, 26, 23), (77, 284, 16, 17), (40, 325, 12, 12))
-OPENING_LEDGES = ((388, 282, 10, 19), (377, 322, 6, 12))
+OPENING_LEDGES = ((388, 282, 15, 19), (377, 322, 10, 12))
+
+
+def ledge_approach(points):
+    """Sample a path that follows the ground of the painted ledge."""
+    xs, ys = zip(*points)
+    x = range(xs[0], xs[-1] + 1)
+    return tuple(zip(x, numpy.interp(x, xs, ys).round().astype(int)))
+
+
+# Ground paths start beyond the building's base and pass clear of the rock in the foreground.
+OPENING_APPROACHES = (
+    ledge_approach(((156, 317), (201, 310), (260, 303), (294, 291), (325, 281), (355, 279), (388, 282))),
+    ledge_approach(((156, 332), (186, 321), (235, 318), (286, 320), (340, 318), (377, 322))),
+)
 
 
 def chasm_fall_pixels(tick, sand):
@@ -2161,25 +2184,32 @@ def chasm_fall_pixels(tick, sand):
 
 
 def opening_sand_pixels(tick, sand):
-    return ledge_fall_pixels(tick, sand, OPENING_LEDGES, approach_ticks=26, slope=0.14)
+    return ledge_fall_pixels(tick, sand, OPENING_LEDGES, approaches=OPENING_APPROACHES)
 
 
-def ledge_fall_pixels(tick, sand, ledges, *, approach_ticks=0, slope=0.0):
+def ledge_fall_pixels(tick, sand, ledges, *, approaches=()):
     """Grains slide up to a painted lip, then accelerate down past it."""
     colours = (NEAR_SANDS[0], SAND[0], FAR_SANDS[1])
     for ledge, (lip_x, lip_y, grains, shortest_fall) in enumerate(ledges):
+        approach = approaches[ledge] if approaches else ()
         for index in range(grains):
             life = shortest_fall + index * 7 % 10
-            period = 54 + index * 11 % 25 + approach_ticks
-            age = (tick + approach_ticks + ledge * 13 + index * 17) % period
-            run = 6 + index * 3 % 9 + approach_ticks
+            short_run = 6 + index * 3 % 9
+            run = round(len(approach) / 2.65) if approach else short_run
+            extra_run = run - short_run
+            period = 54 + index * 11 % 25 + extra_run
+            age = (tick + extra_run + ledge * 13 + index * 17) % period
             fall = age - run
-            ridge = lip_y + index * 5 % 7 - 3
+            spread = index * 5 % 7 - 3
+            ridge = lip_y + spread
             if fall >= life:
                 continue
             if fall < 0:
-                x = lip_x + round(1.65 * fall)
-                y = ridge + round((x - lip_x) * slope)
+                if approach:
+                    x, y = approach[len(approach) * age // run]
+                    y += spread
+                else:
+                    x, y = lip_x + round(1.65 * fall), ridge
                 if sand[y, x]:
                     yield x, y, SAND[0]
                 continue

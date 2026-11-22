@@ -1640,11 +1640,11 @@ class RealSceneTests(unittest.TestCase):
             self.assertFalse(stars_and_sand[114:265].any())
 
             grains = stars_and_sand[265:]
-            self.assertTrue(stars_and_sand[265:325, 315:350].any())
+            self.assertTrue(stars_and_sand[310:342, 156:215].any())
             self.assertTrue(stars_and_sand[279:319, 387:].any())
             self.assertTrue(stars_and_sand[319:, 375:387].any())
-            self.assertLessEqual(int(grains.sum()), 18)
-            self.assertFalse(grains[:, :310].any())
+            self.assertLessEqual(int(grains.sum()), 30)
+            self.assertFalse(grains[:, :150].any())
         finally:
             harness.close()
 

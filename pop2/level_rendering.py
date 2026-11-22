@@ -181,7 +181,7 @@ class LevelRenderer:
 
     def advance_ambience(self, room_id, terrain, footing=None, thuds=(), shakes=()):
         """One game tick of the optional cave or ruins ambience; pixels only."""
-        from pop2.ruins_ambience import DESERT_ROOMS, HORSE_ROOM, RuinsAmbience, RuinsWind, horse_shooting_star
+        from pop2.ruins_ambience import DESERT_ROOMS, HORSE_ROOM, RuinsAmbience, horse_shooting_star
 
         kind = self.ambience_kind()
         if kind is None:
@@ -203,16 +203,21 @@ class LevelRenderer:
                                                           lambda: self.room_with_gates_up(room_id))
             self.ambience = ambience(room_id, self.ambience_air[room_id])
             if isinstance(self.ambience, RuinsAmbience) and self.ambience.air.windy:
-                if self.ruins_wind is None:
-                    self.ruins_wind = RuinsWind()
-                    self.ruins_wind.prime()
-                self.ambience.wind = self.ruins_wind
+                self.attach_ruins_wind()
         if self.ruins_wind is not None:
             self.ruins_wind.advance()
         self.ambience.advance(terrain, footing, thuds, shakes)
         if self.level.number == 9 and room_id == HORSE_ROOM and not self.horse_star_seen:
             self.horse_star_seen = True
             self.ambience.shooter = horse_shooting_star()
+
+    def attach_ruins_wind(self):
+        from pop2.ruins_ambience import RuinsWind
+
+        if self.ruins_wind is None:
+            self.ruins_wind = RuinsWind()
+            self.ruins_wind.prime()
+        self.ambience.wind = self.ruins_wind
 
     def prepare_desert_wind(self, room_air, *, incremental=False):
         """Read the painted desert scenery, then start wind over the whole strip."""
@@ -287,11 +292,19 @@ class LevelRenderer:
     def ambient_layer(self, frame, room_id):
         """Drawn after remember_scenery: a room cut keeps the scenery of the
         previous room in places, and must not keep a mote or a drop with it."""
+        from pop2.ruins_ambience import OPENING_CLIFF, RuinsAmbience, ruins_air
+
+        if (self.level.number, room_id) == OPENING_CLIFF and self.ambience is None:
+            # The first playable frame follows the carpet's painted cliff directly.
+            if room_id not in self.ambience_air:
+                self.ambience_air[room_id] = ruins_air(self.level.number, room_id, self.rooms[room_id])
+            self.ambience = RuinsAmbience(room_id, self.ambience_air[room_id])
+            self.attach_ruins_wind()
         if self.ambience is not None and self.ambience.room == room_id:
             self.ambience.see_gates(self.rooms[room_id])
             frame = self.ambience.draw(frame)
         if self.level.number == 9:
-            from pop2.ruins_ambience import DESERT_ROOMS, WIDTH, ruins_air
+            from pop2.ruins_ambience import DESERT_ROOMS, WIDTH
 
             if room_id in DESERT_ROOMS:
                 if self.desert_wind is None:

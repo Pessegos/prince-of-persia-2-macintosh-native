@@ -16,6 +16,7 @@ from pop2.paths import ASSET_DIR
 
 
 SIZE = (512, 384)
+CARPET_CLIFF_SHAPE, CARPET_CLIFF_PALETTE = 404650, 403502
 # Classic Macintosh VBL clock, also used by Mini vMac's host timer.
 MAC_TICKS_PER_SECOND = 60.14742
 STORY_RECT = (62, 64, 292, 448)
@@ -438,13 +439,16 @@ def area_words(rect):
 
 
 class IntroPlayer:
-    def __init__(self, assets, audio=None, music=None, variant=None, prince=None, status=None):
+    def __init__(self, assets, audio=None, music=None, variant=None, prince=None, status=None, *, ambience=None):
         """`music`: (cue, seconds played, game_song metadata) of a game song
         still playing when the scene starts; its cue markers pace the scene.
         `variant` picks one of the program's variants (the throne scene: the
         Prince's native facing) and `prince` his native X and Y, by which
         the operations tagged `follow` move."""
         self.assets, self.audio = assets, audio
+        self.ambience = ambience
+        self.carpet_cliff = False
+        self.carpet_stars = None
         self.variant, self.prince = variant, prince
         program = assets.program
         self.operations = program["variants"][str(variant)] if variant is not None else program["operations"]
@@ -536,6 +540,8 @@ class IntroPlayer:
         crop = shape.crop((region[0] - x, region[1] - y, region[2] - x, region[3] - y))
         mask = crop.point([0] + [255] * 255) if flags & 16 else None
         self.target.paste(crop, region[:2], mask)
+        if self.program_kind == "carpet" and resource_id == CARPET_CLIFF_SHAPE:
+            self.carpet_cliff = True
 
     def text(self, resource_id, index, initial, dx, dy, dialog=False):
         colors = ((8, 255), (6, 3), (5, 14))
@@ -959,7 +965,7 @@ class IntroPlayer:
         if not 0 <= index < len(self.operations):
             raise ValueError("Intro part is outside the scene program")
         audio = self.audio
-        self.__init__(self.assets)
+        self.__init__(self.assets, ambience=self.ambience)
         while not self.done and self.position <= index:
             self.advance(max(0, self.wait_until - self.time), stop_position=index + 1)
         self.advance(0)
@@ -1029,6 +1035,19 @@ class IntroPlayer:
             return max(0, min(self.wait_until, start + frame / 60) - self.time)
         return 1 / 60
 
+    def opening_star_indices(self):
+        """The gameplay stars, using indices from the cliff's original fade table."""
+        from pop2.ruins_ambience import HEIGHT, WIDTH, is_painted_sky, nearest_colours, opening_star_mask, opening_stars
+
+        palette = self.assets.palettes[CARPET_CLIFF_PALETTE]
+        backdrop = np.asarray(self.assets.shapes[CARPET_CLIFF_SHAPE])[:HEIGHT, :WIDTH]
+        rgb = np.array([palette.get(index, (0, 0, 0)) for index in range(256)], dtype=np.uint8)[backdrop]
+        sky = opening_star_mask(is_painted_sky(np.moveaxis(rgb, -1, 0)))
+        stars = opening_stars(rgb, sky)
+        inks = nearest_colours(palette, {kind.steps[-1] for _, _, kind in stars})
+        indices = {colour: index for index, colour in palette.items()}
+        return [(x, y, int(backdrop[y, x]), indices[inks[kind.steps[-1]][:3]]) for x, y, kind in stars]
+
     def frame(self):
         if self.frame_cache is None:
             frame = self.display.convert("P")
@@ -1038,4 +1057,11 @@ class IntroPlayer:
             self.frame_cache = frame.convert("RGBA")
             if self.status is not None:
                 self.frame_cache.paste(self.status, (0, 365))
-        return self.frame_cache.copy()
+        frame = self.frame_cache.copy()
+        if self.carpet_cliff and self.ambience is not None and self.ambience():
+            if self.carpet_stars is None:
+                self.carpet_stars = self.opening_star_indices()
+            for x, y, background, ink in self.carpet_stars:
+                if self.display.getpixel((x, y)) == background:
+                    frame.putpixel((x, y), (*self.palette[ink], 255))
+        return frame

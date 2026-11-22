@@ -79,7 +79,7 @@ class CutsceneReplay:
     started_at: float = 0.0
 
 
-def chapter_player(chapter, assets, audio=None):
+def chapter_player(chapter, assets, audio=None, *, ambience=None):
     from pop2.intro import IntroPlayer, game_song
 
     music = None
@@ -97,7 +97,7 @@ def chapter_player(chapter, assets, audio=None):
         if audio is not None:
             audio.play_intro(OPEN_SONG, 0, offset=elapsed)
     start, end = chapter_range(chapter, assets.program)
-    player = IntroPlayer(assets, None if start else audio, music)
+    player = IntroPlayer(assets, None if start else audio, music, ambience=ambience)
     if start:
         # Reconstruct palette/animation and cue clocks silently; resume only
         # sounds still active at this chapter boundary, on private channels.
@@ -548,7 +548,8 @@ class CutsceneControls:
             if stage not in provider.assets:
                 provider.assets[stage] = IntroAssets(program_name=chapter.program)
             audio = ReplayAudio(self.audio, getattr(self, 'sound_enabled', True))
-            player = chapter_player(chapter, provider.assets[stage], audio)
+            player = chapter_player(chapter, provider.assets[stage], audio,
+                                    ambience=lambda: getattr(self, 'cave_ambience_enabled', False))
         except (OSError, ValueError, KeyError, RuntimeError):
             if audio is not None:
                 audio.close()
