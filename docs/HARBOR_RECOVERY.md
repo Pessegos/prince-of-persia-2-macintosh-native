@@ -72,11 +72,11 @@ Three port differences were fixed: a front piece of the row above that the
 Prince's rectangle overlaps is in front of him unless he climbs or hangs
 (MarkBufsForRect marks every covered cell), decoration 2 also draws
 decoration 1's SHAP 3559 in front (DrawRoofDecoration 23:021a-023e), and
-the border row hides a head above Y 5: MarkTop 5:16f2 marks the border
-cells and RedrawTopFast 3:1f4e repaints them after the characters, so the
-sky (SHAP 3501), the upper room's last row or row 0's pieces reaching the
-strip cover him there (`RooftopRoom.border_cover`; native room 21 paints
-only row 0's SHAP 3510, native rooms 15 (CUST) and 20 nothing). 22
+the border row draws its foreground above Y 5. MarkTop 5:16f2 marks the
+border cells and RedrawTopFast 3:1f4e queues the back and front passes.
+DumpTable 3:3362-3378 draws the sky (SHAP 3501) before mid-table
+characters and the actual foreground after them. `RooftopRoom.border_cover`
+uses only those front pieces. 22
 frames still differ (of 8,975), all in the harbor's native room 19: the
 animated waves, the ship (objects the probe does not model) and 60 pixels
 of a foot tip's floor redraw. The climb's `ledge_surface_clip` (SEQS 10/68, actions 135-144) is

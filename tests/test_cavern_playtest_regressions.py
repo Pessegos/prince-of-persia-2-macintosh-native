@@ -2,9 +2,58 @@
 
 from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 
 from pop2.paths import ASSET_DIR
 from pop2.story_progress import MESSAGE_FRAMES
+
+
+@unittest.skipUnless((ASSET_DIR / 'ruins_level6.json').is_file(), 'Imported game required')
+class RuinsBorderJumpTests(unittest.TestCase):
+    def test_the_prince_is_visible_through_the_top_after_the_ruins_floor_breaks(self):
+        from PIL import Image
+
+        from pop2.caverns import room_assets
+        from tools.audit_temple_routes import Harness, press
+
+        # Level 6 native room 17, below the breakable floor in room 4.
+        # Exercise the previous exporter's static records even when the
+        # installed assets predate that section.
+        program = room_assets(6, 16)[0]
+        resting_border = {'16': [
+            ['back', 3509, 40, 100, 0, 0, [0, 102, 5, 142], 4, 2, -1],
+            ['front', 3518, 102, 5, 16, -1, [0, 102, 5, 153], 4, 2, -1],
+        ]}
+        harness = Harness(6, draw=True)
+        scene = harness.scene
+        scene.cave_ambience_enabled = False
+        scene.present_viewport = lambda: None
+        sprite_for = scene.player_sprite
+
+        def marker(*args, **kwargs):
+            sprite = sprite_for(*args, **kwargs)
+            painted = Image.new('RGBA', sprite.size, 'magenta')
+            painted.putalpha(sprite.getchannel('A'))
+            return painted
+
+        try:
+            with patch.dict(program, border_redraw=resting_border), patch.object(scene, 'player_sprite', marker):
+                scene.jump_to_room(16, row=0, x=111, facing=1, redraw=False)
+                harness.tick(3)
+                press(harness, 'up', True)
+                observations = []
+                for tick in range(12):
+                    if tick == 2:
+                        press(harness, 'up', False)
+                    harness.tick()
+                    if scene.action in (78, 79):
+                        above = scene.level_map.tile(16, 2, -1).kind
+                        strip = scene.screenshot_viewport.crop((1, 0, 511, 5)).convert('RGB')
+                        pixels = sum(count for count, color in strip.getcolors(2550) if color == (255, 0, 255))
+                        observations.append((scene.action, above, pixels))
+                self.assertEqual(observations, [(78, 15, 0), (79, 0, 42)])
+        finally:
+            harness.close()
 
 
 @unittest.skipUnless((ASSET_DIR / 'ruins_level6.json').is_file(), 'Imported game required')
