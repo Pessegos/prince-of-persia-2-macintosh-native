@@ -1354,7 +1354,13 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
             return
         self.start_sequence(STANDING_TURN_SEQUENCE)
         self.status.set("Standing turn: original SEQS:5")
-        self.advance_animation_now()
+        combat = self.combat
+        # FrameAdv steps the turn and a running opponent on the same tick.
+        # A key callback would show pose 45 immediately while Combat.step
+        # waits for its clock, shifting the runner's gap approach by a pose.
+        if (combat is None or getattr(self, "peaceful", False)
+                or not combat.has_jump_capable_runner_across_gap()):
+            self.advance_animation_now()
 
     def resume_queued_crouch_during_run(self):
         # Compatibility entry point; the directional bank is the sole dispatcher.
@@ -1837,22 +1843,27 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         old_x = self.sequence_state.target_x
         motion = getattr(self, "terrain_motion", None)
         old_bounds = self.player_collision_bounds() if motion is not None else None
+        # CheckOppGenPts at 2:6252 reads the previous row on a climb.
+        generation_player = None
+        if (self.combat is not None and self.native_ledge and self.ledge_climbing
+                and not getattr(self, "peaceful", False)):
+            generation_player = self.combat.generation_player_snapshot()
         environment_for(self).controls()
         if self.update_potion_controls():
             frame = self.sequence_runtime.next_frame()
             self.action, self.player_x = frame.action, frame.target_x
             self.sequence_state.current_x = self.player_x
-            self.run_world_phases('potion', old_x, old_bounds)
+            self.run_world_phases('potion', old_x, old_bounds, generation_player)
             return
         if motion is not None and (motion.falling or motion.sinking or motion.dead):
             self.sequence_runtime.next_frame()
-            self.run_world_phases('falling', old_x, old_bounds)
+            self.run_world_phases('falling', old_x, old_bounds, generation_player)
             return
         if self._combat_controls_locked():
             # SwordCtrl may turn at a ready pose before the hurt sequence ends.
             self.resume_combat_turn()
             self.combat.advance_player_recovery()
-            self.run_world_phases('locked', old_x, old_bounds)
+            self.run_world_phases('locked', old_x, old_bounds, generation_player)
             return
         if self._opening_active():
             phase = self.opening.phase
@@ -1861,7 +1872,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
                 self.sequence_state.sound_events.append(296)
             self.action = self.sequence_state.action
             self.player_x = self.sequence_state.target_x
-            self.run_world_phases('opening', old_x, old_bounds)
+            self.run_world_phases('opening', old_x, old_bounds, generation_player)
             return
         self.update_airborne_controls()
         if not self.resume_combat_turn():
@@ -1967,9 +1978,9 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
             motion.row += 1
             self.sequence_state.current_y -= TILE_HEIGHT
             self.physics.select(self.sequence_runtime, 23)
-        self.run_world_phases('ordinary', old_x, old_bounds, sweep_combat=True)
+        self.run_world_phases('ordinary', old_x, old_bounds, generation_player, sweep_combat=True)
 
-    def run_world_phases(self, mode, old_x, old_bounds, sweep_combat=False):
+    def run_world_phases(self, mode, old_x, old_bounds, generation_player=None, *, sweep_combat=False):
         """Run one tick's world phases (pop2.frame_phases) and end the tick."""
         from pop2.frame_phases import WORLD_PHASES
 
@@ -1991,7 +2002,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
             elif phase == 'combat':
                 # A room cut rebases X; it must not be swept as a cross-room jump.
                 swept = sweep_combat and (motion is None or motion.room == old_room)
-                self.advance_combat(old_x if swept else None)
+                self.advance_combat(old_x if swept else None, generation_player)
             elif phase == 'environment':
                 with self.room_left_view():
                     self.advance_environment()
@@ -2459,7 +2470,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
             return True
         return turned
 
-    def advance_combat(self, old_x=None):
+    def advance_combat(self, old_x=None, generation_player=None):
         combat = getattr(self, "combat", None)
         if combat is None:
             return
@@ -2484,12 +2495,12 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
             # The crossing frame's opponent pass belongs to the room left
             # (finish_room_entry); the cut follows the combat phase.
             with combat.leaving_room(pending[1]):
-                events = self._combat_pass(combat, old_x)
+                events = self._combat_pass(combat, old_x, generation_player)
         else:
-            events = self._combat_pass(combat, old_x)
+            events = self._combat_pass(combat, old_x, generation_player)
         self._combat_events(combat, events)
 
-    def _combat_pass(self, combat, old_x):
+    def _combat_pass(self, combat, old_x, generation_player=None):
         if combat.choose_player_bump(old_x):
             motion = getattr(self, 'terrain_motion', None)
             if motion is not None:
@@ -2504,7 +2515,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
             self.player_x = self.sequence_state.target_x
             self.status.set("Blocked by opponent")
         return combat.step(
-            time.perf_counter(), self.current_animation_interval_ms() / 1000,
+            time.perf_counter(), self.current_animation_interval_ms() / 1000, generation_player,
         )
 
     def _combat_events(self, combat, events):
