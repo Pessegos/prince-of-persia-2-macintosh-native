@@ -15,6 +15,7 @@ from pop2.opponent_records import GuardRoomRecord, corpse_sequence, is_dead_pose
 from pop2.paths import ASSET_DIR
 from pop2.terrain import TerrainMotion, floor_contact_x, floor_y
 from pop2.wall_spikes import WallSpikes
+from tests.test_audio import TimedPlayback
 from tools.audit_temple_routes import Harness, press
 
 TEMPLE_INSTALLED = all((ASSET_DIR / name).is_file()
@@ -170,6 +171,10 @@ class TemplePlaytestTests(unittest.TestCase):
         for room, x, facing, key, expected in ((31, 22, 0, 'L', 1), (27, 500, 1, 'R', 0)):
             with self.subTest(room=room):
                 scene.jump_to_room(room, 1, x, facing, redraw=False)
+                if expected:
+                    scene.audio.add_song(189)
+                    scene.audio.flush()
+                    self.assertTrue(scene.audio.song_playing(189))
                 with patch.object(scene.audio, 'add_song', wraps=scene.audio.add_song) as songs:
                     press(harness, key, True)
                     for _ in range(15):
@@ -182,6 +187,76 @@ class TemplePlaytestTests(unittest.TestCase):
                     self.assertEqual(sum(call.args == (292,) for call in songs.call_args_list), expected)
                     if expected:
                         self.assertEqual(scene.audio.current_music, 292)
+
+    @unittest.skipUnless((ASSET_DIR / 'audio/cue-235.wav').is_file(), 'Imported temple music required')
+    def test_checkpoint_combat_music_waits_for_the_reinforcement_and_death_cue(self):
+        scene = self.harness(13, peaceful=False, draw=False).scene
+        checkpoint, = scene.checkpoints
+        scene.jump_to_room(checkpoint.room, checkpoint.row, 220, 0, redraw=False)
+        audio = scene.audio = AudioEngine(playback=object())
+        audio.playback = TimedPlayback(audio.cues)
+        audio.configure_level(scene.game.level.data)
+
+        combat = scene.combat
+        point, = combat.generation_points
+        point.countdown = 0
+        combat.world_frame = 1
+        combat.generate_opponents()
+        guard, = combat.guards
+        guard.alert_mode = 1
+        scene.advance_audio()
+        self.assertIn(audio.current_music, range(232, 236))
+        clock = audio.music_clock
+
+        guard.life, guard.native_alive = 0, False
+        guard.death_song_pending, guard.death_song_frames = True, 6
+        guard.row = checkpoint.row
+        self.assertTrue(point.active(checkpoint.row, combat._supporting_column(combat.player)))
+        scene.advance_audio()
+        self.assertIs(audio.music_clock, clock)
+        guard.death_song_pending = False
+        scene.advance_audio()
+        self.assertIs(audio.music_clock, clock)
+
+        point.remaining = 0
+        guard.death_song_pending = True
+        scene.advance_audio()
+        self.assertIs(audio.music_clock, clock)
+        combat._advance_guard_death_song(guard)
+        scene.advance_audio()
+        self.assertEqual(audio.current_music, 189)
+        scene.advance_audio()
+        self.assertEqual(audio.current_music, 189)
+        audio.playback.advance(60)
+        scene.advance_audio()
+        self.assertIn(audio.current_music, range(216, 232))
+
+    @unittest.skipUnless((ASSET_DIR / 'audio/cue-253.wav').is_file(), 'Imported temple music required')
+    def test_level13_approach_and_shadow_themes_wait_for_ambient_admission(self):
+        scene = self.harness(13, draw=False).scene
+        scene.jump_to_room(31, 1, 220, 0, redraw=False)
+        audio = scene.audio = AudioEngine(playback=object())
+        audio.playback = TimedPlayback(audio.cues)
+        audio.configure_level(scene.game.level.data)
+
+        scene.advance_audio()
+        self.assertIn(audio.current_music, range(216, 232))
+        clock = audio.music_clock
+        scene.game.place(28, 0, 277, 1)
+        scene.advance_audio()
+        self.assertIs(audio.music_clock, clock)
+        audio.playback.advance(60)
+        scene.advance_audio()
+        self.assertEqual(audio.current_music, 253)
+
+        scene.game.place(3, 1, 220, 0)
+        player = scene.combat.player
+        player.state.actor_type, player.life = 1, 3
+        scene.advance_audio()
+        self.assertEqual(audio.current_music, 253)
+        audio.playback.advance(60)
+        scene.advance_audio()
+        self.assertEqual(audio.current_music, 252)
 
     @unittest.skipUnless((ASSET_DIR / 'temple_level13.json').is_file(), 'Imported level 13 required')
     def test_inscription_guard_draws_after_entry_footstep_with_corpse_in_bank(self):
