@@ -2436,8 +2436,9 @@ class ChosenRoomTests(unittest.TestCase):
         renderer.ambience = None
 
     def test_no_other_level_has_it(self):
+        # The ruins (levels 6-9) have an ambience of their own: tests/test_ruins_ambience.
         renderer = self.renderer
-        with patch.object(renderer, 'level', SimpleNamespace(number=6)):
+        with patch.object(renderer, 'level', SimpleNamespace(number=10)):
             renderer.advance_ambience(15, self.terrain)
         self.assertIsNone(renderer.ambience)
         frame = Image.new('RGBA', (WIDTH, HEIGHT))

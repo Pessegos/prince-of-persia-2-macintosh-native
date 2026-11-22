@@ -164,13 +164,25 @@ class LevelRenderer:
             # Snapshot before actors/HUD; later drawing must not modify this image.
             self.cavern_scenery = frame.copy()
 
-    def advance_ambience(self, room_id, terrain, footing=None, thuds=()):
-        """One game tick of the optional cave ambience; pixels only."""
+    def ambience_kind(self):
+        """(how a room is read, the ambience made of what is read) for this level, or
+        None: the caves' and the ruins' are different effects."""
         from pop2.cavern_ambience import AMBIENCE_LEVELS, CavernAmbience, room_air
+        from pop2.ruins_ambience import RUINS_LEVELS, RuinsAmbience, ruins_air
 
-        if self.level.number not in AMBIENCE_LEVELS:
+        if self.level.number in AMBIENCE_LEVELS:
+            return room_air, CavernAmbience
+        if self.level.number in RUINS_LEVELS:
+            return ruins_air, RuinsAmbience
+        return None
+
+    def advance_ambience(self, room_id, terrain, footing=None, thuds=()):
+        """One game tick of the optional cave or ruins ambience; pixels only."""
+        kind = self.ambience_kind()
+        if kind is None:
             self.ambience = None
             return
+        room_air, ambience = kind
         if self.ambience is None or self.ambience.room != room_id:
             if room_id not in self.ambience_air:
                 ahead = self.ambience_ahead.pop(room_id, None)
@@ -180,7 +192,7 @@ class LevelRenderer:
                 else:
                     self.ambience_air[room_id] = room_air(self.level.number, room_id, self.rooms[room_id], terrain,
                                                           lambda: self.room_with_gates_up(room_id))
-            self.ambience = CavernAmbience(room_id, self.ambience_air[room_id])
+            self.ambience = ambience(room_id, self.ambience_air[room_id])
         self.ambience.advance(terrain, footing, thuds)
 
     def read_ambience_ahead(self, room_id, caverns, terrain):
@@ -193,10 +205,12 @@ class LevelRenderer:
         It goes a step at a time, each call doing one: drawing the room, drawing it
         with its gates up when it has torches, then reading it. Returns whether a step
         was taken."""
-        from pop2.cavern_ambience import AMBIENCE_LEVELS, room_air, room_torches
+        from pop2.cavern_ambience import room_torches
 
-        if self.level.number not in AMBIENCE_LEVELS or self.level.kind not in (2, 3, 4, 6):
+        kind = self.ambience_kind()
+        if kind is None or self.level.kind not in CAVE_KINDS:
             return False
+        room_air = kind[0]
         reading = self.ambience_reading
         if reading is not None and reading[0] in self.ambience_air:
             reading = None  # The Prince went in first.
