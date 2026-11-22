@@ -357,8 +357,8 @@ class DuneTests(unittest.TestCase):
         for x, y in changed:
             self.assertGreaterEqual(y, foot - ruins_ambience.DEVIL_HEIGHTS[1] - 12)
             self.assertLessEqual(y, foot + 3)
-            # Sand sprayed left can travel about 31 pixels from the wandering base.
-            self.assertGreaterEqual(x, devil.start - devil.wander - 32)
+            # Sand sprayed left can travel about 25 pixels from the wandering base.
+            self.assertGreaterEqual(x, devil.start - devil.wander - 26)
         while ambience.devil is not None:
             ambience.advance()
         low, high = ruins_ambience.TICKS_BETWEEN_DEVILS
@@ -410,6 +410,7 @@ class DuneTests(unittest.TestCase):
             for grain in devil.thrown:
                 self.assertNotEqual(grain.dx, 0)
                 self.assertTrue(grain.ground - 6 <= grain.y < grain.ground + 1)
+                self.assertLessEqual(abs(grain.dx * grain.age), 23)
             new_grains = [grain for grain in devil.thrown if grain.age == 1]
             if len(new_grains) >= 4:
                 sides = {1 if grain.dx > 0 else -1 for grain in new_grains}
@@ -1191,6 +1192,28 @@ class RendererTests(unittest.TestCase):
         frame = frame_of(picture((DEEP, 180)))
         self.assertIs(renderer.ambient_layer(frame, 12), frame)
 
+    def test_dunes_share_the_breeze_clock_and_keep_gusts_running_offscreen(self):
+        renderer = self.renderer(9, 4)
+        renderer.rooms = {10: 'right', 11: 'left'}
+        terrain = SimpleNamespace(neighbor=lambda room, direction: 11 if (room, direction) == (10, 'left') else None)
+        air = replace(dunes_air(rock=False), stars=())
+        with patch('pop2.ruins_ambience.ruins_air', return_value=air):
+            renderer.advance_ambience(11, terrain)
+            left = renderer.ambience
+            self.assertTrue(list(left.desert_pixels()))
+            left.desert_gusts = [steady_gust(left.tick)]
+            gust = left.desert_gusts[0]
+            renderer.advance_ambience(10, terrain)
+            right = renderer.ambience
+            self.assertTrue(list(right.desert_pixels()))
+            self.assertEqual((left.dune_origin, right.dune_origin), (0, WIDTH))
+            self.assertEqual(left.tick, right.tick)
+            self.assertIs(left.desert_gusts[0], gust)
+            renderer.advance_ambience(11, terrain)
+        self.assertIs(renderer.ambience, left)
+        self.assertIs(left.desert_gusts[0], gust)
+        self.assertEqual(left.tick, 3)
+
 
 @unittest.skipUnless(RUINS_INSTALLED, 'Imported ruins resources required')
 class EveryRuinsRoomTests(unittest.TestCase):
@@ -1433,6 +1456,39 @@ class RealSceneTests(unittest.TestCase):
         self.assertTrue(devil)
         self.assertEqual(off, on)
         self.assertEqual(on['room'], 11)
+
+    def test_running_through_the_desert_shows_sand_on_the_first_tick_in_each_room(self):
+        from tools.audit_temple_routes import Harness, press
+
+        def seeded_ambience(room, air):
+            return RuinsAmbience(room, air, random.Random(90 + room))
+
+        with patch('pop2.level_rendering.LevelRenderer.ambience_kind',
+                   return_value=(ruins_ambience.ruins_air, seeded_ambience)):
+            harness = Harness(9, peaceful=True, draw=True, god=True)
+            try:
+                scene = harness.scene
+                scene.audio = None
+                scene.cave_ambience_enabled = True
+                scene.jump_to_room(14, row=2, x=28, facing=1)
+                press(harness, 'R', True)
+                visited = []
+                for _ in range(200):
+                    harness.tick()
+                    if not visited or scene.room_id != visited[-1]:
+                        visited.append(scene.room_id)
+                        weather = scene.level_renderer.ambience
+                        self.assertEqual(weather.room, scene.room_id)
+                        scenery = Image.alpha_composite(scene.background, scene.foreground)
+                        with_sand = scenery.copy()
+                        weather.put_sand(with_sand.load())
+                        changed = (numpy.asarray(with_sand) != numpy.asarray(scenery)).any(axis=2)
+                        self.assertGreaterEqual(numpy.count_nonzero(changed), 12, scene.room_id)
+                        if scene.room_id == 10:
+                            break
+                self.assertEqual(visited, [14, 13, 12, 11, 10])
+            finally:
+                harness.close()
 
 
 class SourceTests(unittest.TestCase):

@@ -44,7 +44,8 @@ The puffs. Whatever comes down knocks up a puff of dust from the floor, as in th
 the Prince's steps, skids and landings, a loose floor landing, a gate or a door coming
 down. They are the caves' own puffs, in the pale rose of the ruins' grit.
 
-The desert. Over the dunes of level nine the wind comes in gusts, now and then two or
+The desert. A light breeze carries sand along the connected rooms of level nine's dunes.
+The wind comes in stronger gusts, now and then two or
 three close together, then a lull, each its own strength, speed and stretch of the room,
 blowing harder and softer as it goes. Each runs along the crest of the near dune and blows a low spray of sand
 off it, sweeps loose sand up off the plain, runs streams of sand along the ground, hits
@@ -288,7 +289,7 @@ DUNE_CREST_SPREAD = 40
 # each has its own strength, speed and stretch of the room, its sands only off the crest,
 # only off the plain or both, and blows harder and softer as it goes. The first comes
 # this soon.
-FIRST_DESERT_GUST = (10, 60)
+FIRST_DESERT_GUST = (3, 16)
 GUST_SOON, GUST_LULL, SPELL_CHANCE = (18, 45), (70, 190), 0.45
 # Its strength scales the sand it lifts: about as much on the whole as before, when every
 # gust lifted the same.
@@ -324,6 +325,11 @@ GROUND_SETTLE, GROUND_DRAG = 0.12, 0.95
 GROUND_LIFE = ((5, 9), (8, 14))
 FAR_SANDS = ((157, 114, 98), (149, 106, 90), (134, 99, 83))
 NEAR_SANDS = ((173, 141, 141), (166, 131, 131), (157, 114, 98))
+# The lighter breeze that runs across the whole stretch of dunes, even between gusts.
+# Each row gives a depth on the plain, spacing in world pixels, speed and starting phase.
+DUNE_BREEZE = ((0.05, 173, 2, 31), (0.19, 227, 3, 129), (0.32, 191, 3, 59),
+               (0.49, 263, 4, 206), (0.66, 219, 4, 87), (0.84, 281, 5, 42))
+BREEZE_TRAIL = ((0, 0, 0), (6, -1, 1), (13, 2, 1), (22, 0, 2))
 # Streams of sand along the ground: how many a gust, how late, their fronts, how far they
 # run, their grains a tick and the grains' flight.
 STREAMS, STREAM_DELAY = (2, 4), 14
@@ -369,7 +375,7 @@ FOOT_GRAINS = (1, 2)
 FOOT_HOP, FOOT_LIFE = (0.3, 0.9), (4, 7)
 FOOT_SPIN = (0.6, 1.1)
 FOOT_SPRAY_TICKS, FOOT_SPRAY_GRAINS = (9, 15), (8, 11)
-THROWN_DX, THROWN_DY, THROWN_FALL = (0.85, 2.2), (-1.25, -0.5), 0.24
+THROWN_DX, THROWN_DY, THROWN_FALL = (0.68, 1.76), (-1.25, -0.5), 0.24
 FOOT_HIGHLIGHT = (240, 196, 196)
 NEAR_SIDE, FAR_SIDE, FLUNG = (166, 131, 131), (149, 106, 90), (125, 88, 68)
 # Every pixel of blown sand sits this much of the way back toward the colour behind it.
@@ -651,6 +657,7 @@ class Rock:
 
     foot: dict
     mask: numpy.ndarray
+    size: int
 
     @property
     def left(self):
@@ -702,7 +709,7 @@ def find_rocks(sand, top):
             mask = numpy.zeros_like(solid)
             ys, xs = zip(*pixels)
             mask[list(ys), list(xs)] = True
-            rocks.append(Rock(foot, mask))
+            rocks.append(Rock(foot, mask, len(pixels)))
     return tuple(rocks)
 
 
@@ -1231,6 +1238,7 @@ class RuinsAmbience:
     streams: list = field(default_factory=list)
     devil: Devil | None = None
     devil_wait: int = 0
+    dune_origin: int | None = None
     # The puffs of dust from the floor.
     clouds: list = field(default_factory=list)
     tick: int = 0
@@ -1851,11 +1859,14 @@ class RuinsAmbience:
     def run_at_rocks(self):
         """While a gust's front reaches a big rock, sand runs along the ground at its foot."""
         rng, dunes = self.rng, self.air.dunes
+        fronts = tuple(self.fronts(GROUND_FRONT, 'plain', behind=-45, ahead=5))
+        if not fronts:
+            return
         for rock in dunes.rocks:
-            if len(rock.foot) < 4 or rock.mask.sum() < BIG_ROCK:
+            if len(rock.foot) < 4 or rock.size < BIG_ROCK:
                 continue
             left = rock.left
-            for front, strength in self.fronts(GROUND_FRONT, 'plain', behind=-10 ** 6, ahead=10 ** 6):
+            for front, strength in fronts:
                 if left - 45 <= front <= left + 5:
                     for _ in range(some(rng, AT_ROCK, strength)):
                         y = rock.foot.get(left + 2, rock.foot[left]) + rng.randint(-3, 2)
@@ -1910,10 +1921,10 @@ class RuinsAmbience:
                 grain.dx *= GROUND_DRAG
             grain.age += 1
             x, y = int(grain.x), int(grain.y)
-            inside = 0 <= x < WIDTH and 0 <= y < HEIGHT and any(rock.mask[y, x] for rock in rocks)
+            hidden = (grain.bounced and grain.age > 2 and 0 <= x < WIDTH and 0 <= y < HEIGHT
+                      and any(rock.mask[y, x] for rock in rocks))
             landed = grain.y > grain.start + 0.5 and not grain.bounced
-            if (grain.age < grain.life and not landed and 0 <= grain.x < WIDTH
-                    and not (grain.bounced and inside and grain.age > 2)):
+            if grain.age < grain.life and not landed and not hidden and 0 <= grain.x < WIDTH:
                 kept.append(grain)
         self.blown = kept
 
@@ -2018,6 +2029,8 @@ class RuinsAmbience:
     def desert_pixels(self):
         """(x, y, RGB) of the blown sand, the later over the earlier."""
         dunes, tick = self.air.dunes, self.tick
+        if self.dune_origin is not None:
+            yield from self.breeze_pixels(dunes)
         devil = self.devil
         if devil is not None:
             base_x, base_y = devil.base(tick, dunes.crest)
@@ -2061,6 +2074,19 @@ class RuinsAmbience:
         for grain in self.blown:
             if grain.bounced:
                 yield int(grain.x), int(grain.y), NEAR_SANDS[min(2, grain.age * 3 // grain.life)]
+
+    def breeze_pixels(self, dunes):
+        """Light trails use the same world X and tick on both sides of a room cut."""
+        for depth, spacing, speed, phase in DUNE_BREEZE:
+            head = (self.tick * speed + phase - self.dune_origin) % spacing
+            row = dunes.ground_top + round(depth * (HEIGHT - dunes.ground_top - 8))
+            colours = NEAR_SANDS if depth >= 0.49 else FAR_SANDS
+            for front in range(head, WIDTH + BREEZE_TRAIL[-1][0], spacing):
+                ripple = round(3 * math.sin((front + self.dune_origin) / 37 + phase))
+                for back, dy, shade in BREEZE_TRAIL:
+                    x, y = front - back, row + ripple + dy
+                    if 0 <= x < WIDTH and 0 <= y < HEIGHT and dunes.open_sand[y, x]:
+                        yield x, y, colours[shade]
 
     def put_sand(self, canvas):
         """The blown sand, each pixel gentler: part of the way back to what it covers."""

@@ -19,6 +19,17 @@ def room_kinds(terrain, room_id):
     return tuple(terrain.tile(room_id, column, row).kind for row in range(3) for column in range(10))
 
 
+def dune_origin(terrain, room_id):
+    """Horizontal position of a dune room along its chain of left links."""
+    from pop2.terrain import ROOM_WIDTH
+
+    seen = set()
+    while room_id is not None and room_id not in seen:
+        seen.add(room_id)
+        room_id = terrain.neighbor(room_id, 'left')
+    return (len(seen) - 1) * ROOM_WIDTH
+
+
 class LevelRenderer:
     def __init__(self, level, preload_room=True, retouch_caverns=True):
         if level.kind != 5 and level.number not in (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14):
@@ -33,6 +44,8 @@ class LevelRenderer:
         self.cavern_scenery = None
         self.cavern_map = None
         self.ambience = None
+        self.dune_ambience = {}
+        self.dune_tick = 0
         self.ambience_air = {}
         # Rooms read before the Prince comes in: {room: ((drawing key, tiles), air)}.
         self.ambience_ahead = {}
@@ -183,6 +196,11 @@ class LevelRenderer:
             self.ambience = None
             return
         room_air, ambience = kind
+        if self.level.number == 9:
+            self.dune_tick += 1
+            for room, dunes in self.dune_ambience.items():
+                if room != room_id:
+                    dunes.advance(terrain)
         if self.ambience is None or self.ambience.room != room_id:
             if room_id not in self.ambience_air:
                 ahead = self.ambience_ahead.pop(room_id, None)
@@ -192,7 +210,13 @@ class LevelRenderer:
                 else:
                     self.ambience_air[room_id] = room_air(self.level.number, room_id, self.rooms[room_id], terrain,
                                                           lambda: self.room_with_gates_up(room_id))
-            self.ambience = ambience(room_id, self.ambience_air[room_id])
+            self.ambience = self.dune_ambience.get(room_id)
+            if self.ambience is None:
+                self.ambience = ambience(room_id, self.ambience_air[room_id])
+                if self.level.number == 9 and self.ambience.air.dunes is not None:
+                    self.ambience.tick = self.dune_tick - 1
+                    self.ambience.dune_origin = dune_origin(terrain, room_id)
+                    self.dune_ambience[room_id] = self.ambience
         self.ambience.advance(terrain, footing, thuds, shakes)
 
     def read_ambience_ahead(self, room_id, caverns, terrain):
