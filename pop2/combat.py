@@ -1858,9 +1858,14 @@ class CombatEncounter:
         climb_changed_row = generation_player is not None and generation_player.row != self.player.row
         for point in self.generation_points:
             player = generation_player if climb_changed_row and point.flags >= 1 else self.player
-            if not point.advance(player, blockers, self.world_frame, self.level):
+            column = self._supporting_column(player)
+            if not point.active(player.row, column):
                 continue
-            armed = abs(point.column - character_column(player.state.target_x)) <= 3 and point.life >= 6
+            # CheckOppGenPts 6:3a2a selects the first active point through
+            # GetOppGenPtOnRow 6:3d28 before checking its corridor and timer.
+            if not point.advance(player, blockers, self.world_frame, self.level, player_column=column):
+                break
+            armed = abs(point.column - column) <= 3 and point.life >= 6
             state = SequenceState(90 if armed else 84, current_x=point.x,
                                   target_x=point.x, facing=point.facing,
                                   actor_type=2, level_kind=self.level_kind)
@@ -1875,7 +1880,7 @@ class CombatEncounter:
             guard.native_alive = True
             guard.bank_room, guard.bank_slot = self.player.room, len(self.active_guards())
             self.guards.append(guard)
-            blockers.append(guard)
+            break
         self.refresh_target()
 
     def _generate_final_jaffar(self):
@@ -1990,11 +1995,20 @@ class CombatEncounter:
             art = getattr(self, "guard_art", None)
             old_bounds = (art.collision_bounds(guard.state, floor_y(guard.row), guard.sword_drawn)
                           if art is not None else None)
-            # FrameAdv 2:64f2-651e skips NPCs below Y=484 without a lower
-            # room. Each remaining AutoCtrl call decrements the shared timers,
+            below_floor = (terrain is not None
+                           and floor_y(guard.row) + guard.state.current_y > 484
+                           and terrain.neighbor(guard.room, "down") is None)
+            if (below_floor and guard.state.level_kind == 2
+                    and guard.state.selected_sequence_id == 185):
+                # FrameAdv 2:64f2-650e jumps straight to Move (2:6686)
+                # below the temple floor. Keep the last pose/row until the
+                # body reaches the void limit, then leave it there.
+                if guard.state.animation_state == 9:
+                    self._advance_guard_terrain(guard, old_x, old_bounds, tumble_below_floor=True)
+                continue
+            # Each remaining AutoCtrl call decrements the shared timers,
             # including calls for corpses, before that NPC's decision.
-            if (terrain is None or floor_y(guard.row) + guard.state.current_y <= 484
-                    or terrain.neighbor(guard.room, "down") is not None):
+            if not below_floor:
                 self.parry_timer = max(0, self.parry_timer - 1)
                 self.advance_pause = max(0, self.advance_pause - 1)
                 self.attack_pause = max(0, self.attack_pause - 1)
@@ -2032,6 +2046,9 @@ class CombatEncounter:
                 guard.entry_x = None
             if guard.recovering and guard.state.sequence_id == 227:
                 guard.recovering = False
+        # FrameAdv 2:6740-6742 clears this frame's noise even when the
+        # bank ends with a corpse or an armed guard (or is empty).
+        self.player.state.callback_flag = 0
         self._present_flame_swords()
 
     def final_prince_view(self):
@@ -2330,10 +2347,10 @@ class CombatEncounter:
             return True
         return guard.room in (6, 7) and environment == 6
 
-    def _advance_guard_terrain(self, guard, old_x, old_bounds=None):
+    def _advance_guard_terrain(self, guard, old_x, old_bounds=None, *, tumble_below_floor=False):
         if guard.skeleton is not None and guard.skeleton.phase == 'lava':
             return
-        if not self._physics_admitted(guard):
+        if not tumble_below_floor and not self._physics_admitted(guard):
             return
         if guard.terrain_motion is None:
             guard.terrain_motion = TerrainMotion(guard.room, guard.row)
@@ -2356,7 +2373,7 @@ class CombatEncounter:
             motion, guard.runtime, old_x, bounds(), sword_drawn=guard.sword_drawn,
             bounds_for_state=bounds, cut_enabled=guard.entry_x is None, alive=guard.alive,
             old_bounds=old_bounds, collision_bounds_for_state=collision_bounds,
-            native_alive=_native_alive(guard))
+            native_alive=_native_alive(guard), tumble_below_floor=tumble_below_floor)
         guard.room, guard.row = motion.room, motion.row
         if (guard.state.actor_type == 2 and motion.scream_played
                 and any(event.kind in ('land', 'lava', 'damage')

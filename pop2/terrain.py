@@ -1454,7 +1454,8 @@ class RooftopPhysics:
     def advance(self, motion, runtime, old_x, bounds, sword_drawn=False, protected=False,
                 frame_flags=0x40, frame_record=None, bounds_for_state=None, cut_enabled=True,
                 alive=True, old_bounds=None, catch_ledge=None, collision_bounds_for_state=None,
-                invulnerable=False, native_alive=None, barriers=True, crouch_held=False):
+                invulnerable=False, native_alive=None, barriers=True, crouch_held=False,
+                tumble_below_floor=False):
         state = runtime.state
         motion.landing_pressure = None
         if motion.dead:
@@ -1495,30 +1496,41 @@ class RooftopPhysics:
         if not motion.falling and not landing_recovery:
             motion.smooth_landing = False
         events = []
-        if state.actor_type == 2 and state.level_kind == 5 and state.animation_state == 9:
-            # FrameAdv 2:65da-6664 bypasses barriers/floors/room cuts for
-            # rooftop tumbles. Move only adds gravity; row follows absolute Y.
+        if state.actor_type == 2 and state.level_kind in (2, 5) and state.animation_state == 9:
+            # FrameAdv 2:65ee-6664 skips floors, barriers and room cuts.
+            rooftop = state.level_kind == 5
+            floating = not rooftop and self.floating()
+            acceleration, max_speed = (2, 8) if floating else (GRAVITY, MAX_FALL_SPEED)
+            if floating or state.vertical_velocity < max_speed:
+                state.vertical_velocity = min(max_speed, state.vertical_velocity + acceleration)
             absolute_y = floor_y(motion.row) + state.current_y
-            state.vertical_velocity = min(MAX_FALL_SPEED, state.vertical_velocity + GRAVITY)
-            absolute_y += state.vertical_velocity
-            motion.row = character_row(min(absolute_y, VOID_DEATH_Y))
-            state.current_y = min(absolute_y, VOID_DEATH_Y) - floor_y(motion.row)
+            if absolute_y < 3650:  # MoveChar 4:3466 guards the Y addition.
+                absolute_y += state.vertical_velocity
+            void_limited = rooftop or tumble_below_floor
+            y = min(absolute_y, VOID_DEATH_Y) if void_limited else absolute_y
+            if not tumble_below_floor:
+                # A linked room allows MoveChar to keep falling in place.
+                # Store depth beyond the offscreen row in the Y offset so
+                # the actor's row stays in the ordinary saved-state range.
+                motion.row = character_row(min(y, VOID_DEATH_Y))
+            state.current_y = y - floor_y(motion.row)
             state.current_x = state.target_x
             motion.falling = True
-            if absolute_y > VOID_DEATH_Y:
-                if motion.room in WATER_ROOMS:
+            if void_limited and absolute_y > VOID_DEATH_Y:
+                state.vertical_velocity = 0
+                state.animation_state = 1
+                if rooftop and motion.room in WATER_ROOMS:
                     # Move 4:36ae-36ec leaves the harbor death to RoofWatchOpps.
-                    state.vertical_velocity = 0
-                    state.animation_state = 1
                     return ()
-                # Move 4:36a2-36ec freezes at 730 with pose 185. Do not
-                # apply SEQS:22's +6 X offset to this direct native assignment.
-                state.vertical_velocity = state.horizontal_velocity = 0
-                state.animation_state, state.action = 1, 185
-                state.selected_sequence_id = 22
-                state.sequence_id, state.cursor = 22, len(runtime.sequences[22]) - 1
+                state.action = 185
                 motion.dead = True
-                state.sound_events.append(7)
+                if rooftop:
+                    # Keep the rooftop void-death presentation. In the temple,
+                    # 4:374a-3776 sets the pose directly with no sound request.
+                    state.horizontal_velocity = 0
+                    state.selected_sequence_id = 22
+                    state.sequence_id, state.cursor = 22, len(runtime.sequences[22]) - 1
+                    state.sound_events.append(7)
                 return (TerrainEvent("death"),)
             return ()
         if motion.falling:

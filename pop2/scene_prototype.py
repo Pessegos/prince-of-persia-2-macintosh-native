@@ -3767,6 +3767,11 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         # marks by +0x34, e.g. the Prince after SEQS:27 sinks him (-21 7).
         if getattr(state, 'sequence_mode', 0) in (4, 5, 6, 7, 10, 12):
             return frame
+        if (getattr(state, "level_kind", None) == 2
+                and getattr(state, "actor_type", None) == 2 and state.animation_state == 9):
+            # SetupOpponent 3:0942/096c/0f46 skips foreground marks for
+            # tumbles. The birdhead is drawn in front of the balcony.
+            return Image.alpha_composite(frame, layer)
         # An upper roof's foreground must not erase a lower-row fall.
         rooms = getattr(self, "room_cache", {})
         room = rooms.get(getattr(self, "room_id", None))

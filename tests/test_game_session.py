@@ -356,7 +356,9 @@ class OriginalLevelSessionTests(unittest.TestCase):
         game.combat.enter_room(4, 1)
         self.assertTrue(game.combat.guards)
         self.assertTrue(all(guard.state.level_kind == 1 for guard in game.combat.guards))
-        game.combat.enter_room(3, 1)
+        # Put the Prince far enough from the point to select it before
+        # substituting the countdown check in this construction test.
+        game.place(3, 1, 260, 0, reset_guards=False)
         point = game.combat.generation_points[0]
         before = len(game.combat.guards)
         with patch.object(point, "advance", return_value=True):

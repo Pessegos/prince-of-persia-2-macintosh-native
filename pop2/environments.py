@@ -30,6 +30,7 @@ from pop2.coordinates import native_x, scene_x
 from pop2.crevices import CREVICE_TILE
 from pop2.harbor import SHIP_CLIMB_SEQUENCE
 from pop2.loose_floors import crush_sequence, floor_hits_actor, floor_hits_body
+from pop2.music_cues import INSCRIPTION_SONG
 from pop2.opponent_generation import character_column
 from pop2.render_opening import TILE_HEIGHT, TILE_WIDTH
 from pop2.terrain import floor_contact_x, floor_y
@@ -1954,6 +1955,17 @@ class Temple(Caverns):
 
     # GetEndSong 5:4e0c-4e3e selects LvTemple for environment 2.
     end_song = 187
+
+    def entered_room(self):
+        scene = self.scene
+        if (scene.game.level.number, scene.room_id) != (13, 1):
+            return
+        # CUST 4025 (kind 31) invokes 10:27a6 once on entry. Only the
+        # Prince's supporting column at the cut can trigger Chasm.
+        audio = getattr(scene, 'audio', None)
+        if (audio is not None and audio.music_enabled
+                and scene.combat._supporting_column(scene.combat.player) >= 9):
+            audio.add_song(INSCRIPTION_SONG, ambient=True)
 
     def frame_start(self):
         from pop2.slide_rocks import CRUSH_CUE, WALL_CUE

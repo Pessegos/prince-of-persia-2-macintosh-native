@@ -588,6 +588,23 @@ class PolyphonicCueTests(unittest.TestCase):
         self.assertTrue(self.audio.sound_playing(61))
         self.assertEqual(len(self.playback.effect_channels), 1)
 
+    def test_sword_clash_restarts_before_the_previous_clash_ends(self):
+        self.audio.cues[10].update(mode=2, duration=0.463)
+        self.audio.cues[61]['duration'] = 0.5
+        playback = TimedPlayback(self.audio.cues)
+        with patch.object(self.audio, 'playback', playback):
+            self.audio.add_sound(61)
+            self.audio.add_sound(10)
+            self.audio.flush()
+            playback.advance(0.3)
+            self.assertAlmostEqual(playback.effects[10], 0.163)
+
+            self.audio.add_sound(10)
+            self.audio.add_sound(10)
+            self.audio.flush()
+            self.assertAlmostEqual(playback.effects[10], 0.463)
+            self.assertAlmostEqual(playback.effects[61], 0.2)
+
     def test_stop_sound_is_selective_and_idle_channels_are_reused(self):
         for cue in (61, 294, 17):
             self.audio.add_sound(cue)

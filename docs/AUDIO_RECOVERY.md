@@ -115,6 +115,12 @@ The port's mixed-effects policy allows distinct effects to overlap, with one
 gate voice for opening and one for closing. This is an intentional exception
 to the native single-effect arbitration below, not a recovered Sound Manager rule.
 
+Sword clashes (cue 10) can restart an in-progress clash in mixed mode.
+They follow cue 10's native mode 2 retrigger rule (SetCueSnd 5:530a).
+Requests within one update still coalesce, and other effects can continue
+playing. The level 13 checkpoint recording shows a blocked counterattack
+about 0.3 seconds after the first clash, within its 0.463-second sample.
+
 The controller retains its original integer cues/timing and supplies transient
 `GateSound` direction/source records alongside them. Scene audio attributes
 these before coalescing: opposite motions can overlap, but multiple gates

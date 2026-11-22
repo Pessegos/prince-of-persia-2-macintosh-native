@@ -1,15 +1,19 @@
 """The user's temple playtest reports of 2026-11-06, in the real hidden scene."""
 
+import os
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
+from PIL import Image, ImageChops
+
+from pop2.audio import AudioEngine
 from pop2.combat import guard_frame_index, select_sequence
 from pop2.coordinates import column_left
 from pop2.loose_floors import FallingFloor, floor_hits_body, floor_hits_record
 from pop2.opponent_records import GuardRoomRecord, corpse_sequence, is_dead_pose
 from pop2.paths import ASSET_DIR
-from pop2.terrain import TerrainMotion, floor_contact_x
+from pop2.terrain import TerrainMotion, floor_contact_x, floor_y
 from pop2.wall_spikes import WallSpikes
 from tools.audit_temple_routes import Harness, press
 
@@ -95,6 +99,156 @@ class TemplePlaytestTests(unittest.TestCase):
         harness = Harness(number, **options)
         self.addCleanup(harness.close)
         return harness
+
+    @unittest.skipUnless((ASSET_DIR / 'temple_level13.json').is_file(), 'Imported level 13 required')
+    def test_room32_birdhead_tumbles_in_front_of_the_floor_on_a_fatal_hit(self):
+        scene = self.harness(13, peaceful=False).scene
+        scene.audio = None
+        checkpoint, = scene.checkpoints
+        self.assertEqual((checkpoint.room, checkpoint.row), (31, 1))
+        scene.jump_to_room(checkpoint.room, checkpoint.row, 220, 0, redraw=False)
+        combat = scene.combat
+        point, = combat.generation_points
+        self.assertTrue(point.tumble_enabled)
+        point.countdown = 0
+        combat.world_frame = 1
+        combat.generate_opponents()
+        guard, = combat.guards
+        guard.life = 1
+        guard.entry_x = None
+        guard.state.current_x = guard.state.target_x = 140
+        select_sequence(guard, 227)
+        guard.runtime.next_frame()
+        guard.sword_drawn = combat.player.sword_drawn = True
+        combat.player.state.action = 154
+
+        with patch.object(combat.rng, 'randrange', return_value=0) as roll:
+            self.assertEqual([event.kind for event in combat.resolve_contacts()], ['death'])
+            roll.assert_called_once_with(4)
+        self.assertEqual((guard.state.selected_sequence_id, guard.life), (185, 0))
+
+        frames = []
+        for _ in range(14):
+            state = guard.state
+            frames.append((state.target_x, floor_y(guard.row) + state.current_y,
+                           guard.row, state.action))
+            if state.action == 216:
+                # SetupOpponent 3:0f46 draws the falling body in front of the
+                # room. Compare its opaque pixels below the balcony itself.
+                scene.render()
+                sprite = Image.new('RGBA', (510, 365))
+                scene.guard_art.draw(sprite, state, floor_y(guard.row), guard.palette_variant)
+                body = sprite.crop((0, 240, 180, 365))
+                shown = scene.screenshot_viewport.crop((1, 240, 181, 365))
+                opaque = body.getchannel('A').point(lambda alpha: 255 if alpha == 255 else 0)
+                self.assertIsNotNone(opaque.getbbox())
+                missing = ImageChops.difference(body.convert('RGB'), shown.convert('RGB'))
+                self.assertIsNone(ImageChops.multiply(missing, opaque.convert('RGB')).getbbox())
+            combat.advance_guard()
+        # CheckStab 6:51f2 and FrameAdv 2:64de-668a, native LEVL 2012.
+        self.assertEqual(frames, [
+            (118, 226, 1, 213), (109, 231, 1, 214), (93, 250, 2, 215),
+            (76, 281, 2, 216), (58, 328, 2, 217), (51, 373, 3, 218),
+            (64, 427, 3, 217), (64, 490, 4, 218), (64, 538, 4, 218),
+            (64, 592, 4, 218), (64, 652, 4, 218), (64, 715, 4, 218),
+            (64, 730, 4, 185), (64, 730, 4, 185),
+        ])
+        self.assertEqual(guard.state.sound_events, [30])
+        self.assertEqual(guard.room, checkpoint.room)
+        self.assertTrue(guard.death_registered)
+        self.assertFalse(guard.targetable)
+
+    @unittest.skipUnless((ASSET_DIR / 'temple_level13.json').is_file(), 'Imported level 13 required')
+    @unittest.skipUnless((ASSET_DIR / 'audio/cue-292.wav').is_file(), 'Imported Chasm cue required')
+    def test_inscription_music_on_right_entry(self):
+        harness = self.harness(13, peaceful=False)
+        scene = harness.scene
+        with patch.dict(os.environ, {'SDL_AUDIODRIVER': 'dummy'}):
+            scene.audio = AudioEngine(ASSET_DIR / 'audio')
+        scene.audio.configure_level(scene.game.level.data)
+        self.addCleanup(scene.audio.close)
+        for room, x, facing, key, expected in ((31, 22, 0, 'L', 1), (27, 500, 1, 'R', 0)):
+            with self.subTest(room=room):
+                scene.jump_to_room(room, 1, x, facing, redraw=False)
+                with patch.object(scene.audio, 'add_song', wraps=scene.audio.add_song) as songs:
+                    press(harness, key, True)
+                    for _ in range(15):
+                        harness.tick()
+                        if scene.room_id == 1:
+                            break
+                    press(harness, key, False)
+                    self.assertEqual(scene.room_id, 1)
+                    harness.tick(10)
+                    self.assertEqual(sum(call.args == (292,) for call in songs.call_args_list), expected)
+                    if expected:
+                        self.assertEqual(scene.audio.current_music, 292)
+
+    @unittest.skipUnless((ASSET_DIR / 'temple_level13.json').is_file(), 'Imported level 13 required')
+    def test_inscription_guard_draws_after_entry_footstep_with_corpse_in_bank(self):
+        harness = self.harness(13, peaceful=False)
+        scene = harness.scene
+        scene.audio = None
+        scene.jump_to_room(31, 1, 40, 0, redraw=False)
+        combat = scene.combat
+        point, = combat.generation_points
+        scene.sequence_state.current_x = scene.sequence_state.target_x = 250
+        point.countdown = 0
+        combat.world_frame = 1
+        combat.generate_opponents()
+        corpse, = combat.guards
+        corpse.life, corpse.native_alive, corpse.death_registered = 0, False, True
+        corpse.entry_x = None
+        corpse.state.current_x = corpse.state.target_x = 65
+        select_sequence(corpse, 193)
+        corpse.runtime.next_frame()
+        point.remaining = 0
+        scene.sequence_state.current_x = scene.sequence_state.target_x = 40
+
+        press(harness, 'L', True)
+        harness.tick(7)
+        self.assertEqual((scene.room_id, scene.action), (1, 8))
+        resident, carried = combat.guards
+        self.assertIs(carried, corpse)
+        self.assertEqual(resident.state.action, 166)
+        harness.tick()  # Pose 9's footstep prevents the draw for this one tick.
+        self.assertEqual(resident.state.action, 166)
+        self.assertEqual(scene.sequence_state.callback_flag, 0)
+        harness.tick()
+        self.assertEqual((resident.state.action, resident.sword_drawn), (158, True))
+
+    @unittest.skipUnless((ASSET_DIR / 'temple_level13.json').is_file(), 'Imported level 13 required')
+    def test_inscription_reinforcements_wait_for_the_first_active_point(self):
+        scene = self.harness(13, peaceful=False).scene
+        scene.audio = None
+        scene.jump_to_room(1, 1, 350, 0, redraw=False)
+        combat = scene.combat
+        left, right = combat.generation_points
+        resident, = combat.guards
+        combat.world_frame = 1
+        for _ in range(23):
+            combat.generate_opponents()
+        self.assertEqual((left.countdown, right.countdown), (8, 22))
+        self.assertEqual(combat.guards, [resident])
+        resident.life, resident.native_alive = 0, False
+
+        arrivals = []
+        for _ in range(41):
+            count = len(combat.guards)
+            combat.generate_opponents()
+            if len(combat.guards) > count:
+                guard = combat.guards[-1]
+                arrivals.append((guard.state.target_x, guard.state.facing))
+                guard.life, guard.native_alive = 0, False
+        self.assertEqual(arrivals, [(left.x, 1), (left.x, 1), (right.x, 0)])
+        self.assertEqual((left.remaining, right.remaining), (0, 4))
+
+        scene.jump_to_room(1, 1, 130, 0, redraw=False)
+        left, right = combat.generation_points
+        combat.world_frame = 1
+        for _ in range(23):
+            combat.generate_opponents()
+        self.assertEqual((left.remaining, right.remaining), (2, 4))
+        self.assertEqual(combat.guards[-1].state.target_x, right.x)
 
     def climb_room10_from_below(self, harness):
         scene = harness.scene

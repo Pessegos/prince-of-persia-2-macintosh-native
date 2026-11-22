@@ -737,11 +737,13 @@ selects skill 0. The guard starts at native X=105 / scene X=-102, facing right.
 - `IsActiveOppGenPt`, CODE:6 `0x3daa`: matching current/alternate row,
   nonzero remaining count and Prince more than two columns from the point.
 - `IsTimeToGenOpp`, `0x3e0a`: living Prince, ordinary player type, current
-  room, fewer than five NPC records (including corpses), every-third-frame
-  exclusion, and generation-side living-NPC/wall checks.
-- `CheckOppGenPts`, `0x3a0c`: only eligible world frames decrement the
-  countdown. At zero, generate, reload and decrement the remaining count.
-  Repeated keyboard callbacks cannot run this world-frame clock faster.
+  room, fewer than five NPC records (including corpses), a nonzero
+  16-bit frame counter, and generation-side living-NPC/wall checks.
+- `CheckOppGenPts`, `0x3a0c`: 6:3d28 picks the first active point before
+  testing the corridor. Only that point can decrement its countdown or
+  spawn this frame. A blocked first point leaves later timers untouched.
+  At zero, generate, reload and decrement the remaining count. Repeated
+  keyboard callbacks cannot run this world-frame clock faster.
 - `GenerateOpponent`, `0x3a84`: entry position/facing/skill and packed life.
   This one-life point enters unarmed using `84`, then loops through `208`.
   It is not spawned directly into a sword pose at a guessed onscreen position.
@@ -1128,9 +1130,12 @@ imports but excluding unselected records still owned by the source room.
 The struck actor's geometry and generator permission use the current bank's
 room, without moving its canonical object. Original ordinary-controller
 DoOppTumbleSeq/LoadShad/death-count instructions match 4,000 supplied bank
-cases; 90 original 6:4f60 noise-consumption cases confirm that only the last
-active unarmed slot consumes the signal. A later armed/dead slot does not
-cause an earlier unarmed actor to clear it. Generator lookup, cached support
+cases. In 90 original 6:4f60 noise-consumption cases, only the last active
+unarmed slot consumed the signal inside AutoCtrl. FrameAdv independently
+clears it after the entire opponent pass (2:6740–6742), including when the
+last slot is armed, a corpse or absent. Without that reset an entry footstep
+could keep the resident of level 13 room 2 unarmed indefinitely.
+Generator lookup, cached support
 columns, tile queries, random results and unarmed decisions are supplied
 endpoints in this audit. Special-environment corpse predicates remain open.
 Same-facing kills and specific tiles under/behind reject the tumble. This
@@ -1138,12 +1143,15 @@ flag is separate from the NPC's jump capability. These ordinary selection
 branches are now implemented, with tests for roll/count boundaries, the
 packed flag, same-facing kills, tile vetoes and overlapping corpse poses.
 
-185's callback 30 is a native sound event; its poses are 213-218 and its
-continuation is 207. FrameAdv 2:65ee-6664 bypasses ordinary floors, barriers
-and cuts in mode 9, derives the row from absolute Y and lets Move add gravity
-and cap at Y=730. The prototype now uses that branch instead of inventing a
-lower-floor landing or erasing a body. Ordinary mode-9 ClipChar bypass is
-also translated; the special room 16/19 rendering cap is still not covered.
+SEQS 185 starts with sound 30 and poses 213–218. FrameAdv 2:65da–6664
+adds gravity, skips ordinary floors, barriers and cuts in mode 9, and
+derives the row from absolute Y. In the temple a body below Y=484 with no
+room beneath it goes straight to Move (2:64f2–650e/6686). Pose and row hold
+until Y=730, where 4:373a–3776 sets pose 185 and mode 1 without a new sound.
+Room 32 of level 13 is a verified case. The port previously let the temple
+body collide with solid flooring on the first tumble step. The port keeps
+depth beyond the offscreen row in the Y offset when a lower room is linked.
+[Room 32 evidence](research/level13-room32-birdhead-deaths.md).
 
 GetOppDeadSeq 4:0074-010a / FrameAdv 2:6544-654c chooses flat corpse sequence
 195 (pose 228) for odd ordinary-NPC slot IDs. The helper computes slot ID
