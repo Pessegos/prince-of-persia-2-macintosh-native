@@ -1430,13 +1430,17 @@ class EveryRuinsRoomTests(unittest.TestCase):
             for cycle, (path, turn) in enumerate(paths, start=3):
                 start = cycle * period - phase + ruins_ambience.CHASM_WISP_GLIDE_TICKS
                 coil = set(path[turn:])
-                self.assertLessEqual(max(x for x, _ in coil) - min(x for x, _ in coil), 5)
-                self.assertLessEqual(max(y for _, y in coil) - min(y for _, y in coil), 5)
+                width = max(x for x, _ in coil) - min(x for x, _ in coil)
+                height = max(y for _, y in coil) - min(y for _, y in coil)
+                self.assertEqual(max(width, height), 6)
                 frames = [list(pixels(start + offset)) for offset in (0, 4, 8, 11, 13, 14)]
                 counts = list(map(len, frames))
                 self.assertTrue(all(first > second for first, second in zip(counts, counts[1:])))
                 self.assertTrue(any((x, y) not in coil for x, y, _ in frames[2]))
                 self.assertTrue({(x, y) for x, y, _ in frames[3]} <= coil)
+                curl_peak = max(max(amount) for _, _, amount in frames[3])
+                self.assertGreater(curl_peak, 22)
+                self.assertLess(max(max(amount) for _, _, amount in frames[4]), curl_peak)
                 self.assertFalse(frames[-1])
 
     def test_no_random_shooting_star_over_the_desert(self):

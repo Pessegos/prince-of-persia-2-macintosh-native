@@ -2016,14 +2016,14 @@ def chasm_wisp_path(x, y, travel, lean, radius, turn, *, horizontal=False):
 
 
 CHASM_UPDRAFT_PATHS = tuple(chasm_wisp_path(*shape) for shape in (
-    (322, 350, 115, 4, 2.65, 1),
-    (340, 355, 110, 5, 2.75, -1),
-    (312, 349, 108, 3, 2.55, 1),
+    (322, 350, 115, 4, 3.35, 1),
+    (340, 355, 110, 5, 3.45, -1),
+    (312, 349, 108, 3, 3.25, 1),
 ))
 CHASM_CROSSWIND_PATHS = tuple(chasm_wisp_path(*shape, horizontal=True) for shape in (
-    (33, 218, 130, 4, 2.65, -1),
-    (24, 219, 142, -3, 2.8, 1),
-    (51, 225, 128, 3, 2.55, -1),
+    (33, 218, 130, 4, 3.35, -1),
+    (24, 219, 142, -3, 3.5, 1),
+    (51, 225, 128, 3, 3.25, -1),
 ))
 CHASM_UPDRAFT_PERIOD, CHASM_UPDRAFT_PHASE = 52, 24
 CHASM_CROSSWIND_PERIOD, CHASM_CROSSWIND_PHASE = 63, 3
@@ -2057,7 +2057,8 @@ def chasm_wisp_pixels(tick, paths, period, phase):
         tail = turn - length + round((len(path) - turn + length) * progress ** 0.85)
         glow = min(1.0, (1 - progress) * 3.2)
     for index in range(max(0, tail), head):
-        strength = glow * min(1.0, (index - tail + 1) / 5, (head - index) / 4)
+        curl_glow = 1.0 + 0.2 * min(1.0, max(0.0, (index - turn + 1) / 4))
+        strength = glow * curl_glow * min(1.0, (index - tail + 1) / 5, (head - index) / 4)
         if round(max(CHASM_WISP_PALER) * strength) < 2:
             continue
         yield (*path[index], tuple(round(amount * strength) for amount in CHASM_WISP_PALER))
