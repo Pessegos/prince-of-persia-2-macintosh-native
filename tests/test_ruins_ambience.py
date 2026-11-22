@@ -1388,8 +1388,11 @@ class EveryRuinsRoomTests(unittest.TestCase):
             self.assertLessEqual(peak, 35)
             self.assertLess(max(frame[0][2]), peak)
             self.assertLess(max(frame[-1][2]), peak)
-        self.assertEqual(list(ruins_ambience.chasm_updraft_pixels(period - phase + 69)), [])
-        for path, turn in ruins_ambience.CHASM_UPDRAFT_PATHS:
+        for cycle, (path, turn) in enumerate(ruins_ambience.CHASM_UPDRAFT_PATHS, start=1):
+            start = cycle * period - phase
+            visible = [bool(list(ruins_ambience.chasm_updraft_pixels(start + age))) for age in range(period)]
+            self.assertLessEqual(visible.count(False), 8)
+            self.assertFalse(any(visible[-2:]))
             self.assertGreater(turn, 90)
             self.assertTrue(all(first[1] >= second[1] for first, second in zip(path[:turn], path[1:turn])))
             curl = path[turn:]

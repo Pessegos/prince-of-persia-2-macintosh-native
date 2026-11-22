@@ -2016,7 +2016,7 @@ CHASM_UPDRAFT_PATHS = tuple(chasm_updraft_path(*shape) for shape in (
     (340, 355, 110, 5, 5.0, -1),
     (312, 349, 108, 3, 4.0, 1),
 ))
-CHASM_WISP_PERIOD, CHASM_WISP_PHASE = 72, 44
+CHASM_WISP_PERIOD, CHASM_WISP_PHASE = 58, 30
 CHASM_WISP_PALER = (24, 25, 34)
 
 
