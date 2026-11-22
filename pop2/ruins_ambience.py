@@ -2002,26 +2002,38 @@ def chasm_fall_pixels(tick, sand):
                 yield x, y - 2, colours[min(2, shade + 1)]
 
 
+def chasm_updraft_path(x, y, rise, lean, radius, turn):
+    """A mostly straight climb with a loose curl at the end."""
+    climb = [(step / 4, lean * step / (4 * rise)) for step in range(4 * rise + 1)]
+    # Turn most of the way around and dissolve there, with no run beyond the curl.
+    curled = curl(rise, lean, radius, 1.6)[:540]
+    path = [(x + turn * across, y - along) for along, across in clean_line(climb + curled)]
+    return path, len(clean_line(climb)) - 1
+
+
+CHASM_UPDRAFT_PATHS = tuple(chasm_updraft_path(*shape) for shape in (
+    (322, 350, 115, 4, 4.5, 1),
+    (340, 355, 110, 5, 5.0, -1),
+    (312, 349, 108, 3, 4.0, 1),
+))
+CHASM_WISP_PERIOD, CHASM_WISP_PHASE = 72, 44
+CHASM_WISP_PALER = (18, 19, 26)
+
+
 def chasm_updraft_pixels(tick):
-    """Thin wisps of air rise through the open space next to the right cliff."""
-    for index in range(7):
-        life = 38 + index * 7 % 14
-        age = (tick + index * 19) % (60 + index * 7 % 25)
-        if age >= life:
-            continue
-        head = 350 + index % 5 - round((119 + index * 2) * age / life)
-        length = 14 + index * 3 % 9
-        for tail in range(length):
-            if tail % 7 == 6:
-                continue
-            sway = 1.4 * math.sin(age * 0.15 - tail * 0.17 + index)
-            x = 312 + 6 * index + round(sway)
-            y = head + tail
-            lit = 4 <= tail < length - 4 and 4 <= age < life - 7
-            shade = 1
-            if lit:
-                shade = 3 if index % 3 == 0 else 2
-            yield x, y, LILAC[shade]
+    """A single faint line slides upward, curls and fades at the tip."""
+    cycle, age = divmod(tick + CHASM_WISP_PHASE, CHASM_WISP_PERIOD)
+    path, turn = CHASM_UPDRAFT_PATHS[cycle % len(CHASM_UPDRAFT_PATHS)]
+    straight = age * 3.4
+    head = int(min(turn, straight) + max(0, straight - turn) * 1.5 / 3.4)
+    length = 17
+    glow = min(1.0, age / 5, (len(path) + length - head) / 12)
+    if glow < 0.15:
+        return
+    for index in range(max(0, head - length), min(head, len(path))):
+        end = index - (head - length)
+        strength = glow * min(1.0, (end + 1) / 5, (length - end) / 4)
+        yield (*path[index], tuple(round(amount * strength) for amount in CHASM_WISP_PALER))
 
 
 def chasm_rising_sand_pixels(tick):
@@ -2408,7 +2420,7 @@ class DesertWind:
         pixels = ((x - origin, y, colour) for x, y, colour in self.desert_pixels(origin))
         if air.chasm:
             pixels = chain(pixels, chasm_fall_pixels(self.tick, air.dunes.sand),
-                           chasm_updraft_pixels(self.tick), chasm_rising_sand_pixels(self.tick))
+                           chasm_rising_sand_pixels(self.tick))
         for x, y, colour in pixels:
             if 0 <= x < WIDTH and 0 <= y < HEIGHT and not air.is_covered(x, y):
                 drawn[x, y] = inks[colour][:3]
@@ -2416,3 +2428,7 @@ class DesertWind:
             behind = tuple(canvas[x, y][:3])
             if colour != behind:
                 canvas[x, y] = air.gentle(behind, colour)
+        if air.chasm:
+            for x, y, amount in chasm_updraft_pixels(self.tick):
+                if 0 <= x < WIDTH and 0 <= y < HEIGHT and not air.is_covered(x, y):
+                    canvas[x, y] = air.paler_than(tuple(canvas[x, y][:3]), amount)

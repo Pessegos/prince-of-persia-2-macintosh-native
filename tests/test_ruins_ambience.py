@@ -1367,18 +1367,30 @@ class EveryRuinsRoomTests(unittest.TestCase):
             self.assertTrue(any(x_tip <= x < x_tip + 20 and y_tip + 10 <= y < y_tip + 35
                                 for x, y in falling), (x_tip, y_tip))
 
-        lower = next(ruins_ambience.chasm_updraft_pixels(12))
-        higher = next(ruins_ambience.chasm_updraft_pixels(32))
-        rim = next(ruins_ambience.chasm_updraft_pixels(37))
-        self.assertGreater(lower[1], higher[1])
-        self.assertGreater(higher[1], rim[1])
-        self.assertLessEqual(max(lower[0], higher[0], rim[0]) - min(lower[0], higher[0], rim[0]), 3)
         low_sand = next(ruins_ambience.chasm_rising_sand_pixels(8))
         high_sand = next(ruins_ambience.chasm_rising_sand_pixels(20))
         self.assertGreater(low_sand[1], high_sand[1])
         self.assertLessEqual(abs(low_sand[0] - high_sand[0]), 2)
         for tick in range(90):
             self.assertLessEqual(len(list(ruins_ambience.chasm_rising_sand_pixels(tick))), 7)
+
+    def test_chasm_air_is_one_faint_wisp_that_rises_curls_and_dissolves(self):
+        period = ruins_ambience.CHASM_WISP_PERIOD
+        phase = ruins_ambience.CHASM_WISP_PHASE
+        lower = list(ruins_ambience.chasm_updraft_pixels(period - phase + 12))
+        higher = list(ruins_ambience.chasm_updraft_pixels(period - phase + 22))
+        self.assertLess(max(y for _, y, _ in higher), min(y for _, y, _ in lower))
+        for frame in (lower, higher):
+            self.assertLessEqual(len(frame), 17)
+            self.assertLessEqual(max(x for x, _, _ in frame) - min(x for x, _, _ in frame), 2)
+            self.assertLess(max(max(amount) for _, _, amount in frame), 30)
+        self.assertEqual(list(ruins_ambience.chasm_updraft_pixels(period - phase + 69)), [])
+        for path, turn in ruins_ambience.CHASM_UPDRAFT_PATHS:
+            self.assertGreater(turn, 90)
+            self.assertTrue(all(first[1] >= second[1] for first, second in zip(path[:turn], path[1:turn])))
+            curl = path[turn:]
+            self.assertGreater(max(x for x, _ in curl) - min(x for x, _ in curl), 3)
+            self.assertTrue(any(first[1] < second[1] for first, second in zip(curl, curl[1:])))
 
     def test_no_random_shooting_star_over_the_desert(self):
         rng = random.Random(0)
