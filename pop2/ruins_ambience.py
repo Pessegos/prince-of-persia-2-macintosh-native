@@ -91,12 +91,18 @@ ROSE_MID = StarKind(0.22, ((103, 84, 112), (168, 122, 138)), False)
 ROSE_BRIGHT = StarKind(0.08, ((168, 122, 138), (240, 196, 196)), True)
 GOLD_BRIGHT = StarKind(0.08, ((160, 127, 127), (234, 217, 154)), True)
 WARM_MID, WARM_BRIGHT = 0.35, 0.5
-STAR_KINDS = (DIM, MID, BRIGHT, ROSE_MID, ROSE_BRIGHT, GOLD_BRIGHT)
+# Low in the purple by the horizon, fewer stars and fainter: muted lilac, never a cross.
+HAZE_DIM = StarKind(0.8, ((63, 48, 104), (87, 73, 118)), False)
+HAZE_MID = StarKind(0.2, ((87, 73, 118), (100, 87, 122)), False)
+STAR_KINDS = (DIM, MID, BRIGHT, ROSE_MID, ROSE_BRIGHT, GOLD_BRIGHT, HAZE_DIM, HAZE_MID)
 # How many stars a room of pure deep-blue sky gets, how far apart they keep, and how
 # much clear sky each has around it.
 STARS_PER_SKY = 32
 STAR_APART = 14
 STAR_CLEAR = 2
+# The purple has this share of the stars the deep blue would, further apart.
+HAZE_SHARE = 0.4
+HAZE_APART = 22
 # The desert's sky: a few stars, far apart, one in five bright.
 DESERT_STARS = 9
 DESERT_STAR_APART = 30
@@ -143,13 +149,12 @@ SHOOTERS = (FAINT, NORMAL, GRAZER, FIREBALL)
 LINGER_REACH = 28
 # Where a shooting star may start, and how blue its sky must be at its start, halfway
 # and at its end.
-SHOOTER_LEFT, SHOOTER_TOP, SHOOTER_BOTTOM = 40, 12, 130
-SHOOTER_BLUE = 0.4
+SHOOTER_LEFT = 40
 SHOOTER_TRIES = 500
 # Rare: the first comes some time after the Prince does, then one every 20 to 45
 # seconds or so, never two at once.
-FIRST_SHOOTER = (36, 540)
-TICKS_BETWEEN_SHOOTERS = (240, 540)
+FIRST_SHOOTER = (24, 120)
+TICKS_BETWEEN_SHOOTERS = (120, 300)
 
 ALL_COLOURS = frozenset((*(colour for kind in STAR_KINDS for colour in kind.steps), *LILAC, WHITE))
 
@@ -380,6 +385,24 @@ def warm_some(stars, rng):
             kind = rng.choice((ROSE_BRIGHT, GOLD_BRIGHT))
         warmed.append((x, y, kind))
     return warmed
+
+
+def place_haze_stars(sky, blue, stars, rng):
+    """[(x, y, kind)]: a few faint ones in the purple by the horizon, clear of the others."""
+    weight = clear_of(sky, STAR_CLEAR) * (1 - blue) ** 2
+    wanted = int(round(STARS_PER_SKY * HAZE_SHARE * float(weight.sum()) / (WIDTH * HEIGHT)))
+    ys, xs = numpy.nonzero(weight > 0)
+    placed = []
+    for _ in range(wanted * 40):
+        if len(placed) >= wanted or not len(xs):
+            break
+        i = rng.randrange(len(xs))
+        x, y = int(xs[i]), int(ys[i])
+        if (rng.random() > weight[y, x] or any(math.hypot(x - a, y - b) < STAR_APART for a, b, _ in stars)
+                or any(math.hypot(x - a, y - b) < HAZE_APART for a, b, _ in placed)):
+            continue
+        placed.append((x, y, HAZE_DIM if rng.random() < HAZE_DIM.share else HAZE_MID))
+    return placed
 
 
 def place_desert_stars(sky, rng):
@@ -644,6 +667,7 @@ def read_room(level_number, room, rgb, palette, covered=None, terrain=None, pain
         stars = place_desert_stars(sky, random.Random(seed + 41))
     else:
         stars = warm_some(place_stars(sky, blue, random.Random(seed)), random.Random(seed + 7))
+        stars += place_haze_stars(sky, blue, stars, random.Random(seed + 13))
     luminance = numpy.asarray(Image.fromarray(numpy.ascontiguousarray(rgb, dtype=numpy.uint8)).convert('L'))
     grit = lines = ()
     if terrain is not None and not painted:
@@ -681,16 +705,22 @@ class Shooter:
 
 
 def shooter_path(air, kind, rng):
-    """(x, y, dx, dy) of a shooting star whose whole flight is over deep blue sky, or None."""
+    """(x, y, dx, dy) of a shooting star whose whole flight is over the sky, the deep blue
+    or the purple, or None. None crosses the desert's sky, as its approved look had it."""
+    if air.desert:
+        return None
+    ys, xs = numpy.nonzero(air.sky[:, SHOOTER_LEFT:WIDTH - SHOOTER_LEFT])
+    if not len(xs):
+        return None
     travel = kind.speed * kind.ticks
     for _ in range(SHOOTER_TRIES):
         angle = math.radians(rng.uniform(*kind.angle))
         side = rng.choice((1, -1))
         dx, dy = side * math.cos(angle), math.sin(angle)
-        x, y = rng.uniform(SHOOTER_LEFT, WIDTH - SHOOTER_LEFT), rng.uniform(SHOOTER_TOP, SHOOTER_BOTTOM)
-        ends = [(x + dx * travel * share, y + dy * travel * share) for share in (0, 0.5, 1)]
-        if all(0 <= ex < WIDTH and 0 <= ey < HEIGHT and air.sky[int(ey), int(ex)]
-               and air.blue[int(ey), int(ex)] > SHOOTER_BLUE for ex, ey in ends):
+        i = rng.randrange(len(xs))
+        x, y = float(xs[i] + SHOOTER_LEFT), float(ys[i])
+        ends = [(x + dx * travel * share, y + dy * travel * share) for share in (0, 0.25, 0.5, 0.75, 1)]
+        if all(0 <= ex < WIDTH and 0 <= ey < HEIGHT and air.sky[int(ey), int(ex)] for ex, ey in ends):
             return x, y, dx, dy
     return None
 

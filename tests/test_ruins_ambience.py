@@ -16,7 +16,8 @@ from pop2.paths import ASSET_DIR
 from pop2 import ruins_ambience
 from pop2.ruins_ambience import (
     BODY_PALER, BRIGHT, CURL_RADIUS, CURL_RISE, CURL_SPEED, DESERT_STAR_APART, DESERT_STAR_CLEAR, DESERT_STARS,
-    DIM, DIP_TICKS, FAINT, FIREBALL, FIRST_SHOOTER, GOLD_BRIGHT, GRAZER, GRIT_HEAD, GUST_TICKS, HEIGHT, MID,
+    DIM, DIP_TICKS, FAINT, FIREBALL, FIRST_SHOOTER, GOLD_BRIGHT, GRAZER, GRIT_HEAD, GUST_TICKS, HAZE_APART, HAZE_DIM,
+    HAZE_MID, HEIGHT, MID,
     NORMAL, ROSE_BRIGHT, ROSE_MID, SECOND_STREAK_BELOW, SHOOTERS, STAR_APART, STAR_CLEAR, STARS_PER_SKY,
     STREAK_SPEED, TICKS_BETWEEN_GUSTS, TICKS_BETWEEN_SHOOTERS, WIDTH, RuinsAmbience, Shooter, blueness, new_streak,
     paler, read_room, ribbon, shooter_path, shooter_pixels, sky_mask, streak_pixels,
@@ -30,6 +31,7 @@ PURPLE = (70, 0, 100)
 STONE = (96, 92, 104)
 SAND = (166, 120, 104)
 WARM = (ROSE_MID, ROSE_BRIGHT, GOLD_BRIGHT)
+HAZE = (HAZE_DIM, HAZE_MID)
 PALETTE = {index: (*colour, 255)
            for index, colour in enumerate(sorted({DEEP, MIDDLE, PURPLE, STONE, SAND, *ruins_ambience.INK_COLOURS}))}
 
@@ -75,15 +77,38 @@ class StarTests(unittest.TestCase):
                     if one is not other:
                         self.assertGreaterEqual(math.hypot(one[0] - other[0], one[1] - other[1]), STAR_APART)
 
-    def test_more_where_the_sky_is_bluest_and_none_by_the_horizon(self):
+    def test_more_where_the_sky_is_bluest_and_only_faint_ones_by_the_horizon(self):
         deep = middle = 0
         for room in range(16):
-            for _x, y, _kind in night(6, room, (DEEP, 90), (MIDDLE, 90), (PURPLE, 80)).stars:
+            for _x, y, kind in night(6, room, (DEEP, 90), (MIDDLE, 90), (PURPLE, 80)).stars:
+                if kind in HAZE:
+                    continue
                 self.assertLess(y, 180)
                 deep += y < 90
                 middle += y >= 90
         self.assertGreater(deep, 2 * middle)
         self.assertGreater(middle, 0)
+
+    def test_the_purple_has_a_few_faint_stars_apart_from_the_others(self):
+        # The user, 2026-11-22: stars in the purple too, a little less visible.
+        haze = 0
+        for room in range(16):
+            stars = night(6, room, (DEEP, 90), (PURPLE, 150)).stars
+            faint = [star for star in stars if star[2] in HAZE]
+            haze += len(faint)
+            for x, y, kind in faint:
+                self.assertGreaterEqual(y, 90)
+                for a, b, other in stars:
+                    if (a, b) != (x, y):
+                        self.assertGreaterEqual(math.hypot(a - x, b - y), HAZE_APART if other in HAZE else STAR_APART)
+        # Fewer than the deep blue would have there: 32 * 0.4 * 150 / 365 makes about five a room.
+        self.assertTrue(3 * 16 <= haze <= 7 * 16, haze)
+        self.assertEqual([star for star in night(6, 3, (DEEP, HEIGHT)).stars if star[2] in HAZE], [])
+
+    def test_the_purple_stars_are_fainter_and_never_flare(self):
+        for kind in HAZE:
+            self.assertFalse(kind.cross)
+            self.assertLess(sum(kind.steps[-1]), sum(MID.steps[-1]))
 
     def test_a_whole_sky_of_deep_blue_has_its_full_count(self):
         self.assertEqual(len(night(7, 3, (DEEP, HEIGHT)).stars), STARS_PER_SKY)
@@ -329,7 +354,10 @@ class ShootingStarTests(unittest.TestCase):
                 ambience.advance()
                 self.assertIsNone(ambience.shooter, (seed, tick))
 
-    def test_they_are_rare_and_one_at_a_time(self):
+    def test_they_come_every_ten_to_twenty_five_seconds_one_at_a_time(self):
+        # The user, 2026-11-22: they had waited and seen none; they were not meant to be
+        # that rare. About three a minute in a room the Prince stays in, the first soon.
+        self.assertEqual((FIRST_SHOOTER, TICKS_BETWEEN_SHOOTERS), ((24, 120), (120, 300)))
         ambience = self.ambience(5)
         starts, previous = [], None
         for tick in range(12 * 60 * 30):
@@ -337,9 +365,9 @@ class ShootingStarTests(unittest.TestCase):
             if ambience.shooter is not None and ambience.shooter is not previous:
                 starts.append(tick)
             previous = ambience.shooter
-        # About two a minute in a room the Prince stays in.
-        self.assertGreater(len(starts), 40)
-        self.assertLess(len(starts), 70)
+        self.assertGreater(len(starts), 80)
+        self.assertLess(len(starts), 130)
+        self.assertLessEqual(starts[0], FIRST_SHOOTER[1])
         self.assertGreaterEqual(min(b - a for a, b in zip(starts, starts[1:])), TICKS_BETWEEN_SHOOTERS[0])
 
     def test_the_fireball_is_the_rarest(self):
@@ -354,19 +382,29 @@ class ShootingStarTests(unittest.TestCase):
         self.assertGreater(counts[GRAZER], counts[FIREBALL])
         self.assertAlmostEqual(counts[FIREBALL] / 3000, 0.07, delta=0.02)
 
-    def test_its_flight_stays_over_the_deep_blue(self):
+    def test_its_flight_stays_over_the_sky_the_purple_too(self):
         air = night(6, 11, (DEEP, 100), (PURPLE, 100))
         rng = random.Random(2)
+        purple = 0
         for kind in SHOOTERS * 30:
             x, y, dx, dy = shooter_path(air, kind, rng)
             travel = kind.speed * kind.ticks
-            for share in (0, 0.5, 1):
-                self.assertLess(y + dy * travel * share, 100)
+            for share in (0, 0.25, 0.5, 0.75, 1):
+                self.assertLess(y + dy * travel * share, 200)
+            purple += y + dy * travel >= 100
             self.assertGreater(dy, 0)
             self.assertLessEqual(math.degrees(math.asin(dy)), kind.angle[1])
+        # Before, none crossed the purple, which most rooms show more of than the deep blue.
+        self.assertGreater(purple, 20)
 
-    def test_no_shooting_star_without_deep_blue(self):
+    def test_a_sky_all_purple_has_shooting_stars_and_stone_none(self):
         ambience = self.ambience(4, (PURPLE, 200))
+        seen = 0
+        for _ in range(4000):
+            ambience.advance()
+            seen += ambience.shooter is not None
+        self.assertGreater(seen, 0)
+        ambience = RuinsAmbience(11, read_room(6, 11, picture((STONE, HEIGHT)), PALETTE), random.Random(4))
         for _ in range(4000):
             ambience.advance()
             self.assertIsNone(ambience.shooter)
@@ -938,11 +976,24 @@ class EveryRuinsRoomTests(unittest.TestCase):
                          {(9, 1), (9, 10), (9, 11), (9, 12), (9, 13), (9, 14)})
 
     def test_stars_where_the_sky_is_deep_blue_and_over_the_desert(self):
-        starry = {place for place, air in self.rooms.items() if air.stars and not air.desert}
+        starry = {place for place, air in self.rooms.items()
+                  if any(kind not in HAZE for *_, kind in air.stars) and not air.desert}
         self.assertEqual(starry, {(6, 1), (6, 11), (6, 12), (6, 14), (7, 24), (7, 25), (7, 26), (8, 12)})
         for place, air in self.rooms.items():
             if air.desert:
                 self.assertEqual(len(air.stars), DESERT_STARS, place)
+                self.assertFalse(any(kind in HAZE for *_, kind in air.stars), place)
+
+    def test_faint_stars_in_the_purple_of_every_room_with_much_sky(self):
+        for place, air in self.rooms.items():
+            if not air.desert and air.sky.mean() > 0.1:
+                self.assertTrue(any(kind in HAZE for *_, kind in air.stars), place)
+
+    def test_shooting_stars_in_every_room_with_much_sky_but_the_desert(self):
+        rng = random.Random(1)
+        for place, air in self.rooms.items():
+            if not air.desert and air.sky.mean() > 0.1:
+                self.assertIsNotNone(shooter_path(air, FAINT, rng), place)
 
     def test_the_wind_blows_in_every_room_open_to_the_sky_but_the_desert(self):
         windy = {place for place, air in self.rooms.items() if air.windy}
@@ -970,9 +1021,10 @@ class EveryRuinsRoomTests(unittest.TestCase):
         self.assertGreater(sum(bool(air.grit) for air in self.rooms.values()), 40)
 
     def test_level_six_room_twelve_has_the_sky_that_was_approved(self):
-        stars = self.rooms[6, 11].stars
+        stars = [star for star in self.rooms[6, 11].stars if star[2] not in HAZE]
         self.assertEqual(len(stars), 19)
         self.assertEqual(sum(kind in WARM for *_, kind in stars), 4)
+        self.assertEqual(stars, list(self.rooms[6, 11].stars[:19]))
 
     def test_every_star_is_on_clear_sky(self):
         for place, air in self.rooms.items():
