@@ -37,8 +37,17 @@ shutting, a loose floor landing; the strongest bring down a pebble or two. Grit 
 on the Prince bounces off his head and shoulders, and a streak of wind passing carries
 the grains along its way. Over pale stone the grit is a step darker so that it shows.
 The paintings (the start room, the throne room, the horse and the desert) shed none.
+
+The desert. Over the dunes of level nine the wind comes in gusts, every six to eight
+seconds or so. Each runs along the crest of the near dune and blows a low spray of sand
+off it, sweeps loose sand up off the plain, runs streams of sand along the ground, hits
+the rocks (sand runs at a big rock's foot, grains bounce up its face, and the ground
+lies still in its lee) and now and then a small dust devil of sand grains spins along
+the crest for a while. All of it is a little gentler than the sand's own colours, and
+none of it blows over the blue dunes far away.
 """
 
+from collections import deque
 from dataclasses import dataclass, field
 import math
 import random
@@ -248,8 +257,68 @@ STREAK_REACH, STREAK_PUSH, STREAK_TAKE, STREAK_LIFT = 14.0, 6.0, 0.5, 0.6
 PALE_STONE = 140
 ON_PALE = {GRIT_PALE: GRIT_TAIL, GRIT_HEAD: GRIT_DIM, GRIT_TAIL: PEBBLE_DARK, GRIT_DIM: PEBBLE_DARK}
 
+# The desert. The near dune's crest is its first run of this much solid sand down each
+# column; a room is dunes when the crest runs right across it this flat.
+CREST_SOLID = 4
+DUNE_CREST_SPREAD = 40
+# Gusts: the first comes this soon, then one every so often.
+FIRST_DESERT_GUST = (10, 60)
+TICKS_BETWEEN_DESERT_GUSTS = (70, 100)
+# The crest's spray: its sands, palest first; how fast the gust's front runs along the
+# crest (pixels a tick), the grains leaving by it a tick, and their flight.
+SAND = ((166, 120, 104), (148, 98, 90), (125, 88, 68))
+CREST_FRONT = 6.0
+CREST_GRAINS = (2, 4)
+CREST_BEHIND = 24
+CREST_LIFE, CREST_SPEED, CREST_LIFT, CREST_SETTLE, CREST_DRAG = (7, 15), (2.5, 5.0), (0.3, 1.0), 0.12, 0.96
+# A fast young grain leaves a dimmer pixel behind it.
+FAST_GRAIN = 3.5
+# The plain: where it starts below the crest's lowest point, the front's speed, the
+# grains it lifts a tick from how far behind it, and their flight (the far end of each
+# range at the top of the plain, the near end at the bottom of the room).
+GROUND_FROM = 20
+GROUND_FRONT = 7.0
+GROUND_GRAINS = (5, 8)
+GROUND_REACH = 40
+GROUND_SPEED = ((1.5, 3.0), (3.5, 6.0))
+GROUND_LIFT = ((0.2, 0.6), (0.4, 1.1))
+GROUND_SETTLE, GROUND_DRAG = 0.12, 0.95
+GROUND_LIFE = ((5, 9), (8, 14))
+FAR_SANDS = ((157, 114, 98), (149, 106, 90), (134, 99, 83))
+NEAR_SANDS = ((173, 141, 141), (166, 131, 131), (157, 114, 98))
+# Streams of sand along the ground: how many a gust, how late, their fronts, how far they
+# run, their grains a tick and the grains' flight.
+STREAMS, STREAM_DELAY = (2, 4), 14
+STREAM_FRONT, STREAM_TRAVEL = (6.0, 9.0), (220, 420)
+STREAM_GRAINS = (2, 3)
+# A grain's speed: the near ends at the top of the plain, plus these at the bottom.
+STREAM_SPEED, STREAM_NEAR_SPEED = (1.5, 2.0), (3.0, 6.0)
+STREAM_LIFT, STREAM_SETTLE, STREAM_LIFE = (0.2, 0.7), 0.15, (6, 12)
+# Rocks: a patch of the plain this big that is not sand; a grain riding this near its foot
+# runs into it and is kicked back and up its face; as a gust reaches a rock this big sand
+# runs at its foot.
+SMALLEST_ROCK = 12
+FOOT_DEPTH = 6
+KICK_BACK, KICK_UP = (0.15, 0.4), (1.2, 2.4)
+BIG_ROCK, AT_ROCK = 40, (4, 7)
+# The dust devil: how long it lives and takes to rise and to die away, how far it drifts
+# a tick, grains it lifts a tick at full strength, how fast they spin and climb, its
+# height, how wide it opens at the top, how far its top leans downwind, and its colours.
+FIRST_DEVIL, TICKS_BETWEEN_DEVILS = (30, 360), (240, 720)
+DEVIL_LIFE, DEVIL_RISE, DEVIL_FADE = 190, 24, 24
+DEVIL_DRIFT = 0.4
+DEVIL_FROM = (60, WIDTH - 140)
+DEVIL_FOOT, DEVIL_SMOOTH = 10, 12
+DEVIL_GRAINS = 5
+SPIN, CLIMB = (0.45, 0.75), (0.5, 0.9)
+HEIGHT_OF_DEVIL, TOP_RADIUS, LEAN = 30, 6.0, 4.0
+NEAR_SIDE, FAR_SIDE, FLUNG = (166, 131, 131), (149, 106, 90), (125, 88, 68)
+# Every pixel of blown sand sits this much of the way back toward the colour behind it.
+GENTLE = 0.4
+DESERT_COLOURS = (*SAND, *FAR_SANDS, *NEAR_SANDS, NEAR_SIDE, FAR_SIDE, FLUNG)
+
 # Every colour the effects use, each shown as the nearest of the room's palette.
-INK_COLOURS = ALL_COLOURS | frozenset(GRIT_COLOURS)
+INK_COLOURS = ALL_COLOURS | frozenset(GRIT_COLOURS) | frozenset(DESERT_COLOURS)
 
 
 def sky_mask(rgb):
@@ -363,6 +432,10 @@ class RuinsAir:
     ceilings: tuple = ()
     # [y, x] of the scenery's brightness (0-255).
     luminance: numpy.ndarray | None = None
+    # The desert's dunes, when it has them.
+    dunes: object = None
+    # {(RGB behind, RGB drawn): RGBA} of the gentler sand, filled as it is wanted.
+    gentler: dict = field(default_factory=dict)
 
     def in_sky(self, x, y):
         return 0 <= x < WIDTH and 0 <= y < HEIGHT and bool(self.sky[y, x])
@@ -375,6 +448,17 @@ class RuinsAir:
         if key not in self.paler:
             self.paler[key] = (*paler(behind, amount, self.palette), 255)
         return self.paler[key]
+
+    def gentle(self, behind, drawn):
+        """The sand drawn over behind, GENTLE of the way back toward it."""
+        key = behind, drawn
+        if key not in self.gentler:
+            wanted = numpy.array(behind) + (numpy.array(drawn) - numpy.array(behind)) * (1 - GENTLE)
+            distance = (((self.palette - wanted) * (2, 3, 2)) ** 2).sum(axis=1)
+            colour = next((tuple(int(value) for value in self.palette[i]) for i in distance.argsort(kind='stable')
+                           if tuple(int(value) for value in self.palette[i]) != behind), behind)
+            self.gentler[key] = (*colour, 255)
+        return self.gentler[key]
 
 
 def paler(behind, amount, palette):
@@ -466,12 +550,95 @@ def ceilings(air, clear, stone, terrain, room):
     return tuple(found)
 
 
+@dataclass(frozen=True, eq=False)
+class Rock:
+    """A patch of the plain that is not sand: its foot (its lowest y in each column) and
+    its pixels."""
+
+    foot: dict
+    mask: numpy.ndarray
+
+    @property
+    def left(self):
+        return min(self.foot)
+
+
+@dataclass(frozen=True, eq=False)
+class Dunes:
+    """[x] the near dune's crest; where the plain starts; [y, x] of its sand, of the sand
+    the wind lifts (out of the rocks' lee), and its rocks."""
+
+    crest: numpy.ndarray
+    ground_top: int
+    sand: numpy.ndarray
+    open_sand: numpy.ndarray
+    rocks: tuple
+
+
+def crest_line(sand):
+    """[x] the top of the near dune: its first run of solid sand, or -1."""
+    solid = runs(sand, CREST_SOLID, False)
+    solid[HEIGHT - CREST_SOLID:] = False
+    found = solid.any(axis=0)
+    return numpy.where(found, solid.argmax(axis=0), -1)
+
+
+def find_rocks(sand, top):
+    """Every patch of the plain below top that is not sand."""
+    solid = ~sand
+    solid[:top] = False
+    seen = numpy.zeros_like(solid)
+    rocks = []
+    for y0, x0 in zip(*numpy.nonzero(solid)):
+        if seen[y0, x0]:
+            continue
+        queue, pixels = deque([(int(y0), int(x0))]), []
+        seen[y0, x0] = True
+        while queue:
+            y, x = queue.popleft()
+            pixels.append((y, x))
+            for ny, nx in ((y + 1, x), (y - 1, x), (y, x + 1), (y, x - 1)):
+                if 0 <= ny < HEIGHT and 0 <= nx < WIDTH and solid[ny, nx] and not seen[ny, nx]:
+                    seen[ny, nx] = True
+                    queue.append((ny, nx))
+        if len(pixels) >= SMALLEST_ROCK:
+            foot = {}
+            for y, x in pixels:
+                foot[x] = max(foot.get(x, 0), y)
+            mask = numpy.zeros_like(solid)
+            ys, xs = zip(*pixels)
+            mask[list(ys), list(xs)] = True
+            rocks.append(Rock(foot, mask))
+    return tuple(rocks)
+
+
+def shelter(rocks):
+    """[y, x] the still ground downwind of each rock, a rock's width long."""
+    still = numpy.zeros((HEIGHT, WIDTH), dtype=bool)
+    for rock in rocks:
+        left, right = min(rock.foot), max(rock.foot)
+        base = max(rock.foot.values())
+        still[max(0, base - 8):base + 4, right + 1:min(WIDTH, right + 1 + (right - left))] = True
+    return still
+
+
+def read_dunes(sand):
+    """The desert's dunes, or None where the sand is not a plain of dunes under a crest."""
+    crest = crest_line(sand)
+    if (crest < 0).any() or crest.max() - crest.min() > DUNE_CREST_SPREAD:
+        return None
+    ground_top = int(crest.max()) + GROUND_FROM
+    rocks = find_rocks(sand, ground_top)
+    return Dunes(crest, ground_top, sand, sand & ~shelter(rocks), rocks)
+
+
 def read_room(level_number, room, rgb, palette, covered=None, terrain=None, painted=False):
     """The air of a room from an RGB picture of its scenery, its palette, [y, x] of what
     its foreground covers and its tiles; a painted room sheds no grit."""
     sky, blue = sky_mask(rgb), blueness(rgb)
     open_sky = float(sky.mean())
-    desert = bool(open_sky >= DESERT_SKY and sand_mask(rgb).mean() >= DESERT_SAND)
+    sand = sand_mask(rgb)
+    desert = bool(open_sky >= DESERT_SKY and sand.mean() >= DESERT_SAND)
     seed = level_number * 100 + room
     if desert:
         stars = place_desert_stars(sky, random.Random(seed + 41))
@@ -487,7 +654,7 @@ def read_room(level_number, room, rgb, palette, covered=None, terrain=None, pain
         lines = ceilings(air, clear, stone, terrain, room)
     return RuinsAir(sky, blue, tuple(stars), nearest_colours(palette, INK_COLOURS), desert,
                     windy=open_sky >= OPEN_SKY and not desert, covered=covered, palette=palette_rgb(palette),
-                    grit=grit, ceilings=lines, luminance=luminance)
+                    grit=grit, ceilings=lines, luminance=luminance, dunes=read_dunes(sand) if desert else None)
 
 
 def ruins_air(level_number, room, art, terrain=None, raised=None):
@@ -751,6 +918,82 @@ def tangents(pixels):
     return found
 
 
+@dataclass
+class Blown:
+    """A grain of blown sand: where it is, where it left the ground, how near the bottom of
+    the room (0-1), its flight, and whether a rock kicked it up."""
+
+    x: float
+    y: float
+    start: float
+    near: float
+    dx: float
+    dy: float
+    settle: float
+    life: int
+    age: int = 0
+    bounced: bool = False
+
+
+@dataclass
+class Stream:
+    born: int
+    near: float
+    y: int
+    x: float
+    speed: float
+    travel: float
+    phase: float
+
+
+@dataclass
+class Whirl:
+    """A grain of the dust devil: round it, up it, and once off its top, flung away."""
+
+    angle: float
+    spin: float
+    climb: float
+    wobble: float
+    height: float = 0.0
+    flung: Blown | None = None
+
+
+@dataclass
+class Devil:
+    born: int
+    start: float
+    grains: list = field(default_factory=list)
+
+    def strength(self, tick):
+        age = tick - self.born
+        if age < 0 or age >= DEVIL_LIFE:
+            return 0.0
+        return min(1.0, age / DEVIL_RISE, (DEVIL_LIFE - age) / DEVIL_FADE)
+
+    def base(self, tick, crest):
+        """Its foot: drifting downwind on the crest smoothed, so that a dip in the
+        crest does not trip it."""
+        x = self.start + DEVIL_DRIFT * max(0, tick - self.born)
+        part = crest[max(0, int(x) - DEVIL_SMOOTH):int(x) + DEVIL_SMOOTH + 1]
+        part = part[part > 0]
+        if not len(part):
+            part = crest[crest > 0]
+        return x, int(round(float(numpy.median(part)))) + DEVIL_FOOT
+
+    def point(self, grain, tick, base_x, base_y):
+        share = grain.height / HEIGHT_OF_DEVIL
+        radius = 1.0 + TOP_RADIUS * share ** 1.3 + grain.wobble
+        middle = base_x + LEAN * share ** 1.5 + 1.5 * math.sin(tick * 0.25 + grain.height * 0.22)
+        # Seen a little from above: the near side of the circle a pixel lower than the far.
+        return (middle + radius * math.cos(grain.angle),
+                base_y - grain.height + 0.3 * radius * math.sin(grain.angle))
+
+
+def between(pair, near):
+    (a, b), (c, d) = pair
+    return a + (c - a) * near, b + (d - b) * near
+
+
 def row_of(floor):
     return max(0, min(2, round((floor - floor_y(0)) / TILE_HEIGHT)))
 
@@ -777,6 +1020,14 @@ class RuinsAmbience:
     # [y, x] of the Prince as last drawn, and the frame just before the actors.
     prince_mask: numpy.ndarray | None = None
     before_actors: Image.Image | None = None
+    # The desert's gusts (the ticks they began), its sand and its dust devil.
+    desert_gusts: list = field(default_factory=list)
+    desert_gust_wait: int = 0
+    spray: list = field(default_factory=list)
+    blown: list = field(default_factory=list)
+    streams: list = field(default_factory=list)
+    devil: Devil | None = None
+    devil_wait: int = 0
     tick: int = 0
 
     def __post_init__(self):
@@ -784,6 +1035,8 @@ class RuinsAmbience:
         self.shooter_wait = self.rng.randint(*FIRST_SHOOTER)
         self.gust_wait = self.rng.randint(*TICKS_BETWEEN_GUSTS)
         self.quiet_wait = self.rng.randint(*TICKS_BETWEEN_TRICKLES)
+        self.desert_gust_wait = self.rng.randint(*FIRST_DESERT_GUST)
+        self.devil_wait = self.rng.randint(*FIRST_DEVIL)
 
     def see_gates(self, art):
         """The caves' torches watch the gates; nothing here does."""
@@ -809,6 +1062,8 @@ class RuinsAmbience:
         self.advance_pebbles()
         self.advance_bits()
         self.advance_streaks()
+        if self.air.dunes is not None:
+            self.advance_desert()
 
     # The grit
 
@@ -1230,6 +1485,242 @@ class RuinsAmbience:
                 canvas[x, y] = self.air.inks[bit.shade]
         return frame
 
+    # The desert
+
+    def advance_desert(self):
+        rng, dunes, tick = self.rng, self.air.dunes, self.tick
+        self.desert_gust_wait -= 1
+        if self.desert_gust_wait <= 0:
+            self.desert_gust_wait = rng.randint(*TICKS_BETWEEN_DESERT_GUSTS)
+            self.desert_gusts.append(tick)
+            for _ in range(rng.randint(*STREAMS)):
+                near = rng.random() ** 0.7
+                self.streams.append(Stream(tick + rng.randrange(STREAM_DELAY), near,
+                                           int(dunes.ground_top + near * (HEIGHT - 6 - dunes.ground_top)),
+                                           rng.uniform(-40, 160), rng.uniform(*STREAM_FRONT),
+                                           rng.uniform(*STREAM_TRAVEL), rng.uniform(0, 6.3)))
+        # A gust is over once its fronts have crossed the room.
+        self.desert_gusts = [start for start in self.desert_gusts
+                             if (tick - start) * min(CREST_FRONT, GROUND_FRONT) - 20 <= WIDTH + 45]
+        self.blow_the_crest()
+        self.blow_the_plain()
+        self.run_at_rocks()
+        self.run_streams()
+        self.advance_blown()
+        self.advance_devil()
+
+    def fronts(self, speed, behind=-20, ahead=20):
+        for start in self.desert_gusts:
+            front = (self.tick - start) * speed - 20
+            if behind <= front <= WIDTH + ahead:
+                yield front
+
+    def blow_the_crest(self):
+        rng, crest = self.rng, self.air.dunes.crest
+        for front in self.fronts(CREST_FRONT):
+            for _ in range(rng.randint(*CREST_GRAINS)):
+                x = int(front - rng.uniform(0, CREST_BEHIND))
+                if 0 <= x < WIDTH and crest[x] > 0:
+                    self.spray.append(Blown(float(x), float(crest[x] - 1), float(crest[x] - 1), 0.0,
+                                            rng.uniform(*CREST_SPEED), -rng.uniform(*CREST_LIFT), CREST_SETTLE,
+                                            rng.randint(*CREST_LIFE)))
+        kept = []
+        for grain in self.spray:
+            grain.x += grain.dx
+            grain.y += grain.dy
+            grain.dy += grain.settle
+            grain.dx *= CREST_DRAG
+            grain.age += 1
+            x = int(grain.x)
+            # A grain that falls back onto the dune is gone.
+            if grain.age < grain.life and 0 <= x < WIDTH and grain.y < crest[x]:
+                kept.append(grain)
+        self.spray = kept
+
+    def blow_the_plain(self):
+        rng, dunes = self.rng, self.air.dunes
+        for front in self.fronts(GROUND_FRONT, ahead=40):
+            for _ in range(rng.randint(*GROUND_GRAINS)):
+                x = int(front - rng.uniform(0, GROUND_REACH))
+                y = int(dunes.ground_top + rng.random() ** 0.8 * (HEIGHT - 4 - dunes.ground_top))
+                if not (0 <= x < WIDTH and 0 <= y < HEIGHT and dunes.open_sand[y, x]):
+                    continue
+                near = (y - dunes.ground_top) / (HEIGHT - dunes.ground_top)
+                self.blown.append(Blown(float(x), float(y), float(y), near, rng.uniform(*between(GROUND_SPEED, near)),
+                                        -rng.uniform(*between(GROUND_LIFT, near)), GROUND_SETTLE,
+                                        rng.randint(*map(round, between(GROUND_LIFE, near)))))
+
+    def run_at_rocks(self):
+        """While a gust's front reaches a big rock, sand runs along the ground at its foot."""
+        rng, dunes = self.rng, self.air.dunes
+        for rock in dunes.rocks:
+            if len(rock.foot) < 4 or rock.mask.sum() < BIG_ROCK:
+                continue
+            left = rock.left
+            for front in self.fronts(GROUND_FRONT, behind=-10 ** 6, ahead=10 ** 6):
+                if left - 45 <= front <= left + 5:
+                    for _ in range(rng.randint(*AT_ROCK)):
+                        y = rock.foot.get(left + 2, rock.foot[left]) + rng.randint(-3, 2)
+                        near = (y - dunes.ground_top) / (HEIGHT - dunes.ground_top)
+                        self.blown.append(Blown(rng.uniform(left - 30, left - 3), float(y), float(y), near,
+                                                rng.uniform(*between(GROUND_SPEED, near)),
+                                                -rng.uniform(*between(GROUND_LIFT, near)) * 0.6, GROUND_SETTLE,
+                                                rng.randint(8, 14)))
+
+    def run_streams(self):
+        rng, kept = self.rng, []
+        for stream in self.streams:
+            front = stream.x + (self.tick - stream.born) * stream.speed
+            if front - stream.x > stream.travel:
+                continue
+            kept.append(stream)
+            if self.tick < stream.born:
+                continue
+            for _ in range(rng.randint(*STREAM_GRAINS)):
+                x = front - rng.uniform(0, 16)
+                y = stream.y + round(math.sin(x / 23 + stream.phase))
+                speed = tuple(far + near * stream.near for far, near in zip(STREAM_SPEED, STREAM_NEAR_SPEED))
+                self.blown.append(Blown(x, float(y), float(y), stream.near, rng.uniform(*speed),
+                                        -rng.uniform(*STREAM_LIFT), STREAM_SETTLE, rng.randint(*STREAM_LIFE)))
+        self.streams = kept
+
+    def rock_hit(self, x, y, ground):
+        """The rock a grain riding at ground row `ground` runs into at (x, y), if any."""
+        if not (0 <= x < WIDTH and 0 <= y < HEIGHT):
+            return None
+        for rock in self.air.dunes.rocks:
+            if rock.mask[y, x] and x in rock.foot and abs(rock.foot[x] - ground) <= FOOT_DEPTH:
+                return rock
+        return None
+
+    def advance_blown(self):
+        rng, rocks, kept = self.rng, self.air.dunes.rocks, []
+        for grain in self.blown:
+            nx, ny = grain.x + grain.dx, grain.y + grain.dy
+            if not grain.bounced and self.rock_hit(int(nx), int(ny), int(grain.start)) is not None:
+                # It runs into the rock: back off a little and up its face.
+                grain.bounced = True
+                grain.dx = -abs(grain.dx) * rng.uniform(*KICK_BACK)
+                grain.dy = -rng.uniform(*KICK_UP)
+                nx, ny = grain.x + grain.dx, grain.y + grain.dy
+            grain.x, grain.y = nx, ny
+            grain.dy += grain.settle
+            if grain.bounced:
+                # Kicked up, the wind takes it on again, over the rock if it rose high enough.
+                grain.dx = min(grain.dx + 0.5, 2.5)
+            else:
+                grain.dx *= GROUND_DRAG
+            grain.age += 1
+            x, y = int(grain.x), int(grain.y)
+            inside = 0 <= x < WIDTH and 0 <= y < HEIGHT and any(rock.mask[y, x] for rock in rocks)
+            landed = grain.y > grain.start + 0.5 and not grain.bounced
+            if (grain.age < grain.life and not landed and 0 <= grain.x < WIDTH
+                    and not (grain.bounced and inside and grain.age > 2)):
+                kept.append(grain)
+        self.blown = kept
+
+    def devil_start(self):
+        """Where a dust devil can rise: with crest all along its way."""
+        crest = self.air.dunes.crest
+        for _ in range(20):
+            x = self.rng.uniform(*DEVIL_FROM)
+            way = crest[max(0, int(x) - DEVIL_SMOOTH):int(x + DEVIL_DRIFT * DEVIL_LIFE) + DEVIL_SMOOTH + 1]
+            if len(way) and (way > 0).all():
+                return x
+        return None
+
+    def advance_devil(self):
+        rng, tick, crest = self.rng, self.tick, self.air.dunes.crest
+        devil = self.devil
+        if devil is None:
+            self.devil_wait -= 1
+            if self.devil_wait > 0:
+                return
+            self.devil_wait = rng.randint(*TICKS_BETWEEN_DEVILS)
+            start = self.devil_start()
+            if start is None:
+                return
+            devil = self.devil = Devil(tick, start)
+        strength = devil.strength(tick)
+        base_x, base_y = devil.base(tick, crest)
+        count = int(DEVIL_GRAINS * strength) + (rng.random() < DEVIL_GRAINS * strength % 1)
+        for _ in range(count):
+            devil.grains.append(Whirl(rng.uniform(0, 2 * math.pi), rng.uniform(*SPIN), rng.uniform(*CLIMB),
+                                      rng.uniform(-0.6, 0.6)))
+        kept = []
+        for grain in devil.grains:
+            flung = grain.flung
+            if flung is not None:
+                # Off the top: carried away downwind, sinking a little, for a few ticks.
+                flung.x += flung.dx
+                flung.y += flung.dy
+                flung.dy += 0.05
+                flung.age += 1
+                if flung.age < flung.life:
+                    kept.append(grain)
+                continue
+            grain.angle += grain.spin
+            grain.height += grain.climb
+            if grain.height >= HEIGHT_OF_DEVIL * (0.8 + 0.2 * rng.random()):
+                x, y = devil.point(grain, tick, base_x, base_y)
+                grain.flung = Blown(x, y, y, 1.0, rng.uniform(1.0, 2.5), rng.uniform(-0.4, 0.1), 0.05,
+                                    rng.randint(4, 9))
+            kept.append(grain)
+        devil.grains = kept
+        if not kept and tick - devil.born >= DEVIL_LIFE:
+            self.devil = None
+
+    def desert_pixels(self):
+        """(x, y, RGB) of the blown sand, the later over the earlier."""
+        dunes, tick = self.air.dunes, self.tick
+        devil = self.devil
+        if devil is not None:
+            base_x, base_y = devil.base(tick, dunes.crest)
+            # The far side first, so the near side's grains are drawn over it.
+            for near in (False, True):
+                for grain in devil.grains:
+                    if grain.flung is not None:
+                        if near:
+                            yield int(grain.flung.x), int(grain.flung.y), FLUNG
+                        continue
+                    if (math.sin(grain.angle) > 0) != near:
+                        continue
+                    x, y = (int(round(value)) for value in devil.point(grain, tick, base_x, base_y))
+                    yield x, y, NEAR_SIDE if near else FAR_SIDE
+        for grain in self.spray:
+            x, y = int(grain.x), int(grain.y)
+            step = min(2, grain.age * 3 // grain.life)
+            yield x, y, SAND[step]
+            if grain.dx > FAST_GRAIN and step < 2 and x > 0:
+                yield x - 1, y, SAND[step + 1]
+        sand = dunes.sand
+        for grain in self.blown:
+            if grain.bounced:
+                continue
+            x, y = int(grain.x), int(grain.y)
+            if not (0 <= x < WIDTH and 0 <= y < HEIGHT and sand[y, x]):
+                continue
+            steps = NEAR_SANDS if grain.near > 0.5 else FAR_SANDS
+            step = min(2, grain.age * 3 // grain.life)
+            yield x, y, steps[step]
+            if grain.dx > FAST_GRAIN and step < 2 and x > 0 and sand[y, x - 1]:
+                yield x - 1, y, steps[step + 1]
+        for grain in self.blown:
+            if grain.bounced:
+                yield int(grain.x), int(grain.y), NEAR_SANDS[min(2, grain.age * 3 // grain.life)]
+
+    def put_sand(self, canvas):
+        """The blown sand, each pixel gentler: part of the way back to what it covers."""
+        air, inks = self.air, self.air.inks
+        drawn = {}
+        for x, y, colour in self.desert_pixels():
+            if 0 <= x < WIDTH and 0 <= y < HEIGHT and not air.is_covered(x, y):
+                drawn[x, y] = inks[colour][:3]
+        for (x, y), colour in drawn.items():
+            behind = tuple(canvas[x, y][:3])
+            if colour != behind:
+                canvas[x, y] = air.gentle(behind, colour)
+
     # The sky and the wind
 
     def twinkle(self):
@@ -1310,6 +1801,8 @@ class RuinsAmbience:
                 if 0 <= x < WIDTH and 0 <= y < HEIGHT and not air.is_covered(x, y):
                     canvas[x, y] = air.paler_than(tuple(canvas[x, y][:3]), amount)
         self.put_grit(canvas, self.pebble_pixels())
+        if air.dunes is not None:
+            self.put_sand(canvas)
         # Kept to find the Prince in once he is drawn, while anything could fall on him.
         self.before_actors = frame.copy() if self.watches_the_prince() else None
         return frame
