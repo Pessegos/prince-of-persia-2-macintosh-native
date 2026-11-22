@@ -352,16 +352,67 @@ class DuneTests(unittest.TestCase):
         devil = ambience.devil
         self.assertIsNotNone(devil)
         foot = CREST + ruins_ambience.DEVIL_FOOT
-        changed |= blown_sand(ambience, ruins_ambience.DEVIL_LIFE, plain)
+        changed |= blown_sand(ambience, devil.life, plain)
         self.assertTrue(changed)
         for x, y in changed:
-            self.assertGreaterEqual(y, foot - ruins_ambience.HEIGHT_OF_DEVIL - 12)
+            self.assertGreaterEqual(y, foot - ruins_ambience.DEVIL_HEIGHTS[1] - 12)
             self.assertLessEqual(y, foot + 3)
             self.assertGreaterEqual(x, devil.start - 10)
         while ambience.devil is not None:
             ambience.advance()
         low, high = ruins_ambience.TICKS_BETWEEN_DEVILS
         self.assertTrue(low <= ambience.devil_wait + 0 <= high)
+
+    def test_each_dust_devil_is_its_own(self):
+        # The user, 2026-11-22: the devil was always the same, with the same moves.
+        ambience = self.quiet(12, rock=False)
+        devils = [ambience.new_devil() for _ in range(60)]
+        for name in ('life', 'drift', 'height', 'top', 'lean', 'grain_count', 'sway', 'sway_speed', 'foot'):
+            values = [getattr(devil, name) for devil in devils]
+            low, high = min(values), max(values)
+            self.assertGreater(high - low, 0.3 * high, name)
+        self.assertEqual(len({round(devil.phase, 3) for devil in devils}), 60)
+        # The old devil had one height and one life.
+        self.assertGreater(len({devil.life for devil in devils}), 20)
+
+    def test_a_devil_wanders_to_and_fro_and_thickens_and_thins(self):
+        crest = numpy.full(WIDTH, CREST)
+        devil = ruins_ambience.Devil(0, 200.0, life=200, drift=0.3, wander=4.0, wander_ticks=10.0,
+                                     pulse=0.4, pulse_ticks=8.0)
+        steps = [devil.base(tick + 1, crest)[0] - devil.base(tick, crest)[0] for tick in range(30, 150)]
+        self.assertTrue(any(step < 0 for step in steps))
+        self.assertTrue(any(step > 0.3 for step in steps))
+        strengths = [devil.strength(tick) for tick in range(40, 160)]
+        self.assertLess(min(strengths), 0.7)
+        self.assertGreater(max(strengths), 0.95)
+
+    def test_sand_whirls_at_the_devil_s_foot_and_is_thrown_out_and_falls_back(self):
+        ambience = self.quiet(13, rock=False)
+        ambience.devil_wait = 1
+        thrown_seen, kicks_seen, puffs = [], 0, set()
+        for _ in range(120):
+            ambience.advance()
+            puffs |= {id(cloud) for cloud in ambience.clouds}
+            devil = ambience.devil
+            if devil is None:
+                continue
+            base_x, base_y = devil.base(ambience.tick, ambience.air.dunes.crest)
+            for kick in devil.kicks:
+                x, y = devil.kick_point(kick, base_x, base_y)
+                kicks_seen += 1
+                # On the ground round its foot: no wider than the skirt, never far above it.
+                self.assertLessEqual(abs(x - base_x), devil.foot + 0.01)
+                self.assertTrue(base_y - 5 <= y <= base_y + 3, (y, base_y))
+            for grain in devil.thrown:
+                self.assertLess(grain.y, grain.ground + 1)
+                thrown_seen.append(id(grain))
+            pixels = list(ambience.desert_pixels())
+            if devil.kicks:
+                self.assertTrue(any(abs(y - base_y) <= 3 and abs(x - base_x) <= devil.foot + 1 for x, y, _ in pixels))
+        self.assertGreater(kicks_seen, 100)
+        self.assertGreater(len(set(thrown_seen)), 3)
+        # And small puffs of dust off its foot, a few seconds apart at most.
+        self.assertTrue(3 <= len(puffs) <= 20, len(puffs))
 
     def test_the_devil_s_foot_does_not_trip_on_a_dip_in_the_crest(self):
         crest = numpy.full(WIDTH, CREST)

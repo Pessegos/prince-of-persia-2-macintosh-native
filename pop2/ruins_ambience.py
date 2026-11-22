@@ -50,7 +50,9 @@ blowing harder and softer as it goes. Each runs along the crest of the near dune
 off it, sweeps loose sand up off the plain, runs streams of sand along the ground, hits
 the rocks (sand runs at a big rock's foot, grains bounce up its face, and the ground
 lies still in its lee) and now and then a small dust devil of sand grains spins along
-the crest for a while. All of it is a little gentler than the sand's own colours, and
+the crest for a while, each its own size, shape, ways and life, with a skirt of sand
+whirling at its foot that now and then throws a grain out along the crest and raises
+a small puff of dust. All of it is a little gentler than the sand's own colours, and
 none of it blows over the blue dunes far away.
 """
 
@@ -64,8 +66,8 @@ from PIL import Image
 
 from pop2.cavern_ambience import (
     CLOUD_CRUMBLE, CLOUD_PALER, CLOUD_STEPS, EMPTY_TILES, FLOOR_STRIP, LANDING_DEPTH, MOST_CLOUDS, SHUT_PUFF,
-    SLAM_PUFF, TILE_HEIGHT, TILE_PUFF, TILE_WIDTH, TIP_LUMINANCE, Cloud, Fleck, colours_of, floor_y, footfalls,
-    landing, open_air,
+    SLAM_PUFF, STEP_PUFF, TILE_HEIGHT, TILE_PUFF, TILE_WIDTH, TIP_LUMINANCE, Cloud, Fleck, Thud, colours_of, floor_y,
+    footfalls, landing, open_air,
 )
 
 WIDTH, HEIGHT = 510, 365
@@ -349,6 +351,34 @@ DEVIL_FOOT, DEVIL_SMOOTH = 10, 12
 DEVIL_GRAINS = 5
 SPIN, CLIMB = (0.45, 0.75), (0.5, 0.9)
 HEIGHT_OF_DEVIL, TOP_RADIUS, LEAN = 30, 6.0, 4.0
+# The user, 2026-11-22: every devil looked the same, with the same moves. Each is its own
+# now, drawn from these: how long it lives, how fast it drifts and how far it wanders to
+# and fro, its height, how wide it opens, how far it leans, how many grains it lifts, how
+# fast and how far it sways, and how much it thickens and thins as it goes.
+DEVIL_LIVES = (130, 260)
+DEVIL_DRIFTS = (0.2, 0.6)
+DEVIL_WANDER, DEVIL_WANDER_TICKS = (0.0, 4.0), (30, 70)
+DEVIL_HEIGHTS = (22, 36)
+DEVIL_TOPS = (4.5, 7.5)
+DEVIL_LEANS = (1.5, 6.0)
+DEVIL_GRAIN_COUNTS = (3.5, 6.5)
+DEVIL_SWAY_SPEEDS, DEVIL_SWAYS = (0.15, 0.35), (0.6, 2.2)
+DEVIL_PULSE, DEVIL_PULSE_TICKS = (0.0, 0.4), (12, 30)
+# Its foot: a low skirt of sand whirling round it on the ground (how wide, grains a tick
+# at full strength, how high they hop and for how long), and now and then a grain thrown
+# out along the crest, mostly downwind, that falls back to the sand.
+FOOT_WIDTH = (4.0, 7.5)
+FOOT_GRAINS = (2, 4)
+FOOT_HOP, FOOT_LIFE = (0.5, 2.5), (5, 10)
+FOOT_SPIN = (0.6, 1.1)
+THROWN_CHANCE = 0.35
+THROWN_DX, THROWN_DY, THROWN_FALL = (-0.5, 1.6), (-1.4, -0.5), 0.22
+# The skirt's near side is the palest sand, so that it shows on the dune; its far side and
+# the thrown grains a step darker.
+FOOT_NEAR, FOOT_FAR = (173, 141, 141), (166, 131, 131)
+# And now and then, while it blows strongly enough, a small puff of dust off its foot:
+# the caves' step puff, as the Prince's feet raise in the ruins.
+FOOT_PUFF_TICKS, FOOT_PUFF_STRENGTH, FOOT_PUFF_SPREAD = (6, 16), 0.5, 2
 NEAR_SIDE, FAR_SIDE, FLUNG = (166, 131, 131), (149, 106, 90), (125, 88, 68)
 # Every pixel of blown sand sits this much of the way back toward the colour behind it.
 GENTLE = 0.4
@@ -1079,31 +1109,87 @@ class Whirl:
 
 
 @dataclass
+class Kick:
+    """A grain of the skirt at a devil's foot: round it on the ground, hopping a little."""
+
+    angle: float
+    spin: float
+    radius: float
+    hop: float
+    life: int
+    age: int = 0
+
+
+@dataclass
+class Thrown:
+    """A grain a devil's foot threw out along the crest, falling back to the sand."""
+
+    x: float
+    y: float
+    ground: float
+    dx: float
+    dy: float
+    age: int = 0
+
+
+@dataclass
 class Devil:
+    """A dust devil. Its defaults are the one devil there used to be; `new_devil` gives
+    each its own."""
+
     born: int
     start: float
     grains: list = field(default_factory=list)
+    life: int = DEVIL_LIFE
+    drift: float = DEVIL_DRIFT
+    wander: float = 0.0
+    wander_ticks: float = 50.0
+    height: float = HEIGHT_OF_DEVIL
+    top: float = TOP_RADIUS
+    lean: float = LEAN
+    grain_count: float = DEVIL_GRAINS
+    sway_speed: float = 0.25
+    sway: float = 1.5
+    pulse: float = 0.0
+    pulse_ticks: float = 20.0
+    phase: float = 0.0
+    foot: float = 0.0
+    kicks: list = field(default_factory=list)
+    thrown: list = field(default_factory=list)
+    puff_wait: int = 4
 
     def strength(self, tick):
         age = tick - self.born
-        if age < 0 or age >= DEVIL_LIFE:
+        if age < 0 or age >= self.life:
             return 0.0
-        return min(1.0, age / DEVIL_RISE, (DEVIL_LIFE - age) / DEVIL_FADE)
+        rise = min(1.0, age / DEVIL_RISE, (self.life - age) / DEVIL_FADE)
+        return rise * (1.0 - self.pulse * (0.5 + 0.5 * math.sin(age / self.pulse_ticks + self.phase)))
+
+    def reach(self):
+        """How far from its start it can be, either way."""
+        return -self.wander, self.drift * self.life + self.wander
 
     def base(self, tick, crest):
         """Its foot: drifting downwind on the crest smoothed, so that a dip in the
-        crest does not trip it."""
-        x = self.start + DEVIL_DRIFT * max(0, tick - self.born)
+        crest does not trip it, wandering to and fro a little as it goes."""
+        age = max(0, tick - self.born)
+        x = self.start + self.drift * age + self.wander * math.sin(age / self.wander_ticks + self.phase)
         part = crest[max(0, int(x) - DEVIL_SMOOTH):int(x) + DEVIL_SMOOTH + 1]
         part = part[part > 0]
         if not len(part):
             part = crest[crest > 0]
         return x, int(round(float(numpy.median(part)))) + DEVIL_FOOT
 
+    def kick_point(self, kick, base_x, base_y):
+        hop = kick.hop * math.sin(math.pi * kick.age / kick.life)
+        return (base_x + kick.radius * math.cos(kick.angle),
+                base_y + 0.3 * kick.radius * math.sin(kick.angle) - hop)
+
     def point(self, grain, tick, base_x, base_y):
-        share = grain.height / HEIGHT_OF_DEVIL
-        radius = 1.0 + TOP_RADIUS * share ** 1.3 + grain.wobble
-        middle = base_x + LEAN * share ** 1.5 + 1.5 * math.sin(tick * 0.25 + grain.height * 0.22)
+        share = min(1.0, grain.height / self.height)
+        radius = 1.0 + self.top * share ** 1.3 + grain.wobble
+        middle = (base_x + self.lean * share ** 1.5
+                  + self.sway * math.sin(tick * self.sway_speed + grain.height * 0.22 + self.phase))
         # Seen a little from above: the near side of the circle a pixel lower than the far.
         return (middle + radius * math.cos(grain.angle),
                 base_y - grain.height + 0.3 * radius * math.sin(grain.angle))
@@ -1839,12 +1925,24 @@ class RuinsAmbience:
                 kept.append(grain)
         self.blown = kept
 
-    def devil_start(self):
+    def new_devil(self):
+        """A dust devil of its own shape, size, ways and life, not yet placed."""
+        rng = self.rng
+        return Devil(self.tick, 0.0, life=rng.randint(*DEVIL_LIVES), drift=rng.uniform(*DEVIL_DRIFTS),
+                     wander=rng.uniform(*DEVIL_WANDER), wander_ticks=rng.uniform(*DEVIL_WANDER_TICKS),
+                     height=rng.uniform(*DEVIL_HEIGHTS), top=rng.uniform(*DEVIL_TOPS),
+                     lean=rng.uniform(*DEVIL_LEANS), grain_count=rng.uniform(*DEVIL_GRAIN_COUNTS),
+                     sway_speed=rng.uniform(*DEVIL_SWAY_SPEEDS), sway=rng.uniform(*DEVIL_SWAYS),
+                     pulse=rng.uniform(*DEVIL_PULSE), pulse_ticks=rng.uniform(*DEVIL_PULSE_TICKS),
+                     phase=rng.uniform(0, 2 * math.pi), foot=rng.uniform(*FOOT_WIDTH))
+
+    def devil_start(self, devil=None):
         """Where a dust devil can rise: with crest all along its way."""
         crest = self.air.dunes.crest
+        behind, ahead = devil.reach() if devil is not None else (0.0, DEVIL_DRIFT * DEVIL_LIFE)
         for _ in range(20):
             x = self.rng.uniform(*DEVIL_FROM)
-            way = crest[max(0, int(x) - DEVIL_SMOOTH):int(x + DEVIL_DRIFT * DEVIL_LIFE) + DEVIL_SMOOTH + 1]
+            way = crest[max(0, int(x + behind) - DEVIL_SMOOTH):int(x + ahead) + DEVIL_SMOOTH + 1]
             if len(way) and (way > 0).all():
                 return x
         return None
@@ -1857,13 +1955,17 @@ class RuinsAmbience:
             if self.devil_wait > 0:
                 return
             self.devil_wait = rng.randint(*TICKS_BETWEEN_DEVILS)
-            start = self.devil_start()
+            devil = self.new_devil()
+            start = self.devil_start(devil)
             if start is None:
                 return
-            devil = self.devil = Devil(tick, start)
+            devil.start = start
+            self.devil = devil
         strength = devil.strength(tick)
         base_x, base_y = devil.base(tick, crest)
-        count = int(DEVIL_GRAINS * strength) + (rng.random() < DEVIL_GRAINS * strength % 1)
+        self.advance_foot(devil, strength, base_x, base_y)
+        wanted = devil.grain_count * strength
+        count = int(wanted) + (rng.random() < wanted % 1)
         for _ in range(count):
             devil.grains.append(Whirl(rng.uniform(0, 2 * math.pi), rng.uniform(*SPIN), rng.uniform(*CLIMB),
                                       rng.uniform(-0.6, 0.6)))
@@ -1881,14 +1983,49 @@ class RuinsAmbience:
                 continue
             grain.angle += grain.spin
             grain.height += grain.climb
-            if grain.height >= HEIGHT_OF_DEVIL * (0.8 + 0.2 * rng.random()):
+            if grain.height >= devil.height * (0.8 + 0.2 * rng.random()):
                 x, y = devil.point(grain, tick, base_x, base_y)
                 grain.flung = Blown(x, y, y, 1.0, rng.uniform(1.0, 2.5), rng.uniform(-0.4, 0.1), 0.05,
                                     rng.randint(4, 9))
             kept.append(grain)
         devil.grains = kept
-        if not kept and tick - devil.born >= DEVIL_LIFE:
+        if not kept and not devil.kicks and not devil.thrown and tick - devil.born >= devil.life:
             self.devil = None
+
+    def advance_foot(self, devil, strength, base_x, base_y):
+        """The skirt of sand whirling at its foot, and the grains it throws out."""
+        rng = self.rng
+        if devil.foot > 0 and strength > 0:
+            for _ in range(some(rng, FOOT_GRAINS, strength)):
+                devil.kicks.append(Kick(rng.uniform(0, 2 * math.pi), rng.uniform(*FOOT_SPIN),
+                                        rng.uniform(1.5, devil.foot), rng.uniform(*FOOT_HOP),
+                                        rng.randint(*FOOT_LIFE)))
+            if rng.random() < THROWN_CHANCE * strength:
+                side = rng.choice((-1, 1))
+                devil.thrown.append(Thrown(base_x + side * rng.uniform(1, devil.foot), base_y - 1, base_y,
+                                           rng.uniform(*THROWN_DX), rng.uniform(*THROWN_DY)))
+        kicks = []
+        for kick in devil.kicks:
+            kick.angle += kick.spin
+            kick.age += 1
+            if kick.age < kick.life:
+                kicks.append(kick)
+        devil.kicks = kicks
+        thrown = []
+        for grain in devil.thrown:
+            grain.x += grain.dx
+            grain.y += grain.dy
+            grain.dy += THROWN_FALL
+            grain.age += 1
+            if grain.y < grain.ground + 1 and grain.age < 30:
+                thrown.append(grain)
+        devil.thrown = thrown
+        if devil.foot > 0 and strength >= FOOT_PUFF_STRENGTH:
+            devil.puff_wait -= 1
+            if devil.puff_wait <= 0:
+                devil.puff_wait = rng.randint(*FOOT_PUFF_TICKS)
+                x, y = int(round(base_x)), int(round(base_y))
+                self.puff(None, None, [Thud(x - FOOT_PUFF_SPREAD, x + FOOT_PUFF_SPREAD, y, y, STEP_PUFF)])
 
     def desert_pixels(self):
         """(x, y, RGB) of the blown sand, the later over the earlier."""
@@ -1896,8 +2033,16 @@ class RuinsAmbience:
         devil = self.devil
         if devil is not None:
             base_x, base_y = devil.base(tick, dunes.crest)
-            # The far side first, so the near side's grains are drawn over it.
+            # The far side first, so the near side's grains are drawn over it; the
+            # skirt at its foot with each.
             for near in (False, True):
+                for kick in devil.kicks:
+                    if (math.sin(kick.angle) > 0) == near:
+                        x, y = (int(round(value)) for value in devil.kick_point(kick, base_x, base_y))
+                        yield x, y, FOOT_NEAR if near else FOOT_FAR
+                if near:
+                    for grain in devil.thrown:
+                        yield int(round(grain.x)), int(round(grain.y)), FOOT_FAR
                 for grain in devil.grains:
                     if grain.flung is not None:
                         if near:
