@@ -34,6 +34,7 @@ class LevelRenderer:
         self.cavern_map = None
         self.ambience = None
         self.desert_wind = None
+        self.ruins_wind = None
         self.horse_star_seen = False
         self.ambience_air = {}
         # Rooms read before the Prince comes in: {room: ((drawing key, tiles), air)}.
@@ -180,7 +181,7 @@ class LevelRenderer:
 
     def advance_ambience(self, room_id, terrain, footing=None, thuds=(), shakes=()):
         """One game tick of the optional cave or ruins ambience; pixels only."""
-        from pop2.ruins_ambience import DESERT_ROOMS, HORSE_ROOM, horse_shooting_star
+        from pop2.ruins_ambience import DESERT_ROOMS, HORSE_ROOM, RuinsAmbience, RuinsWind, horse_shooting_star
 
         kind = self.ambience_kind()
         if kind is None:
@@ -201,6 +202,13 @@ class LevelRenderer:
                     self.ambience_air[room_id] = room_air(self.level.number, room_id, self.rooms[room_id], terrain,
                                                           lambda: self.room_with_gates_up(room_id))
             self.ambience = ambience(room_id, self.ambience_air[room_id])
+            if isinstance(self.ambience, RuinsAmbience) and self.ambience.air.windy:
+                if self.ruins_wind is None:
+                    self.ruins_wind = RuinsWind()
+                    self.ruins_wind.prime()
+                self.ambience.wind = self.ruins_wind
+        if self.ruins_wind is not None:
+            self.ruins_wind.advance()
         self.ambience.advance(terrain, footing, thuds, shakes)
         if self.level.number == 9 and room_id == HORSE_ROOM and not self.horse_star_seen:
             self.horse_star_seen = True

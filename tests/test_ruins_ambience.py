@@ -621,6 +621,9 @@ class DrawingTests(unittest.TestCase):
         ambience = RuinsAmbience(11, replace(air, windy=windy), random.Random(8))
         for _ in range(200):
             ambience.advance()
+        if windy:
+            ambience.wind = ruins_ambience.RuinsWind(random.Random(8))
+            ambience.wind.prime()
         ambience.twinkles[0] = [0, 2]
         ambience.shooter = Shooter(FIREBALL, 120, 30, math.cos(0.3), math.sin(0.3), 4)
         return ambience
@@ -674,7 +677,7 @@ class PuffTests(unittest.TestCase):
     def ambience(self, covered=None):
         air = replace(read_room(6, 11, picture((DEEP, 100)), PALETTE, covered), stars=())
         ambience = RuinsAmbience(11, air, random.Random(3))
-        ambience.quiet_wait = ambience.gust_wait = ambience.shooter_wait = 10 ** 6
+        ambience.quiet_wait = ambience.shooter_wait = 10 ** 6
         return ambience
 
     @staticmethod
@@ -846,20 +849,19 @@ class WindTests(unittest.TestCase):
         ambience = RuinsAmbience(4, night(6, 4, (PURPLE, 12)), random.Random(1))
         for _ in range(1000):
             ambience.advance()
-            self.assertEqual(ambience.streaks, [])
+            self.assertFalse(ambience.streaks)
 
     def test_gusts_keep_both_styles_balanced_with_shorter_pauses(self):
-        ambience = RuinsAmbience(4, replace(night(6, 4), stars=()), random.Random(2))
+        wind = ruins_ambience.RuinsWind(random.Random(2))
         gusts = []
         for tick in range(60000):
-            before = list(ambience.streaks)
-            ambience.blow()
-            new = [streak for streak in ambience.streaks if streak not in before]
+            before = list(wind.streaks)
+            wind.advance()
+            new = [streak for streak in wind.streaks if streak not in before]
             if new:
                 gusts.append((tick, new))
-            ambience.advance_streaks()
         self.assertGreater(len(gusts), 380)
-        self.assertLessEqual(gusts[0][0], 109)
+        self.assertEqual(gusts[0][0], 0)
         self.assertEqual({len(new) for _, new in gusts}, {1, 2})
         streaks = [streak for _, new in gusts for streak in new]
         winding = sum(isinstance(streak, ruins_ambience.WindingStreak) for streak in streaks)
@@ -883,7 +885,7 @@ class WindTests(unittest.TestCase):
         streak = new_streak(random.Random(8), winding=True)
         streak.pixels = [(x, 100 + (x % 7 == 0)) for x in range(80, 300)]
         streak.turn, streak.shown = 210, 23
-        ambience.streaks = [streak]
+        ambience.wind = ruins_ambience.RuinsWind(streaks=[streak])
         frame = frame_of(rgb)
         ambience.draw(frame)
         after = numpy.asarray(frame)[..., :3].astype(int)
@@ -899,9 +901,9 @@ class WindTests(unittest.TestCase):
         air = replace(read_room(6, 4, rgb, PALETTE), stars=())
         ambience = RuinsAmbience(4, air, random.Random(3))
         streak = new_streak(random.Random(8), winding=True)
-        ambience.streaks = [streak]
+        ambience.wind = ruins_ambience.RuinsWind(streaks=[streak])
         for _ in range(ruins_ambience.RUINS_STREAK_STYLE.lifetime - 1):
-            ambience.advance_streaks()
+            ambience.wind.advance_streaks()
         [(x, y, amount)] = list(streak.visible_pixels())
         home_x, home_y = streak.pixels[-1]
         self.assertEqual((x, y), (home_x + 42, home_y))
@@ -909,7 +911,7 @@ class WindTests(unittest.TestCase):
         self.assertEqual(ambience.streak_push(home_x, home_y), (0.0, 0.0))
         frame = ambience.draw(frame_of(rgb))
         self.assertEqual(frame.getpixel((x, y)), air.paler_than(tuple(rgb[y, x]), amount))
-        ambience.advance_streaks()
+        ambience.wind.advance_streaks()
         self.assertFalse(ambience.streaks)
 
     def test_paler_is_never_the_colour_behind(self):
@@ -1205,7 +1207,7 @@ class GritTests(unittest.TestCase):
         streak = new_streak(random.Random(1), winding=True)
         streak.pixels = [(x, 150) for x in range(100, 300)]
         streak.turn, streak.shown = 210, 23
-        ambience.streaks = [streak]
+        ambience.wind = ruins_ambience.RuinsWind(streaks=[streak])
         # The visible line spans x 196 to 249.
         push_x, push_y = ambience.streak_push(220, 155)
         self.assertAlmostEqual(push_x, ruins_ambience.STREAK_PUSH * (1 - 5 / ruins_ambience.STREAK_REACH))
@@ -1271,6 +1273,40 @@ class RendererTests(unittest.TestCase):
         self.assertEqual(reads, [(6, 11, 'room 11'), (6, 12, 'room 12')])
         frame = frame_of(picture((DEEP, 180)))
         self.assertIs(renderer.ambient_layer(frame, 12), frame)
+
+    def test_ruins_wind_is_visible_on_entry_and_runs_across_short_room_visits(self):
+        renderer = self.renderer(6, 4)
+        renderer.rooms = {4: 'outside', 5: 'inside', 7: 'outside again'}
+        outside = replace(night(6, 4), stars=())
+        renderer.ambience_air = {4: outside, 5: replace(outside, windy=False), 7: outside}
+        scenery = frame_of(picture((DEEP, 180), (PURPLE, 60)))
+
+        renderer.advance_ambience(5, None)
+        self.assertIsNone(renderer.ruins_wind)
+        with patch('pop2.ruins_ambience.RuinsWind',
+                   return_value=ruins_ambience.RuinsWind(random.Random(2))):
+            renderer.advance_ambience(4, None)
+        wind = renderer.ruins_wind
+        self.assertTrue(wind.streaks)
+        first = wind.streaks[0]
+        age = first.shown
+        self.assertNotEqual(renderer.ambient_layer(scenery.copy(), 4).tobytes(), scenery.tobytes())
+
+        renderer.advance_ambience(5, None)
+        self.assertFalse(renderer.ambience.streaks)
+        self.assertEqual(renderer.ambient_layer(scenery.copy(), 5).tobytes(), scenery.tobytes())
+        renderer.advance_ambience(7, None)
+        self.assertIs(renderer.ambience.wind, wind)
+        self.assertIs(renderer.ambience.streaks[0], first)
+        self.assertEqual(first.shown, age + 2)
+
+        starts = 0
+        for tick in range(310):
+            renderer.advance_ambience(4 if tick % 2 else 7, None)
+            starts += any(streak.shown == 1 for streak in wind.streaks)
+        self.assertEqual(renderer.ambience.tick, 1)
+        self.assertGreaterEqual(starts, 2)
+        self.assertIs(renderer.ruins_wind, wind)
 
     def test_desert_draws_before_the_first_tick_and_reuses_the_wind_on_return(self):
         renderer = self.renderer(9, 4)

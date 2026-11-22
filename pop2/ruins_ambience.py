@@ -25,7 +25,7 @@ room, a large shooting star leaves a glowing line that sheds sparks.
 
 The wind. In a room open to the sky one gust sends one or two waving streaks across
 the ruins. Each can roll briefly and run out or travel farther as it winds inward.
-Both styles use the same gusts. The desert has its own wind.
+Both styles share a gust clock that runs across room changes. The desert has its own wind.
 
 The grit. Every few seconds a little grit trickles from a crack in the underside of a
 block or a ledge, now and then a thin pour that heaps a small mound on the floor and
@@ -1446,6 +1446,46 @@ def row_of(floor):
 
 
 @dataclass
+class RuinsWind:
+    """One clock and set of live streaks for the open rooms of a level."""
+
+    rng: random.Random = field(default_factory=random.Random)
+    streaks: list = field(default_factory=list)
+    gust: int = 0
+    gust_wait: int = 0
+
+    def prime(self):
+        """Have the first gust in view when the Prince reaches open air."""
+        for _ in range(12):
+            self.advance()
+
+    def advance(self):
+        self.blow()
+        self.advance_streaks()
+
+    def blow(self):
+        """Start a gust after the shared lull."""
+        if self.gust:
+            self.gust -= 1
+            return
+        self.gust_wait -= 1
+        if self.gust_wait > 0:
+            return
+        rng = self.rng
+        self.gust, self.gust_wait = GUST_TICKS, rng.randint(*TICKS_BETWEEN_GUSTS)
+        gust_y = None
+        for _ in range(rng.randint(*STREAKS_A_GUST)):
+            streak = new_streak(rng, gust_y, winding=rng.random() < 0.5)
+            gust_y = streak.y
+            self.streaks.append(streak)
+
+    def advance_streaks(self):
+        for streak in self.streaks:
+            streak.advance()
+        self.streaks = [streak for streak in self.streaks if not streak.gone]
+
+
+@dataclass
 class RuinsAmbience:
     room: int
     air: RuinsAir
@@ -1454,9 +1494,7 @@ class RuinsAmbience:
     twinkles: list = field(default_factory=list)
     shooter: Shooter | None = None
     shooter_wait: int = 0
-    streaks: list = field(default_factory=list)
-    gust: int = 0
-    gust_wait: int = 0
+    wind: RuinsWind | None = None
     trickles: list = field(default_factory=list)
     mounds: list = field(default_factory=list)
     pebbles: list = field(default_factory=list)
@@ -1474,11 +1512,16 @@ class RuinsAmbience:
     def __post_init__(self):
         self.twinkles = [[0, 0] for _ in self.air.stars]
         self.shooter_wait = self.rng.randint(*FIRST_SHOOTER)
-        self.gust_wait = self.rng.randint(*TICKS_BETWEEN_GUSTS)
+        # Preserve the room-local random sequence now that its wind runs separately.
+        self.rng.randint(*TICKS_BETWEEN_GUSTS)
         self.quiet_wait = self.rng.randint(*TICKS_BETWEEN_TRICKLES)
         # Keep the room-local random sequence now that desert wind has its own clock.
         self.rng.randint(*FIRST_DESERT_GUST)
         self.rng.randint(*FIRST_DEVIL)
+
+    @property
+    def streaks(self):
+        return self.wind.streaks if self.wind is not None else ()
 
     def see_gates(self, art):
         """The caves' torches watch the gates; nothing here does."""
@@ -1500,12 +1543,10 @@ class RuinsAmbience:
                 done.append((x, row))
                 self.shake(x, row, strength, name, terrain)
         self.quiet_trickle(terrain)
-        self.blow()
         self.advance_trickles(terrain)
         self.advance_mounds(terrain)
         self.advance_pebbles()
         self.advance_bits()
-        self.advance_streaks()
         self.advance_clouds()
 
     # The puffs
@@ -2030,29 +2071,6 @@ class RuinsAmbience:
         path = shooter_path(self.air, kind, self.rng)
         if path is not None:
             self.shooter = Shooter(kind, *path)
-
-    def blow(self):
-        """Now and then a gust, with its streaks: only in rooms open to the sky."""
-        if not self.air.windy:
-            return
-        if self.gust:
-            self.gust -= 1
-            return
-        self.gust_wait -= 1
-        if self.gust_wait > 0:
-            return
-        rng = self.rng
-        self.gust, self.gust_wait = GUST_TICKS, rng.randint(*TICKS_BETWEEN_GUSTS)
-        gust_y = None
-        for _ in range(rng.randint(*STREAKS_A_GUST)):
-            streak = new_streak(rng, gust_y, winding=rng.random() < 0.5)
-            gust_y = streak.y
-            self.streaks.append(streak)
-
-    def advance_streaks(self):
-        for streak in self.streaks:
-            streak.advance()
-        self.streaks = [streak for streak in self.streaks if not streak.gone]
 
     def sky_pixels(self):
         """(x, y, RGB) of the stars and the shooting star, the later over the earlier."""
