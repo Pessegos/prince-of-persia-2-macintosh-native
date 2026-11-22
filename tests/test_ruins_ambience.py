@@ -1377,17 +1377,17 @@ class EveryRuinsRoomTests(unittest.TestCase):
     def test_chasm_updraft_rises_as_a_faint_line_before_curling(self):
         period = ruins_ambience.CHASM_UPDRAFT_PERIOD
         phase = ruins_ambience.CHASM_UPDRAFT_PHASE
-        self.assertLessEqual(period, 52)
+        self.assertEqual(period, 52)
         lower = list(ruins_ambience.chasm_updraft_pixels(period - phase + 14))
         higher = list(ruins_ambience.chasm_updraft_pixels(period - phase + 27))
         self.assertLess(max(y for _, y, _ in higher), min(y for _, y, _ in lower))
         for frame in (lower, higher):
             self.assertGreaterEqual(len(frame), 34)
             self.assertLessEqual(len(frame), 36)
-            self.assertLessEqual(max(x for x, _, _ in frame) - min(x for x, _, _ in frame), 2)
+            self.assertLessEqual(max(x for x, _, _ in frame) - min(x for x, _, _ in frame), 6)
             peak = max(max(amount) for _, _, amount in frame)
-            self.assertGreaterEqual(peak, 36)
-            self.assertLessEqual(peak, 39)
+            self.assertGreaterEqual(peak, 31)
+            self.assertLessEqual(peak, 34)
             self.assertLess(max(frame[0][2]), peak)
             self.assertLess(max(frame[-1][2]), peak)
         for cycle, (path, turn) in enumerate(ruins_ambience.CHASM_UPDRAFT_PATHS, start=3):
@@ -1399,7 +1399,9 @@ class EveryRuinsRoomTests(unittest.TestCase):
             self.assertTrue(any((x, y + drift) in curl_pixels for x, y, _ in next_glide))
             self.assertTrue(any((x, y + drift) not in curl_pixels for x, y, _ in next_glide))
             self.assertGreater(turn, 90)
-            self.assertTrue(all(first[1] >= second[1] for first, second in zip(path[:turn], path[1:turn])))
+            run_steps = list(zip(path[:turn], path[1:turn]))
+            self.assertTrue(all(first[1] >= second[1] for first, second in run_steps))
+            self.assertTrue({-1, 1} <= {second[0] - first[0] for first, second in run_steps})
             curl = path[turn:]
             self.assertGreater(max(x for x, _ in curl) - min(x for x, _ in curl), 3)
             self.assertTrue(any(first[1] < second[1] for first, second in zip(curl, curl[1:])))
@@ -1407,6 +1409,7 @@ class EveryRuinsRoomTests(unittest.TestCase):
     def test_chasm_wind_crosses_the_left_bank_and_curls_over_the_gap(self):
         period = ruins_ambience.CHASM_CROSSWIND_PERIOD
         phase = ruins_ambience.CHASM_CROSSWIND_PHASE
+        self.assertEqual(period, 63)
         early = list(ruins_ambience.chasm_crosswind_pixels(period - phase + 14))
         late = list(ruins_ambience.chasm_crosswind_pixels(period - phase + 27))
         self.assertLess(max(x for x, _, _ in early), min(x for x, _, _ in late))
@@ -1415,7 +1418,9 @@ class EveryRuinsRoomTests(unittest.TestCase):
             self.assertLessEqual(len(frame), 36)
             self.assertTrue(all(210 <= y <= 228 for _, y, _ in frame))
         for cycle, (path, turn) in enumerate(ruins_ambience.CHASM_CROSSWIND_PATHS, start=3):
-            self.assertTrue(all(first[0] <= second[0] for first, second in zip(path[:turn], path[1:turn])))
+            run_steps = list(zip(path[:turn], path[1:turn]))
+            self.assertTrue(all(first[0] <= second[0] for first, second in run_steps))
+            self.assertTrue({-1, 1} <= {second[1] - first[1] for first, second in run_steps})
             coil = path[turn:]
             self.assertGreater(coil[0][0], 136)
             self.assertTrue(any(first[0] > second[0] for first, second in zip(coil, coil[1:])))

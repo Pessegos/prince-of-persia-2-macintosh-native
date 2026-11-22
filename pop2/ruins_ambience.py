@@ -2001,15 +2001,21 @@ def chasm_fall_pixels(tick, sand):
 
 
 def chasm_wisp_path(x, y, travel, lean, radius, turn, *, horizontal=False):
-    """A mostly straight path with a tight curl at the end."""
-    straight = [(step / 4, lean * step / (4 * travel)) for step in range(4 * travel + 1)]
+    """A gently waving run that settles into a tight curl."""
+    wave_height, wave_length = 2.1, 64
+    run = []
+    for step in range(4 * travel + 1):
+        along = step / 4
+        wave = wave_height * math.sin(math.tau * along / wave_length)
+        taper = min(1.0, (travel - along) / 18) ** 2
+        run.append((along, lean * along / travel + wave * taper))
     curled = curl(travel, lean, radius, radius, turns=1.75)
-    pixels = clean_line(straight + curled)
+    pixels = clean_line(run + curled)
     if horizontal:
         path = [(x + along, y + turn * across) for along, across in pixels]
     else:
         path = [(x + turn * across, y - along) for along, across in pixels]
-    return path, len(clean_line(straight)) - 1
+    return path, len(clean_line(run)) - 1
 
 
 CHASM_UPDRAFT_PATHS = tuple(chasm_wisp_path(*shape) for shape in (
@@ -2025,7 +2031,7 @@ CHASM_CROSSWIND_PATHS = tuple(chasm_wisp_path(*shape, horizontal=True) for shape
 CHASM_UPDRAFT_PERIOD, CHASM_UPDRAFT_PHASE = 52, 24
 CHASM_CROSSWIND_PERIOD, CHASM_CROSSWIND_PHASE = 63, 3
 CHASM_WISP_GLIDE_TICKS, CHASM_WISP_CURL_TICKS = 36, 22
-CHASM_WISP_PALER = (26, 28, 37)
+CHASM_WISP_PALER = (23, 25, 33)
 
 
 def chasm_updraft_pixels(tick):
