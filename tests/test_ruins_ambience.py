@@ -565,13 +565,30 @@ class Floor:
 
 
 class FloorBelow:
-    """A level map with a floor along the bottom row only."""
+    """A level map: stone along the top row, the grit's cracks in its underside, open
+    air below it, a floor along the bottom row, and no room above."""
 
     def tile(self, room, column, row):
-        return Floor(1 if row == 2 else 0)
+        return Floor(20 if row == 0 else 1 if row == 2 else 0)
+
+    def neighbor(self, room, direction):
+        return None
 
 
 TERRAIN = FloorBelow()
+
+
+class FallenAbove(FloorBelow):
+    """FloorBelow with the stone of some columns fallen from the top row, and the floor of
+    others fallen from the bottom one."""
+
+    def __init__(self, columns, floor_gone=()):
+        self.columns, self.floor_gone = set(columns), set(floor_gone)
+
+    def tile(self, room, column, row):
+        if (row == 0 and column in self.columns) or (row == 2 and column in self.floor_gone):
+            return Floor(0)
+        return super().tile(room, column, row)
 GROUND = 346
 
 
@@ -579,7 +596,7 @@ def grit_air(**changes):
     """A dark room under three ceilings, with two cracks."""
     lines = tuple(tuple(c * 120 + 7 if 20 <= x < 490 else -1 for x in range(WIDTH)) for c in range(3))
     air = replace(night(6, 4, (PURPLE, 12)), stars=(),
-                  grit=(ruins_ambience.Crack(100, 130, GROUND), ruins_ambience.Crack(300, 130, GROUND)), ceilings=lines)
+                  grit=(ruins_ambience.Crack(100, 125, GROUND), ruins_ambience.Crack(300, 125, GROUND)), ceilings=lines)
     return replace(air, **changes)
 
 
@@ -600,11 +617,12 @@ class GritTests(unittest.TestCase):
         ambience = self.ambience()
         ambience.quiet_wait = 1
         seen = []
-        for _ in range(12 * 200):
+        # Ten minutes, for enough of them to count the pours by.
+        for _ in range(12 * 600):
             ambience.advance(TERRAIN)
             seen.extend(trickle for trickle in ambience.trickles if all(trickle is not other for other in seen))
-        self.assertGreater(len(seen), 40)
-        self.assertLess(len(seen), 100)
+        self.assertGreater(len(seen), 120)
+        self.assertLess(len(seen), 300)
         self.assertAlmostEqual(sum(trickle.pour for trickle in seen) / len(seen), ruins_ambience.POUR_CHANCE,
                                delta=0.12)
         self.assertEqual({trickle.source.x for trickle in seen}, {100, 300})
@@ -613,7 +631,7 @@ class GritTests(unittest.TestCase):
         # It used to sway a pixel aside, and to be two pixels wide under the crack.
         for seed in range(6):
             ambience = self.ambience(seed)
-            ambience.start(100, 130, 26, 0, True, TERRAIN)
+            ambience.start(100, 125, 26, 0, True, TERRAIN)
             thread_at_crack = False
             for _ in range(200):
                 ambience.advance(TERRAIN)
@@ -622,28 +640,28 @@ class GritTests(unittest.TestCase):
                 pixels = list(ambience.grit_pixels())
                 ambience.flecks = flecks
                 for x, y, _shade in pixels:
-                    if 130 <= y < GROUND - 10:
+                    if 125 <= y < GROUND - 10:
                         self.assertEqual(x, 100, (seed, y))
-                    thread_at_crack |= (x, y) == (100, 130)
+                    thread_at_crack |= (x, y) == (100, 125)
                 if not ambience.trickles:
                     break
             self.assertTrue(thread_at_crack)
 
     def test_one_trickle_at_a_crack(self):
         ambience = self.ambience()
-        ambience.start(100, 130, 20, 0, True, TERRAIN)
-        ambience.start(101, 130, 20, 0, True, TERRAIN)
-        ambience.start(102, 130, 4, 0, False, TERRAIN)
+        ambience.start(100, 125, 20, 0, True, TERRAIN)
+        ambience.start(101, 125, 20, 0, True, TERRAIN)
+        ambience.start(102, 125, 4, 0, False, TERRAIN)
         self.assertEqual(len(ambience.trickles), 1)
-        ambience.start(300, 130, 4, 0, False, TERRAIN)
-        ambience.start(301, 130, 4, 0, False, TERRAIN)
+        ambience.start(300, 125, 4, 0, False, TERRAIN)
+        ambience.start(301, 125, 4, 0, False, TERRAIN)
         self.assertEqual(len(ambience.trickles), 3)
-        ambience.start(299, 130, 20, 0, True, TERRAIN)
+        ambience.start(299, 125, 20, 0, True, TERRAIN)
         self.assertEqual(len(ambience.trickles), 3)
 
     def test_the_rhythm_picks_a_crack_that_is_free(self):
         ambience = self.ambience()
-        ambience.start(100, 130, 20, 0, True, TERRAIN)
+        ambience.start(100, 125, 20, 0, True, TERRAIN)
         for _ in range(10):
             ambience.quiet_wait = 1
             ambience.quiet_trickle(TERRAIN)
@@ -651,7 +669,7 @@ class GritTests(unittest.TestCase):
 
     def test_a_pour_heaps_a_small_mound_that_wears_away(self):
         ambience = self.ambience(3)
-        ambience.start(100, 130, 26, 0, True, TERRAIN)
+        ambience.start(100, 125, 26, 0, True, TERRAIN)
         run_out(ambience)
         self.assertEqual(len(ambience.mounds), 1)
         mound = ambience.mounds[0]
@@ -666,7 +684,7 @@ class GritTests(unittest.TestCase):
         ambience = self.ambience()
         sizes = []
         for _ in range(300):
-            trickle = ruins_ambience.Trickle(ruins_ambience.Crack(100, 130, GROUND), 0, 1)
+            trickle = ruins_ambience.Trickle(ruins_ambience.Crack(100, 125, GROUND), 0, 1)
             ambience.release(trickle)
             sizes.append(trickle.grains[0].size)
         self.assertAlmostEqual(sizes.count('speck') / 300, 0.7, delta=0.08)
@@ -674,11 +692,52 @@ class GritTests(unittest.TestCase):
         self.assertGreater(sizes.count('crumb'), 0)
         landed = []
         ambience.land = lambda x, bottom, pour, trickle=None: landed.append(x)
-        trickle = ruins_ambience.Trickle(ruins_ambience.Crack(100, 130, GROUND), 0, 0)
+        trickle = ruins_ambience.Trickle(ruins_ambience.Crack(100, 125, GROUND), 0, 0)
         trickle.grains = [ruins_ambience.Grain(GROUND - 1.0, 3.0, 100.0, GRIT_HEAD, size='crumb')]
         ambience.trickles = [trickle]
         ambience.advance_trickles()
         self.assertEqual(landed, [100.0, 101.0])
+
+    def test_no_grit_falls_from_where_a_loose_floor_fell(self):
+        # It kept falling from the hole the floor left, out of thin air.
+        fallen = FallenAbove({1})
+        ambience = self.ambience(4)
+        ambience.quiet_wait = 1
+        seen = set()
+        for _ in range(12 * 60):
+            ambience.advance(fallen)
+            seen |= {trickle.source.x for trickle in ambience.trickles}
+        self.assertEqual(seen, {300})
+        # Nor does a blow shake any down from under the hole.
+        for seed in range(10):
+            ambience = self.ambience(seed)
+            ambience.shake(100, 1, 1.0, 'bump', FallenAbove({1, 2}))
+            self.assertTrue(ambience.trickles, seed)
+            # (The top ceiling is the room above's floor, which still stands.)
+            self.assertFalse([trickle for trickle in ambience.trickles
+                              if 51 <= trickle.source.x < 153 and trickle.source.top == 127], seed)
+            self.assertTrue([trickle for trickle in ambience.trickles if trickle.source.top == 127], seed)
+
+    def test_a_pour_stops_when_its_stone_falls_and_its_mound_goes_with_the_floor(self):
+        ambience = self.ambience(5)
+        ambience.start(100, 125, 26, 0, True, TERRAIN)
+        for _ in range(8):
+            ambience.advance(TERRAIN)
+        trickle = ambience.trickles[0]
+        released = trickle.released
+        self.assertGreater(released, 2)
+        fallen = FallenAbove({1})
+        for _ in range(40):
+            ambience.advance(fallen)
+        self.assertEqual(trickle.released, released)
+        self.assertEqual(ambience.trickles, [])
+        # A mound on a floor that then gives way goes with it.
+        ambience = self.ambience(3)
+        ambience.start(100, 125, 26, 0, True, TERRAIN)
+        run_out(ambience)
+        self.assertEqual(len(ambience.mounds), 1)
+        ambience.advance(FallenAbove(set(), floor_gone={1}))
+        self.assertEqual(ambience.mounds, [])
 
     def test_a_bump_shakes_grit_down_right_over_his_hands(self):
         for seed in range(10):
@@ -749,7 +808,7 @@ class GritTests(unittest.TestCase):
         mask = numpy.zeros((HEIGHT, WIDTH), dtype=bool)
         mask[200:260, 90:111] = True
         ambience.prince_mask = mask
-        trickle = ruins_ambience.Trickle(ruins_ambience.Crack(100, 130, GROUND), 0, 0)
+        trickle = ruins_ambience.Trickle(ruins_ambience.Crack(100, 125, GROUND), 0, 0)
         trickle.grains = [ruins_ambience.Grain(198.0, 3.0, 100.0, GRIT_HEAD)]
         ambience.trickles = [trickle]
         ambience.advance_trickles()

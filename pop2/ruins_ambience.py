@@ -877,6 +877,8 @@ class Trickle:
     crumbled: bool = False
     released: int = 0
     mound: Mound | None = None
+    # The row of the tile it comes out from under (-1: the room above's floor).
+    stone: int | None = None
 
     @property
     def running(self):
@@ -994,6 +996,11 @@ def between(pair, near):
     return a + (c - a) * near, b + (d - b) * near
 
 
+def stone_row(top):
+    """The row of the tile a crack at top is in the underside of, as the cracks are found."""
+    return (int(top) - 1 - 5) // TILE_HEIGHT
+
+
 def row_of(floor):
     return max(0, min(2, round((floor - floor_y(0)) / TILE_HEIGHT)))
 
@@ -1057,8 +1064,8 @@ class RuinsAmbience:
                 self.shake(x, row, strength, name, terrain)
         self.quiet_trickle(terrain)
         self.blow()
-        self.advance_trickles()
-        self.advance_mounds()
+        self.advance_trickles(terrain)
+        self.advance_mounds(terrain)
         self.advance_pebbles()
         self.advance_bits()
         self.advance_streaks()
@@ -1085,17 +1092,40 @@ class RuinsAmbience:
                 blows.append((where, row, STRENGTH[name], name))
         return blows
 
+    def stands(self, terrain, x, row):
+        """Whether the tile over x in row (-1: the room above's floor) is still there: a
+        loose floor that has fallen sheds no more grit, from the hole it left."""
+        if terrain is None or row is None:
+            return True
+        column = int(x) // TILE_WIDTH
+        if not 0 <= column < 10 or row > 2:
+            return True
+        if row < 0:
+            # The underside of the room above's floor.
+            above = terrain.neighbor(self.room, 'up')
+            if above is None:
+                return True
+            return terrain.tile(above, column, 2).kind not in EMPTY_TILES
+        return terrain.tile(self.room, column, row).kind not in EMPTY_TILES
+
+    def floor_stands(self, terrain, x, bottom):
+        """Whether the floor something lies on at bottom is still there."""
+        if terrain is None or not 0 <= int(x) < WIDTH:
+            return True
+        return terrain.tile(self.room, int(x) // TILE_WIDTH, row_of(bottom)).kind not in EMPTY_TILES
+
     def busy(self, x, pour=True):
         """Whether a crack near x is pouring, or for a new pour, running at all."""
         return any(abs(trickle.source.x - x) <= SAME_CRACK and trickle.running and (pour or trickle.pour)
                    for trickle in self.trickles)
 
-    def start(self, x, top, grains, wait, pour=False, terrain=None):
-        if self.busy(x, pour):
+    def start(self, x, top, grains, wait, pour=False, terrain=None, stone=None):
+        stone = stone_row(top) if stone is None else stone
+        if self.busy(x, pour) or not self.stands(terrain, x, stone):
             return
         ground = landing(terrain, self.room, int(x), top) if terrain is not None else None
         bottom = HEIGHT if ground is None else ground + self.rng.randint(*LANDING_DEPTH)
-        self.trickles.append(Trickle(Crack(int(x), top, bottom), wait, grains, pour))
+        self.trickles.append(Trickle(Crack(int(x), top, bottom), wait, grains, pour, stone=stone))
 
     def shake(self, x, row, strength, name, terrain):
         """Grit shaken down from the ceilings, most near the blow, a little further off a
@@ -1111,7 +1141,7 @@ class RuinsAmbience:
             near = [c for c in range(max(0, int(x) - BUMP_REACH), min(WIDTH, int(x) + BUMP_REACH + 1))
                     if line[c] >= 0]
             for c in rng.sample(near, min(len(near), rng.randint(*BUMP_SPOTS))):
-                self.start(c, line[c], rng.randint(*BUMP_GRAINS), rng.randint(0, 2), terrain=terrain)
+                self.start(c, line[c], rng.randint(*BUMP_GRAINS), rng.randint(0, 2), terrain=terrain, stone=row - 1)
                 spots += 1
         candidates = []
         for c, line in enumerate(lines):
@@ -1120,13 +1150,13 @@ class RuinsAmbience:
                     continue
                 distance = math.hypot(column - x, (c - row) * TILE_HEIGHT * 0.7)
                 chance = strength * math.exp(-distance / SHAKE_REACH)
-                if rng.random() < chance:
-                    candidates.append((distance, column, line[column], chance))
+                if rng.random() < chance and self.stands(terrain, column, c - 1):
+                    candidates.append((distance, column, line[column], chance, c - 1))
         candidates.sort()
-        for distance, column, top, chance in candidates[:MOST_SPOTS - spots]:
+        for distance, column, top, chance, stone in candidates[:MOST_SPOTS - spots]:
             grains = 1 + int(5 * chance * rng.random() + 2 * chance)
             self.start(column + rng.randint(-3, 3), top, grains, int(distance / SHAKE_SPREAD) + rng.randint(0, 3),
-                       terrain=terrain)
+                       terrain=terrain, stone=stone)
         for trickle in self.trickles[before:]:
             trickle.shaken = True
         if strength < PEBBLE_FROM:
@@ -1144,6 +1174,9 @@ class RuinsAmbience:
         if not sources or self.quiet_wait > 0:
             return
         self.quiet_wait = rng.randint(*TICKS_BETWEEN_TRICKLES)
+        sources = [crack for crack in sources if self.stands(terrain, crack.x, stone_row(crack.top))]
+        if not sources:
+            return
         source = rng.choice([crack for crack in sources if not self.busy(crack.x)] or sources)
         pour = rng.random() < POUR_CHANCE
         self.start(source.x, source.top, rng.randint(*(POUR if pour else SPRINKLE)), 0, pour, terrain)
@@ -1171,10 +1204,13 @@ class RuinsAmbience:
         trickle.grains.append(Grain(float(source.top), 0.3, float(x), shade, 0.0, size, rng.randrange(4),
                                     rng.choice((-1, 1))))
 
-    def advance_trickles(self):
+    def advance_trickles(self, terrain=None):
         kept = []
         for trickle in self.trickles:
             source, mound = trickle.source, trickle.mound
+            if trickle.left > 0 and not self.stands(terrain, source.x, trickle.stone):
+                # Its stone fell: what is already falling goes on down, and no more.
+                trickle.left = trickle.wait = 0
             if trickle.wait > 0:
                 trickle.wait -= 1
             elif trickle.left > 0:
@@ -1246,9 +1282,12 @@ class RuinsAmbience:
             self.flecks.append(Fleck(x + rng.choice((-1, 0, 0, 1)), bottom - rng.randint(0, 2), 0.0, 0.0, 0.0,
                                      (GRIT_TAIL, GRIT_DIM), rng.randint(*REST_LIFE), HEIGHT))
 
-    def advance_mounds(self):
+    def advance_mounds(self, terrain=None):
         rng, kept = self.rng, []
         for mound in self.mounds:
+            if not self.floor_stands(terrain, mound.x, mound.bottom):
+                # The floor it lay on fell.
+                continue
             for roller in list(mound.rolling):
                 target, place = roller
                 if place == target:
