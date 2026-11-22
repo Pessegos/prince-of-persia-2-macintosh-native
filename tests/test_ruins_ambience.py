@@ -1419,6 +1419,25 @@ class EveryRuinsRoomTests(unittest.TestCase):
             end = (cycle + 1) * period - phase - 1
             self.assertEqual(list(ruins_ambience.chasm_crosswind_pixels(end)), [])
 
+    def test_each_chasm_wind_line_retracts_into_a_small_curl(self):
+        sides = (
+            (ruins_ambience.CHASM_UPDRAFT_PATHS, ruins_ambience.CHASM_UPDRAFT_PERIOD,
+             ruins_ambience.CHASM_UPDRAFT_PHASE, ruins_ambience.chasm_updraft_pixels),
+            (ruins_ambience.CHASM_CROSSWIND_PATHS, ruins_ambience.CHASM_CROSSWIND_PERIOD,
+             ruins_ambience.CHASM_CROSSWIND_PHASE, ruins_ambience.chasm_crosswind_pixels),
+        )
+        for paths, period, phase, pixels in sides:
+            for cycle, (path, turn) in enumerate(paths, start=3):
+                start = cycle * period - phase + ruins_ambience.CHASM_WISP_GLIDE_TICKS
+                coil = set(path[turn:])
+                self.assertLessEqual(max(x for x, _ in coil) - min(x for x, _ in coil), 6)
+                self.assertLessEqual(max(y for _, y in coil) - min(y for _, y in coil), 6)
+                frames = [list(pixels(start + offset)) for offset in (0, 2, 4, 5, 6)]
+                counts = list(map(len, frames))
+                self.assertTrue(all(first > second for first, second in zip(counts, counts[1:])))
+                self.assertTrue({(x, y) for x, y, _ in frames[2]} <= coil)
+                self.assertFalse(frames[-1])
+
     def test_no_random_shooting_star_over_the_desert(self):
         rng = random.Random(0)
         for place, air in self.rooms.items():
