@@ -2029,33 +2029,38 @@ CHASM_WISP_PALER = (26, 28, 37)
 
 
 def chasm_updraft_pixels(tick):
-    return chasm_wisp_pixels(tick, CHASM_UPDRAFT_PATHS, CHASM_UPDRAFT_PERIOD, CHASM_UPDRAFT_PHASE)
+    return chasm_wisp_pixels(
+        tick, CHASM_UPDRAFT_PATHS, CHASM_UPDRAFT_PERIOD, CHASM_UPDRAFT_PHASE, direction=(0, -1),
+    )
 
 
 def chasm_crosswind_pixels(tick):
-    return chasm_wisp_pixels(tick, CHASM_CROSSWIND_PATHS, CHASM_CROSSWIND_PERIOD, CHASM_CROSSWIND_PHASE)
+    return chasm_wisp_pixels(
+        tick, CHASM_CROSSWIND_PATHS, CHASM_CROSSWIND_PERIOD, CHASM_CROSSWIND_PHASE, direction=(1, 0),
+    )
 
 
-def chasm_wisp_pixels(tick, paths, period, phase):
+def chasm_wisp_pixels(tick, paths, period, phase, *, direction):
     """Keep the wind cadence independent of how long each curl takes."""
     cycle, age = divmod(tick + phase, period)
     lifetime = CHASM_WISP_GLIDE_TICKS + CHASM_WISP_CURL_TICKS
     if age + period < lifetime:
         path, turn = paths[(cycle - 1) % len(paths)]
-        yield from chasm_wisp_frame(path, turn, age + period)
+        yield from chasm_wisp_frame(path, turn, age + period, direction)
     path, turn = paths[cycle % len(paths)]
-    yield from chasm_wisp_frame(path, turn, age)
+    yield from chasm_wisp_frame(path, turn, age, direction)
 
 
-def chasm_wisp_frame(path, turn, age):
-    """Glide, then wind the whole line into the center of the spiral."""
+def chasm_wisp_frame(path, turn, age, direction):
+    """Glide, then travel with the wind while winding into the spiral."""
     length = 35
-    if age < CHASM_WISP_GLIDE_TICKS:
+    curl_age = age - CHASM_WISP_GLIDE_TICKS
+    if curl_age < 0:
         head = turn * age // CHASM_WISP_GLIDE_TICKS
         tail = head - length
         glow = min(1.0, age / 5)
     else:
-        progress = (age - CHASM_WISP_GLIDE_TICKS) / CHASM_WISP_CURL_TICKS
+        progress = curl_age / CHASM_WISP_CURL_TICKS
         if progress >= 1.0:
             return
         curl_length = len(path) - turn
@@ -2064,6 +2069,8 @@ def chasm_wisp_frame(path, turn, age):
         wound = 1.0 - (1.0 - progress) ** 1.25
         tail = turn - length + round((length + curl_length) * wound)
         glow = 1.0
+    drift = max(0, curl_age)
+    dx, dy = direction[0] * drift, direction[1] * drift
     for index in range(max(0, tail), head):
         if index < turn:
             strength = glow * min(1.0, (index - tail + 1) / 5, (head - index) / 4)
@@ -2071,7 +2078,8 @@ def chasm_wisp_frame(path, turn, age):
             strength = 1.0 + 0.2 * min(1.0, (index - turn + 1) / 4)
         if round(max(CHASM_WISP_PALER) * strength) < 2:
             continue
-        yield (*path[index], tuple(round(amount * strength) for amount in CHASM_WISP_PALER))
+        x, y = path[index]
+        yield x + dx, y + dy, tuple(round(amount * strength) for amount in CHASM_WISP_PALER)
 
 
 def chasm_rising_sand_pixels(tick):

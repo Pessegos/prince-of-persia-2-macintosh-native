@@ -1393,9 +1393,11 @@ class EveryRuinsRoomTests(unittest.TestCase):
         for cycle, (path, turn) in enumerate(ruins_ambience.CHASM_UPDRAFT_PATHS, start=3):
             start = cycle * period - phase
             curl_pixels = set(path[turn:])
-            next_glide = list(ruins_ambience.chasm_updraft_pixels(start + period + 2))
-            self.assertTrue(any((x, y) in curl_pixels for x, y, _ in next_glide))
-            self.assertTrue(any((x, y) not in curl_pixels for x, y, _ in next_glide))
+            overlap_age = period + 2
+            drift = overlap_age - ruins_ambience.CHASM_WISP_GLIDE_TICKS
+            next_glide = list(ruins_ambience.chasm_updraft_pixels(start + overlap_age))
+            self.assertTrue(any((x, y + drift) in curl_pixels for x, y, _ in next_glide))
+            self.assertTrue(any((x, y + drift) not in curl_pixels for x, y, _ in next_glide))
             self.assertGreater(turn, 90)
             self.assertTrue(all(first[1] >= second[1] for first, second in zip(path[:turn], path[1:turn])))
             curl = path[turn:]
@@ -1420,25 +1422,27 @@ class EveryRuinsRoomTests(unittest.TestCase):
             end = (cycle + 1) * period - phase - 1
             self.assertEqual(list(ruins_ambience.chasm_crosswind_pixels(end)), [])
 
-    def test_each_chasm_wind_line_winds_into_its_center_without_dimming(self):
+    def test_each_chasm_wind_line_moves_downwind_while_curling_without_dimming(self):
         sides = (
             (ruins_ambience.CHASM_UPDRAFT_PATHS, ruins_ambience.CHASM_UPDRAFT_PERIOD,
-             ruins_ambience.CHASM_UPDRAFT_PHASE, ruins_ambience.chasm_updraft_pixels),
+             ruins_ambience.CHASM_UPDRAFT_PHASE, ruins_ambience.chasm_updraft_pixels, (0, -1)),
             (ruins_ambience.CHASM_CROSSWIND_PATHS, ruins_ambience.CHASM_CROSSWIND_PERIOD,
-             ruins_ambience.CHASM_CROSSWIND_PHASE, ruins_ambience.chasm_crosswind_pixels),
+             ruins_ambience.CHASM_CROSSWIND_PHASE, ruins_ambience.chasm_crosswind_pixels, (1, 0)),
         )
-        for paths, period, phase, pixels in sides:
+        for paths, period, phase, pixels, (dx, dy) in sides:
             for cycle, (path, turn) in enumerate(paths, start=3):
                 start = cycle * period - phase + ruins_ambience.CHASM_WISP_GLIDE_TICKS
                 coil = set(path[turn:])
                 width = max(x for x, _ in coil) - min(x for x, _ in coil)
                 height = max(y for _, y in coil) - min(y for _, y in coil)
                 self.assertIn(max(width, height), (4, 5))
-                forming = [list(pixels(start + offset)) for offset in range(16)]
-                winding = [
-                    [pixel for pixel in pixels(start + offset) if pixel[:2] in coil]
-                    for offset in range(16, 23)
+                # Track the shape in the frame of the moving wisp.
+                frames = [
+                    [(x - dx * offset, y - dy * offset, rgb) for x, y, rgb in pixels(start + offset)]
+                    for offset in range(23)
                 ]
+                forming = frames[:16]
+                winding = [[pixel for pixel in frame if pixel[:2] in coil] for frame in frames[16:]]
                 counts = list(map(len, forming + winding))
                 self.assertTrue(all(first > second for first, second in zip(counts, counts[1:])))
                 self.assertTrue(any((x, y) not in coil for x, y, _ in forming[12]))
