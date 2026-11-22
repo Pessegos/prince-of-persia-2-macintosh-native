@@ -18,11 +18,11 @@ from pop2.cavern_ambience import (
 from pop2.paths import ASSET_DIR
 from pop2 import ruins_ambience
 from pop2.ruins_ambience import (
-    BODY_PALER, BRIGHT, CURL_RADIUS, CURL_RISE, CURL_SPEED, DESERT_STAR_APART, DESERT_STAR_CLEAR, DESERT_STARS,
+    BODY_PALER, BRIGHT, CURL_RADIUS, CURL_RISE, CURL_SPEED, DESERT_ROOMS, DESERT_STAR_APART, DESERT_STAR_CLEAR, DESERT_STARS,
     DIM, DIP_TICKS, FAINT, FIREBALL, FIRST_SHOOTER, GOLD_BRIGHT, GRAZER, GRIT_HEAD, GUST_TICKS, HAZE_APART, HAZE_DIM,
-    HAZE_MID, HEIGHT, MID,
-    NORMAL, ROSE_BRIGHT, ROSE_MID, SECOND_STREAK_BELOW, SHOOTERS, STAR_APART, STAR_CLEAR, STARS_PER_SKY,
-    STREAK_SPEED, TICKS_BETWEEN_GUSTS, TICKS_BETWEEN_SHOOTERS, WIDTH, RuinsAmbience, Shooter, blueness, new_streak,
+    HAZE_MID, HEIGHT, MID, NORMAL, ROSE_BRIGHT, ROSE_MID, SECOND_STREAK_BELOW, SHOOTERS, STAR_APART, STAR_CLEAR, STARS_PER_SKY,
+    STREAK_SPEED, TICKS_BETWEEN_GUSTS, TICKS_BETWEEN_SHOOTERS, WIDTH, DesertWind, Dunes, RuinsAmbience, Shooter,
+    blueness, new_streak,
     paler, read_room, ribbon, shooter_path, shooter_pixels, sky_mask, streak_pixels,
 )
 
@@ -167,9 +167,11 @@ def dunes_air(rock=True):
 def blown_sand(ambience, ticks, plain):
     """{(x, y)} of every pixel the blown sand changed, tick after tick."""
     changed = set()
+    air = read_room(9, 11, plain, PALETTE)
     for _ in range(ticks):
         ambience.advance()
-        frame = ambience.draw(frame_of(plain))
+        frame = frame_of(plain)
+        ambience.put_sand(frame.load(), air)
         ys, xs = numpy.nonzero((numpy.asarray(frame.convert('RGB')) != plain).any(axis=2))
         changed |= set(zip(xs.tolist(), ys.tolist()))
     return changed
@@ -184,7 +186,7 @@ class DuneTests(unittest.TestCase):
     def test_the_dunes_crest_their_plain_and_a_rock(self):
         dunes = dunes_air().dunes
         self.assertEqual(set(dunes.crest.tolist()), {CREST})
-        self.assertEqual(dunes.ground_top, CREST + ruins_ambience.GROUND_FROM)
+        self.assertEqual(set(dunes.ground_top), {CREST + ruins_ambience.GROUND_FROM})
         self.assertEqual(len(dunes.rocks), 1)
         rock = dunes.rocks[0]
         self.assertEqual((rock.left, max(rock.foot)), (200, 239))
@@ -204,14 +206,14 @@ class DuneTests(unittest.TestCase):
         self.assertIsNone(ruins_ambience.read_dunes(steep))
 
     def quiet(self, seed=1, **changes):
-        ambience = RuinsAmbience(11, replace(dunes_air(**changes), stars=()), random.Random(seed))
+        ambience = DesertWind(dunes_air(**changes).dunes, random.Random(seed))
         ambience.desert_gust_wait = ambience.devil_wait = 10 ** 6
         return ambience
 
     def test_gusts_come_in_spells_and_lulls_about_as_often_as_before(self):
         # The user, 2026-11-22: a straight wave each time on the same beat. Before, every
         # gap was 70 to 100 ticks.
-        ambience = RuinsAmbience(11, replace(dunes_air(), stars=()), random.Random(4))
+        ambience = DesertWind(dunes_air().dunes, random.Random(4))
         ambience.devil_wait = 10 ** 6
         starts = []
         for _ in range(12 * 60 * 10):
@@ -291,7 +293,7 @@ class DuneTests(unittest.TestCase):
         rows = {y for _, y in changed}
         # A low spray just over the crest, and sand off the plain; none higher.
         self.assertTrue(any(CREST - 6 <= y < CREST for y in rows))
-        self.assertTrue(any(y >= ambience.air.dunes.ground_top for y in rows))
+        self.assertTrue(any(y >= ambience.dunes.ground_top[0] for y in rows))
         self.assertGreaterEqual(min(rows), CREST - 8)
         xs = {x for x, _ in changed}
         self.assertLess(min(xs), 60)
@@ -308,7 +310,7 @@ class DuneTests(unittest.TestCase):
 
     def test_the_plain_lifts_sand_only_out_of_the_rocks_lee(self):
         ambience = self.quiet(3)
-        dunes = ambience.air.dunes
+        dunes = ambience.dunes
         for tick in range(0, 90, 3):
             ambience.tick = tick
             ambience.desert_gusts = [steady_gust()]
@@ -349,8 +351,8 @@ class DuneTests(unittest.TestCase):
         ambience.devil_wait = 1
         plain = picture((PURPLE, 70), (DEEP, CREST - 70), (SAND, HEIGHT - CREST))
         changed = blown_sand(ambience, 2, plain)
-        devil = ambience.devil
-        self.assertIsNotNone(devil)
+        self.assertEqual(len(ambience.devils), 1)
+        devil = ambience.devils[0]
         foot = CREST + ruins_ambience.DEVIL_FOOT
         changed |= blown_sand(ambience, devil.life, plain)
         self.assertTrue(changed)
@@ -359,7 +361,7 @@ class DuneTests(unittest.TestCase):
             self.assertLessEqual(y, foot + 3)
             # Sand sprayed left can travel about 25 pixels from the wandering base.
             self.assertGreaterEqual(x, devil.start - devil.wander - 26)
-        while ambience.devil is not None:
+        while ambience.devils:
             ambience.advance()
         low, high = ruins_ambience.TICKS_BETWEEN_DEVILS
         self.assertTrue(low <= ambience.devil_wait + 0 <= high)
@@ -372,7 +374,7 @@ class DuneTests(unittest.TestCase):
             values = [getattr(devil, name) for devil in devils]
             low, high = min(values), max(values)
             self.assertGreater(high - low, 0.3 * high, name)
-        self.assertEqual(len({round(devil.phase, 3) for devil in devils}), 60)
+        self.assertEqual(len({devil.phase for devil in devils}), 60)
         # The old devil had one height and one life.
         self.assertGreater(len({devil.life for devil in devils}), 20)
 
@@ -391,16 +393,16 @@ class DuneTests(unittest.TestCase):
         ambience = self.quiet(13, rock=False)
         ambience.devil_wait = 1
         plain = picture((PURPLE, 70), (DEEP, CREST - 70), (SAND, HEIGHT - CREST))
+        air = dunes_air(rock=False)
         kicks_seen = 0
         spray_sides = []
         most_bright_pixels = {-1: 0, 1: 0}
         for _ in range(120):
             ambience.advance()
-            self.assertFalse(ambience.clouds)
-            devil = ambience.devil
-            if devil is None:
+            if not ambience.devils:
                 continue
-            base_x, base_y = devil.base(ambience.tick, ambience.air.dunes.crest)
+            devil = ambience.devils[0]
+            base_x, base_y = devil.base(ambience.tick, ambience.dunes.crest)
             self.assertLessEqual(len(devil.kicks), 12)
             for kick in devil.kicks:
                 x, y = devil.kick_point(kick, base_x, base_y)
@@ -423,7 +425,7 @@ class DuneTests(unittest.TestCase):
             if devil.thrown:
                 frame = frame_of(plain)
                 canvas = frame.load()
-                ambience.put_sand(canvas)
+                ambience.put_sand(canvas, air)
                 for side in most_bright_pixels:
                     spray = {(x, y) for x, y, _ in pixels if (x - base_x) * side > 4
                              and abs(y - base_y) <= 6 and canvas[x, y][1] >= SAND[1] + 15}
@@ -442,13 +444,43 @@ class DuneTests(unittest.TestCase):
 
     def test_a_dust_devil_rises_only_where_the_crest_runs_all_its_way(self):
         ambience = self.quiet(7, rock=False)
-        dunes = ambience.air.dunes
+        dunes = ambience.dunes
         crest = dunes.crest.copy()
         crest[:WIDTH - 60] = -1
-        ambience.air = replace(ambience.air, dunes=replace(dunes, crest=crest))
+        ambience.dunes = replace(dunes, crest=crest)
         ambience.devil_wait = 1
         ambience.advance()
-        self.assertIsNone(ambience.devil)
+        self.assertFalse(ambience.devils)
+
+    def test_gust_stream_and_devil_continue_across_the_same_room_seam(self):
+        air = dunes_air(rock=False)
+        wind = DesertWind(Dunes.join((air.dunes, air.dunes)), random.Random(74))
+        wind.tick = 40
+        wind.desert_gust_wait = wind.devil_wait = 1000
+        gust = steady_gust(0, start=WIDTH - 240)
+        stream = ruins_ambience.Stream(40, 0.5, WIDTH - 1, 8, 380, 0)
+        crest_grain = ruins_ambience.Blown(WIDTH - 1, CREST - 3, CREST - 3, 0.0, 3, -0.4, 0.12, 15)
+        floor_grain = ruins_ambience.Blown(WIDTH - 1, 270, 270, 0.5, 4, -0.4, 0.12, 15)
+        devil = ruins_ambience.Devil(-10, WIDTH - 21, foot=3.5)
+        wind.desert_gusts = [gust]
+        wind.streams = [stream]
+        wind.spray = [crest_grain]
+        wind.blown = [floor_grain]
+        wind.devils = [devil]
+        self.assertLess(devil.base(wind.tick, wind.dunes.crest)[0], WIDTH)
+        for _ in range(4):
+            wind.advance()
+        self.assertIs(wind.desert_gusts[0], gust)
+        self.assertIs(wind.streams[0], stream)
+        self.assertIs(wind.devils[0], devil)
+        self.assertGreater(devil.base(wind.tick, wind.dunes.crest)[0], WIDTH)
+        self.assertTrue(any(front > WIDTH for front, _ in wind.fronts(ruins_ambience.CREST_FRONT, 'crest')))
+        self.assertTrue(any(grain is crest_grain and grain.x >= WIDTH for grain in wind.spray))
+        self.assertTrue(any(grain is floor_grain and grain.x >= WIDTH for grain in wind.blown))
+        local = frame_of(picture((DEEP, CREST), (SAND, HEIGHT - CREST)))
+        previous = local.tobytes()
+        wind.put_sand(local.load(), air, WIDTH)
+        self.assertNotEqual(local.tobytes(), previous)
 
 
 class TwinkleTests(unittest.TestCase):
@@ -1192,27 +1224,28 @@ class RendererTests(unittest.TestCase):
         frame = frame_of(picture((DEEP, 180)))
         self.assertIs(renderer.ambient_layer(frame, 12), frame)
 
-    def test_dunes_share_the_breeze_clock_and_keep_gusts_running_offscreen(self):
+    def test_desert_draws_before_the_first_tick_and_reuses_the_wind_on_return(self):
         renderer = self.renderer(9, 4)
-        renderer.rooms = {10: 'right', 11: 'left'}
-        terrain = SimpleNamespace(neighbor=lambda room, direction: 11 if (room, direction) == (10, 'left') else None)
+        renderer.rooms = dict.fromkeys(DESERT_ROOMS, 'dunes')
+        terrain = None
         air = replace(dunes_air(rock=False), stars=())
+        scenery = frame_of(picture((DEEP, CREST), (SAND, HEIGHT - CREST)))
         with patch('pop2.ruins_ambience.ruins_air', return_value=air):
-            renderer.advance_ambience(11, terrain)
-            left = renderer.ambience
-            self.assertTrue(list(left.desert_pixels()))
-            left.desert_gusts = [steady_gust(left.tick)]
-            gust = left.desert_gusts[0]
+            before_first_tick = renderer.ambient_layer(scenery.copy(), 1)
+            self.assertNotEqual(before_first_tick.tobytes(), scenery.tobytes())
+            wind = renderer.desert_wind
+            self.assertEqual(wind.width, 6 * WIDTH)
+            tick = wind.tick
+            gust = steady_gust(tick, start=4 * WIDTH)
+            wind.desert_gusts = [gust]
+            wind.desert_gust_wait = 100
             renderer.advance_ambience(10, terrain)
-            right = renderer.ambience
-            self.assertTrue(list(right.desert_pixels()))
-            self.assertEqual((left.dune_origin, right.dune_origin), (0, WIDTH))
-            self.assertEqual(left.tick, right.tick)
-            self.assertIs(left.desert_gusts[0], gust)
             renderer.advance_ambience(11, terrain)
-        self.assertIs(renderer.ambience, left)
-        self.assertIs(left.desert_gusts[0], gust)
-        self.assertEqual(left.tick, 3)
+            renderer.advance_ambience(10, terrain)
+        self.assertIs(renderer.desert_wind, wind)
+        self.assertIs(wind.desert_gusts[0], gust)
+        self.assertEqual(wind.tick, tick + 3)
+        self.assertGreater(len(wind.spray) + len(wind.blown), 0)
 
 
 @unittest.skipUnless(RUINS_INSTALLED, 'Imported ruins resources required')
@@ -1301,14 +1334,19 @@ class EveryRuinsRoomTests(unittest.TestCase):
                 self.assertTrue(air.sky[y - clear:y + clear + 1, x - clear:x + clear + 1].all(), (place, x, y))
 
     def test_the_sand_blows_in_the_desert_of_the_dunes(self):
-        # Menu rooms 11-15; menu room 2's sand rises to the top of the room as a slope.
+        # The strip continues to the horse, with the exposed ground around the statue.
         self.assertEqual({place for place, air in self.rooms.items() if air.dunes is not None},
-                         {(9, room) for room in (10, 11, 12, 13, 14)})
+                         {(9, room) for room in DESERT_ROOMS})
         for room in (10, 11, 12, 13, 14):
             dunes = self.rooms[9, room].dunes
             self.assertTrue(194 <= dunes.crest.min() and dunes.crest.max() <= 218, room)
-            self.assertEqual(dunes.ground_top, 238, room)
+            self.assertEqual(set(dunes.ground_top), {238}, room)
             self.assertTrue(20 <= len(dunes.rocks) <= 28, room)
+        horse = self.rooms[9, 1].dunes
+        self.assertTrue((horse.crest[:85] > 0).all())
+        self.assertFalse(horse.sand[:200].any())
+        self.assertFalse(horse.sand[:310, 268:370].any())
+        self.assertTrue(horse.open_sand[280:330, :80].any())
 
     def test_no_shooting_star_over_the_desert(self):
         # The desert's sky is the purple by the horizon, as the approved look had it.
@@ -1432,19 +1470,17 @@ class RealSceneTests(unittest.TestCase):
             scene.cave_ambience_enabled = enabled
             scene.jump_to_room(11, row=2, facing=1)
             harness.tick(12)
-            ambience = scene.level_renderer.ambience
-            if ambience is not None:
-                ambience.desert_gust_wait = ambience.devil_wait = 1
+            wind = scene.level_renderer.desert_wind
+            if wind is not None:
+                wind.desert_gust_wait = wind.devil_wait = 1
             press(harness, 'R', True)
             harness.tick(6)
             press(harness, 'R', False)
             harness.tick(30)
-            ambience = scene.level_renderer.ambience
             state = scene.sequence_state
             return dict(random=random.getstate(), room=scene.room_id, x=scene.player_x, action=scene.action,
                         sequence=state.sequence_id, y=state.current_y,
-                        sand=None if ambience is None else (len(ambience.blown) + len(ambience.spray),
-                                                            ambience.devil is not None))
+                        sand=None if wind is None else (len(wind.blown) + len(wind.spray), bool(wind.devils)))
         finally:
             harness.close()
 
@@ -1473,20 +1509,39 @@ class RealSceneTests(unittest.TestCase):
                 scene.jump_to_room(14, row=2, x=28, facing=1)
                 press(harness, 'R', True)
                 visited = []
-                for _ in range(200):
+                wind = scene.level_renderer.desert_wind
+                self.assertIsNotNone(wind)
+
+                def changed_sand():
+                    room = scene.room_id
+                    renderer = scene.level_renderer
+                    self.assertIs(renderer.desert_wind, wind)
+                    scenery = Image.alpha_composite(scene.background, scene.foreground)
+                    with_sand = scenery.copy()
+                    wind.put_sand(with_sand.load(), renderer.ambience_air[room], DESERT_ROOMS.index(room) * WIDTH)
+                    return (numpy.asarray(with_sand) != numpy.asarray(scenery)).any(axis=2)
+
+                for _ in range(260):
                     harness.tick()
                     if not visited or scene.room_id != visited[-1]:
                         visited.append(scene.room_id)
-                        weather = scene.level_renderer.ambience
-                        self.assertEqual(weather.room, scene.room_id)
-                        scenery = Image.alpha_composite(scene.background, scene.foreground)
-                        with_sand = scenery.copy()
-                        weather.put_sand(with_sand.load())
-                        changed = (numpy.asarray(with_sand) != numpy.asarray(scenery)).any(axis=2)
+                        changed = changed_sand()
                         self.assertGreaterEqual(numpy.count_nonzero(changed), 12, scene.room_id)
-                        if scene.room_id == 10:
+                        if scene.room_id == 1:
+                            self.assertFalse(changed[:310, 268:370].any())
                             break
-                self.assertEqual(visited, [14, 13, 12, 11, 10])
+                self.assertEqual(visited, list(DESERT_ROOMS))
+
+                entered_horse = wind.tick
+                press(harness, 'R', False)
+                press(harness, 'L', True)
+                for elapsed in range(1, 46):
+                    harness.tick()
+                    if scene.room_id == 10:
+                        break
+                self.assertEqual(scene.room_id, 10)
+                self.assertEqual(wind.tick, entered_horse + elapsed)
+                self.assertGreaterEqual(numpy.count_nonzero(changed_sand()), 12)
             finally:
                 harness.close()
 
