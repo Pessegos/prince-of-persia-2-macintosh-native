@@ -389,30 +389,30 @@ class DuneTests(unittest.TestCase):
     def test_sand_whirls_at_the_devil_s_foot_and_is_thrown_out_and_falls_back(self):
         ambience = self.quiet(13, rock=False)
         ambience.devil_wait = 1
-        thrown_seen, kicks_seen, puffs = [], 0, set()
+        thrown_seen, kicks_seen = 0, 0
         for _ in range(120):
             ambience.advance()
-            puffs |= {id(cloud) for cloud in ambience.clouds}
+            self.assertFalse(ambience.clouds)
             devil = ambience.devil
             if devil is None:
                 continue
             base_x, base_y = devil.base(ambience.tick, ambience.air.dunes.crest)
+            self.assertLessEqual(len(devil.kicks), 12)
             for kick in devil.kicks:
                 x, y = devil.kick_point(kick, base_x, base_y)
                 kicks_seen += 1
-                # On the ground round its foot: no wider than the skirt, never far above it.
-                self.assertLessEqual(abs(x - base_x), devil.foot + 0.01)
-                self.assertTrue(base_y - 5 <= y <= base_y + 3, (y, base_y))
+                self.assertLessEqual(abs(x - base_x), 4.25)
+                self.assertTrue(base_y - 2 <= y <= base_y + 1, (y, base_y))
             for grain in devil.thrown:
-                self.assertLess(grain.y, grain.ground + 1)
-                thrown_seen.append(id(grain))
+                self.assertGreater(grain.dx, 0)
+                self.assertTrue(grain.ground - 3 <= grain.y < grain.ground + 1)
+                thrown_seen += grain.age == 1
             pixels = list(ambience.desert_pixels())
             if devil.kicks:
-                self.assertTrue(any(abs(y - base_y) <= 3 and abs(x - base_x) <= devil.foot + 1 for x, y, _ in pixels))
-        self.assertGreater(kicks_seen, 100)
-        self.assertGreater(len(set(thrown_seen)), 3)
-        # And small puffs of dust off its foot, a few seconds apart at most.
-        self.assertTrue(3 <= len(puffs) <= 20, len(puffs))
+                self.assertTrue(any(abs(y - base_y) <= 2 and abs(x - base_x) <= devil.foot + 1
+                                    for x, y, _ in pixels))
+        self.assertGreater(kicks_seen, 0)
+        self.assertGreater(thrown_seen, 3)
 
     def test_the_devil_s_foot_does_not_trip_on_a_dip_in_the_crest(self):
         crest = numpy.full(WIDTH, CREST)
