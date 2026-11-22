@@ -824,7 +824,7 @@ class WindTests(unittest.TestCase):
             ambience.advance()
             self.assertEqual(ambience.streaks, [])
 
-    def test_a_gust_sends_one_or_two_streaks_the_second_below_the_first(self):
+    def test_gusts_mix_both_streak_styles_at_the_existing_cadence(self):
         ambience = RuinsAmbience(4, replace(night(6, 4), stars=()), random.Random(2))
         gusts = []
         for tick in range(6000):
@@ -836,6 +836,8 @@ class WindTests(unittest.TestCase):
             ambience.advance_streaks()
         self.assertGreater(len(gusts), 25)
         self.assertEqual({len(new) for _, new in gusts}, {1, 2})
+        self.assertTrue(any({type(streak) for streak in new} == {ruins_ambience.Streak, ruins_ambience.WindingStreak}
+                            for _, new in gusts))
         for _, new in gusts:
             if len(new) == 2:
                 self.assertGreaterEqual(new[1].y - new[0].y, SECOND_STREAK_BELOW[0])
@@ -863,6 +865,24 @@ class WindTests(unittest.TestCase):
         self.assertTrue((after[changed].sum(axis=1) > rgb[changed].astype(int).sum(axis=1)).all())
         shown = {tuple(value) for value in after[changed]}
         self.assertLessEqual(shown, {colour[:3] for colour in PALETTE.values()})
+
+    def test_a_winding_streak_draws_and_pushes_grit_at_its_moving_tip(self):
+        rgb = picture((PURPLE, 70), (STONE, 60))
+        air = replace(read_room(6, 4, rgb, PALETTE), stars=())
+        ambience = RuinsAmbience(4, air, random.Random(3))
+        streak = new_streak(random.Random(8), winding=True)
+        ambience.streaks = [streak]
+        for _ in range(ruins_ambience.WINDING_STREAK_LIFETIME - 1):
+            ambience.advance_streaks()
+        [(x, y, amount)] = list(streak.visible_pixels())
+        home_x, home_y = streak.pixels[-1]
+        self.assertEqual((x, y), (home_x + 21, home_y))
+        self.assertGreater(math.hypot(*ambience.streak_push(x, y)), 0)
+        self.assertEqual(ambience.streak_push(home_x, home_y), (0.0, 0.0))
+        frame = ambience.draw(frame_of(rgb))
+        self.assertEqual(frame.getpixel((x, y)), air.paler_than(tuple(rgb[y, x]), amount))
+        ambience.advance_streaks()
+        self.assertFalse(ambience.streaks)
 
     def test_paler_is_never_the_colour_behind(self):
         palette = numpy.array(sorted({colour[:3] for colour in PALETTE.values()}))
@@ -1394,7 +1414,7 @@ class EveryRuinsRoomTests(unittest.TestCase):
             start = cycle * period - phase
             curl_pixels = set(path[turn:])
             overlap_age = period + 2
-            drift = overlap_age - ruins_ambience.CHASM_WISP_GLIDE_TICKS
+            drift = overlap_age - ruins_ambience.WINDING_STREAK_GLIDE_TICKS
             next_glide = list(ruins_ambience.chasm_updraft_pixels(start + overlap_age))
             self.assertTrue(any((x, y + drift) in curl_pixels for x, y, _ in next_glide))
             self.assertTrue(any((x, y + drift) not in curl_pixels for x, y, _ in next_glide))
@@ -1436,7 +1456,7 @@ class EveryRuinsRoomTests(unittest.TestCase):
         )
         for paths, period, phase, pixels, (dx, dy) in sides:
             for cycle, (path, turn) in enumerate(paths, start=3):
-                start = cycle * period - phase + ruins_ambience.CHASM_WISP_GLIDE_TICKS
+                start = cycle * period - phase + ruins_ambience.WINDING_STREAK_GLIDE_TICKS
                 coil = set(path[turn:])
                 width = max(x for x, _ in coil) - min(x for x, _ in coil)
                 height = max(y for _, y in coil) - min(y for _, y in coil)

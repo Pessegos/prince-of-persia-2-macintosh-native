@@ -23,11 +23,10 @@ that bursts at the end and leaves its trail a moment. Over the desert of level n
 the sky has only a few stars, middling and bright. On the first visit to the horse's
 room, a large shooting star leaves a glowing line that sheds sparks.
 
-The wind. In a room open to the sky a gust now and then sends one or two thin streaks
-of air across it, over the ruins too: a long wavy line a few shades paler than what is
-behind it, which runs in, rolls one small curl that comes out a little higher than it
-went in, and runs out. It slows down to wind its curl and fades in and out in three
-steps of the palette, as a game of the time would. The desert has its own wind.
+The wind. In a room open to the sky a gust sends one or two thin streaks across the
+ruins. Some rise a little through a curl and run out, fading in three palette steps.
+Softer streaks drift downwind as their tails wind into the center of a small spiral.
+A gust can carry either style or both. The desert has its own wind.
 
 The grit. Every few seconds a little grit trickles from a crack in the underside of a
 block or a ledge, now and then a thin pour that heaps a small mound on the floor and
@@ -205,6 +204,10 @@ NEAR_CURL = 16
 # each of its three steps of fading in and out.
 BODY_PALER, END_PALER = (52, 50, 62), (26, 25, 31)
 FADE_STEP = 2
+WINDING_STREAK_CHANCE = 1 / 3
+WINDING_STREAK_GLIDE_TICKS, WINDING_STREAK_CURL_TICKS = 36, 22
+WINDING_STREAK_LIFETIME = WINDING_STREAK_GLIDE_TICKS + WINDING_STREAK_CURL_TICKS
+WINDING_STREAK_LENGTH, WINDING_STREAK_PALER = 35, (23, 25, 33)
 
 # The grit's colours, as RGB, each shown as the nearest of the room's palette.
 GRIT_PALE, GRIT_HEAD, GRIT_TAIL, GRIT_DIM = (173, 141, 141), (166, 131, 131), (135, 110, 110), (113, 87, 113)
@@ -1001,6 +1004,17 @@ class Streak:
     def gone(self):
         return self.head - self.length >= len(self.pixels)
 
+    def advance(self):
+        self.head += self.step()
+        self.shown += 1
+
+    @property
+    def offset(self):
+        return 0, 0
+
+    def visible_pixels(self):
+        return streak_pixels(self)
+
     def step(self):
         """How far its head runs this tick: slower about its curl."""
         begin, end = self.curl
@@ -1019,6 +1033,87 @@ class Streak:
     def showing(self):
         head = int(self.head)
         return range(max(0, head - self.length), min(head, len(self.pixels)))
+
+
+def winding_streak_path(x, y, travel, lean, radius, turn, *, horizontal=False):
+    """A gently waving run that settles into a tight curl."""
+    wave_height, wave_length = 2.1, 64
+    run = []
+    for step in range(4 * travel + 1):
+        along = step / 4
+        wave = wave_height * math.sin(math.tau * along / wave_length)
+        taper = min(1.0, (travel - along) / 18) ** 2
+        run.append((along, lean * along / travel + wave * taper))
+    curled = curl(travel, lean, radius, radius, turns=1.75)
+    pixels = clean_line(run + curled)
+    if horizontal:
+        path = [(x + along, y + turn * across) for along, across in pixels]
+    else:
+        path = [(x + turn * across, y - along) for along, across in pixels]
+    return path, len(clean_line(run)) - 1
+
+
+def winding_streak_bounds(path, turn, age):
+    length = WINDING_STREAK_LENGTH
+    curl_age = age - WINDING_STREAK_GLIDE_TICKS
+    if curl_age < 0:
+        head = turn * age // WINDING_STREAK_GLIDE_TICKS
+        return head - length, head
+    progress = curl_age / WINDING_STREAK_CURL_TICKS
+    if progress >= 1.0:
+        return len(path), len(path)
+    curl_length = len(path) - turn
+    head = turn + round(curl_length * min(1.0, progress * 1.5))
+    # The back of the line slows as it winds the last pixels into the center.
+    wound = 1.0 - (1.0 - progress) ** 1.25
+    tail = turn - length + round((length + curl_length) * wound)
+    return tail, head
+
+
+def winding_streak_pixels(path, turn, age, direction):
+    """Glide, then travel with the wind while winding into the spiral."""
+    tail, head = winding_streak_bounds(path, turn, age)
+    glow = min(1.0, age / 5)
+    drift = max(0, age - WINDING_STREAK_GLIDE_TICKS)
+    dx, dy = direction[0] * drift, direction[1] * drift
+    for index in range(max(0, tail), head):
+        if index < turn:
+            strength = glow * min(1.0, (index - tail + 1) / 5, (head - index) / 4)
+        else:
+            strength = 1.0 + 0.2 * min(1.0, (index - turn + 1) / 4)
+        if round(max(WINDING_STREAK_PALER) * strength) < 2:
+            continue
+        x, y = path[index]
+        yield x + dx, y + dy, tuple(round(amount * strength) for amount in WINDING_STREAK_PALER)
+
+
+@dataclass
+class WindingStreak:
+    """A moving stroke that gathers into the center of a spiral."""
+
+    pixels: list
+    turn: int
+    y: float
+    shown: int = 0
+    tangents: list | None = None
+
+    @property
+    def gone(self):
+        return self.shown >= WINDING_STREAK_LIFETIME
+
+    def advance(self):
+        self.shown += 1
+
+    @property
+    def offset(self):
+        return max(0, self.shown - WINDING_STREAK_GLIDE_TICKS), 0
+
+    def showing(self):
+        tail, head = winding_streak_bounds(self.pixels, self.turn, self.shown)
+        return range(max(0, tail), head)
+
+    def visible_pixels(self):
+        return winding_streak_pixels(self.pixels, self.turn, self.shown, (1, 0))
 
 
 def ribbon(x0, y0, rng):
@@ -1050,9 +1145,15 @@ def ribbon(x0, y0, rng):
     return path, (begin, end)
 
 
-def new_streak(rng, gust_y=None):
+def new_streak(rng, gust_y=None, *, winding=False):
     y0 = gust_y + rng.uniform(*SECOND_STREAK_BELOW) if gust_y is not None else rng.uniform(STREAK_TOP, STREAK_BOTTOM)
     x0 = rng.uniform(STREAK_LEFT, STREAK_RIGHT)
+    if winding:
+        pixels, turn = winding_streak_path(
+            round(x0), round(y0), rng.randint(*RUN_IN), rng.randint(-4, 4),
+            rng.uniform(2.55, 2.8), rng.choice((-1, 1)), horizontal=True,
+        )
+        return WindingStreak(pixels, turn, y0)
     pixels, bends = ribbon(x0, y0, rng)
     return Streak(pixels, bends, rng.randint(*STREAK_LENGTH), y0)
 
@@ -1761,8 +1862,10 @@ class RuinsAmbience:
                 continue
             if streak.tangents is None:
                 streak.tangents = tangents(streak.pixels)
+            dx, dy = streak.offset
             for i in showing:
-                px, py = streak.pixels[i]
+                x_at, y_at = streak.pixels[i]
+                px, py = x_at + dx, y_at + dy
                 if abs(px - x) >= best or abs(py - y) >= best:
                     continue
                 distance = math.hypot(px - x, py - y)
@@ -1924,14 +2027,13 @@ class RuinsAmbience:
         self.gust, self.gust_wait = GUST_TICKS, rng.randint(*TICKS_BETWEEN_GUSTS)
         gust_y = None
         for _ in range(rng.randint(*STREAKS_A_GUST)):
-            streak = new_streak(rng, gust_y)
+            streak = new_streak(rng, gust_y, winding=rng.random() < WINDING_STREAK_CHANCE)
             gust_y = streak.y
             self.streaks.append(streak)
 
     def advance_streaks(self):
         for streak in self.streaks:
-            streak.head += streak.step()
-            streak.shown += 1
+            streak.advance()
         self.streaks = [streak for streak in self.streaks if not streak.gone]
 
     def sky_pixels(self):
@@ -1962,7 +2064,7 @@ class RuinsAmbience:
         self.put_grit(canvas, self.grit_pixels())
         # The wind, behind what the foreground covers, paler than what it crosses.
         for streak in self.streaks:
-            for x, y, amount in streak_pixels(streak):
+            for x, y, amount in streak.visible_pixels():
                 if 0 <= x < WIDTH and 0 <= y < HEIGHT and not air.is_covered(x, y):
                     canvas[x, y] = air.paler_than(tuple(canvas[x, y][:3]), amount)
         self.put_grit(canvas, self.pebble_pixels())
@@ -2000,38 +2102,18 @@ def chasm_fall_pixels(tick, sand):
                 yield x, y - 2, colours[min(2, shade + 1)]
 
 
-def chasm_wisp_path(x, y, travel, lean, radius, turn, *, horizontal=False):
-    """A gently waving run that settles into a tight curl."""
-    wave_height, wave_length = 2.1, 64
-    run = []
-    for step in range(4 * travel + 1):
-        along = step / 4
-        wave = wave_height * math.sin(math.tau * along / wave_length)
-        taper = min(1.0, (travel - along) / 18) ** 2
-        run.append((along, lean * along / travel + wave * taper))
-    curled = curl(travel, lean, radius, radius, turns=1.75)
-    pixels = clean_line(run + curled)
-    if horizontal:
-        path = [(x + along, y + turn * across) for along, across in pixels]
-    else:
-        path = [(x + turn * across, y - along) for along, across in pixels]
-    return path, len(clean_line(run)) - 1
-
-
-CHASM_UPDRAFT_PATHS = tuple(chasm_wisp_path(*shape) for shape in (
+CHASM_UPDRAFT_PATHS = tuple(winding_streak_path(*shape) for shape in (
     (322, 350, 115, 4, 2.65, 1),
     (340, 355, 110, 5, 2.75, -1),
     (312, 349, 108, 3, 2.55, 1),
 ))
-CHASM_CROSSWIND_PATHS = tuple(chasm_wisp_path(*shape, horizontal=True) for shape in (
+CHASM_CROSSWIND_PATHS = tuple(winding_streak_path(*shape, horizontal=True) for shape in (
     (33, 218, 130, 4, 2.65, -1),
     (24, 219, 142, -3, 2.8, 1),
     (51, 225, 128, 3, 2.55, -1),
 ))
 CHASM_UPDRAFT_PERIOD, CHASM_UPDRAFT_PHASE = 52, 24
 CHASM_CROSSWIND_PERIOD, CHASM_CROSSWIND_PHASE = 63, 3
-CHASM_WISP_GLIDE_TICKS, CHASM_WISP_CURL_TICKS = 36, 22
-CHASM_WISP_PALER = (23, 25, 33)
 
 
 def chasm_updraft_pixels(tick):
@@ -2049,43 +2131,11 @@ def chasm_crosswind_pixels(tick):
 def chasm_wisp_pixels(tick, paths, period, phase, *, direction):
     """Keep the wind cadence independent of how long each curl takes."""
     cycle, age = divmod(tick + phase, period)
-    lifetime = CHASM_WISP_GLIDE_TICKS + CHASM_WISP_CURL_TICKS
-    if age + period < lifetime:
+    if age + period < WINDING_STREAK_LIFETIME:
         path, turn = paths[(cycle - 1) % len(paths)]
-        yield from chasm_wisp_frame(path, turn, age + period, direction)
+        yield from winding_streak_pixels(path, turn, age + period, direction)
     path, turn = paths[cycle % len(paths)]
-    yield from chasm_wisp_frame(path, turn, age, direction)
-
-
-def chasm_wisp_frame(path, turn, age, direction):
-    """Glide, then travel with the wind while winding into the spiral."""
-    length = 35
-    curl_age = age - CHASM_WISP_GLIDE_TICKS
-    if curl_age < 0:
-        head = turn * age // CHASM_WISP_GLIDE_TICKS
-        tail = head - length
-        glow = min(1.0, age / 5)
-    else:
-        progress = curl_age / CHASM_WISP_CURL_TICKS
-        if progress >= 1.0:
-            return
-        curl_length = len(path) - turn
-        head = turn + round(curl_length * min(1.0, progress * 1.5))
-        # The back of the line slows as it winds the last pixels into the center.
-        wound = 1.0 - (1.0 - progress) ** 1.25
-        tail = turn - length + round((length + curl_length) * wound)
-        glow = 1.0
-    drift = max(0, curl_age)
-    dx, dy = direction[0] * drift, direction[1] * drift
-    for index in range(max(0, tail), head):
-        if index < turn:
-            strength = glow * min(1.0, (index - tail + 1) / 5, (head - index) / 4)
-        else:
-            strength = 1.0 + 0.2 * min(1.0, (index - turn + 1) / 4)
-        if round(max(CHASM_WISP_PALER) * strength) < 2:
-            continue
-        x, y = path[index]
-        yield x + dx, y + dy, tuple(round(amount * strength) for amount in CHASM_WISP_PALER)
+    yield from winding_streak_pixels(path, turn, age, direction)
 
 
 def chasm_rising_sand_pixels(tick):
