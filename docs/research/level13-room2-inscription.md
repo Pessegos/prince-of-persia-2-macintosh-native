@@ -66,3 +66,9 @@ the port's real generator tables. The probe does not execute Macintosh
 sound synthesis, the full frame loop, generation constructors or a full
 duel. The port's existing offscreen-capacity safeguards and generation
 corridor model remain in place.
+
+The shared test suite caught a change to the port's approved ship-escape
+scene. An earlier guard still outside native room 19 would hold the
+reinforcement timer through the ship catch. The port retains its existing
+right-corridor spacing in that rooftop room so arriving guards take part
+in the cinematic stand-down.

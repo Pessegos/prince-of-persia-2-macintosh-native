@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import struct
 
 from pop2.coordinates import character_column_parts, native_room, scene_x
+from pop2.harbor import SHIP_ROOM
 
 # CODE:3 IsWall / IsObstacle / IsEmpty; ordinary rooftop actors only.
 WALL_TILES = frozenset((20, 2, 7, 25, 43))
@@ -158,6 +159,9 @@ class OpponentGenerationPoint:
             return False
         wall = first_wall_column(level, self.room, self.column, self.row,
                                  1 if self.column < 5 else -1)
+        # The port's ship escape keeps its staged dock guards. In that room
+        # preserve the approach's existing spacing while a runner is offscreen.
+        ship_approach = self.room == SHIP_ROOM and struct.unpack_from(">h", level, 0x2186)[0] == 5
         between = 0
         for guard in guards:
             if not guard.alive or abs(guard.row - player.row) > 1:
@@ -171,10 +175,15 @@ class OpponentGenerationPoint:
             if between >= self.max_between:
                 return False
             guard_column = character_column(guard.state.target_x)
-            # The blocking column is at or outside the entry point on its
-            # own side (6:3f68–3f80), mirrored for the right-hand point.
-            if (self.column < player_column and self.column >= guard_column
-                    or self.column > player_column and self.column <= guard_column):
+            if self.column < player_column:
+                blocks_entry = guard_column <= self.column
+            elif ship_approach:
+                blocks_entry = guard_column < self.column
+            else:
+                # In the normal right corridor 6:3f72–3f80 rejects a
+                # preceding guard at or beyond the right point.
+                blocks_entry = guard_column >= self.column
+            if blocks_entry:
                 return False
         return True
 
