@@ -2016,18 +2016,19 @@ def chasm_wisp_path(x, y, travel, lean, radius, turn, *, horizontal=False):
 
 
 CHASM_UPDRAFT_PATHS = tuple(chasm_wisp_path(*shape) for shape in (
-    (322, 350, 115, 4, 3.35, 1),
-    (340, 355, 110, 5, 3.45, -1),
-    (312, 349, 108, 3, 3.25, 1),
+    (322, 350, 115, 4, 2.65, 1),
+    (340, 355, 110, 5, 2.75, -1),
+    (312, 349, 108, 3, 2.55, 1),
 ))
 CHASM_CROSSWIND_PATHS = tuple(chasm_wisp_path(*shape, horizontal=True) for shape in (
-    (33, 218, 130, 4, 3.35, -1),
-    (24, 219, 142, -3, 3.5, 1),
-    (51, 225, 128, 3, 3.25, -1),
+    (33, 218, 130, 4, 2.65, -1),
+    (24, 219, 142, -3, 2.8, 1),
+    (51, 225, 128, 3, 2.55, -1),
 ))
 CHASM_UPDRAFT_PERIOD, CHASM_UPDRAFT_PHASE = 52, 24
 CHASM_CROSSWIND_PERIOD, CHASM_CROSSWIND_PHASE = 63, 3
-CHASM_WISP_GLIDE_TICKS, CHASM_WISP_CURL_TICKS = 36, 14
+CHASM_WISP_GLIDE_TICKS, CHASM_WISP_CURL_TICKS = 36, 12
+CHASM_WISP_HOLD_TICKS, CHASM_WISP_FADE_TICKS = 6, 5
 CHASM_WISP_PALER = (26, 28, 37)
 
 
@@ -2040,22 +2041,33 @@ def chasm_crosswind_pixels(tick):
 
 
 def chasm_wisp_pixels(tick, paths, period, phase):
-    """One faint line travels, then contracts into its curl."""
+    """Keep the wind cadence independent of how long each curl lingers."""
     cycle, age = divmod(tick + phase, period)
+    lifetime = (CHASM_WISP_GLIDE_TICKS + CHASM_WISP_CURL_TICKS
+                + CHASM_WISP_HOLD_TICKS + CHASM_WISP_FADE_TICKS)
+    if age + period < lifetime:
+        path, turn = paths[(cycle - 1) % len(paths)]
+        yield from chasm_wisp_frame(path, turn, age + period)
     path, turn = paths[cycle % len(paths)]
-    length = 27
+    yield from chasm_wisp_frame(path, turn, age)
+
+
+def chasm_wisp_frame(path, turn, age):
+    """Glide, gather the whole line into a curl, then hold and fade."""
+    length = 35
     if age < CHASM_WISP_GLIDE_TICKS:
         head = turn * age // CHASM_WISP_GLIDE_TICKS
         tail = head - length
         glow = min(1.0, age / 5)
     else:
-        progress = (age - CHASM_WISP_GLIDE_TICKS) / CHASM_WISP_CURL_TICKS
-        if progress >= 1:
+        curl_age = age - CHASM_WISP_GLIDE_TICKS
+        fade_age = max(0, curl_age - CHASM_WISP_CURL_TICKS - CHASM_WISP_HOLD_TICKS)
+        if fade_age >= CHASM_WISP_FADE_TICKS:
             return
-        head = turn + int((len(path) - turn) * min(1, progress * 1.35))
-        # The tail catches the head as it turns. By the end only the tight curl shows.
-        tail = turn - length + round((len(path) - turn + length) * progress ** 0.85)
-        glow = min(1.0, (1 - progress) * 3.2)
+        progress = min(1.0, curl_age / CHASM_WISP_CURL_TICKS)
+        head = turn + round((len(path) - turn) * progress)
+        tail = turn - length + round(length * progress ** 0.85)
+        glow = 1.0 - fade_age / CHASM_WISP_FADE_TICKS
     for index in range(max(0, tail), head):
         curl_glow = 1.0 + 0.2 * min(1.0, max(0.0, (index - turn + 1) / 4))
         strength = glow * curl_glow * min(1.0, (index - tail + 1) / 5, (head - index) / 4)

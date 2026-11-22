@@ -1374,27 +1374,28 @@ class EveryRuinsRoomTests(unittest.TestCase):
         for tick in range(90):
             self.assertLessEqual(len(list(ruins_ambience.chasm_rising_sand_pixels(tick))), 7)
 
-    def test_chasm_air_is_one_faint_wisp_that_rises_curls_and_dissolves(self):
+    def test_chasm_updraft_rises_as_a_faint_line_before_curling(self):
         period = ruins_ambience.CHASM_UPDRAFT_PERIOD
         phase = ruins_ambience.CHASM_UPDRAFT_PHASE
         self.assertLessEqual(period, 52)
-        lower = list(ruins_ambience.chasm_updraft_pixels(period - phase + 12))
-        higher = list(ruins_ambience.chasm_updraft_pixels(period - phase + 22))
+        lower = list(ruins_ambience.chasm_updraft_pixels(period - phase + 14))
+        higher = list(ruins_ambience.chasm_updraft_pixels(period - phase + 27))
         self.assertLess(max(y for _, y, _ in higher), min(y for _, y, _ in lower))
         for frame in (lower, higher):
-            self.assertGreaterEqual(len(frame), 26)
-            self.assertLessEqual(len(frame), 28)
+            self.assertGreaterEqual(len(frame), 34)
+            self.assertLessEqual(len(frame), 36)
             self.assertLessEqual(max(x for x, _, _ in frame) - min(x for x, _, _ in frame), 2)
             peak = max(max(amount) for _, _, amount in frame)
             self.assertGreaterEqual(peak, 36)
             self.assertLessEqual(peak, 39)
             self.assertLess(max(frame[0][2]), peak)
             self.assertLess(max(frame[-1][2]), peak)
-        for cycle, (path, turn) in enumerate(ruins_ambience.CHASM_UPDRAFT_PATHS, start=1):
+        for cycle, (path, turn) in enumerate(ruins_ambience.CHASM_UPDRAFT_PATHS, start=3):
             start = cycle * period - phase
-            visible = [bool(list(ruins_ambience.chasm_updraft_pixels(start + age))) for age in range(period)]
-            self.assertLessEqual(visible.count(False), 5)
-            self.assertFalse(visible[0] or visible[-1])
+            curl_pixels = set(path[turn:])
+            next_glide = list(ruins_ambience.chasm_updraft_pixels(start + period + 2))
+            self.assertTrue(any((x, y) in curl_pixels for x, y, _ in next_glide))
+            self.assertTrue(any((x, y) not in curl_pixels for x, y, _ in next_glide))
             self.assertGreater(turn, 90)
             self.assertTrue(all(first[1] >= second[1] for first, second in zip(path[:turn], path[1:turn])))
             curl = path[turn:]
@@ -1404,12 +1405,12 @@ class EveryRuinsRoomTests(unittest.TestCase):
     def test_chasm_wind_crosses_the_left_bank_and_curls_over_the_gap(self):
         period = ruins_ambience.CHASM_CROSSWIND_PERIOD
         phase = ruins_ambience.CHASM_CROSSWIND_PHASE
-        early = list(ruins_ambience.chasm_crosswind_pixels(period - phase + 12))
-        late = list(ruins_ambience.chasm_crosswind_pixels(period - phase + 22))
+        early = list(ruins_ambience.chasm_crosswind_pixels(period - phase + 14))
+        late = list(ruins_ambience.chasm_crosswind_pixels(period - phase + 27))
         self.assertLess(max(x for x, _, _ in early), min(x for x, _, _ in late))
         for frame in (early, late):
-            self.assertGreaterEqual(len(frame), 26)
-            self.assertLessEqual(len(frame), 28)
+            self.assertGreaterEqual(len(frame), 34)
+            self.assertLessEqual(len(frame), 36)
             self.assertTrue(all(210 <= y <= 228 for _, y, _ in frame))
         for cycle, (path, turn) in enumerate(ruins_ambience.CHASM_CROSSWIND_PATHS, start=3):
             self.assertTrue(all(first[0] <= second[0] for first, second in zip(path[:turn], path[1:turn])))
@@ -1419,7 +1420,7 @@ class EveryRuinsRoomTests(unittest.TestCase):
             end = (cycle + 1) * period - phase - 1
             self.assertEqual(list(ruins_ambience.chasm_crosswind_pixels(end)), [])
 
-    def test_each_chasm_wind_line_retracts_into_a_small_curl(self):
+    def test_each_chasm_wind_line_lingers_in_a_small_curl(self):
         sides = (
             (ruins_ambience.CHASM_UPDRAFT_PATHS, ruins_ambience.CHASM_UPDRAFT_PERIOD,
              ruins_ambience.CHASM_UPDRAFT_PHASE, ruins_ambience.chasm_updraft_pixels),
@@ -1432,16 +1433,20 @@ class EveryRuinsRoomTests(unittest.TestCase):
                 coil = set(path[turn:])
                 width = max(x for x, _ in coil) - min(x for x, _ in coil)
                 height = max(y for _, y in coil) - min(y for _, y in coil)
-                self.assertEqual(max(width, height), 6)
-                frames = [list(pixels(start + offset)) for offset in (0, 4, 8, 11, 13, 14)]
+                self.assertEqual(max(width, height), 5)
+                frames = [list(pixels(start + offset)) for offset in (0, 6, 9, 12)]
                 counts = list(map(len, frames))
                 self.assertTrue(all(first > second for first, second in zip(counts, counts[1:])))
                 self.assertTrue(any((x, y) not in coil for x, y, _ in frames[2]))
-                self.assertTrue({(x, y) for x, y, _ in frames[3]} <= coil)
-                curl_peak = max(max(amount) for _, _, amount in frames[3])
-                self.assertGreater(curl_peak, 22)
-                self.assertLess(max(max(amount) for _, _, amount in frames[4]), curl_peak)
-                self.assertFalse(frames[-1])
+                formed = frames[3]
+                self.assertTrue(formed)
+                self.assertTrue({(x, y) for x, y, _ in formed} <= coil)
+                for offset in range(13, 19):
+                    self.assertEqual([pixel for pixel in pixels(start + offset) if pixel[:2] in coil], formed)
+                fading = [pixel for pixel in pixels(start + 21) if pixel[:2] in coil]
+                self.assertEqual([pixel[:2] for pixel in fading], [pixel[:2] for pixel in formed])
+                self.assertLess(max(max(rgb) for _, _, rgb in fading), max(max(rgb) for _, _, rgb in formed))
+                self.assertFalse(any((x, y) in coil for x, y, _ in pixels(start + 23)))
 
     def test_no_random_shooting_star_over_the_desert(self):
         rng = random.Random(0)
