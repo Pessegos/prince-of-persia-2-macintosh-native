@@ -46,8 +46,8 @@ the Prince's steps, skids and landings, a loose floor landing, a gate or a door 
 down. They are the caves' own puffs, in the pale rose of the ruins' grit.
 
 The desert. One wind runs from the chasm along the dunes of level nine and up to the
-horse. Sand trickles off the ledges of the left cliff. Wisps of rising air carry a
-little sand on the right side of the gorge.
+horse. Sand trickles off the ledges of the left cliff as wisps descend beside it.
+Rising air carries a little sand on the right side of the gorge.
 The wind comes in stronger gusts, now and then two or
 three close together, then a lull, each its own strength, speed and stretch of the room,
 blowing harder and softer as it goes. Each runs along the crest of the near dune and blows a low spray of sand
@@ -2002,30 +2002,45 @@ def chasm_fall_pixels(tick, sand):
                 yield x, y - 2, colours[min(2, shade + 1)]
 
 
-def chasm_updraft_path(x, y, rise, lean, radius, turn):
-    """A mostly straight climb with a loose curl at the end."""
-    climb = [(step / 4, lean * step / (4 * rise)) for step in range(4 * rise + 1)]
+def chasm_wisp_path(x, y, travel, lean, radius, turn, direction):
+    """A mostly straight vertical path with a loose curl at the end."""
+    straight = [(step / 4, lean * step / (4 * travel)) for step in range(4 * travel + 1)]
     # Turn most of the way around and dissolve there, with no run beyond the curl.
-    curled = curl(rise, lean, radius, 1.6)[:540]
-    path = [(x + turn * across, y - along) for along, across in clean_line(climb + curled)]
-    return path, len(clean_line(climb)) - 1
+    curled = curl(travel, lean, radius, 1.6)[:540]
+    path = [(x + turn * across, y + direction * along) for along, across in clean_line(straight + curled)]
+    return path, len(clean_line(straight)) - 1
 
 
-CHASM_UPDRAFT_PATHS = tuple(chasm_updraft_path(*shape) for shape in (
+CHASM_UPDRAFT_PATHS = tuple(chasm_wisp_path(*shape, direction=-1) for shape in (
     (322, 350, 115, 4, 4.5, 1),
     (340, 355, 110, 5, 5.0, -1),
     (312, 349, 108, 3, 4.0, 1),
 ))
-CHASM_WISP_PERIOD, CHASM_WISP_PHASE = 58, 30
+CHASM_DOWNDRAFT_PATHS = tuple(chasm_wisp_path(*shape, direction=1) for shape in (
+    (155, 228, 102, 6, 4.0, 1),
+    (145, 239, 101, 5, 4.5, -1),
+    (158, 217, 110, 6, 4.2, 1),
+))
+CHASM_UPDRAFT_PERIOD, CHASM_UPDRAFT_PHASE = 52, 24
+CHASM_DOWNDRAFT_PERIOD, CHASM_DOWNDRAFT_PHASE = 63, 3
 CHASM_WISP_PALER = (24, 25, 34)
 
 
 def chasm_updraft_pixels(tick):
-    """A single faint line slides upward, curls and fades at the tip."""
-    cycle, age = divmod(tick + CHASM_WISP_PHASE, CHASM_WISP_PERIOD)
-    path, turn = CHASM_UPDRAFT_PATHS[cycle % len(CHASM_UPDRAFT_PATHS)]
-    straight = age * 3.4
-    head = int(min(turn, straight) + max(0, straight - turn) * 1.5 / 3.4)
+    return chasm_wisp_pixels(tick, CHASM_UPDRAFT_PATHS, CHASM_UPDRAFT_PERIOD, CHASM_UPDRAFT_PHASE)
+
+
+def chasm_downdraft_pixels(tick):
+    return chasm_wisp_pixels(tick, CHASM_DOWNDRAFT_PATHS, CHASM_DOWNDRAFT_PERIOD, CHASM_DOWNDRAFT_PHASE)
+
+
+def chasm_wisp_pixels(tick, paths, period, phase):
+    """One faint line travels, curls and fades away."""
+    cycle, age = divmod(tick + phase, period)
+    path, turn = paths[cycle % len(paths)]
+    straight_speed, curl_speed = 3.7, 1.65
+    straight = age * straight_speed
+    head = int(min(turn, straight) + max(0, straight - turn) * curl_speed / straight_speed)
     length = 17
     glow = min(1.0, age / 5, (len(path) + length - head) / 12)
     if glow < 0.15:
@@ -2429,6 +2444,7 @@ class DesertWind:
             if colour != behind:
                 canvas[x, y] = air.gentle(behind, colour)
         if air.chasm:
-            for x, y, amount in chasm_updraft_pixels(self.tick):
+            wisps = chain(chasm_updraft_pixels(self.tick), chasm_downdraft_pixels(self.tick))
+            for x, y, amount in wisps:
                 if 0 <= x < WIDTH and 0 <= y < HEIGHT and not air.is_covered(x, y):
                     canvas[x, y] = air.paler_than(tuple(canvas[x, y][:3]), amount)

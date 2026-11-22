@@ -1375,8 +1375,9 @@ class EveryRuinsRoomTests(unittest.TestCase):
             self.assertLessEqual(len(list(ruins_ambience.chasm_rising_sand_pixels(tick))), 7)
 
     def test_chasm_air_is_one_faint_wisp_that_rises_curls_and_dissolves(self):
-        period = ruins_ambience.CHASM_WISP_PERIOD
-        phase = ruins_ambience.CHASM_WISP_PHASE
+        period = ruins_ambience.CHASM_UPDRAFT_PERIOD
+        phase = ruins_ambience.CHASM_UPDRAFT_PHASE
+        self.assertLessEqual(period, 52)
         lower = list(ruins_ambience.chasm_updraft_pixels(period - phase + 12))
         higher = list(ruins_ambience.chasm_updraft_pixels(period - phase + 22))
         self.assertLess(max(y for _, y, _ in higher), min(y for _, y, _ in lower))
@@ -1391,13 +1392,26 @@ class EveryRuinsRoomTests(unittest.TestCase):
         for cycle, (path, turn) in enumerate(ruins_ambience.CHASM_UPDRAFT_PATHS, start=1):
             start = cycle * period - phase
             visible = [bool(list(ruins_ambience.chasm_updraft_pixels(start + age))) for age in range(period)]
-            self.assertLessEqual(visible.count(False), 8)
-            self.assertFalse(any(visible[-2:]))
+            self.assertLessEqual(visible.count(False), 5)
+            self.assertFalse(visible[0] or visible[-1])
             self.assertGreater(turn, 90)
             self.assertTrue(all(first[1] >= second[1] for first, second in zip(path[:turn], path[1:turn])))
             curl = path[turn:]
             self.assertGreater(max(x for x, _ in curl) - min(x for x, _ in curl), 3)
             self.assertTrue(any(first[1] < second[1] for first, second in zip(curl, curl[1:])))
+
+    def test_chasm_air_also_descends_on_the_left_and_curls_at_the_bottom(self):
+        start = ruins_ambience.CHASM_DOWNDRAFT_PERIOD - ruins_ambience.CHASM_DOWNDRAFT_PHASE
+        higher = list(ruins_ambience.chasm_downdraft_pixels(start + 12))
+        lower = list(ruins_ambience.chasm_downdraft_pixels(start + 22))
+        self.assertLess(max(y for _, y, _ in higher), min(y for _, y, _ in lower))
+        for frame in (higher, lower):
+            self.assertLessEqual(len(frame), 17)
+            self.assertTrue(all(136 <= x < 180 for x, _, _ in frame))
+        for path, turn in ruins_ambience.CHASM_DOWNDRAFT_PATHS:
+            self.assertTrue(all(first[1] <= second[1] for first, second in zip(path[:turn], path[1:turn])))
+            coil = path[turn:]
+            self.assertTrue(any(first[1] > second[1] for first, second in zip(coil, coil[1:])))
 
     def test_no_random_shooting_star_over_the_desert(self):
         rng = random.Random(0)
