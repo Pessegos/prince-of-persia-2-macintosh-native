@@ -548,7 +548,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         self.pause_started_at = self.next_animation_at if self.paused else None
         self.active_save_path = Path(path).absolute()
         self.cutscene_campaign_active = True
-        self.forget_cutscene_watch()
+        self.reset_cutscene_tracking()
         from pop2.cutscenes import CutsceneCollection
 
         self.cutscene_collection = CutsceneCollection.from_saved(saved['cutscenes'])
@@ -2914,7 +2914,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         self.cutscene_campaign_active = True
         self.active_save_path = None
         self.cutscene_collection = CutsceneCollection()
-        self.forget_cutscene_watch()
+        self.reset_cutscene_tracking()
         self.copy_verified = False
         self.copy_challenge = None
         if self.game.level.number != 1:

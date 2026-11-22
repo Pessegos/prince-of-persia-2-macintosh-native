@@ -50,8 +50,10 @@ opens. A new game starts with every chapter locked, the opening's three too
 chapters, and each of them unlocks as it begins: the first with the
 introduction, the title screen when it appears, the palace escape when it
 starts (the first version unlocked all three as the introduction began).
-Skipping the introduction unlocks the chapters it passes over, as a loaded save
-always has all three: a campaign is saved after its introduction. Unlocking
+Skipping the introduction unlocks the chapters it passes over. A loaded save
+always has all three, since a campaign is saved after its introduction. Chapters
+restored from a save are visible as soon as the viewer opens. Loading a save or
+starting a new game clears any reveals from the previous campaign. Unlocking
 each scene only once it had ended was tried and rejected: the happy ending,
 the last scene, would then appear only in the game that follows it. Chapters revealed
 together, one after another, share one sound.

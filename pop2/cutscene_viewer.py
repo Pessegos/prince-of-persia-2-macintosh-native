@@ -184,9 +184,10 @@ class CutsceneControls:
         if chapter is not None:
             self.watch_cutscene(chapter.key)
 
-    def forget_cutscene_watch(self):
-        """A load or a new game: the introduction playing belongs to the old campaign."""
+    def reset_cutscene_tracking(self):
+        """Drop the previous campaign's playing chapter and pending reveals."""
         self.cutscene_watch = None
+        self.cutscene_fresh = set()
 
     def update_cutscene_watch(self):
         """Unlock each of the opening's chapters that has begun; the ones a skip
@@ -239,7 +240,7 @@ class CutsceneControls:
                     pass  # The card and replay action provide the import error.
         self.update_cutscene_watch()
         fresh = getattr(self, 'cutscene_fresh', set())
-        # A new game or a load drops what the previous campaign had unlocked.
+        # Reveal only chapters present in the current collection.
         fresh &= self.cutscene_collection.seen
         if not developer and fresh:
             gallery.begin_reveal(index for index, chapter in enumerate(CHAPTERS) if chapter.key in fresh)

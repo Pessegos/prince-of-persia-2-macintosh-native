@@ -1632,10 +1632,43 @@ class ViewerSceneTests(unittest.TestCase):
                          sorted(OPENING_KEYS | {'voyage', 'discovery'}))
         scene.new_game()
         self.assertEqual(scene.cutscene_collection.seen, set())   # all locked until the introduction plays
+        self.assertEqual(scene.cutscene_fresh, set())
         scene.load_game_from(advanced)
         self.assertEqual(scene.cutscene_collection.seen, OPENING_KEYS | {'voyage', 'discovery'})
         scene.load_game_from(early)
         self.assertEqual(scene.cutscene_collection.seen, OPENING_KEYS | {'voyage'})
+
+    def test_loading_level_nine_does_not_reveal_the_previous_games_opening(self):
+        from pop2.save_game import capture, write_save
+
+        scene = self.scene
+        scene.load_level(9)
+        seen = OPENING_KEYS | {'voyage', 'discovery', 'carpet', 'vision'}
+        document = capture(scene.game)
+        for legacy in (False, True):
+            with self.subTest(legacy=legacy):
+                path = Path(self.directory.name) / f'level-nine-{legacy}.pop2save'
+                saved = document.copy()
+                if not legacy:
+                    saved['cutscenes'] = sorted(seen)
+                write_save(path, saved)
+
+                scene.new_game()
+                scene.start_intro()
+                scene.finish_intro()
+                self.assertEqual(scene.cutscene_fresh, OPENING_KEYS)
+                scene.load_game_from(path)
+                self.assertEqual(scene.game.level.number, 9)
+                gallery = self.open_viewer()
+                self.assertEqual(gallery.reveal, {})
+                self.assertIsNone(scene.cutscene_gallery_after_id)
+                self.assertEqual({chapter.key for index, chapter in enumerate(CHAPTERS)
+                                  if gallery.chapter_unlocked(index)}, seen)
+                scene.close_game_menu()
+
+        scene.start_temple_ride(lambda: None)
+        gallery = self.open_viewer()
+        self.assertEqual([CHAPTERS[index].key for index in gallery.reveal], ['horse'])
 
     def test_viewer_over_a_copy_challenge_pauses_on_focus_loss_and_resets_its_clock_on_return(self):
         scene = self.scene
