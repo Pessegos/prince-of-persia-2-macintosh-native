@@ -1355,7 +1355,7 @@ class EveryRuinsRoomTests(unittest.TestCase):
                 for kind in SHOOTERS:
                     self.assertIsNone(shooter_path(air, kind, rng), place)
 
-    def test_the_horse_arrival_star_fades_in_and_its_line_dissolves_before_the_sparks(self):
+    def test_the_horse_arrival_star_has_a_white_head_and_a_shallow_afterglow(self):
         air = self.rooms[9, ruins_ambience.HORSE_ROOM]
         shooter = ruins_ambience.horse_shooting_star()
         distance = int(shooter.kind.speed * (shooter.kind.ticks - 1))
@@ -1364,14 +1364,18 @@ class EveryRuinsRoomTests(unittest.TestCase):
         line = {shooter.at(step) for step in range(distance + 1)}
         self.assertTrue(all(air.in_sky(x, y) and not air.is_covered(x, y) for x, y in line))
 
-        head_light = []
-        for age in (0, 1, 3):
+        glow_pixels = []
+        for age in range(shooter.kind.ticks):
             shooter.age = age
-            head = shooter.at(age * shooter.kind.speed)
+            travelled = age * shooter.kind.speed
+            head = shooter.at(travelled)
             drawn = {(x, y): colour for x, y, colour in shooter_pixels(shooter)}
-            head_light.append(sum(drawn[head]))
-        self.assertLess(head_light[0], head_light[1])
-        self.assertLess(head_light[1], head_light[2])
+            self.assertEqual(drawn[head], shooter.kind.head)
+            if age > 0:
+                self.assertEqual(drawn[shooter.at(travelled - 3)], shooter.kind.head)
+            glow_pixels.append((head[0], head[1] - 1) in drawn)
+        self.assertFalse(glow_pixels[0])
+        self.assertTrue(glow_pixels[3])
 
         line_counts = []
         for age in (10, 15, 20, 22):
@@ -1383,12 +1387,12 @@ class EveryRuinsRoomTests(unittest.TestCase):
         self.assertGreater(line_counts[2], 0)
         self.assertEqual(line_counts[3], 0)
 
-        shooter.age = 17
+        shooter.age = 22
         pixels = {(x, y) for x, y, _ in shooter_pixels(shooter)}
-        fallen = {(x, y) for x, y in pixels
-                  if y > shooter.y + (x - shooter.x) * shooter.dy / shooter.dx + 8}
-        self.assertGreaterEqual(sum(air.in_sky(x, y) for x, y in fallen), 10)
-        self.assertTrue(any(not air.in_sky(x, y) for x, y in fallen))
+        self.assertGreaterEqual(sum(air.in_sky(x, y) for x, y in pixels), 6)
+        depths = [y - (shooter.y + (x - shooter.x) * shooter.dy / shooter.dx) for x, y in pixels]
+        self.assertGreater(max(depths), 4)
+        self.assertLessEqual(max(depths), 12)
 
         rgb = numpy.where(air.sky[..., None], DEEP, STONE).astype(numpy.uint8)
         frame = frame_of(rgb)

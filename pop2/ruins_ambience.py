@@ -878,7 +878,7 @@ def shooter_pixels(shooter):
 
 
 def horse_star_glow(tick):
-    """Build brightness at the start and let it burn down toward the end."""
+    """Build the glow around the white head, then let it burn down."""
     remaining = HORSE_STAR.ticks - 1 - tick
     return min(1.0, 0.18 + 0.28 * tick, 0.34 + 0.31 * remaining)
 
@@ -893,25 +893,26 @@ def horse_star_pixels(shooter):
         since = age - passed_at
         if since >= HORSE_LINE_TICKS:
             continue
-        glow = horse_star_glow(passed_at) * (1 - since / HORSE_LINE_TICKS) ** 1.35
+        glow = min(1.0, 0.45 + 0.24 * passed_at) * (1 - since / HORSE_LINE_TICKS) ** 1.35
         # The faint line loses individual pixels in a fixed pattern as it fades.
         if glow < 0.35 * ((step * 37 % 17 + 0.5) / 17):
             continue
         shade = max(0, shades - 1 - int(glow * shades))
         x, y = shooter.at(step)
-        yield x, y, kind.colours[shade]
+        colour = kind.head if age < kind.ticks and distance - step <= 6 else kind.colours[shade]
+        yield x, y, colour
         if glow >= 0.75 and since < 2:
             yield x, y + 1, kind.colours[shade + 1]
 
-    # Stagger the release, acceleration and fade so the sparks separate from the line.
+    # Keep the fall shallow in screen space so the sparks read as distant.
     for index, step in enumerate(range(5, distance + 1, 6)):
         fall = 1.5 * (age - step / kind.speed) - (3 + index * 5 % 8)
         life = 14 + index * 3 % 8
         if not 0 <= fall < life:
             continue
         x, y = shooter.at(step)
-        drift = round((index % 5 - 2) * fall / 10)
-        drop = 1 + round(0.22 * fall + (0.055 + 0.012 * (index % 4)) * fall ** 2)
+        drift = round((index % 5 - 2) * fall / 15)
+        drop = 1 + round(0.11 * fall + (0.012 + 0.0018 * (index % 4)) * fall ** 2)
         shade = int((fall / life) ** 1.65 * shades)
         yield x + drift, y + drop, kind.colours[shade]
         if shade < 3 and index % 3 == 0:
@@ -921,7 +922,7 @@ def horse_star_pixels(shooter):
         x, y = shooter.at(distance)
         glow = horse_star_glow(age)
         shade = max(0, shades - 1 - int(glow * shades))
-        yield x, y, kind.head if glow >= 0.9 else kind.colours[shade]
+        yield x, y, kind.head
         if glow >= 0.5:
             for ox, oy in STAR_CROSS:
                 yield x + ox, y + oy, kind.colours[shade + 1]
