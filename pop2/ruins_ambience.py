@@ -23,9 +23,9 @@ that bursts at the end and leaves its trail a moment. Over the desert of level n
 the sky has only a few stars, middling and bright. On the first visit to the horse's
 room, a large shooting star leaves a glowing line that sheds sparks.
 
-The wind. In a room open to the sky a gust sends one or two long, gently waving
-streaks across the ruins. Each drifts downwind as its tail winds into a small
-spiral. The desert has its own wind.
+The wind. In a room open to the sky one gust sends one or two waving streaks across
+the ruins. Each can roll briefly and run out or travel farther as it winds inward.
+Both styles use the same gusts. The desert has its own wind.
 
 The grit. Every few seconds a little grit trickles from a crack in the underside of a
 block or a ledge, now and then a thin pour that heaps a small mound on the floor and
@@ -192,6 +192,17 @@ SECOND_STREAK_BELOW = (16, 32)
 STREAK_TOP, STREAK_BOTTOM = 20, 300
 STREAK_LEFT, STREAK_RIGHT = -30, WIDTH - 260
 RUINS_STREAK_RUN = (175, 235)
+RUN_IN, RUN_OUT = (90, 140), (60, 110)
+WAVE, WAVE_LENGTH = (1.0, 2.5), (60, 90)
+CURL_RADIUS, CURL_RISE = (4.0, 4.5), 2.0
+STREAK_LENGTH = (40, 60)
+# Pixels of its path its head runs a tick, slower near its curl and slower still in it.
+STREAK_SPEED, NEAR_CURL_SPEED, CURL_SPEED = 8, 5, 3
+NEAR_CURL = 16
+# How much paler than what is behind it: its body, and its two ends; and the ticks of
+# each of its three steps of fading in and out.
+BODY_PALER, END_PALER = (52, 50, 62), (26, 25, 31)
+FADE_STEP = 2
 
 # The grit's colours, as RGB, each shown as the nearest of the room's palette.
 GRIT_PALE, GRIT_HEAD, GRIT_TAIL, GRIT_DIM = (173, 141, 141), (166, 131, 131), (135, 110, 110), (113, 87, 113)
@@ -959,16 +970,64 @@ def clean_line(points):
     return clean
 
 
-def curl(bx, by, radius):
-    """Start rightward from (bx, by) and spiral to the center."""
-    cx, cy = bx, by - radius
+def curl(bx, by, r0, rise, *, turns=1.0):
+    """Start rightward from (bx, by) and spiral inward as the radius shrinks by rise."""
+    cx, cy = bx, by - r0
     points, steps = [], 720
     for i in range(1, steps + 1):
         turn = i / steps
-        angle = -math.pi / 2 + 2 * math.pi * turn * 1.75
-        r = radius - radius * turn
+        angle = -math.pi / 2 + 2 * math.pi * turn * turns
+        r = r0 - rise * turn
         points.append((cx + r * math.cos(angle), cy - r * math.sin(angle)))
     return points
+
+
+@dataclass
+class Streak:
+    """A streak of wind: its path's pixels, where its curl begins and ends among them,
+    how many show at once, and how far its head has run."""
+
+    pixels: list
+    curl: tuple
+    length: int
+    y: float
+    head: float = 0.0
+    shown: int = 0
+    tangents: list | None = None
+
+    @property
+    def gone(self):
+        return self.head - self.length >= len(self.pixels)
+
+    def advance(self):
+        self.head += self.step()
+        self.shown += 1
+
+    @property
+    def offset(self):
+        return 0, 0
+
+    def visible_pixels(self):
+        return streak_pixels(self)
+
+    def step(self):
+        """How far its head runs this tick: slower about its curl."""
+        begin, end = self.curl
+        if begin - 2 <= self.head <= end + 2:
+            return CURL_SPEED
+        if begin - NEAR_CURL <= self.head <= end + NEAR_CURL:
+            return NEAR_CURL_SPEED
+        return STREAK_SPEED
+
+    def strength(self):
+        """How much of its paleness shows: a third, two thirds or all of it."""
+        left = (len(self.pixels) + self.length - self.head) / STREAK_SPEED
+        level = min(3, self.shown // FADE_STEP + 1, math.ceil(max(0.0, left) / FADE_STEP))
+        return max(1, level) / 3
+
+    def showing(self):
+        head = int(self.head)
+        return range(max(0, head - self.length), min(head, len(self.pixels)))
 
 
 @dataclass(frozen=True)
@@ -1000,7 +1059,7 @@ def winding_streak_path(x, y, travel, lean, radius, turn, *, horizontal=False):
         wave = wave_height * math.sin(math.tau * along / wave_length)
         taper = min(1.0, (travel - along) / 18) ** 2
         run.append((along, lean * along / travel + wave * taper))
-    curled = curl(travel, lean, radius)
+    curled = curl(travel, lean, radius, radius, turns=1.75)
     pixels = clean_line(run + curled)
     if horizontal:
         path = [(x + along, y + turn * across) for along, across in pixels]
@@ -1071,8 +1130,41 @@ class WindingStreak:
         return winding_streak_pixels(self.pixels, self.turn, self.shown, (1, 0), RUINS_STREAK_STYLE)
 
 
-def new_streak(rng, gust_y=None):
+def ribbon(x0, y0, rng):
+    """(pixels, (curl begin, curl end)) of a streak's path from (x0, y0)."""
+    run_in, run_out = rng.uniform(*RUN_IN), rng.uniform(*RUN_OUT)
+    wave, wave_length = rng.uniform(*WAVE), rng.uniform(*WAVE_LENGTH)
+    phase = rng.uniform(0, 2 * math.pi)
+    r0 = rng.uniform(*CURL_RADIUS)
+    points, x = [], 0.0
+    while x < run_in:
+        points.append((x0 + x, y0 + wave * math.sin(phase + 2 * math.pi * x / wave_length)))
+        x += 0.25
+    bx, by = points[-1]
+    run = len(points)
+    points += curl(bx, by, r0, CURL_RISE)
+    ex, ey = points[-1]
+    start = wave * math.sin(phase + 2 * math.pi * run_in / wave_length)
+    x = 0.25
+    while x < run_out:
+        points.append((ex + x, ey + wave * math.sin(phase + 2 * math.pi * (run_in + x) / wave_length) - start))
+        x += 0.25
+    path = clean_line(points)
+    # The pixels nearest where the curl begins and ends: cleaning may drop the very ones.
+    near = len(clean_line(points[:run]))
+    begin = min(range(max(0, near - 4), min(len(path), near + 4)),
+                key=lambda i: math.hypot(path[i][0] - bx, path[i][1] - by))
+    end = min(range(begin + 5, min(len(path), begin + 80)),
+              key=lambda i: math.hypot(path[i][0] - ex, path[i][1] - ey))
+    return path, (begin, end)
+
+
+def new_streak(rng, gust_y=None, *, winding=False):
     y0 = gust_y + rng.uniform(*SECOND_STREAK_BELOW) if gust_y is not None else rng.uniform(STREAK_TOP, STREAK_BOTTOM)
+    if not winding:
+        x0 = rng.uniform(STREAK_LEFT, STREAK_RIGHT)
+        pixels, bends = ribbon(x0, y0, rng)
+        return Streak(pixels, bends, rng.randint(*STREAK_LENGTH), y0)
     travel = rng.randint(*RUINS_STREAK_RUN)
     # Leave room for the spiral to travel after the long approach.
     right_edge = WIDTH - travel - RUINS_STREAK_STYLE.drift_at(RUINS_STREAK_STYLE.lifetime - 1) - 8
@@ -1082,6 +1174,17 @@ def new_streak(rng, gust_y=None):
         rng.choice((-1, 1)), horizontal=True,
     )
     return WindingStreak(pixels, turn, y0)
+
+
+def streak_pixels(streak):
+    """(x, y, how much paler) of what shows of a streak, its ends less pale."""
+    showing = streak.showing()
+    strength = streak.strength()
+    last = max(1, len(showing) - 1)
+    for i, index in enumerate(showing):
+        share = i / last
+        amount = END_PALER if share < 0.25 or share > 0.9 else BODY_PALER
+        yield (*streak.pixels[index], tuple(round(value * strength) for value in amount))
 
 
 @dataclass
@@ -1942,7 +2045,7 @@ class RuinsAmbience:
         self.gust, self.gust_wait = GUST_TICKS, rng.randint(*TICKS_BETWEEN_GUSTS)
         gust_y = None
         for _ in range(rng.randint(*STREAKS_A_GUST)):
-            streak = new_streak(rng, gust_y)
+            streak = new_streak(rng, gust_y, winding=rng.random() < 0.5)
             gust_y = streak.y
             self.streaks.append(streak)
 

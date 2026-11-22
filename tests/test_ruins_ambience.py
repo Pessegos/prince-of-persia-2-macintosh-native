@@ -18,11 +18,12 @@ from pop2.cavern_ambience import (
 from pop2.paths import ASSET_DIR
 from pop2 import ruins_ambience
 from pop2.ruins_ambience import (
-    BRIGHT, DESERT_ROOMS, DESERT_STAR_APART, DESERT_STAR_CLEAR, DESERT_STARS,
+    BODY_PALER, BRIGHT, CURL_RADIUS, CURL_RISE, CURL_SPEED, DESERT_ROOMS, DESERT_STAR_APART, DESERT_STAR_CLEAR, DESERT_STARS,
     DIM, DIP_TICKS, FAINT, FIREBALL, FIRST_SHOOTER, GOLD_BRIGHT, GRAZER, GRIT_HEAD, GUST_TICKS, HAZE_APART, HAZE_DIM,
     HAZE_MID, HEIGHT, MID, NORMAL, ROSE_BRIGHT, ROSE_MID, SECOND_STREAK_BELOW, SHOOTERS, STAR_APART, STAR_CLEAR, STARS_PER_SKY,
-    TICKS_BETWEEN_GUSTS, TICKS_BETWEEN_SHOOTERS, WIDTH, DesertWind, Dunes, RuinsAmbience, Shooter,
-    blueness, new_streak, paler, read_room, shooter_path, shooter_pixels, sky_mask,
+    STREAK_SPEED, TICKS_BETWEEN_GUSTS, TICKS_BETWEEN_SHOOTERS, WIDTH, DesertWind, Dunes, RuinsAmbience, Shooter,
+    blueness, new_streak,
+    paler, read_room, ribbon, shooter_path, shooter_pixels, sky_mask, streak_pixels,
 )
 
 RUINS_INSTALLED = (ASSET_DIR / 'ruins_level6.json').is_file()
@@ -762,9 +763,52 @@ class PuffTests(unittest.TestCase):
 
 
 class WindTests(unittest.TestCase):
-    def test_a_streak_rolls_into_a_small_spiral(self):
+    def test_a_streak_rolls_one_small_curl_that_comes_out_a_little_higher(self):
         for seed in range(40):
-            streak = new_streak(random.Random(seed))
+            pixels, (begin, end) = ribbon(20, 150, random.Random(seed))
+            curl = pixels[begin:end + 1]
+            xs, ys = [x for x, _ in curl], [y for _, y in curl]
+            self.assertLessEqual(max(xs) - min(xs), 2 * CURL_RADIUS[1] + 2, seed)
+            self.assertLessEqual(max(ys) - min(ys), 2 * CURL_RADIUS[1] + 2, seed)
+            self.assertLess(min(ys), pixels[begin][1] - 2 * CURL_RADIUS[0] + 3, seed)
+            self.assertIn(pixels[begin][1] - pixels[end][1], range(round(CURL_RISE) - 1, round(CURL_RISE) + 2), seed)
+
+    def test_it_slows_down_to_wind_its_curl(self):
+        streak = new_streak(random.Random(4))
+        begin, end = streak.curl
+        steps, in_curl = [], 0
+        while not streak.gone:
+            step = streak.step()
+            steps.append(step)
+            in_curl += begin <= streak.head <= end
+            streak.head += step
+        self.assertEqual(steps[0], STREAK_SPEED)
+        self.assertEqual(steps[-1], STREAK_SPEED)
+        self.assertIn(CURL_SPEED, steps)
+        # About eight ticks, two thirds of a second, to wind it.
+        self.assertGreaterEqual(in_curl, (end - begin) // CURL_SPEED)
+
+    def test_it_fades_in_and_out_a_third_at_a_time(self):
+        streak = new_streak(random.Random(6))
+        strengths = []
+        while not streak.gone:
+            strengths.append(streak.strength())
+            streak.head += streak.step()
+            streak.shown += 1
+        self.assertEqual(strengths[:5], [1 / 3, 1 / 3, 2 / 3, 2 / 3, 1])
+        self.assertEqual(strengths[-1], 1 / 3)
+        self.assertEqual(max(strengths), 1)
+        for a, b in zip(strengths, strengths[1:]):
+            self.assertLessEqual(abs(a - b), 1 / 3 + 1e-9)
+        streak.head, streak.shown = 0, 0
+        self.assertEqual({amount for *_, amount in streak_pixels(streak)} - {(0, 0, 0)}, set())
+        streak.head = 30
+        self.assertEqual({amount for *_, amount in streak_pixels(streak)},
+                         {tuple(round(value / 3) for value in BODY_PALER), (9, 8, 10)})
+
+    def test_a_winding_streak_rolls_into_a_small_spiral(self):
+        for seed in range(40):
+            streak = new_streak(random.Random(seed), winding=True)
             curl = streak.pixels[streak.turn:]
             width = max(x for x, _ in curl) - min(x for x, _ in curl)
             height = max(y for _, y in curl) - min(y for _, y in curl)
@@ -772,7 +816,7 @@ class WindTests(unittest.TestCase):
 
     def test_its_pixels_are_a_clean_line(self):
         for seed in range(20):
-            pixels = new_streak(random.Random(seed)).pixels
+            pixels = new_streak(random.Random(seed), winding=True).pixels
             for a, b in zip(pixels, pixels[1:]):
                 self.assertLessEqual(max(abs(a[0] - b[0]), abs(a[1] - b[1])), 1)
                 self.assertNotEqual(a, b)
@@ -781,7 +825,7 @@ class WindTests(unittest.TestCase):
 
     def test_the_wind_crosses_more_of_the_ruins_in_a_longer_faster_stroke(self):
         for seed in range(20):
-            streak = new_streak(random.Random(seed))
+            streak = new_streak(random.Random(seed), winding=True)
             streak.shown = 20
             first = list(streak.visible_pixels())
             streak.advance()
@@ -803,10 +847,10 @@ class WindTests(unittest.TestCase):
             ambience.advance()
             self.assertEqual(ambience.streaks, [])
 
-    def test_gusts_send_only_winding_streaks_at_the_existing_cadence(self):
+    def test_gusts_balance_both_streak_styles_at_the_existing_cadence(self):
         ambience = RuinsAmbience(4, replace(night(6, 4), stars=()), random.Random(2))
         gusts = []
-        for tick in range(6000):
+        for tick in range(60000):
             before = list(ambience.streaks)
             ambience.blow()
             new = [streak for streak in ambience.streaks if streak not in before]
@@ -815,7 +859,11 @@ class WindTests(unittest.TestCase):
             ambience.advance_streaks()
         self.assertGreater(len(gusts), 25)
         self.assertEqual({len(new) for _, new in gusts}, {1, 2})
-        self.assertEqual({type(streak) for _, new in gusts for streak in new}, {ruins_ambience.WindingStreak})
+        streaks = [streak for _, new in gusts for streak in new]
+        winding = sum(isinstance(streak, ruins_ambience.WindingStreak) for streak in streaks)
+        self.assertAlmostEqual(winding / len(streaks), 0.5, delta=0.06)
+        self.assertTrue(any({type(streak) for streak in new} == {ruins_ambience.Streak, ruins_ambience.WindingStreak}
+                            for _, new in gusts))
         for _, new in gusts:
             if len(new) == 2:
                 self.assertGreaterEqual(new[1].y - new[0].y, SECOND_STREAK_BELOW[0])
@@ -830,7 +878,7 @@ class WindTests(unittest.TestCase):
         covered[:, 180:200] = True
         air = replace(read_room(6, 11, rgb, PALETTE, covered), stars=())
         ambience = RuinsAmbience(11, air, random.Random(3))
-        streak = new_streak(random.Random(8))
+        streak = new_streak(random.Random(8), winding=True)
         streak.pixels = [(x, 100 + (x % 7 == 0)) for x in range(80, 300)]
         streak.turn, streak.shown = 210, 23
         ambience.streaks = [streak]
@@ -848,7 +896,7 @@ class WindTests(unittest.TestCase):
         rgb = picture((PURPLE, 70), (STONE, 60))
         air = replace(read_room(6, 4, rgb, PALETTE), stars=())
         ambience = RuinsAmbience(4, air, random.Random(3))
-        streak = new_streak(random.Random(8))
+        streak = new_streak(random.Random(8), winding=True)
         ambience.streaks = [streak]
         for _ in range(ruins_ambience.RUINS_STREAK_STYLE.lifetime - 1):
             ambience.advance_streaks()
@@ -1152,7 +1200,7 @@ class GritTests(unittest.TestCase):
 
     def test_a_streak_passing_carries_the_grains_along_its_way(self):
         ambience = self.ambience()
-        streak = new_streak(random.Random(1))
+        streak = new_streak(random.Random(1), winding=True)
         streak.pixels = [(x, 150) for x in range(100, 300)]
         streak.turn, streak.shown = 210, 23
         ambience.streaks = [streak]
