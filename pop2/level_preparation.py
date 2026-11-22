@@ -52,6 +52,7 @@ class NextLevel:
 
     def steps(self):
         from pop2.cavern_ambience import AMBIENCE_LEVELS, colours_of, room_air, room_torches
+        from pop2.ruins_ambience import RUINS_LEVELS
         from pop2.game_session import GameSession
 
         game = GameSession.load(self.resources, self.number, self.terrain_enabled, ruins_entry=self.ruins_entry)
@@ -81,6 +82,14 @@ class NextLevel:
             renderer.cached_room(drawn_key)
             yield
         if self.number not in AMBIENCE_LEVELS or not self.ambience():
+            if self.number in RUINS_LEVELS and self.ambience():
+                # The tables for the ruins' puffs of dust, one for each of the level's
+                # palettes (levels six and eight have two).
+                palettes = dict.fromkeys(tuple(sorted(room_assets(self.number, near)[2].items()))
+                                         for near in renderer.supported_rooms_cache())
+                for palette in palettes:
+                    colours_of(palette)
+                    yield
             return
         # The palette's tables, made once for the level.
         colours_of(tuple(sorted(room_assets(self.number, room)[2].items())))

@@ -11,7 +11,10 @@ from unittest.mock import patch
 import numpy
 from PIL import Image
 
-from pop2.cavern_ambience import SHUT_PUFF, SLAM_PUFF, STEP_PUFF, TILE_PUFF, Footing, Thud
+from pop2.cavern_ambience import (
+    GATE, LANDING_PUFF, MOST_LANDING_LOBES, SHUT_PUFF, SKID_PUFF, SLAM_PUFF, STEP_PUFF, TILE_PUFF, Footing, Thud,
+    door_coming_down, tile_landing,
+)
 from pop2.paths import ASSET_DIR
 from pop2 import ruins_ambience
 from pop2.ruins_ambience import (
@@ -484,6 +487,109 @@ class DrawingTests(unittest.TestCase):
         self.assertEqual(first.tobytes(), second.tobytes())
         self.assertEqual(ambience.twinkles, twinkles)
         self.assertEqual(ambience.shooter.age, 4)
+
+
+class PuffTests(unittest.TestCase):
+    """The caves' puffs from his feet and whatever comes down (the user, 2026-11-22), in
+    the dust of the ruins' stone."""
+
+    # A run to the left, as the caves' FeetTests play it: his body, the game's foot and
+    # the frame. A foot lands on frames 6, 9 and 12.
+    RUN = ((313, 341, 5), (306, 318, 6), (293, 316, 7), (283, 288, 8), (269, 270, 9), (262, 269, 10), (244, 268, 11),
+           (228, 230, 12), (226, 228, 13), (220, 226, 14), (200, 223, 7), (190, 195, 8), (176, 177, 9))
+    TURN = ((220, 226, 14), (200, 223, 7), (198, 197, 53), (197, 197, 54), (170, 167, 55), (164, 163, 56),
+            (139, 145, 57), (131, 138, 58))
+
+    def ambience(self, covered=None):
+        air = replace(read_room(6, 11, picture((DEEP, 100)), PALETTE, covered), stars=())
+        ambience = RuinsAmbience(11, air, random.Random(3))
+        ambience.quiet_wait = ambience.gust_wait = ambience.shooter_wait = 10 ** 6
+        return ambience
+
+    @staticmethod
+    def made(ambience, **inputs):
+        """The puffs this tick raised."""
+        ambience.advance(**inputs)
+        return [cloud for cloud in ambience.clouds if cloud.age.max() == 1]
+
+    def footing(self, x, foot, action=0):
+        return Footing(x, foot, 226, action != 12, False, 0, action)
+
+    def test_each_foot_raises_a_tuft_where_it_lands_and_a_skid_sprays_ahead(self):
+        ambience = self.ambience()
+        stepped = []
+        for step in self.RUN:
+            made = self.made(ambience, footing=self.footing(*step))
+            if made:
+                stepped.append(step[2])
+                self.assertEqual([cloud.kind for cloud in made], [STEP_PUFF])
+        self.assertEqual(stepped, [6, 9, 12, 9])
+        skids = [step[2] for step in self.TURN
+                 if any(cloud.kind is SKID_PUFF for cloud in self.made(ambience, footing=self.footing(*step)))]
+        self.assertEqual(skids, [55, 57])
+
+    def test_a_landing_raises_more_the_further_he_fell(self):
+        ambience = self.ambience()
+        self.made(ambience, footing=Footing(200, 200, 226, True, True, 36))
+        made = self.made(ambience, footing=Footing(205, 200, 226, True, False))
+        self.assertEqual(len(made), 1)
+        self.assertEqual(len(made[0].x), 2 * MOST_LANDING_LOBES)
+        self.assertEqual(made[0].kind.size, LANDING_PUFF.size)
+
+    def test_a_tile_and_a_gate_coming_down_raise_theirs(self):
+        ambience = self.ambience()
+        tile, = self.made(ambience, thuds=[tile_landing(14)])
+        self.assertIs(tile.kind, TILE_PUFF)
+        gate, = self.made(ambience, thuds=[door_coming_down(GATE, 17, True)])
+        self.assertIs(gate.kind, SLAM_PUFF)
+        # None in front of the slab that came down: it is behind it.
+        self.assertTrue(gate.hidden.any())
+
+    def test_they_thin_away(self):
+        ambience = self.ambience()
+        self.made(ambience, thuds=[tile_landing(14)])
+        for _ in range(TILE_PUFF.life[1] + 1):
+            ambience.advance()
+        self.assertEqual(ambience.clouds, [])
+
+    def landed(self, covered=None, rgb=None):
+        ambience = self.ambience(covered)
+        self.made(ambience, footing=Footing(200, 200, 226, True, True, 36))
+        self.made(ambience, footing=Footing(205, 200, 226, True, False))
+        for _ in range(3):
+            ambience.advance()
+        rgb = picture((DEEP, 100)) if rgb is None else rgb
+        frame = ambience.draw(frame_of(rgb))
+        return rgb, numpy.asarray(frame)
+
+    def test_over_a_speckled_floor_it_is_flat_lumps_not_speckles(self):
+        # Taken pixel by pixel, the puff came out as speckles again on the ruins' floors.
+        rgb = picture((DEEP, 100))
+        rgb[100:][(numpy.indices((HEIGHT - 100, WIDTH)).sum(axis=0) % 2) == 1] = SAND
+        rgb, after = self.landed(rgb=rgb)
+        changed = (after[..., :3] != rgb).any(axis=2)
+        self.assertGreater(changed.sum(), 40)
+        ys, xs = numpy.nonzero(changed[:, :-1] & changed[:, 1:])
+        same = (after[ys, xs, :3] == after[ys, xs + 1, :3]).all(axis=1)
+        self.assertGreater(same.mean(), 0.7)
+
+    def test_its_pixels_are_the_palette_s_paler_than_the_floor_and_low_on_it(self):
+        rgb, after = self.landed()
+        changed = (after[..., :3] != rgb).any(axis=2)
+        self.assertTrue(changed.any())
+        ys, xs = numpy.nonzero(changed)
+        self.assertTrue(226 - LANDING_PUFF.height <= ys.min() and ys.max() < 226 + 12)
+        self.assertTrue(150 < xs.min() and xs.max() < 250)
+        self.assertTrue((after[changed][:, :3].astype(int).sum(axis=1) > sum(STONE)).all())
+        self.assertLessEqual({tuple(value) for value in after.reshape(-1, 4)}, set(PALETTE.values()))
+
+    def test_none_over_what_the_foreground_covers(self):
+        covered = numpy.zeros((HEIGHT, WIDTH), dtype=bool)
+        covered[:, :200] = True
+        rgb, after = self.landed(covered)
+        changed = (after[..., :3] != rgb).any(axis=2)
+        self.assertTrue(changed[:, 200:].any())
+        self.assertFalse(changed[:, :200].any())
 
 
 class WindTests(unittest.TestCase):
@@ -1119,6 +1225,39 @@ class RealSceneTests(unittest.TestCase):
         self.assertEqual(off.pop('shaken'), 0)
         self.assertGreaterEqual(on.pop('shaken'), 3)
         self.assertEqual(off, on)
+
+    def run_along(self, enabled):
+        from tools.audit_temple_routes import Harness, press
+
+        random.seed(71)
+        harness = Harness(7, peaceful=True, draw=True)
+        try:
+            scene = harness.scene
+            scene.audio = None
+            scene.cave_ambience_enabled = enabled
+            scene.jump_to_room(4, row=1, x=250, facing=1)
+            harness.tick(12)
+            press(harness, 'R', True)
+            puffs = 0
+            for _ in range(14):
+                harness.tick()
+                ambience = scene.level_renderer.ambience
+                if ambience is not None:
+                    puffs += sum(cloud.age.max() == 1 for cloud in ambience.clouds)
+            press(harness, 'R', False)
+            harness.tick(12)
+            state = scene.sequence_state
+            return dict(random=random.getstate(), room=scene.room_id, x=scene.player_x, action=scene.action,
+                        sequence=state.sequence_id, y=state.current_y, puffs=puffs)
+        finally:
+            harness.close()
+
+    def test_his_steps_raise_puffs_and_change_no_game_state(self):
+        off, on = self.run_along(False), self.run_along(True)
+        self.assertEqual(off.pop('puffs'), 0)
+        self.assertGreaterEqual(on.pop('puffs'), 2)
+        self.assertEqual(off, on)
+        self.assertGreater(on['x'], 300)
 
     def walk_the_desert(self, enabled):
         from tools.audit_temple_routes import Harness, press

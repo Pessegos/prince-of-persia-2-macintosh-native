@@ -2,7 +2,8 @@
 
 A port improvement, drawn with the "Cave ambience" menu item like the caves'
 (pop2.cavern_ambience) but made of the ruins' own things: the user did not want the
-caves' dust and drops again here. Nothing comes from the original game and nothing
+caves' floating dust and drops again here, only, later, the puffs of dust their feet,
+tiles and gates raise (2026-11-22). Nothing comes from the original game and nothing
 touches it. The effect is drawn on the frame, behind the actors, and reads the room
 only. Its random numbers come from a private generator, so turning it on cannot
 change an opponent, a route or a test.
@@ -38,6 +39,10 @@ on the Prince bounces off his head and shoulders, and a streak of wind passing c
 the grains along its way. Over pale stone the grit is a step darker so that it shows.
 The paintings (the start room, the throne room, the horse and the desert) shed none.
 
+The puffs. Whatever comes down knocks up a puff of dust from the floor, as in the caves:
+the Prince's steps, skids and landings, a loose floor landing, a gate or a door coming
+down. They are the caves' own puffs, in the pale rose of the ruins' grit.
+
 The desert. Over the dunes of level nine the wind comes in gusts, every six to eight
 seconds or so. Each runs along the crest of the near dune and blows a low spray of sand
 off it, sweeps loose sand up off the plain, runs streams of sand along the ground, hits
@@ -56,8 +61,9 @@ import numpy
 from PIL import Image
 
 from pop2.cavern_ambience import (
-    EMPTY_TILES, FLOOR_STRIP, LANDING_DEPTH, SHUT_PUFF, SLAM_PUFF, TILE_HEIGHT, TILE_PUFF, TILE_WIDTH,
-    TIP_LUMINANCE, Fleck, floor_y, landing, open_air,
+    CLOUD_CRUMBLE, CLOUD_PALER, CLOUD_STEPS, EMPTY_TILES, FLOOR_STRIP, LANDING_DEPTH, MOST_CLOUDS, SHUT_PUFF,
+    SLAM_PUFF, TILE_HEIGHT, TILE_PUFF, TILE_WIDTH, TIP_LUMINANCE, Cloud, Fleck, colours_of, floor_y, footfalls,
+    landing, open_air,
 )
 
 WIDTH, HEIGHT = 510, 365
@@ -184,6 +190,12 @@ FADE_STEP = 2
 
 # The grit's colours, as RGB, each shown as the nearest of the room's palette.
 GRIT_PALE, GRIT_HEAD, GRIT_TAIL, GRIT_DIM = (173, 141, 141), (166, 131, 131), (135, 110, 110), (113, 87, 113)
+# The puffs' steps, thinnest first, as the caves' (CLOUD_SHADES): the colour, and how
+# much of what is behind it the step hides at full strength. The ruins' warm light
+# colours, the grit's pale rose; never lit by a torch, as nothing here is.
+PUFF_SHADES = (((160, 127, 127), 0.5), (GRIT_HEAD, 0.75), (GRIT_PALE, 1.0))
+# How far round a puff's pixel what is behind it is taken from (a square of 5).
+PUFF_BEHIND = 2
 PEBBLE_DARK = (82, 62, 86)
 GRIT_COLOURS = (GRIT_PALE, GRIT_HEAD, GRIT_TAIL, GRIT_DIM, PEBBLE_DARK)
 # Where grit comes from: the underside of stone this many pixels thick, with this much
@@ -420,6 +432,20 @@ def place_desert_stars(sky, rng):
     return stars
 
 
+def around(frame, box, radius):
+    """[y, x, RGB] of the box of the frame, each pixel the mean of the square of pixels
+    radius round it (the frame's edge pixels carried on past it)."""
+    left, top, right, bottom = box
+    near = (max(0, left - radius), max(0, top - radius), min(WIDTH, right + radius), min(HEIGHT, bottom + radius))
+    rgb = numpy.asarray(frame.crop(near).convert('RGB'), dtype=numpy.int64)
+    rgb = numpy.pad(rgb, ((near[1] - top + radius, bottom + radius - near[3]),
+                          (near[0] - left + radius, right + radius - near[2]), (0, 0)), mode='edge')
+    sums = numpy.pad(rgb.cumsum(0).cumsum(1), ((1, 0), (1, 0), (0, 0)))
+    side = 2 * radius + 1
+    total = sums[side:, side:] - sums[:-side, side:] - sums[side:, :-side] + sums[:-side, :-side]
+    return (total // (side * side)).astype(numpy.int32)
+
+
 def palette_rgb(palette):
     return numpy.array(sorted({tuple(colour[:3]) for colour in palette.values()}), dtype=numpy.int64)
 
@@ -459,6 +485,8 @@ class RuinsAir:
     dunes: object = None
     # {(RGB behind, RGB drawn): RGBA} of the gentler sand, filled as it is wanted.
     gentler: dict = field(default_factory=dict)
+    # The room's palette as the caves key their tables (colours_of), for the puffs.
+    palette_key: tuple = ()
 
     def in_sky(self, x, y):
         return 0 <= x < WIDTH and 0 <= y < HEIGHT and bool(self.sky[y, x])
@@ -678,7 +706,8 @@ def read_room(level_number, room, rgb, palette, covered=None, terrain=None, pain
         lines = ceilings(air, clear, stone, terrain, room)
     return RuinsAir(sky, blue, tuple(stars), nearest_colours(palette, INK_COLOURS), desert,
                     windy=open_sky >= OPEN_SKY and not desert, covered=covered, palette=palette_rgb(palette),
-                    grit=grit, ceilings=lines, luminance=luminance, dunes=read_dunes(sand) if desert else None)
+                    grit=grit, ceilings=lines, luminance=luminance, dunes=read_dunes(sand) if desert else None,
+                    palette_key=tuple(sorted(palette.items())))
 
 
 def ruins_air(level_number, room, art, terrain=None, raised=None):
@@ -1065,6 +1094,8 @@ class RuinsAmbience:
     streams: list = field(default_factory=list)
     devil: Devil | None = None
     devil_wait: int = 0
+    # The puffs of dust from the floor.
+    clouds: list = field(default_factory=list)
     tick: int = 0
 
     def __post_init__(self):
@@ -1084,7 +1115,9 @@ class RuinsAmbience:
         self.tick += 1
         self.twinkle()
         self.advance_shooter()
+        last = self.footing
         blows = self.hits(footing, thuds, shakes)
+        self.puff(last, footing, thuds)
         self.advance_flecks()
         # One blow in a place a tick: a stamp on landing is one shake, not two.
         done = []
@@ -1099,8 +1132,49 @@ class RuinsAmbience:
         self.advance_pebbles()
         self.advance_bits()
         self.advance_streaks()
+        self.advance_clouds()
         if self.air.dunes is not None:
             self.advance_desert()
+
+    # The puffs
+
+    def puff(self, last, footing, thuds):
+        """The puffs his feet and whatever came down raise this tick."""
+        raised = list(thuds)
+        if last is not None and footing is not None:
+            raised += footfalls(last, footing)
+        for thud in raised:
+            cloud = Cloud(thud, self.rng)
+            # Off the side of the screen there is nothing to show.
+            if len(self.clouds) < MOST_CLOUDS and cloud.right - cloud.left >= 3 and cloud.bottom - cloud.top >= 3:
+                self.clouds.append(cloud)
+
+    def advance_clouds(self):
+        for cloud in self.clouds:
+            cloud.advance()
+        self.clouds = [cloud for cloud in self.clouds if len(cloud.x)]
+
+    def draw_cloud(self, frame, cloud, colours):
+        """A few hard shades over what is behind it, each pixel landing on the palette.
+        Unlike the caves', each step is worked out from what is behind it a few pixels
+        round, not from the pixel itself: over the speckled floors of the ruins the
+        pixel's own colour left the puff as speckles again, which hid it."""
+        box = cloud.left, cloud.top, cloud.right, cloud.bottom
+        pixels = numpy.array(frame.crop(box))
+        shown = pixels[..., :3].astype(numpy.int32)
+        steps = numpy.digitize(cloud.thickness() + cloud.grain * CLOUD_CRUMBLE, CLOUD_STEPS)
+        amount = cloud.kind.most * numpy.array((0, *(share for _, share in PUFF_SHADES)))[steps]
+        if self.air.covered is not None:
+            amount[self.air.covered[cloud.top:cloud.bottom, cloud.left:cloud.right]] = 0
+        if cloud.hidden is not None:
+            amount[cloud.hidden] = 0
+        behind = around(frame, box, PUFF_BEHIND)
+        shades = numpy.array([(0, 0, 0)] + [colour for colour, _ in PUFF_SHADES], dtype=numpy.int32)
+        paler = numpy.maximum(shades[steps], behind + CLOUD_PALER)
+        wanted = (behind + (paler - behind) * amount[..., None]).clip(0, 255).astype(numpy.int32)
+        flat = colours.cube_colours[(wanted[..., 0] >> 3) << 10 | (wanted[..., 1] >> 3) << 5 | wanted[..., 2] >> 3]
+        pixels[..., :3] = numpy.where((amount > 0)[..., None], flat, shown)
+        frame.paste(Image.fromarray(pixels), box[:2])
 
     # The grit
 
@@ -1863,6 +1937,11 @@ class RuinsAmbience:
             if air.in_sky(x, y) and ((x, y) in drawn or is_sky(canvas[x, y])):
                 canvas[x, y] = inks[colour]
                 drawn.add((x, y))
+        if self.clouds:
+            colours = colours_of(air.palette_key)
+            for cloud in self.clouds:
+                self.draw_cloud(frame, cloud, colours)
+            canvas = frame.load()
         self.put_grit(canvas, self.grit_pixels())
         # The wind, behind what the foreground covers, paler than what it crosses.
         for streak in self.streaks:

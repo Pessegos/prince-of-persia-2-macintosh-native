@@ -919,6 +919,29 @@ class Thud:
     forward: bool = False
 
 
+def foot_down(footing):
+    return footing.action != FOOT_NOT_DOWN_YET and (footing.down or footing.action == FOOT_DOWN_UNMARKED)
+
+
+def footfalls(last, footing):
+    """[Thud] of the dust his feet raise this tick: a landing, a skid or a step."""
+    moved = footing.x - last.x
+    if last.falling and not footing.falling:
+        lobes = min(MOST_LANDING_LOBES, LANDING_PUFF.lobes + last.speed // LANDING_FALL)
+        return [Thud(footing.foot - 3, footing.foot + 3, footing.floor, footing.floor,
+                     replace(LANDING_PUFF, lobes=lobes))]
+    if footing.action in SKID_FRAMES and footing.floor == last.floor and abs(moved) >= STEP_SPEED:
+        ahead = 1 if moved > 0 else -1
+        return [Thud(footing.foot - 1, footing.foot + 1, footing.floor, footing.floor, SKID_PUFF, only=ahead)]
+    if foot_down(footing) and footing.floor == last.floor and abs(moved) >= STEP_SPEED:
+        stride = footing.foot - last.foot
+        if abs(stride) >= STEP_STRIDE and stride * moved > 0:
+            behind = -1 if moved > 0 else 1
+            heel = footing.foot + behind * STEP_HEEL
+            return [Thud(heel - 1, heel + 1, footing.floor, footing.floor, STEP_PUFF, only=behind)]
+    return []
+
+
 def door_coming_down(kind, cell, slammed):
     row, column = cell // 10, cell % 10
     floor = floor_y(row)
@@ -1349,32 +1372,8 @@ class CavernAmbience:
         # There is no dust on the lava.
         if surface_under(self.air.pools, footing.foot) is not None:
             return
-        if last.falling and not footing.falling:
-            self.land_on(footing, last.speed)
-        elif footing.action in SKID_FRAMES and footing.floor == last.floor and abs(moved) >= STEP_SPEED:
-            self.skid(footing, moved)
-        elif (self.foot_down(footing) and footing.floor == last.floor and abs(moved) >= STEP_SPEED):
-            stride = footing.foot - last.foot
-            if abs(stride) >= STEP_STRIDE and stride * moved > 0:
-                self.step_on(footing, moved)
-
-    @staticmethod
-    def foot_down(footing):
-        return footing.action != FOOT_NOT_DOWN_YET and (footing.down or footing.action == FOOT_DOWN_UNMARKED)
-
-    def step_on(self, footing, moved):
-        behind = -1 if moved > 0 else 1
-        heel = footing.foot + behind * STEP_HEEL
-        self.thud(Thud(heel - 1, heel + 1, footing.floor, footing.floor, STEP_PUFF, only=behind))
-
-    def skid(self, footing, moved):
-        ahead = 1 if moved > 0 else -1
-        self.thud(Thud(footing.foot - 1, footing.foot + 1, footing.floor, footing.floor, SKID_PUFF, only=ahead))
-
-    def land_on(self, footing, speed):
-        lobes = min(MOST_LANDING_LOBES, LANDING_PUFF.lobes + speed // LANDING_FALL)
-        self.thud(Thud(footing.foot - 3, footing.foot + 3, footing.floor, footing.floor,
-                       replace(LANDING_PUFF, lobes=lobes)))
+        for thud in footfalls(last, footing):
+            self.thud(thud)
 
     def thud(self, thud):
         """A puff of dust from the floor. There is none on the lava."""
