@@ -1234,7 +1234,7 @@ class RendererTests(unittest.TestCase):
             before_first_tick = renderer.ambient_layer(scenery.copy(), 1)
             self.assertNotEqual(before_first_tick.tobytes(), scenery.tobytes())
             wind = renderer.desert_wind
-            self.assertEqual(wind.width, 6 * WIDTH)
+            self.assertEqual(wind.width, len(DESERT_ROOMS) * WIDTH)
             tick = wind.tick
             gust = steady_gust(tick, start=4 * WIDTH)
             wind.desert_gusts = [gust]
@@ -1296,11 +1296,11 @@ class EveryRuinsRoomTests(unittest.TestCase):
             if not air.desert and air.sky.mean() > 0.1:
                 self.assertIsNotNone(shooter_path(air, FAINT, rng), place)
 
-    def test_the_wind_blows_in_every_room_open_to_the_sky_but_the_desert(self):
+    def test_the_horizontal_wind_blows_in_open_ruins_outside_the_desert_and_chasm(self):
         windy = {place for place, air in self.rooms.items() if air.windy}
         self.assertEqual(windy, {(6, room) for room in (1, 4, 7, 8, 11, 12, 14, 20, 22)}
                          | {(7, room) for room in (13, 15, 16, 18, 19, 24, 25, 26, 27)}
-                         | {(8, 12)} | {(9, room) for room in (3, 4, 5, 7, 15)})
+                         | {(8, 12)} | {(9, room) for room in (3, 4, 5, 7)})
 
     def test_grit_comes_from_cracks_in_the_undersides_of_stone(self):
         from pop2.caverns import customized_rooms
@@ -1347,6 +1347,27 @@ class EveryRuinsRoomTests(unittest.TestCase):
         self.assertFalse(horse.sand[:200].any())
         self.assertFalse(horse.sand[:310, 268:370].any())
         self.assertTrue(horse.open_sand[280:330, :80].any())
+
+    def test_chasm_has_two_sandy_banks_and_opposing_air_currents(self):
+        air = self.rooms[9, ruins_ambience.CHASM_ROOM]
+        self.assertTrue(air.chasm)
+        self.assertFalse(air.windy)
+        sand = air.dunes.sand
+        self.assertTrue(sand[225:248, :125].any())
+        self.assertTrue(sand[230:285, 450:].any())
+        self.assertFalse(sand[:, 136:345].any())
+        self.assertFalse((air.dunes.crest >= 0).any())
+
+        first = next(ruins_ambience.chasm_fall_pixels(8, sand))
+        later = next(ruins_ambience.chasm_fall_pixels(18, sand))
+        self.assertGreater(later[1], first[1])
+        self.assertLess(later[0], 165)
+        lower = next(ruins_ambience.chasm_updraft_pixels(12))
+        higher = next(ruins_ambience.chasm_updraft_pixels(32))
+        rim = next(ruins_ambience.chasm_updraft_pixels(37))
+        self.assertGreater(lower[1], higher[1])
+        self.assertGreater(higher[1], rim[1])
+        self.assertGreater(rim[0], higher[0])
 
     def test_no_random_shooting_star_over_the_desert(self):
         rng = random.Random(0)
@@ -1556,11 +1577,12 @@ class RealSceneTests(unittest.TestCase):
                 scene = harness.scene
                 scene.audio = None
                 scene.cave_ambience_enabled = True
-                scene.jump_to_room(14, row=2, x=28, facing=1)
+                scene.jump_to_room(ruins_ambience.CHASM_ROOM, row=2, x=435, facing=1)
                 press(harness, 'R', True)
                 visited = []
                 wind = scene.level_renderer.desert_wind
                 self.assertIsNotNone(wind)
+                self.assertEqual(wind.devil_room_count, 6)
 
                 def changed_sand():
                     room = scene.room_id

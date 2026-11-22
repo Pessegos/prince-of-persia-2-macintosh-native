@@ -45,7 +45,9 @@ The puffs. Whatever comes down knocks up a puff of dust from the floor, as in th
 the Prince's steps, skids and landings, a loose floor landing, a gate or a door coming
 down. They are the caves' own puffs, in the pale rose of the ruins' grit.
 
-The desert. One wind runs along the dunes of level nine and up to the horse.
+The desert. One wind runs from the chasm along the dunes of level nine and up to the
+horse. Sand trickles over the left cliff and a rising current follows the right wall,
+turning out over the sand bank.
 The wind comes in stronger gusts, now and then two or
 three close together, then a lull, each its own strength, speed and stretch of the room,
 blowing harder and softer as it goes. Each runs along the crest of the near dune and blows a low spray of sand
@@ -58,6 +60,7 @@ a little gentler than the sand's own colours, and none of it blows over the blue
 """
 
 from collections import deque
+from itertools import chain
 from dataclasses import dataclass, field
 import math
 import random
@@ -76,7 +79,8 @@ WIDTH, HEIGHT = 510, 365
 RUINS_LEVELS = frozenset({6, 7, 8, 9})
 # Level 9's contiguous desert, from left to right. Internal room indices are zero-based.
 HORSE_ROOM = 1
-DESERT_ROOMS = (14, 13, 12, 11, 10, HORSE_ROOM)
+CHASM_ROOM = 15
+DESERT_ROOMS = (CHASM_ROOM, 14, 13, 12, 11, 10, HORSE_ROOM)
 
 # The night sky: what the ruins paint it with, and how blue it is (1 in the deep blue
 # overhead, 0 in the purple by the horizon).
@@ -545,6 +549,7 @@ class RuinsAir:
     gentler: dict = field(default_factory=dict)
     # The room's palette as the caves key their tables (colours_of), for the puffs.
     palette_key: tuple = ()
+    chasm: bool = False
 
     def in_sky(self, x, y):
         return 0 <= x < WIDTH and 0 <= y < HEIGHT and bool(self.sky[y, x])
@@ -768,6 +773,15 @@ def read_dunes(sand, *, horse=False):
     return Dunes(crest, ground_top, sand, sand & ~shelter(rocks), rocks)
 
 
+def chasm_dunes(sand):
+    """The chasm has two sandy banks and an open gap, without a continuous crest."""
+    x = numpy.arange(WIDTH)
+    y = numpy.arange(HEIGHT)[:, None]
+    banks = (y >= 219) & ((x < 136) | (x >= 345))
+    sand = sand & banks
+    return Dunes(numpy.full(WIDTH, -1), numpy.full(WIDTH, 238), sand, sand, ())
+
+
 def read_room(level_number, room, rgb, palette, covered=None, terrain=None, painted=False):
     """The air of a room from an RGB picture of its scenery, its palette, [y, x] of what
     its foreground covers and its tiles; a painted room sheds no grit."""
@@ -775,6 +789,7 @@ def read_room(level_number, room, rgb, palette, covered=None, terrain=None, pain
     open_sky = float(sky.mean())
     sand = sand_mask(rgb)
     desert = bool(open_sky >= DESERT_SKY and sand.mean() >= DESERT_SAND)
+    chasm = (level_number, room) == (9, CHASM_ROOM)
     seed = level_number * 100 + room
     if desert:
         stars = place_desert_stars(sky, random.Random(seed + 41))
@@ -789,11 +804,15 @@ def read_room(level_number, room, rgb, palette, covered=None, terrain=None, pain
         stone = luminance >= TIP_LUMINANCE
         grit = grit_sources(air, clear, stone, terrain, room, random.Random(seed))
         lines = ceilings(air, clear, stone, terrain, room)
+    dunes = None
+    if chasm:
+        dunes = chasm_dunes(sand)
+    elif desert:
+        dunes = read_dunes(sand, horse=(level_number, room) == (9, HORSE_ROOM))
     return RuinsAir(sky, blue, tuple(stars), nearest_colours(palette, INK_COLOURS), desert,
-                    windy=open_sky >= OPEN_SKY and not desert, covered=covered, palette=palette_rgb(palette),
-                    grit=grit, ceilings=lines, luminance=luminance,
-                    dunes=read_dunes(sand, horse=(level_number, room) == (9, HORSE_ROOM)) if desert else None,
-                    palette_key=tuple(sorted(palette.items())))
+                    windy=open_sky >= OPEN_SKY and not (desert or chasm), covered=covered,
+                    palette=palette_rgb(palette), grit=grit, ceilings=lines, luminance=luminance,
+                    dunes=dunes, palette_key=tuple(sorted(palette.items())), chasm=chasm)
 
 
 def ruins_air(level_number, room, art, terrain=None, raised=None):
@@ -1954,6 +1973,51 @@ class RuinsAmbience:
         return frame
 
 
+def chasm_fall_pixels(tick, sand):
+    """Grains roll over the left lip, then fall away from the wall."""
+    colours = (NEAR_SANDS[0], SAND[0], FAR_SANDS[1])
+    for index in range(28):
+        life = 23 + index * 7 % 10
+        age = (tick + index * 17) % (54 + index * 11 % 25)
+        run = 6 + index * 3 % 9
+        fall = age - run
+        ridge = 242 + index * 5 % 7 - 3
+        if fall >= life:
+            continue
+        if fall < 0:
+            x = 132 + round(1.65 * fall)
+            y = ridge
+            if sand[y, x]:
+                yield x, y, SAND[0]
+            continue
+        x = 131 + index * 3 % 7 + round((0.21 + 0.09 * (index % 5)) * fall)
+        y = ridge + round(0.35 * fall + (0.07 + 0.009 * (index % 4)) * fall ** 2)
+        shade = min(2, fall * 3 // life)
+        yield x, y, colours[shade]
+        if index % 5 == 0 and 5 <= fall < 20:
+            yield x, y - 2, colours[min(2, shade + 1)]
+
+
+def chasm_updraft_pixels(tick):
+    """Air climbs just inside the right wall and bends over its sandy rim."""
+    for index in range(31):
+        life = 38 + index * 5 % 14
+        age = (tick + index * 19) % (57 + index * 7 % 25)
+        if age >= life:
+            continue
+        trail = 9 if index % 8 == 0 else 1
+        for step in range(trail):
+            progress = (age - 0.62 * step) / life
+            if progress < 0:
+                break
+            y = 355 + index % 9 - round(135 * progress ** 0.9)
+            wall = 339 + 0.43 * max(0, y - 243) + 1.27 * max(0, 243 - y)
+            sway = 3 * math.sin(6 * progress + index)
+            x = round(wall + (index % 11 - 5) * 1.85 + sway)
+            shade = 1 if progress < 0.12 or progress > 0.91 else max(1, 3 - step // 3)
+            yield x, y, LILAC[shade]
+
+
 @dataclass
 class DesertWind:
     """One level-owned wind simulation. All sand coordinates are in the joined strip."""
@@ -1969,8 +2033,10 @@ class DesertWind:
     def __post_init__(self):
         self.width = self.dunes.crest.size
         self.room_count = self.width // WIDTH
+        # The gorge adds wind room without increasing the density of dust devils.
+        self.devil_room_count = max(1, math.ceil(numpy.count_nonzero(self.dunes.crest > 0) / WIDTH))
         self.desert_gust_wait = self.rng.randint(*FIRST_DESERT_GUST)
-        self.devil_wait = max(1, self.rng.randint(*FIRST_DEVIL) // self.room_count)
+        self.devil_wait = max(1, self.rng.randint(*FIRST_DEVIL) // self.devil_room_count)
         self.rocks_by_column = {}
         for rock in self.dunes.rocks:
             for column in rock.foot:
@@ -2175,10 +2241,10 @@ class DesertWind:
         return None
 
     def advance_devils(self):
-        if len(self.devils) < self.room_count:
+        if len(self.devils) < self.devil_room_count:
             self.devil_wait -= 1
             if self.devil_wait <= 0:
-                self.devil_wait = self.rng.randint(*TICKS_BETWEEN_DEVILS) // self.room_count
+                self.devil_wait = self.rng.randint(*TICKS_BETWEEN_DEVILS) // self.devil_room_count
                 devil = self.new_devil()
                 start = self.devil_start(devil)
                 if start is not None:
@@ -2321,8 +2387,10 @@ class DesertWind:
         """The blown sand, each pixel gentler: part of the way back to what it covers."""
         inks = air.inks
         drawn = {}
-        for world_x, y, colour in self.desert_pixels(origin):
-            x = world_x - origin
+        pixels = ((x - origin, y, colour) for x, y, colour in self.desert_pixels(origin))
+        if air.chasm:
+            pixels = chain(pixels, chasm_fall_pixels(self.tick, air.dunes.sand), chasm_updraft_pixels(self.tick))
+        for x, y, colour in pixels:
             if 0 <= x < WIDTH and 0 <= y < HEIGHT and not air.is_covered(x, y):
                 drawn[x, y] = inks[colour][:3]
         for (x, y), colour in drawn.items():
