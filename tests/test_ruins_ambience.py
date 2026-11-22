@@ -1420,7 +1420,7 @@ class EveryRuinsRoomTests(unittest.TestCase):
             end = (cycle + 1) * period - phase - 1
             self.assertEqual(list(ruins_ambience.chasm_crosswind_pixels(end)), [])
 
-    def test_each_chasm_wind_line_lingers_in_a_small_curl(self):
+    def test_each_chasm_wind_line_winds_into_its_center_without_dimming(self):
         sides = (
             (ruins_ambience.CHASM_UPDRAFT_PATHS, ruins_ambience.CHASM_UPDRAFT_PERIOD,
              ruins_ambience.CHASM_UPDRAFT_PHASE, ruins_ambience.chasm_updraft_pixels),
@@ -1433,20 +1433,23 @@ class EveryRuinsRoomTests(unittest.TestCase):
                 coil = set(path[turn:])
                 width = max(x for x, _ in coil) - min(x for x, _ in coil)
                 height = max(y for _, y in coil) - min(y for _, y in coil)
-                self.assertEqual(max(width, height), 5)
-                frames = [list(pixels(start + offset)) for offset in (0, 6, 9, 12)]
-                counts = list(map(len, frames))
+                self.assertIn(max(width, height), (4, 5))
+                forming = [list(pixels(start + offset)) for offset in range(16)]
+                winding = [
+                    [pixel for pixel in pixels(start + offset) if pixel[:2] in coil]
+                    for offset in range(16, 23)
+                ]
+                counts = list(map(len, forming + winding))
                 self.assertTrue(all(first > second for first, second in zip(counts, counts[1:])))
-                self.assertTrue(any((x, y) not in coil for x, y, _ in frames[2]))
-                formed = frames[3]
-                self.assertTrue(formed)
-                self.assertTrue({(x, y) for x, y, _ in formed} <= coil)
-                for offset in range(13, 19):
-                    self.assertEqual([pixel for pixel in pixels(start + offset) if pixel[:2] in coil], formed)
-                fading = [pixel for pixel in pixels(start + 21) if pixel[:2] in coil]
-                self.assertEqual([pixel[:2] for pixel in fading], [pixel[:2] for pixel in formed])
-                self.assertLess(max(max(rgb) for _, _, rgb in fading), max(max(rgb) for _, _, rgb in formed))
-                self.assertFalse(any((x, y) in coil for x, y, _ in pixels(start + 23)))
+                self.assertTrue(any((x, y) not in coil for x, y, _ in forming[12]))
+                self.assertTrue({(x, y) for x, y, _ in forming[-1]} <= coil)
+                # The coiled line gets shorter every tick while each surviving pixel keeps its colour.
+                joined = [forming[-1], *winding]
+                for before, after in zip(joined, joined[1:]):
+                    self.assertEqual(after, before[len(before) - len(after):])
+                self.assertEqual([pixel[:2] for pixel in winding[-2]], [path[-1]])
+                self.assertGreaterEqual(max(winding[-2][0][2]), 37)
+                self.assertFalse(winding[-1])
 
     def test_no_random_shooting_star_over_the_desert(self):
         rng = random.Random(0)

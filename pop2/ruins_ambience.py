@@ -972,15 +972,13 @@ def clean_line(points):
     return clean
 
 
-def curl(bx, by, r0, rise):
-    """A curl from (bx, by), heading right: up by the right, over the top, down the left
-    and back under, its radius shrinking by rise so that it ends rise higher than it
-    began and does not close."""
+def curl(bx, by, r0, rise, *, turns=1.0):
+    """Start rightward from (bx, by) and spiral inward as the radius shrinks by rise."""
     cx, cy = bx, by - r0
     points, steps = [], 720
     for i in range(1, steps + 1):
         turn = i / steps
-        angle = -math.pi / 2 + 2 * math.pi * turn
+        angle = -math.pi / 2 + 2 * math.pi * turn * turns
         r = r0 - rise * turn
         points.append((cx + r * math.cos(angle), cy - r * math.sin(angle)))
     return points
@@ -2005,8 +2003,7 @@ def chasm_fall_pixels(tick, sand):
 def chasm_wisp_path(x, y, travel, lean, radius, turn, *, horizontal=False):
     """A mostly straight path with a tight curl at the end."""
     straight = [(step / 4, lean * step / (4 * travel)) for step in range(4 * travel + 1)]
-    # Turn most of the way around and dissolve there, with no run beyond the curl.
-    curled = curl(travel, lean, radius, 1.1)[:610]
+    curled = curl(travel, lean, radius, radius, turns=1.75)
     pixels = clean_line(straight + curled)
     if horizontal:
         path = [(x + along, y + turn * across) for along, across in pixels]
@@ -2027,8 +2024,7 @@ CHASM_CROSSWIND_PATHS = tuple(chasm_wisp_path(*shape, horizontal=True) for shape
 ))
 CHASM_UPDRAFT_PERIOD, CHASM_UPDRAFT_PHASE = 52, 24
 CHASM_CROSSWIND_PERIOD, CHASM_CROSSWIND_PHASE = 63, 3
-CHASM_WISP_GLIDE_TICKS, CHASM_WISP_CURL_TICKS = 36, 12
-CHASM_WISP_HOLD_TICKS, CHASM_WISP_FADE_TICKS = 6, 5
+CHASM_WISP_GLIDE_TICKS, CHASM_WISP_CURL_TICKS = 36, 22
 CHASM_WISP_PALER = (26, 28, 37)
 
 
@@ -2041,10 +2037,9 @@ def chasm_crosswind_pixels(tick):
 
 
 def chasm_wisp_pixels(tick, paths, period, phase):
-    """Keep the wind cadence independent of how long each curl lingers."""
+    """Keep the wind cadence independent of how long each curl takes."""
     cycle, age = divmod(tick + phase, period)
-    lifetime = (CHASM_WISP_GLIDE_TICKS + CHASM_WISP_CURL_TICKS
-                + CHASM_WISP_HOLD_TICKS + CHASM_WISP_FADE_TICKS)
+    lifetime = CHASM_WISP_GLIDE_TICKS + CHASM_WISP_CURL_TICKS
     if age + period < lifetime:
         path, turn = paths[(cycle - 1) % len(paths)]
         yield from chasm_wisp_frame(path, turn, age + period)
@@ -2053,24 +2048,27 @@ def chasm_wisp_pixels(tick, paths, period, phase):
 
 
 def chasm_wisp_frame(path, turn, age):
-    """Glide, gather the whole line into a curl, then hold and fade."""
+    """Glide, then wind the whole line into the center of the spiral."""
     length = 35
     if age < CHASM_WISP_GLIDE_TICKS:
         head = turn * age // CHASM_WISP_GLIDE_TICKS
         tail = head - length
         glow = min(1.0, age / 5)
     else:
-        curl_age = age - CHASM_WISP_GLIDE_TICKS
-        fade_age = max(0, curl_age - CHASM_WISP_CURL_TICKS - CHASM_WISP_HOLD_TICKS)
-        if fade_age >= CHASM_WISP_FADE_TICKS:
+        progress = (age - CHASM_WISP_GLIDE_TICKS) / CHASM_WISP_CURL_TICKS
+        if progress >= 1.0:
             return
-        progress = min(1.0, curl_age / CHASM_WISP_CURL_TICKS)
-        head = turn + round((len(path) - turn) * progress)
-        tail = turn - length + round(length * progress ** 0.85)
-        glow = 1.0 - fade_age / CHASM_WISP_FADE_TICKS
+        curl_length = len(path) - turn
+        head = turn + round(curl_length * min(1.0, progress * 1.5))
+        # The back of the line slows as it winds the last pixels into the center.
+        wound = 1.0 - (1.0 - progress) ** 1.25
+        tail = turn - length + round((length + curl_length) * wound)
+        glow = 1.0
     for index in range(max(0, tail), head):
-        curl_glow = 1.0 + 0.2 * min(1.0, max(0.0, (index - turn + 1) / 4))
-        strength = glow * curl_glow * min(1.0, (index - tail + 1) / 5, (head - index) / 4)
+        if index < turn:
+            strength = glow * min(1.0, (index - tail + 1) / 5, (head - index) / 4)
+        else:
+            strength = 1.0 + 0.2 * min(1.0, (index - turn + 1) / 4)
         if round(max(CHASM_WISP_PALER) * strength) < 2:
             continue
         yield (*path[index], tuple(round(amount * strength) for amount in CHASM_WISP_PALER))
