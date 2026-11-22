@@ -833,8 +833,10 @@ class GritTests(unittest.TestCase):
         for _ in range(12 * 600):
             ambience.advance(TERRAIN)
             seen.extend(trickle for trickle in ambience.trickles if all(trickle is not other for other in seen))
-        self.assertGreater(len(seen), 120)
-        self.assertLess(len(seen), 300)
+        # The user, 2026-11-22: "um pouco too much" - how often, not its colour. Every 24
+        # to 60 ticks gave about 170 in ten minutes.
+        self.assertGreater(len(seen), 75)
+        self.assertLess(len(seen), 135)
         self.assertAlmostEqual(sum(trickle.pour for trickle in seen) / len(seen), ruins_ambience.POUR_CHANCE,
                                delta=0.12)
         self.assertEqual({trickle.source.x for trickle in seen}, {100, 300})
@@ -1032,8 +1034,7 @@ class GritTests(unittest.TestCase):
         frame = frame_of(picture((PURPLE, 12)))
         ambience.before_actors = frame.copy()
         shown = ambience.over_actors(frame, (90, 200, 110, 260))
-        self.assertEqual(shown.getpixel((100, 199)),
-                         ambience.air.gentle(STONE, ambience.air.inks[GRIT_HEAD][:3], ruins_ambience.GRIT_GENTLE))
+        self.assertEqual(shown.getpixel((100, 199)), ambience.air.inks[GRIT_HEAD])
 
     def test_his_pixels_are_what_the_actors_changed_within_his_bounds(self):
         ambience = self.ambience()
@@ -1071,27 +1072,10 @@ class GritTests(unittest.TestCase):
         frame = frame_of(picture((PURPLE, 12)))
         canvas = frame.load()
         ambience.put_grit(canvas, [(100, 150, GRIT_HEAD), (250, 150, GRIT_HEAD), (450, 150, GRIT_HEAD)])
-        inks, air, gentle = ambience.air.inks, ambience.air, ruins_ambience.GRIT_GENTLE
-        self.assertEqual(frame.getpixel((100, 150)), air.gentle(STONE, inks[GRIT_HEAD][:3], gentle))
-        self.assertEqual(frame.getpixel((250, 150)), air.gentle(STONE, inks[ruins_ambience.GRIT_DIM][:3], gentle))
+        inks = ambience.air.inks
+        self.assertEqual(frame.getpixel((100, 150)), inks[GRIT_HEAD])
+        self.assertEqual(frame.getpixel((250, 150)), inks[ruins_ambience.GRIT_DIM])
         self.assertEqual(frame.getpixel((450, 150))[:3], STONE)
-
-    def test_the_grit_is_gentler_than_its_own_colours(self):
-        # The user, 2026-11-22: all the ceiling grit "um pouco too much".
-        air = self.ambience().air
-        palette = {tuple(colour[:3]) for colour in PALETTE.values()}
-        for behind in (STONE, PURPLE, DEEP):
-            for shade in ruins_ambience.GRIT_COLOURS:
-                ink = air.inks[shade][:3]
-                softer = air.gentle(behind, ink, ruins_ambience.GRIT_GENTLE)[:3]
-                self.assertIn(softer, palette)
-                self.assertNotEqual(softer, behind)
-                # No further from what is behind it than its own colour is.
-                self.assertLessEqual(sum((a - b) ** 2 for a, b in zip(softer, behind)),
-                                     sum((a - b) ** 2 for a, b in zip(ink, behind)))
-        moved = sum(air.gentle(STONE, air.inks[shade][:3], ruins_ambience.GRIT_GENTLE)[:3] != air.inks[shade][:3]
-                    for shade in ruins_ambience.GRIT_COLOURS)
-        self.assertGreater(moved, 0)
 
     def test_a_painting_sheds_no_grit(self):
         rgb = picture((PURPLE, 12))

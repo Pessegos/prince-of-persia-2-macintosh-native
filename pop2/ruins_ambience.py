@@ -190,10 +190,7 @@ NEAR_CURL = 16
 BODY_PALER, END_PALER = (52, 50, 62), (26, 25, 31)
 FADE_STEP = 2
 
-# The grit's colours, as RGB, each shown as the nearest of the room's palette, and then,
-# as the desert's sand, this much of the way back toward the colour behind it: at full
-# strength it was a little too much.
-GRIT_GENTLE = 0.4
+# The grit's colours, as RGB, each shown as the nearest of the room's palette.
 GRIT_PALE, GRIT_HEAD, GRIT_TAIL, GRIT_DIM = (173, 141, 141), (166, 131, 131), (135, 110, 110), (113, 87, 113)
 # The puffs' steps, thinnest first, as the caves' (CLOUD_SHADES): the colour, and how
 # much of what is behind it the step hides at full strength. The ruins' warm light
@@ -218,8 +215,9 @@ MOST_GRIT, GRIT_APART = 4, 60
 # with this much clear air below.
 CEILING_ABOVE, CEILING_BELOW, CEILING_CLEAR = 25, 7, 6
 # The room's rhythm: ticks between trickles, a sprinkle's grains, how often one is a pour
-# instead, and its grains.
-TICKS_BETWEEN_TRICKLES = (24, 60)
+# instead, and its grains. The user, 2026-11-22: every 2 to 5 seconds (24-60 ticks) was a
+# little too much; now every 3.5 to 8 seconds or so.
+TICKS_BETWEEN_TRICKLES = (40, 100)
 SPRINKLE = (3, 6)
 POUR_CHANCE, POUR = 0.25, (14, 26)
 SPRINKLE_GAP = (0, 1)
@@ -1657,14 +1655,13 @@ class RuinsAmbience:
                 yield x, y - 2, GRIT_DIM
 
     def put_grit(self, canvas, pixels):
-        """Grit behind the foreground; over pale stone a step darker, so that it shows,
-        and gentler than its own colours."""
+        """Grit behind the foreground; over pale stone a step darker, so that it shows."""
         air, inks, luminance = self.air, self.air.inks, self.air.luminance
         for x, y, shade in pixels:
             if 0 <= x < WIDTH and 0 <= y < HEIGHT and not air.is_covered(x, y):
                 if shade in ON_PALE and luminance is not None and luminance[y, x] >= PALE_STONE:
                     shade = ON_PALE[shade]
-                canvas[x, y] = air.gentle(tuple(canvas[x, y][:3]), inks[shade][:3], GRIT_GENTLE)
+                canvas[x, y] = inks[shade]
 
     def over_actors(self, frame, player_bounds):
         """Where the Prince was drawn, for the grit to fall on, and the bits bouncing off
@@ -1687,7 +1684,7 @@ class RuinsAmbience:
         for bit in self.bits:
             x, y = int(bit.x), int(bit.y)
             if 0 <= x < WIDTH and 0 <= y < HEIGHT:
-                canvas[x, y] = self.air.gentle(tuple(canvas[x, y][:3]), self.air.inks[bit.shade][:3], GRIT_GENTLE)
+                canvas[x, y] = self.air.inks[bit.shade]
         return frame
 
     # The desert
