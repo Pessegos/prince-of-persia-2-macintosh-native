@@ -552,6 +552,7 @@ class RuinsAir:
     palette_key: tuple = ()
     chasm: bool = False
     cliff_wind_sky: numpy.ndarray | None = None
+    cliff_sand: numpy.ndarray | None = None
 
     def in_sky(self, x, y):
         return 0 <= x < WIDTH and 0 <= y < HEIGHT and bool(self.sky[y, x])
@@ -822,7 +823,7 @@ def read_room(level_number, room, rgb, palette, covered=None, terrain=None, pain
                     windy=windy, covered=covered,
                     palette=palette_rgb(palette), grit=grit, ceilings=lines, luminance=luminance,
                     dunes=dunes, palette_key=tuple(sorted(palette.items())), chasm=chasm,
-                    cliff_wind_sky=cliff_wind_sky)
+                    cliff_wind_sky=cliff_wind_sky, cliff_sand=sand if place == OPENING_CLIFF else None)
 
 
 def ruins_air(level_number, room, art, terrain=None, raised=None):
@@ -1465,6 +1466,7 @@ class RuinsWind:
     streaks: list = field(default_factory=list)
     gust: int = 0
     gust_wait: int = 0
+    tick: int = 0
 
     def prime(self):
         """Have the first gust in view when the Prince reaches open air."""
@@ -1472,6 +1474,7 @@ class RuinsWind:
             self.advance()
 
     def advance(self):
+        self.tick += 1
         self.blow()
         self.advance_streaks()
 
@@ -2127,6 +2130,9 @@ class RuinsAmbience:
             canvas = frame.load()
         self.put_grit(canvas, self.grit_pixels())
         self.draw_wind(canvas)
+        if self.wind is not None and air.cliff_sand is not None:
+            grains = ledge_fall_pixels(self.wind.tick, air.cliff_sand, OPENING_LEDGES)
+            draw_sand_pixels(canvas, air, grains)
         self.put_grit(canvas, self.pebble_pixels())
         # Kept to find the Prince in once he is drawn, while anything could fall on him.
         self.before_actors = frame.copy() if self.watches_the_prince() else None
@@ -2135,12 +2141,17 @@ class RuinsAmbience:
 
 # Each painted ledge has its own lip, grain count and shortest time in free fall.
 CHASM_LEDGES = ((132, 241, 26, 23), (77, 284, 16, 17), (40, 325, 12, 12))
+OPENING_LEDGES = ((388, 282, 10, 19), (377, 322, 6, 12))
 
 
 def chasm_fall_pixels(tick, sand):
-    """Grains spill from each exposed ledge on the left cliff."""
+    return ledge_fall_pixels(tick, sand, CHASM_LEDGES)
+
+
+def ledge_fall_pixels(tick, sand, ledges):
+    """Grains slide up to a painted lip, then accelerate down past it."""
     colours = (NEAR_SANDS[0], SAND[0], FAR_SANDS[1])
-    for ledge, (lip_x, lip_y, grains, shortest_fall) in enumerate(CHASM_LEDGES):
+    for ledge, (lip_x, lip_y, grains, shortest_fall) in enumerate(ledges):
         for index in range(grains):
             life = shortest_fall + index * 7 % 10
             age = (tick + ledge * 13 + index * 17) % (54 + index * 11 % 25)
@@ -2160,6 +2171,18 @@ def chasm_fall_pixels(tick, sand):
             yield x, y, colours[shade]
             if index % 4 == 0 and 4 <= fall < 20:
                 yield x, y - 2, colours[min(2, shade + 1)]
+
+
+def draw_sand_pixels(canvas, air, pixels):
+    """Draw sand in the room's palette, blended toward the scenery behind it."""
+    drawn = {}
+    for x, y, colour in pixels:
+        if 0 <= x < WIDTH and 0 <= y < HEIGHT and not air.is_covered(x, y):
+            drawn[x, y] = air.inks[colour][:3]
+    for (x, y), colour in drawn.items():
+        behind = tuple(canvas[x, y][:3])
+        if colour != behind:
+            canvas[x, y] = air.gentle(behind, colour)
 
 
 CHASM_UPDRAFT_PATHS = tuple(winding_streak_path(*shape) for shape in (
@@ -2577,19 +2600,11 @@ class DesertWind:
 
     def put_sand(self, canvas, air, origin=0):
         """The blown sand, each pixel gentler: part of the way back to what it covers."""
-        inks = air.inks
-        drawn = {}
         pixels = ((x - origin, y, colour) for x, y, colour in self.desert_pixels(origin))
         if air.chasm:
             pixels = chain(pixels, chasm_fall_pixels(self.tick, air.dunes.sand),
                            chasm_rising_sand_pixels(self.tick))
-        for x, y, colour in pixels:
-            if 0 <= x < WIDTH and 0 <= y < HEIGHT and not air.is_covered(x, y):
-                drawn[x, y] = inks[colour][:3]
-        for (x, y), colour in drawn.items():
-            behind = tuple(canvas[x, y][:3])
-            if colour != behind:
-                canvas[x, y] = air.gentle(behind, colour)
+        draw_sand_pixels(canvas, air, pixels)
         if air.chasm:
             wisps = chain(chasm_updraft_pixels(self.tick), chasm_crosswind_pixels(self.tick))
             for x, y, amount in wisps:

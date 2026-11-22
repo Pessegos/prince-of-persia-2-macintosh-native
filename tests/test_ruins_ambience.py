@@ -1608,7 +1608,7 @@ class EveryRuinsRoomTests(unittest.TestCase):
 class RealSceneTests(unittest.TestCase):
     """The same inputs with the toggle off and on, in the hidden real scene."""
 
-    def test_the_opening_cliff_has_distant_wind_on_its_first_tick(self):
+    def test_the_opening_cliff_has_distant_wind_and_falling_sand_on_its_first_tick(self):
         from tools.audit_temple_routes import Harness
 
         harness = Harness(6, peaceful=True, draw=True, god=True)
@@ -1628,6 +1628,14 @@ class RealSceneTests(unittest.TestCase):
             self.assertGreaterEqual(int(changed.sum()), 12)
             self.assertFalse(changed[:, :250].any())
             self.assertFalse(changed[~sky].any())
+
+            with_sand = ambience.draw(scenery.copy())
+            grains = (numpy.asarray(with_sand) != numpy.asarray(frame)).any(axis=2)
+            self.assertTrue(grains[279:319, 387:].any())
+            self.assertTrue(grains[319:, 375:387].any())
+            self.assertLessEqual(int(grains.sum()), 16)
+            self.assertFalse(grains[:275].any())
+            self.assertFalse(grains[:, :350].any())
         finally:
             harness.close()
 
