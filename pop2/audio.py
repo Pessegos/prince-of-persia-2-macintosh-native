@@ -521,8 +521,13 @@ class AudioEngine:
                 self.pending_effects.pop(65, None)
             playing = set(self.playback.playing_effects())
             for cue in self.pending_effects:
-                if cue not in playing:
-                    self.playback.play_effect(cue)
+                if cue in playing:
+                    # Mode 2 lets consecutive sword contacts restart cue 10
+                    # before its tail ends (SetCueSnd 5:530a).
+                    if cue != 10 or self.cues[cue]["mode"] != 2:
+                        continue
+                    self.playback.stop_effect(cue)
+                self.playback.play_effect(cue)
             self.pending_effects.clear()
         for bus in self.effect_buses:
             cue = getattr(self, f"pending_{bus}")
