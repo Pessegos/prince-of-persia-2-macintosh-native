@@ -20,7 +20,8 @@ moment, and a bright one flares a small cross. A few of the middling and bright 
 are warm, rose or pale gold. Once in a long while a shooting star crosses the sky: a
 faint quick one, an ordinary one, one grazing low and slow, or most rarely a fireball
 that bursts at the end and leaves its trail a moment. Over the desert of level nine
-the sky has only a few stars, middling and bright.
+the sky has only a few stars, middling and bright. A large shooting star passes
+above the horse on the first visit to its room.
 
 The wind. In a room open to the sky a gust now and then sends one or two thin streaks
 of air across it, over the ruins too: a long wavy line a few shades paler than what is
@@ -74,7 +75,8 @@ WIDTH, HEIGHT = 510, 365
 
 RUINS_LEVELS = frozenset({6, 7, 8, 9})
 # Level 9's contiguous desert, from left to right. Internal room indices are zero-based.
-DESERT_ROOMS = (14, 13, 12, 11, 10, 1)
+HORSE_ROOM = 1
+DESERT_ROOMS = (14, 13, 12, 11, 10, HORSE_ROOM)
 
 # The night sky: what the ruins paint it with, and how blue it is (1 in the deep blue
 # overhead, 0 in the purple by the horizon).
@@ -156,7 +158,10 @@ FAINT = ShooterKind('faint', 12.0, 4, 6, LILAC[2::-1], LILAC[2], (25, 40), 40)
 NORMAL = ShooterKind('normal', 11.0, 7, 11, LILAC[3::-1], LILAC[4], (20, 35), 35)
 GRAZER = ShooterKind('grazer', 6.0, 16, 18, LILAC[3::-1], LILAC[4], (6, 12), 18)
 FIREBALL = ShooterKind('fireball', 9.0, 10, 14, (LILAC[4], *LILAC[3::-1]), WHITE, (12, 20), 7, burst=2, linger=3)
+HORSE_STAR = ShooterKind('horse arrival', 11.0, 19, 44, (GOLD_BRIGHT.steps[-1], *LILAC[4:0:-1]),
+                         WHITE, (11, 11), 0, burst=4, linger=7)
 SHOOTERS = (FAINT, NORMAL, GRAZER, FIREBALL)
+STAR_CROSS = ((1, 0), (-1, 0), (0, 1), (0, -1))
 # How far back along its path the fireball's trail stays.
 LINGER_REACH = 28
 # Where a shooting star may start, and how blue its sky must be at its start, halfway
@@ -350,7 +355,7 @@ BIG_ROCK, AT_ROCK = 40, (4, 7)
 # The dust devil: how long it lives and takes to rise and to die away, how far it drifts
 # a tick, grains it lifts a tick at full strength, how fast they spin and climb, its
 # height, how wide it opens at the top, how far its top leans downwind, and its colours.
-FIRST_DEVIL, TICKS_BETWEEN_DEVILS = (30, 360), (240, 720)
+FIRST_DEVIL, TICKS_BETWEEN_DEVILS = (30, 360), (320, 960)
 DEVIL_LIFE, DEVIL_RISE, DEVIL_FADE = 190, 24, 24
 DEVIL_DRIFT = 0.4
 DEVIL_FROM = (60, WIDTH - 140)
@@ -784,7 +789,7 @@ def read_room(level_number, room, rgb, palette, covered=None, terrain=None, pain
     return RuinsAir(sky, blue, tuple(stars), nearest_colours(palette, INK_COLOURS), desert,
                     windy=open_sky >= OPEN_SKY and not desert, covered=covered, palette=palette_rgb(palette),
                     grit=grit, ceilings=lines, luminance=luminance,
-                    dunes=read_dunes(sand, horse=(level_number, room) == (9, 1)) if desert else None,
+                    dunes=read_dunes(sand, horse=(level_number, room) == (9, HORSE_ROOM)) if desert else None,
                     palette_key=tuple(sorted(palette.items())))
 
 
@@ -811,9 +816,14 @@ class Shooter:
         return int(round(self.x + self.dx * distance)), int(round(self.y + self.dy * distance))
 
 
+def horse_shooting_star():
+    """A long flight through the clear sky to the left of the horse's silhouette."""
+    angle = math.radians(HORSE_STAR.angle[0])
+    return Shooter(HORSE_STAR, 52, 16, math.cos(angle), math.sin(angle))
+
+
 def shooter_path(air, kind, rng):
-    """(x, y, dx, dy) of a shooting star whose whole flight is over the sky, the deep blue
-    or the purple, or None. None crosses the desert's sky, as its approved look had it."""
+    """(x, y, dx, dy) of a random shooting star over clear sky, outside the desert."""
     if air.desert:
         return None
     ys, xs = numpy.nonzero(air.sky[:, SHOOTER_LEFT:WIDTH - SHOOTER_LEFT])
@@ -836,27 +846,37 @@ def shooter_pixels(shooter):
     """(x, y, RGB) of a shooting star at its age, the later over the earlier."""
     kind, age = shooter.kind, shooter.age
     travelled = kind.speed * min(age, kind.ticks - 1)
-    # The fireball's trail stays a moment, dimmest, where it has just been.
+    # A bright meteor leaves its trail behind for a moment.
     if kind.linger and age >= 2:
         fading = max(0, age - kind.ticks)
         if fading < kind.linger:
-            for step in range(max(0, int(travelled) - LINGER_REACH), int(travelled)):
+            for step in range(max(0, int(travelled) - max(LINGER_REACH, kind.tail)), int(travelled)):
                 if (step * 7 + age) % 3 or fading < 2:
                     yield (*shooter.at(step), kind.colours[-1])
     if age >= kind.ticks:
         if kind.burst and age < kind.ticks + kind.burst:
             x, y = shooter.at(travelled)
-            for ox, oy in ((0, 0), (1, 0), (-1, 0), (0, 1), (0, -1)):
-                yield x + ox, y + oy, kind.head if (ox, oy) == (0, 0) else kind.colours[0]
+            yield x, y, kind.head
+            for ox, oy in STAR_CROSS:
+                yield x + ox, y + oy, kind.colours[0]
+                if kind is HORSE_STAR and age < kind.ticks + 2:
+                    yield x + 2 * ox, y + 2 * oy, kind.colours[1]
         return
     # The tail shortens as it burns out.
     length = max(2, int(kind.tail * (1.15 - age / kind.ticks)))
     for step in range(length, 0, -1):
         share = step / length
-        yield (*shooter.at(travelled - step),
-               kind.colours[min(len(kind.colours) - 1, int(share * len(kind.colours)))])
+        x, y = shooter.at(travelled - step)
+        shade = min(len(kind.colours) - 1, int(share * len(kind.colours)))
+        yield x, y, kind.colours[shade]
+        if kind is HORSE_STAR and share < 0.45:
+            yield x, y + 1, kind.colours[shade + 1]
     yield (*shooter.at(travelled), kind.head)
-    if kind is FIREBALL:
+    if kind is HORSE_STAR:
+        x, y = shooter.at(travelled)
+        for ox, oy in STAR_CROSS:
+            yield x + ox, y + oy, kind.colours[0]
+    elif kind is FIREBALL:
         # A head two pixels across: the second one dimmer, beside it on the slope.
         x, y = shooter.at(travelled)
         yield x, y + 1 if abs(shooter.dx) > abs(shooter.dy) else y, kind.colours[0]

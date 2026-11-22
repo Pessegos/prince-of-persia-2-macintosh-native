@@ -34,6 +34,7 @@ class LevelRenderer:
         self.cavern_map = None
         self.ambience = None
         self.desert_wind = None
+        self.horse_star_seen = False
         self.ambience_air = {}
         # Rooms read before the Prince comes in: {room: ((drawing key, tiles), air)}.
         self.ambience_ahead = {}
@@ -179,7 +180,7 @@ class LevelRenderer:
 
     def advance_ambience(self, room_id, terrain, footing=None, thuds=(), shakes=()):
         """One game tick of the optional cave or ruins ambience; pixels only."""
-        from pop2.ruins_ambience import DESERT_ROOMS
+        from pop2.ruins_ambience import DESERT_ROOMS, HORSE_ROOM, horse_shooting_star
 
         kind = self.ambience_kind()
         if kind is None:
@@ -201,6 +202,9 @@ class LevelRenderer:
                                                           lambda: self.room_with_gates_up(room_id))
             self.ambience = ambience(room_id, self.ambience_air[room_id])
         self.ambience.advance(terrain, footing, thuds, shakes)
+        if self.level.number == 9 and room_id == HORSE_ROOM and not self.horse_star_seen:
+            self.horse_star_seen = True
+            self.ambience.shooter = horse_shooting_star()
 
     def prepare_desert_wind(self, room_air, *, incremental=False):
         """Read the painted desert scenery, then start wind over the whole strip."""

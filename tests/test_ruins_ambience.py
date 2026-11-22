@@ -589,7 +589,7 @@ class ShootingStarTests(unittest.TestCase):
             last = len(list(shooter_pixels(Shooter(kind, 100, 40, 0.9, 0.3, kind.ticks - 1))))
             self.assertGreater(first, last, kind.name)
 
-    def test_only_the_fireball_bursts_and_leaves_its_trail(self):
+    def test_only_the_regular_fireball_bursts_and_leaves_its_trail(self):
         for kind in (FAINT, NORMAL, GRAZER):
             self.assertEqual(list(shooter_pixels(Shooter(kind, 100, 40, 1, 0, kind.ticks))), [])
             self.assertEqual(kind.lasts, kind.ticks)
@@ -1348,13 +1348,22 @@ class EveryRuinsRoomTests(unittest.TestCase):
         self.assertFalse(horse.sand[:310, 268:370].any())
         self.assertTrue(horse.open_sand[280:330, :80].any())
 
-    def test_no_shooting_star_over_the_desert(self):
-        # The desert's sky is the purple by the horizon, as the approved look had it.
+    def test_no_random_shooting_star_over_the_desert(self):
         rng = random.Random(0)
         for place, air in self.rooms.items():
             if air.desert:
                 for kind in SHOOTERS:
                     self.assertIsNone(shooter_path(air, kind, rng), place)
+
+    def test_the_horse_arrival_star_fits_the_sky_above_the_dunes(self):
+        air = self.rooms[9, ruins_ambience.HORSE_ROOM]
+        shooter = ruins_ambience.horse_shooting_star()
+        self.assertGreater(shooter.at(shooter.kind.speed * (shooter.kind.ticks - 1))[0] - shooter.x, 190)
+        for age in range(shooter.kind.lasts):
+            shooter.age = age
+            for x, y, _ in shooter_pixels(shooter):
+                self.assertTrue(air.in_sky(x, y), (age, x, y))
+                self.assertFalse(air.is_covered(x, y), (age, x, y))
 
 
 @unittest.skipUnless(RUINS_INSTALLED, 'Imported ruins resources required')
@@ -1544,6 +1553,39 @@ class RealSceneTests(unittest.TestCase):
                 self.assertGreaterEqual(numpy.count_nonzero(changed_sand()), 12)
             finally:
                 harness.close()
+
+    def test_the_horse_room_shows_the_big_star_only_on_first_entry(self):
+        from tools.audit_temple_routes import Harness, press
+
+        horse = ruins_ambience.HORSE_ROOM
+        harness = Harness(9, peaceful=True, draw=True, god=True)
+        try:
+            scene = harness.scene
+            scene.audio = None
+            scene.cave_ambience_enabled = True
+            scene.jump_to_room(10, row=2, x=435, facing=1)
+            renderer = scene.level_renderer
+
+            def run_to(room, direction, opposite):
+                press(harness, opposite, False)
+                press(harness, direction, True)
+                for _ in range(45):
+                    harness.tick()
+                    if scene.room_id == room:
+                        return
+                self.fail(f'Prince did not reach room {room}')
+
+            run_to(horse, 'R', 'L')
+            star = renderer.ambience.shooter
+            self.assertIsNotNone(star)
+            self.assertIs(star.kind, ruins_ambience.HORSE_STAR)
+            self.assertEqual(star.age, 0)
+            run_to(10, 'L', 'R')
+            self.assertIsNone(renderer.ambience.shooter)
+            run_to(horse, 'R', 'L')
+            self.assertIsNone(renderer.ambience.shooter)
+        finally:
+            harness.close()
 
 
 class SourceTests(unittest.TestCase):
