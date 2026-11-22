@@ -4,12 +4,14 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
+from PIL import Image, ImageChops
+
 from pop2.combat import guard_frame_index, select_sequence
 from pop2.coordinates import column_left
 from pop2.loose_floors import FallingFloor, floor_hits_body, floor_hits_record
 from pop2.opponent_records import GuardRoomRecord, corpse_sequence, is_dead_pose
 from pop2.paths import ASSET_DIR
-from pop2.terrain import TerrainMotion, floor_contact_x
+from pop2.terrain import TerrainMotion, floor_contact_x, floor_y
 from pop2.wall_spikes import WallSpikes
 from tools.audit_temple_routes import Harness, press
 
@@ -95,6 +97,64 @@ class TemplePlaytestTests(unittest.TestCase):
         harness = Harness(number, **options)
         self.addCleanup(harness.close)
         return harness
+
+    @unittest.skipUnless((ASSET_DIR / 'temple_level13.json').is_file(), 'Imported level 13 required')
+    def test_room32_birdhead_tumbles_in_front_of_the_floor_on_a_fatal_hit(self):
+        scene = self.harness(13, peaceful=False).scene
+        scene.audio = None
+        checkpoint, = scene.checkpoints
+        self.assertEqual((checkpoint.room, checkpoint.row), (31, 1))
+        scene.jump_to_room(checkpoint.room, checkpoint.row, 220, 0, redraw=False)
+        combat = scene.combat
+        point, = combat.generation_points
+        self.assertTrue(point.tumble_enabled)
+        point.countdown = 0
+        combat.world_frame = 1
+        combat.generate_opponents()
+        guard, = combat.guards
+        guard.life = 1
+        guard.entry_x = None
+        guard.state.current_x = guard.state.target_x = 140
+        select_sequence(guard, 227)
+        guard.runtime.next_frame()
+        guard.sword_drawn = combat.player.sword_drawn = True
+        combat.player.state.action = 154
+
+        with patch.object(combat.rng, 'randrange', return_value=0) as roll:
+            self.assertEqual([event.kind for event in combat.resolve_contacts()], ['death'])
+            roll.assert_called_once_with(4)
+        self.assertEqual((guard.state.selected_sequence_id, guard.life), (185, 0))
+
+        frames = []
+        for _ in range(14):
+            state = guard.state
+            frames.append((state.target_x, floor_y(guard.row) + state.current_y,
+                           guard.row, state.action))
+            if state.action == 216:
+                # SetupOpponent 3:0f46 draws the falling body in front of the
+                # room. Compare its opaque pixels below the balcony itself.
+                scene.render()
+                sprite = Image.new('RGBA', (510, 365))
+                scene.guard_art.draw(sprite, state, floor_y(guard.row), guard.palette_variant)
+                body = sprite.crop((0, 240, 180, 365))
+                shown = scene.screenshot_viewport.crop((1, 240, 181, 365))
+                opaque = body.getchannel('A').point(lambda alpha: 255 if alpha == 255 else 0)
+                self.assertIsNotNone(opaque.getbbox())
+                missing = ImageChops.difference(body.convert('RGB'), shown.convert('RGB'))
+                self.assertIsNone(ImageChops.multiply(missing, opaque.convert('RGB')).getbbox())
+            combat.advance_guard()
+        # CheckStab 6:51f2 and FrameAdv 2:64de-668a, native LEVL 2012.
+        self.assertEqual(frames, [
+            (118, 226, 1, 213), (109, 231, 1, 214), (93, 250, 2, 215),
+            (76, 281, 2, 216), (58, 328, 2, 217), (51, 373, 3, 218),
+            (64, 427, 3, 217), (64, 490, 4, 218), (64, 538, 4, 218),
+            (64, 592, 4, 218), (64, 652, 4, 218), (64, 715, 4, 218),
+            (64, 730, 4, 185), (64, 730, 4, 185),
+        ])
+        self.assertEqual(guard.state.sound_events, [30])
+        self.assertEqual(guard.room, checkpoint.room)
+        self.assertTrue(guard.death_registered)
+        self.assertFalse(guard.targetable)
 
     def climb_room10_from_below(self, harness):
         scene = harness.scene

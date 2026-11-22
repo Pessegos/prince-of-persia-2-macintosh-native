@@ -1138,12 +1138,15 @@ flag is separate from the NPC's jump capability. These ordinary selection
 branches are now implemented, with tests for roll/count boundaries, the
 packed flag, same-facing kills, tile vetoes and overlapping corpse poses.
 
-185's callback 30 is a native sound event; its poses are 213-218 and its
-continuation is 207. FrameAdv 2:65ee-6664 bypasses ordinary floors, barriers
-and cuts in mode 9, derives the row from absolute Y and lets Move add gravity
-and cap at Y=730. The prototype now uses that branch instead of inventing a
-lower-floor landing or erasing a body. Ordinary mode-9 ClipChar bypass is
-also translated; the special room 16/19 rendering cap is still not covered.
+SEQS 185 starts with sound 30 and poses 213–218. FrameAdv 2:65da–6664
+adds gravity, skips ordinary floors, barriers and cuts in mode 9, and
+derives the row from absolute Y. In the temple a body below Y=484 with no
+room beneath it goes straight to Move (2:64f2–650e/6686). Pose and row hold
+until Y=730, where 4:373a–3776 sets pose 185 and mode 1 without a new sound.
+Room 32 of level 13 is a verified case. The port previously let the temple
+body collide with solid flooring on the first tumble step. The port keeps
+depth beyond the offscreen row in the Y offset when a lower room is linked.
+[Room 32 evidence](research/level13-room32-birdhead-deaths.md).
 
 GetOppDeadSeq 4:0074-010a / FrameAdv 2:6544-654c chooses flat corpse sequence
 195 (pose 228) for odd ordinary-NPC slot IDs. The helper computes slot ID
