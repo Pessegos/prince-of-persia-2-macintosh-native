@@ -1355,17 +1355,36 @@ class EveryRuinsRoomTests(unittest.TestCase):
                 for kind in SHOOTERS:
                     self.assertIsNone(shooter_path(air, kind, rng), place)
 
-    def test_the_horse_arrival_star_leaves_a_line_and_falling_sparks(self):
+    def test_the_horse_arrival_star_fades_in_and_its_line_dissolves_before_the_sparks(self):
         air = self.rooms[9, ruins_ambience.HORSE_ROOM]
         shooter = ruins_ambience.horse_shooting_star()
         distance = int(shooter.kind.speed * (shooter.kind.ticks - 1))
-        self.assertGreater(shooter.x - shooter.at(distance)[0], 275)
+        self.assertGreater(shooter.x - shooter.at(distance)[0], 230)
+        self.assertLessEqual(shooter.kind.ticks, 9)
         line = {shooter.at(step) for step in range(distance + 1)}
         self.assertTrue(all(air.in_sky(x, y) and not air.is_covered(x, y) for x, y in line))
 
-        shooter.age = shooter.kind.ticks + 9
+        head_light = []
+        for age in (0, 1, 3):
+            shooter.age = age
+            head = shooter.at(age * shooter.kind.speed)
+            drawn = {(x, y): colour for x, y, colour in shooter_pixels(shooter)}
+            head_light.append(sum(drawn[head]))
+        self.assertLess(head_light[0], head_light[1])
+        self.assertLess(head_light[1], head_light[2])
+
+        line_counts = []
+        for age in (10, 15, 20, 22):
+            shooter.age = age
+            pixels = {(x, y) for x, y, _ in shooter_pixels(shooter)}
+            line_counts.append(len(pixels & line))
+        self.assertGreater(line_counts[0], line_counts[1])
+        self.assertGreater(line_counts[1], line_counts[2])
+        self.assertGreater(line_counts[2], 0)
+        self.assertEqual(line_counts[3], 0)
+
+        shooter.age = 17
         pixels = {(x, y) for x, y, _ in shooter_pixels(shooter)}
-        self.assertTrue(line <= pixels)
         fallen = {(x, y) for x, y in pixels
                   if y > shooter.y + (x - shooter.x) * shooter.dy / shooter.dx + 8}
         self.assertGreaterEqual(sum(air.in_sky(x, y) for x, y in fallen), 10)

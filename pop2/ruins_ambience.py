@@ -158,8 +158,9 @@ FAINT = ShooterKind('faint', 12.0, 4, 6, LILAC[2::-1], LILAC[2], (25, 40), 40)
 NORMAL = ShooterKind('normal', 11.0, 7, 11, LILAC[3::-1], LILAC[4], (20, 35), 35)
 GRAZER = ShooterKind('grazer', 6.0, 16, 18, LILAC[3::-1], LILAC[4], (6, 12), 18)
 FIREBALL = ShooterKind('fireball', 9.0, 10, 14, (LILAC[4], *LILAC[3::-1]), WHITE, (12, 20), 7, burst=2, linger=3)
-HORSE_STAR = ShooterKind('horse arrival', 24.0, 13, 0, (GOLD_BRIGHT.steps[-1], *LILAC[4:0:-1]),
-                         WHITE, (9, 9), 0, burst=3, linger=32)
+HORSE_STAR = ShooterKind('horse arrival', 31.0, 9, 0, (GOLD_BRIGHT.steps[-1], *LILAC[4:0:-1]),
+                         WHITE, (9, 9), 0, linger=20)
+HORSE_LINE_TICKS = 14
 SHOOTERS = (FAINT, NORMAL, GRAZER, FIREBALL)
 STAR_CROSS = ((1, 0), (-1, 0), (0, 1), (0, -1))
 # How far back along its path the fireball's trail stays.
@@ -876,24 +877,35 @@ def shooter_pixels(shooter):
         yield x, y + 1 if abs(shooter.dx) > abs(shooter.dy) else y, kind.colours[0]
 
 
+def horse_star_glow(tick):
+    """Build brightness at the start and let it burn down toward the end."""
+    remaining = HORSE_STAR.ticks - 1 - tick
+    return min(1.0, 0.18 + 0.28 * tick, 0.34 + 0.31 * remaining)
+
+
 def horse_star_pixels(shooter):
     """An afterglow along the full flight path, with sparks falling from it."""
     kind, age = shooter.kind, shooter.age
     distance = int(kind.speed * min(age, kind.ticks - 1))
     shades = len(kind.colours)
     for step in range(distance + 1):
-        since = age - step / kind.speed
-        if since >= kind.linger:
+        passed_at = step / kind.speed
+        since = age - passed_at
+        if since >= HORSE_LINE_TICKS:
             continue
-        shade = int(since * shades / kind.linger)
+        glow = horse_star_glow(passed_at) * (1 - since / HORSE_LINE_TICKS) ** 1.35
+        # The faint line loses individual pixels in a fixed pattern as it fades.
+        if glow < 0.35 * ((step * 37 % 17 + 0.5) / 17):
+            continue
+        shade = max(0, shades - 1 - int(glow * shades))
         x, y = shooter.at(step)
         yield x, y, kind.colours[shade]
-        if since < 2:
+        if glow >= 0.75 and since < 2:
             yield x, y + 1, kind.colours[shade + 1]
 
     # Stagger the release, acceleration and fade so the sparks separate from the line.
     for index, step in enumerate(range(5, distance + 1, 6)):
-        fall = age - step / kind.speed - (3 + index * 5 % 8)
+        fall = 1.5 * (age - step / kind.speed) - (3 + index * 5 % 8)
         life = 14 + index * 3 % 8
         if not 0 <= fall < life:
             continue
@@ -905,12 +917,14 @@ def horse_star_pixels(shooter):
         if shade < 3 and index % 3 == 0:
             yield x + drift, y + drop - 1, kind.colours[shade + 1]
 
-    if age < kind.ticks + kind.burst:
+    if age < kind.ticks:
         x, y = shooter.at(distance)
-        yield x, y, kind.head
-        for ox, oy in STAR_CROSS:
-            yield x + ox, y + oy, kind.colours[0]
-            yield x + 2 * ox, y + 2 * oy, kind.colours[1]
+        glow = horse_star_glow(age)
+        shade = max(0, shades - 1 - int(glow * shades))
+        yield x, y, kind.head if glow >= 0.9 else kind.colours[shade]
+        if glow >= 0.5:
+            for ox, oy in STAR_CROSS:
+                yield x + ox, y + oy, kind.colours[shade + 1]
 
 
 def clean_line(points):
