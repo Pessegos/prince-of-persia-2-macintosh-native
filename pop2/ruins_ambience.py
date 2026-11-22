@@ -158,9 +158,11 @@ FAINT = ShooterKind('faint', 12.0, 4, 6, LILAC[2::-1], LILAC[2], (25, 40), 40)
 NORMAL = ShooterKind('normal', 11.0, 7, 11, LILAC[3::-1], LILAC[4], (20, 35), 35)
 GRAZER = ShooterKind('grazer', 6.0, 16, 18, LILAC[3::-1], LILAC[4], (6, 12), 18)
 FIREBALL = ShooterKind('fireball', 9.0, 10, 14, (LILAC[4], *LILAC[3::-1]), WHITE, (12, 20), 7, burst=2, linger=3)
-HORSE_STAR = ShooterKind('horse arrival', 31.0, 9, 0, (GOLD_BRIGHT.steps[-1], *LILAC[4:0:-1]),
-                         WHITE, (9, 9), 0, linger=20)
 HORSE_LINE_TICKS = 14
+HORSE_SPARK_DELAY, HORSE_SPARK_LIFE = (3, 10), (36, 48)
+HORSE_SPARK_FADE = 10
+HORSE_STAR = ShooterKind('horse arrival', 31.0, 9, 0, (GOLD_BRIGHT.steps[-1], *LILAC[4:0:-1]),
+                         WHITE, (9, 9), 0, linger=HORSE_SPARK_DELAY[1] + HORSE_SPARK_LIFE[1])
 SHOOTERS = (FAINT, NORMAL, GRAZER, FIREBALL)
 STAR_CROSS = ((1, 0), (-1, 0), (0, 1), (0, -1))
 # How far back along its path the fireball's trail stays.
@@ -904,18 +906,24 @@ def horse_star_pixels(shooter):
         if glow >= 0.75 and since < 2:
             yield x, y + 1, kind.colours[shade + 1]
 
-    # Keep the fall shallow in screen space so the sparks read as distant.
-    for index, step in enumerate(range(5, distance + 1, 6)):
-        fall = 1.5 * (age - step / kind.speed) - (3 + index * 5 % 8)
-        life = 14 + index * 3 % 8
+    # The sparks keep their own lifetime after the line fades.
+    first_delay, last_delay = HORSE_SPARK_DELAY
+    shortest, longest = HORSE_SPARK_LIFE
+    for index, sample in enumerate(range(5, distance + 1, 6)):
+        step = sample + index * 7 % 5 - 2
+        delay = first_delay + index * 5 % (last_delay - first_delay + 1)
+        fall = age - step / kind.speed - delay
+        life = shortest + index * 3 % (longest - shortest + 1)
         if not 0 <= fall < life:
             continue
         x, y = shooter.at(step)
-        drift = round((index % 5 - 2) * fall / 15)
-        drop = 1 + round(0.11 * fall + (0.012 + 0.0018 * (index % 4)) * fall ** 2)
-        shade = int((fall / life) ** 1.65 * shades)
+        drift = round((index % 5 - 2) * fall / 43)
+        drop = 1 + round(0.03 * fall + (0.0018 + 0.0002 * (index % 4)) * fall ** 2)
+        first_shade = 1 + (index % 4 != 0)
+        fade = max(0.0, 1 - (life - fall) / HORSE_SPARK_FADE)
+        shade = first_shade + int(fade * (shades - first_shade))
         yield x + drift, y + drop, kind.colours[shade]
-        if shade < 3 and index % 3 == 0:
+        if drop >= 3 and shade < 3 and index % 3 == 0:
             yield x + drift, y + drop - 1, kind.colours[shade + 1]
 
     if age < kind.ticks:

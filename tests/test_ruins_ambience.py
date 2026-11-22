@@ -1355,7 +1355,7 @@ class EveryRuinsRoomTests(unittest.TestCase):
                 for kind in SHOOTERS:
                     self.assertIsNone(shooter_path(air, kind, rng), place)
 
-    def test_the_horse_arrival_star_has_a_white_head_and_a_shallow_afterglow(self):
+    def test_the_horse_arrival_star_has_a_white_head_and_lingering_sparks(self):
         air = self.rooms[9, ruins_ambience.HORSE_ROOM]
         shooter = ruins_ambience.horse_shooting_star()
         distance = int(shooter.kind.speed * (shooter.kind.ticks - 1))
@@ -1387,12 +1387,17 @@ class EveryRuinsRoomTests(unittest.TestCase):
         self.assertGreater(line_counts[2], 0)
         self.assertEqual(line_counts[3], 0)
 
-        shooter.age = 22
-        pixels = {(x, y) for x, y, _ in shooter_pixels(shooter)}
-        self.assertGreaterEqual(sum(air.in_sky(x, y) for x, y in pixels), 6)
-        depths = [y - (shooter.y + (x - shooter.x) * shooter.dy / shooter.dx) for x, y in pixels]
-        self.assertGreater(max(depths), 4)
-        self.assertLessEqual(max(depths), 12)
+        max_depths = []
+        for age in (22, 48):
+            shooter.age = age
+            self.assertLess(age, shooter.kind.lasts)
+            pixels = {(x, y) for x, y, _ in shooter_pixels(shooter)}
+            self.assertGreaterEqual(sum(air.in_sky(x, y) for x, y in pixels), 6)
+            depths = [y - (shooter.y + (x - shooter.x) * shooter.dy / shooter.dx) for x, y in pixels]
+            max_depths.append(max(depths))
+        self.assertLessEqual(max_depths[0], 4)
+        self.assertGreater(max_depths[1], max_depths[0])
+        self.assertLessEqual(max_depths[1], 9)
 
         rgb = numpy.where(air.sky[..., None], DEEP, STONE).astype(numpy.uint8)
         frame = frame_of(rgb)
