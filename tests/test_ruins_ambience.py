@@ -389,7 +389,8 @@ class DuneTests(unittest.TestCase):
     def test_sand_whirls_at_the_devil_s_foot_and_is_thrown_out_and_falls_back(self):
         ambience = self.quiet(13, rock=False)
         ambience.devil_wait = 1
-        thrown_seen, kicks_seen = 0, 0
+        plain = picture((PURPLE, 70), (DEEP, CREST - 70), (SAND, HEIGHT - CREST))
+        sprays_seen, kicks_seen, most_bright_pixels = 0, 0, 0
         for _ in range(120):
             ambience.advance()
             self.assertFalse(ambience.clouds)
@@ -405,14 +406,22 @@ class DuneTests(unittest.TestCase):
                 self.assertTrue(base_y - 2 <= y <= base_y + 1, (y, base_y))
             for grain in devil.thrown:
                 self.assertGreater(grain.dx, 0)
-                self.assertTrue(grain.ground - 3 <= grain.y < grain.ground + 1)
-                thrown_seen += grain.age == 1
+                self.assertTrue(grain.ground - 6 <= grain.y < grain.ground + 1)
+            sprays_seen += sum(grain.age == 1 for grain in devil.thrown) >= 4
             pixels = list(ambience.desert_pixels())
             if devil.kicks:
                 self.assertTrue(any(abs(y - base_y) <= 2 and abs(x - base_x) <= devil.foot + 1
                                     for x, y, _ in pixels))
+            if devil.thrown:
+                frame = frame_of(plain)
+                canvas = frame.load()
+                ambience.put_sand(canvas)
+                spray = {(x, y) for x, y, _ in pixels
+                         if x > base_x + 4 and abs(y - base_y) <= 6 and canvas[x, y][1] >= SAND[1] + 15}
+                most_bright_pixels = max(most_bright_pixels, len(spray))
         self.assertGreater(kicks_seen, 0)
-        self.assertGreater(thrown_seen, 3)
+        self.assertGreaterEqual(sprays_seen, 3)
+        self.assertGreaterEqual(most_bright_pixels, 5)
 
     def test_the_devil_s_foot_does_not_trip_on_a_dip_in_the_crest(self):
         crest = numpy.full(WIDTH, CREST)

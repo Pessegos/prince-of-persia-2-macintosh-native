@@ -51,7 +51,7 @@ off it, sweeps loose sand up off the plain, runs streams of sand along the groun
 the rocks (sand runs at a big rock's foot, grains bounce up its face, and the ground
 lies still in its lee) and now and then a small dust devil of sand grains spins along
 the crest for a while, each its own size, shape, ways and life. A few low grains curl
-around its foot, and now and then one skips away downwind. All of it is a little
+around its foot, with short sprays of sand skipping away downwind. All of it is a little
 gentler than the sand's own colours, and none of it blows over the blue dunes far away.
 """
 
@@ -363,17 +363,18 @@ DEVIL_LEANS = (1.5, 6.0)
 DEVIL_GRAIN_COUNTS = (3.5, 6.5)
 DEVIL_SWAY_SPEEDS, DEVIL_SWAYS = (0.15, 0.35), (0.6, 2.2)
 DEVIL_PULSE, DEVIL_PULSE_TICKS = (0.0, 0.4), (12, 30)
-# At its foot a few grains spin close to the funnel, or skip away downwind.
+# At its foot a few grains spin close to the funnel between short sprays of sand.
 FOOT_WIDTH = (2.4, 4.2)
 FOOT_GRAINS = (1, 2)
 FOOT_HOP, FOOT_LIFE = (0.3, 0.9), (4, 7)
 FOOT_SPIN = (0.6, 1.1)
-THROWN_CHANCE = 0.22
-THROWN_DX, THROWN_DY, THROWN_FALL = (0.65, 1.35), (-0.7, -0.35), 0.22
+FOOT_SPRAY_TICKS, FOOT_SPRAY_GRAINS = (9, 15), (8, 11)
+THROWN_DX, THROWN_DY, THROWN_FALL = (0.85, 2.2), (-1.25, -0.5), 0.24
+FOOT_HIGHLIGHT = (240, 196, 196)
 NEAR_SIDE, FAR_SIDE, FLUNG = (166, 131, 131), (149, 106, 90), (125, 88, 68)
 # Every pixel of blown sand sits this much of the way back toward the colour behind it.
 GENTLE = 0.4
-DESERT_COLOURS = (*SAND, *FAR_SANDS, *NEAR_SANDS, NEAR_SIDE, FAR_SIDE, FLUNG)
+DESERT_COLOURS = (*SAND, *FAR_SANDS, *NEAR_SANDS, NEAR_SIDE, FAR_SIDE, FLUNG, FOOT_HIGHLIGHT)
 
 # Every colour the effects use, each shown as the nearest of the room's palette.
 INK_COLOURS = ALL_COLOURS | frozenset(GRIT_COLOURS) | frozenset(DESERT_COLOURS)
@@ -1147,6 +1148,7 @@ class Devil:
     foot: float = 0.0
     kicks: list = field(default_factory=list)
     thrown: list = field(default_factory=list)
+    next_spray: int = 0
 
     def strength(self, tick):
         age = tick - self.born
@@ -1990,9 +1992,11 @@ class RuinsAmbience:
                 devil.kicks.append(Kick(rng.uniform(0, 2 * math.pi), rng.uniform(*FOOT_SPIN),
                                         rng.uniform(0.8, devil.foot), rng.uniform(*FOOT_HOP),
                                         rng.randint(*FOOT_LIFE)))
-            if rng.random() < THROWN_CHANCE * strength:
-                devil.thrown.append(Thrown(base_x + rng.uniform(1, devil.foot), base_y - 1, base_y,
-                                           rng.uniform(*THROWN_DX), rng.uniform(*THROWN_DY)))
+            if strength >= 0.5 and self.tick >= devil.next_spray:
+                devil.next_spray = self.tick + rng.randint(*FOOT_SPRAY_TICKS)
+                for _ in range(some(rng, FOOT_SPRAY_GRAINS, strength)):
+                    devil.thrown.append(Thrown(base_x + rng.uniform(-1, 2), base_y - rng.uniform(0, 1.5),
+                                               base_y, rng.uniform(*THROWN_DX), rng.uniform(*THROWN_DY)))
         kicks = []
         for kick in devil.kicks:
             kick.angle += kick.spin
@@ -2021,10 +2025,11 @@ class RuinsAmbience:
                 for kick in devil.kicks:
                     if (math.sin(kick.angle) > 0) == near:
                         x, y = (int(round(value)) for value in devil.kick_point(kick, base_x, base_y))
-                        yield x, y, NEAR_SIDE if near else FAR_SIDE
+                        yield x, y, NEAR_SANDS[0] if near else FAR_SIDE
                 if near:
                     for grain in devil.thrown:
-                        yield int(round(grain.x)), int(round(grain.y)), FAR_SIDE
+                        shade = FOOT_HIGHLIGHT if grain.age <= 6 else NEAR_SIDE
+                        yield int(round(grain.x)), int(round(grain.y)), shade
                 for grain in devil.grains:
                     if grain.flung is not None:
                         if near:
