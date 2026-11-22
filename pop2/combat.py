@@ -1831,7 +1831,21 @@ class CombatEncounter:
             terrain = LevelMap(self.level)
         return terrain.tile(guard.room, column, guard.row)
 
-    def generate_opponents(self):
+    def has_jump_capable_runner_across_gap(self):
+        player = self.player
+        return any(guard.room == player.room and guard.row == player.row
+                   and guard.alive and not guard.sword_drawn and guard.generation_flags >= 1
+                   and guard.alert_mode == 1
+                   and 186 <= guard.state.action <= 199 for guard in self.guards)
+
+    def generation_player_snapshot(self):
+        if not any(point.flags >= 1 and point.remaining for point in self.generation_points):
+            return None
+        player = self.player
+        state = replace(player.state)
+        return replace(player, runtime=SequenceRuntime(self.sequences, state))
+
+    def generate_opponents(self, generation_player=None):
         if self.level_kind == 6 and self.player.room == 2:
             self._generate_final_jaffar()
             return
@@ -1841,10 +1855,12 @@ class CombatEncounter:
         blockers.extend(view for guard in self.active_guards()
                         if guard.room != self.player.room and guard.alive
                         and (view := self._project_fighter(guard, self.player.room)) is not None)
+        climb_changed_row = generation_player is not None and generation_player.row != self.player.row
         for point in self.generation_points:
-            if not point.advance(self.player, blockers, self.world_frame, self.level):
+            player = generation_player if climb_changed_row and point.flags >= 1 else self.player
+            if not point.advance(player, blockers, self.world_frame, self.level):
                 continue
-            armed = abs(point.column - character_column(self.player.state.target_x)) <= 3 and point.life >= 6
+            armed = abs(point.column - character_column(player.state.target_x)) <= 3 and point.life >= 6
             state = SequenceState(90 if armed else 84, current_x=point.x,
                                   target_x=point.x, facing=point.facing,
                                   actor_type=2, level_kind=self.level_kind)
@@ -2683,12 +2699,12 @@ class CombatEncounter:
         self.refresh_target()
         return events
 
-    def step(self, now, interval_seconds):
+    def step(self, now, interval_seconds, generation_player=None):
         # Key events can advance the Prince immediately, but not speed up AI.
         # Tk rounds to whole milliseconds; preserve phase rather than missing
         # every other tick when an 83 ms callback is just short of 83.333 ms.
         if self.last_guard_at is None or now - self.last_guard_at >= interval_seconds - 0.002:
-            self.generate_opponents()
+            self.generate_opponents(generation_player)
             if self.level is not None:
                 self.update_guard_alerts()
             self.advance_guard()

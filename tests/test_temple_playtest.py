@@ -91,9 +91,84 @@ class RecordContactTests(unittest.TestCase):
 class TemplePlaytestTests(unittest.TestCase):
     def harness(self, number=10, **options):
         options.setdefault('peaceful', True)
-        harness = Harness(number, draw=True, **options)
+        options.setdefault('draw', True)
+        harness = Harness(number, **options)
         self.addCleanup(harness.close)
         return harness
+
+    def climb_room10_from_below(self, harness):
+        scene = harness.scene
+        scene.audio = None
+        scene.jump_to_room(9, 2, 188, 1, redraw=False)
+        press(harness, 'up', True)
+        press(harness, 'shift', True)
+        harness.tick(16)
+        press(harness, 'up', False)
+        for _ in range(35):
+            if (scene.terrain_motion.row, scene.action) == (1, 15):
+                break
+            harness.tick()
+        press(harness, 'shift', False)
+        self.assertEqual((scene.room_id, scene.terrain_motion.row, scene.action, scene.player_x),
+                         (9, 1, 15, 189))
+        first, runner = scene.combat.guards
+        self.assertEqual((first.state.action, runner.generation_flags), (166, 1))
+        return runner
+
+    @unittest.skipUnless((ASSET_DIR / 'temple_level13.json').is_file(), 'Imported level 13 required')
+    def test_room10_reinforcement_starts_on_first_standing_frame_after_climb(self):
+        harness = self.harness(13, draw=False, peaceful=False)
+        guard = self.climb_room10_from_below(harness)
+        # FrameAdv 2:6252 counts from the frame after the climb changes rows.
+        self.assertEqual((guard.state.action, guard.state.target_x), (187, -102))
+        press(harness, 'L', True)
+        press(harness, 'L', False)
+        self.assertEqual((harness.scene.action, guard.state.action), (15, 187))
+        harness.tick()
+        self.assertEqual((harness.scene.action, guard.state.action), (45, 188))
+        harness.tick(9)
+        self.assertEqual((guard.selected_sequence, guard.state.action), (100, 202))
+
+    @unittest.skipUnless((ASSET_DIR / 'temple_level13.json').is_file(), 'Imported level 13 required')
+    def test_room10_standing_turn_preserves_the_crossing_jump_window(self):
+        harness = self.harness(13, draw=False, peaceful=False)
+        for turn_at, expected in ((191, 101), (192, 100)):
+            with self.subTest(guard_pose=turn_at):
+                guard = self.climb_room10_from_below(harness)
+                for _ in range(12):
+                    if guard.state.action == turn_at:
+                        break
+                    harness.tick()
+                self.assertEqual(guard.state.action, turn_at)
+                press(harness, 'L', True)
+                press(harness, 'L', False)
+                for _ in range(15):
+                    harness.tick()
+                    if guard.selected_sequence != 84:
+                        break
+                self.assertEqual(guard.selected_sequence, expected)
+                if expected == 101:
+                    self.assertEqual((harness.scene.action, guard.state.action), (49, 200))
+                    continue
+
+                scene = harness.scene
+                self.assertEqual((scene.action, guard.state.action), (49, 202))
+                harness.tick()  # The guard's first visible airborne pose.
+                press(harness, 'up', True)
+                press(harness, 'L', True)
+                harness.tick()
+                press(harness, 'L', False)
+                press(harness, 'up', False)
+                player = scene.sequence_state
+                self.assertLess(guard.state.target_x, player.target_x)
+                crossed_in_air = False
+                for _ in range(30):
+                    harness.tick()
+                    crossed_in_air |= (guard.state.target_x > player.target_x
+                                       and player.current_y < 0 and guard.state.current_y < 0)
+                self.assertTrue(crossed_in_air)
+                self.assertEqual((scene.room_id, scene.terrain_motion.row, scene.action,
+                                  scene.player_x, scene.combat.player.life), (9, 1, 15, 15, 3))
 
     @unittest.skipUnless((ASSET_DIR / 'temple_level11.json').is_file(), 'Imported level 11 required')
     def test_room4_right_turn_extends_the_spikes_before_ledge_alignment(self):
