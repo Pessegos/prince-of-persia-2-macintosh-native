@@ -155,17 +155,17 @@ class Environment:
             if special is None:
                 special = 119 if bridge_checked(scene.game.level.number, scene.room_id) else None
             column = character_column(int(contact))
-            combat_pending = False
-            if not fighting and not scene.peaceful and audio.current_music_group is not None:
+            options = {'special_when_idle': True} if special_when_idle else {}
+            if not fighting and not scene.peaceful:
                 # 5:5602-56be checks the current room's generation points and
                 # NPC cue flags before admitting a return from combat music.
                 guards, points = scene.combat.room_encounters.get(scene.room_id, ((), ()))
-                combat_pending = (any(point.active(motion.row, column) for point in points)
-                                  or any(guard.row == motion.row and guard.death_song_pending
-                                         and guard.death_song_frames < 7 for guard in guards))
+                if (any(point.active(motion.row, column) for point in points)
+                        or any(guard.row == motion.row and guard.death_song_pending
+                               and guard.death_song_frames < 7 for guard in guards)):
+                    options['combat_pending'] = True
             audio.ambient(scene.room_id, motion.row, column, fighting, scene.combat.player.alive,
-                          special=special, special_when_idle=special_when_idle,
-                          combat_pending=combat_pending)
+                          special=special, **options)
 
     # Drawing, in ScenePrototype.render order.
 
