@@ -183,8 +183,11 @@ ALL_COLOURS = frozenset((*(colour for kind in STAR_KINDS for colour in kind.step
 # The wind blows in rooms with this much sky. A gust: ticks between gusts (counted once
 # the last is over), how long one lasts, its streaks, and how far below the first the
 # second runs.
-OPEN_SKY = 0.04
-TICKS_BETWEEN_GUSTS = (60, 110)
+OPEN_SKY = 0.02
+TICKS_BETWEEN_GUSTS = (26, 58)
+OPENING_CLIFF = (6, 26)
+OPEN_COURTYARD = (8, 8)
+CLIFF_WIND_ORIGIN = (267, 25)
 GUST_TICKS = 44
 STREAKS_A_GUST = (1, 2)
 SECOND_STREAK_BELOW = (16, 32)
@@ -548,6 +551,7 @@ class RuinsAir:
     # The room's palette as the caves key their tables (colours_of), for the puffs.
     palette_key: tuple = ()
     chasm: bool = False
+    cliff_wind_sky: numpy.ndarray | None = None
 
     def in_sky(self, x, y):
         return 0 <= x < WIDTH and 0 <= y < HEIGHT and bool(self.sky[y, x])
@@ -788,6 +792,13 @@ def read_room(level_number, room, rgb, palette, covered=None, terrain=None, pain
     sand = sand_mask(rgb)
     desert = bool(open_sky >= DESERT_SKY and sand.mean() >= DESERT_SAND)
     chasm = (level_number, room) == (9, CHASM_ROOM)
+    place = level_number, room
+    cliff_wind_sky = None
+    if place == OPENING_CLIFF:
+        # The painted gradient is blue without matching the night-sky palette.
+        red, green, blue_channel = (rgb[..., channel] for channel in range(3))
+        cliff_wind_sky = (blue_channel > red) & (blue_channel > green)
+    windy = not (desert or chasm) and (open_sky >= OPEN_SKY or place in (OPENING_CLIFF, OPEN_COURTYARD))
     seed = level_number * 100 + room
     if desert:
         stars = place_desert_stars(sky, random.Random(seed + 41))
@@ -808,9 +819,10 @@ def read_room(level_number, room, rgb, palette, covered=None, terrain=None, pain
     elif desert:
         dunes = read_dunes(sand, horse=(level_number, room) == (9, HORSE_ROOM))
     return RuinsAir(sky, blue, tuple(stars), nearest_colours(palette, INK_COLOURS), desert,
-                    windy=open_sky >= OPEN_SKY and not (desert or chasm), covered=covered,
+                    windy=windy, covered=covered,
                     palette=palette_rgb(palette), grit=grit, ceilings=lines, luminance=luminance,
-                    dunes=dunes, palette_key=tuple(sorted(palette.items())), chasm=chasm)
+                    dunes=dunes, palette_key=tuple(sorted(palette.items())), chasm=chasm,
+                    cliff_wind_sky=cliff_wind_sky)
 
 
 def ruins_air(level_number, room, art, terrain=None, raised=None):
@@ -2082,6 +2094,22 @@ class RuinsAmbience:
         if self.shooter is not None:
             yield from shooter_pixels(self.shooter)
 
+    def draw_wind(self, canvas):
+        air = self.air
+        cliff_sky = air.cliff_wind_sky
+        for streak in self.streaks:
+            drawn = set()
+            for x, y, amount in streak.visible_pixels():
+                if cliff_sky is not None:
+                    # This wind is farther away, beyond the edge of the cliff.
+                    x, y = CLIFF_WIND_ORIGIN[0] + x // 2, CLIFF_WIND_ORIGIN[1] + y // 2
+                    if (x, y) in drawn:
+                        continue
+                    drawn.add((x, y))
+                if 0 <= x < WIDTH and 0 <= y < HEIGHT and not air.is_covered(x, y):
+                    if cliff_sky is None or cliff_sky[y, x]:
+                        canvas[x, y] = air.paler_than(tuple(canvas[x, y][:3]), amount)
+
     def draw(self, frame):
         """Only on the sky, and only where the frame still shows it: a gate or a tile
         coming down in front of the sky covers the stars too."""
@@ -2098,11 +2126,7 @@ class RuinsAmbience:
                 self.draw_cloud(frame, cloud, colours)
             canvas = frame.load()
         self.put_grit(canvas, self.grit_pixels())
-        # The wind, behind what the foreground covers, paler than what it crosses.
-        for streak in self.streaks:
-            for x, y, amount in streak.visible_pixels():
-                if 0 <= x < WIDTH and 0 <= y < HEIGHT and not air.is_covered(x, y):
-                    canvas[x, y] = air.paler_than(tuple(canvas[x, y][:3]), amount)
+        self.draw_wind(canvas)
         self.put_grit(canvas, self.pebble_pixels())
         # Kept to find the Prince in once he is drawn, while anything could fall on him.
         self.before_actors = frame.copy() if self.watches_the_prince() else None

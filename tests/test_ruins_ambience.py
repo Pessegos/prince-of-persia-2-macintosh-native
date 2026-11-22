@@ -844,9 +844,10 @@ class WindTests(unittest.TestCase):
 
     def test_only_a_room_open_to_the_sky_is_windy_and_never_the_desert(self):
         self.assertTrue(night(6, 4, (PURPLE, 30)).windy)
-        self.assertFalse(night(6, 4, (PURPLE, 12)).windy)
+        self.assertTrue(night(6, 4, (PURPLE, 12)).windy)
+        self.assertFalse(night(6, 4, (PURPLE, 5)).windy)
         self.assertFalse(read_room(9, 11, picture((PURPLE, 70), (SAND, 200)), PALETTE).windy)
-        ambience = RuinsAmbience(4, night(6, 4, (PURPLE, 12)), random.Random(1))
+        ambience = RuinsAmbience(4, night(6, 4, (PURPLE, 5)), random.Random(1))
         for _ in range(1000):
             ambience.advance()
             self.assertFalse(ambience.streaks)
@@ -860,7 +861,7 @@ class WindTests(unittest.TestCase):
             new = [streak for streak in wind.streaks if streak not in before]
             if new:
                 gusts.append((tick, new))
-        self.assertGreater(len(gusts), 380)
+        self.assertGreater(len(gusts), 585)
         self.assertEqual(gusts[0][0], 0)
         self.assertEqual({len(new) for _, new in gusts}, {1, 2})
         streaks = [streak for _, new in gusts for streak in new]
@@ -873,8 +874,8 @@ class WindTests(unittest.TestCase):
                 self.assertGreaterEqual(new[1].y - new[0].y, SECOND_STREAK_BELOW[0])
                 self.assertLessEqual(new[1].y - new[0].y, SECOND_STREAK_BELOW[1])
         gaps = [b - a for (a, _), (b, _) in zip(gusts, gusts[1:])]
-        self.assertGreaterEqual(min(gaps), 104)
-        self.assertLessEqual(max(gaps), 154)
+        self.assertGreaterEqual(min(gaps), 70)
+        self.assertLessEqual(max(gaps), 102)
 
     def test_it_is_paler_than_what_it_crosses_and_behind_the_foreground(self):
         rgb = picture((DEEP, 150), (PURPLE, 60))
@@ -1382,9 +1383,9 @@ class EveryRuinsRoomTests(unittest.TestCase):
 
     def test_the_horizontal_wind_blows_in_open_ruins_outside_the_desert_and_chasm(self):
         windy = {place for place, air in self.rooms.items() if air.windy}
-        self.assertEqual(windy, {(6, room) for room in (1, 4, 7, 8, 11, 12, 14, 20, 22)}
+        self.assertEqual(windy, {(6, room) for room in (1, 4, 7, 8, 11, 12, 14, 20, 22, 26)}
                          | {(7, room) for room in (13, 15, 16, 18, 19, 24, 25, 26, 27)}
-                         | {(8, 12)} | {(9, room) for room in (3, 4, 5, 7)})
+                         | {(8, 8), (8, 12)} | {(9, room) for room in (0, 3, 4, 5, 7)})
 
     def test_grit_comes_from_cracks_in_the_undersides_of_stone(self):
         from pop2.caverns import customized_rooms
@@ -1606,6 +1607,29 @@ class EveryRuinsRoomTests(unittest.TestCase):
 @unittest.skipUnless(RUINS_INSTALLED, 'Imported ruins resources required')
 class RealSceneTests(unittest.TestCase):
     """The same inputs with the toggle off and on, in the hidden real scene."""
+
+    def test_the_opening_cliff_has_distant_wind_on_its_first_tick(self):
+        from tools.audit_temple_routes import Harness
+
+        harness = Harness(6, peaceful=True, draw=True, god=True)
+        try:
+            scene = harness.scene
+            scene.cave_ambience_enabled = True
+            self.assertEqual(scene.room_id, 26)
+            with patch('pop2.ruins_ambience.RuinsWind',
+                       return_value=ruins_ambience.RuinsWind(random.Random(2))):
+                harness.tick()
+            ambience = scene.level_renderer.ambience
+            sky = ambience.air.cliff_wind_sky
+            scenery = Image.alpha_composite(scene.background, scene.foreground)
+            frame = scenery.copy()
+            ambience.draw_wind(frame.load())
+            changed = (numpy.asarray(frame) != numpy.asarray(scenery)).any(axis=2)
+            self.assertGreaterEqual(int(changed.sum()), 12)
+            self.assertFalse(changed[:, :250].any())
+            self.assertFalse(changed[~sky].any())
+        finally:
+            harness.close()
 
     def play(self, enabled):
         from tools.audit_temple_routes import Harness
