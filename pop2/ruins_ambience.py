@@ -1,6 +1,6 @@
 """Optional ambience for the ruins (levels six to nine): the night sky.
 
-A port improvement, drawn with the "Cave ambience" menu item like the caves'
+A port improvement, drawn with the "Ambient effects" menu item like the caves'
 (pop2.cavern_ambience) but made of the ruins' own things: the user did not want the
 caves' floating dust and drops again here, only, later, the puffs of dust their feet,
 tiles and gates raise (2026-11-22). Nothing comes from the original game and nothing

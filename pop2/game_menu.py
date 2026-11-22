@@ -132,7 +132,7 @@ class GameMenu:
             MenuItem("sound", "Game sounds", "Alt+T", checked=self.sound),
             MenuItem("menu_sounds", "Menu sounds", "", checked=self.menu_sounds),
             MenuItem("music", "Ambient music", "Alt+M", checked=self.music),
-            MenuItem("ambience", "Cave ambience", "Alt+A", checked=self.cave_ambience),
+            MenuItem("ambience", "Ambient effects", "Alt+A", checked=self.cave_ambience),
             MenuItem("fullscreen", "Fullscreen", "Alt+Enter", checked=self.fullscreen),
             MenuItem("copy_protection", "Copy protection", "", checked=self.copy_protection),
             MenuItem("options_back", "Back" if self.return_to_menu else "Close", ""),

@@ -2,7 +2,7 @@
 
 A port improvement. Nothing here comes from the original game, and nothing
 here touches it: the effect is drawn on the frame, behind the actors, while the
-"Cave ambience" menu item is on. It reads the room and never writes game state.
+"Ambient effects" menu item is on. It reads the room and never writes game state.
 Its random numbers come from a private generator, so turning it on cannot
 change an opponent, a route or a test.
 

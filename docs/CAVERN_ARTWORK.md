@@ -158,7 +158,7 @@ to level8 room5. The comparison is kept locally at
 
 An optional port effect, not a recovered behavior: the original has no dust,
 ash, water drops or cast light, and its torch does not behave like this.
-`pop2/cavern_ambience.py` draws them while Cave ambience (Options page, under
+`pop2/cavern_ambience.py` draws them while Ambient effects (Options page, under
 Display; Alt+A) is on, and `pop2/firelight.py` works out the light. It is off by default, and the
 choice is kept between sessions in `preferences.json` (`pop2/preferences.py`).
 
