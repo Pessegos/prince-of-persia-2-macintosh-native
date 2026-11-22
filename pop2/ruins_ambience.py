@@ -184,7 +184,7 @@ ALL_COLOURS = frozenset((*(colour for kind in STAR_KINDS for colour in kind.step
 # the last is over), how long one lasts, its streaks, and how far below the first the
 # second runs.
 OPEN_SKY = 0.04
-TICKS_BETWEEN_GUSTS = (90, 160)
+TICKS_BETWEEN_GUSTS = (60, 110)
 GUST_TICKS = 44
 STREAKS_A_GUST = (1, 2)
 SECOND_STREAK_BELOW = (16, 32)

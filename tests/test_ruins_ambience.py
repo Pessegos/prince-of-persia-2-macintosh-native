@@ -19,9 +19,9 @@ from pop2.paths import ASSET_DIR
 from pop2 import ruins_ambience
 from pop2.ruins_ambience import (
     BODY_PALER, BRIGHT, CURL_RADIUS, CURL_RISE, CURL_SPEED, DESERT_ROOMS, DESERT_STAR_APART, DESERT_STAR_CLEAR, DESERT_STARS,
-    DIM, DIP_TICKS, FAINT, FIREBALL, FIRST_SHOOTER, GOLD_BRIGHT, GRAZER, GRIT_HEAD, GUST_TICKS, HAZE_APART, HAZE_DIM,
+    DIM, DIP_TICKS, FAINT, FIREBALL, FIRST_SHOOTER, GOLD_BRIGHT, GRAZER, GRIT_HEAD, HAZE_APART, HAZE_DIM,
     HAZE_MID, HEIGHT, MID, NORMAL, ROSE_BRIGHT, ROSE_MID, SECOND_STREAK_BELOW, SHOOTERS, STAR_APART, STAR_CLEAR, STARS_PER_SKY,
-    STREAK_SPEED, TICKS_BETWEEN_GUSTS, TICKS_BETWEEN_SHOOTERS, WIDTH, DesertWind, Dunes, RuinsAmbience, Shooter,
+    STREAK_SPEED, TICKS_BETWEEN_SHOOTERS, WIDTH, DesertWind, Dunes, RuinsAmbience, Shooter,
     blueness, new_streak,
     paler, read_room, ribbon, shooter_path, shooter_pixels, sky_mask, streak_pixels,
 )
@@ -616,8 +616,9 @@ class ShootingStarTests(unittest.TestCase):
 
 
 class DrawingTests(unittest.TestCase):
-    def busy(self):
-        ambience = RuinsAmbience(11, night(6, 11, (DEEP, 150), (PURPLE, 60)), random.Random(8))
+    def busy(self, *, windy=True, palette=PALETTE):
+        air = read_room(6, 11, picture((DEEP, 150), (PURPLE, 60)), palette)
+        ambience = RuinsAmbience(11, replace(air, windy=windy), random.Random(8))
         for _ in range(200):
             ambience.advance()
         ambience.twinkles[0] = [0, 2]
@@ -625,7 +626,7 @@ class DrawingTests(unittest.TestCase):
         return ambience
 
     def test_only_the_sky_still_showing_is_drawn(self):
-        ambience = self.busy()
+        ambience = self.busy(windy=False)
         rgb = picture((DEEP, 150), (PURPLE, 60))
         # A gate down in front of the sky, drawn after the room was read.
         rgb[0:150, 100:220] = STONE
@@ -640,8 +641,8 @@ class DrawingTests(unittest.TestCase):
     def test_every_pixel_left_is_a_colour_of_the_palette(self):
         palette = {index: (*colour, 255) for index, colour in enumerate(
             (DEEP, PURPLE, STONE, (60, 60, 120), (130, 130, 170), (220, 220, 230), (200, 140, 140)))}
-        ambience = self.busy()
-        ambience.air = replace(ambience.air, inks=read_room(6, 11, picture(), palette).inks)
+        ambience = self.busy(palette=palette)
+        self.assertTrue(ambience.streaks)
         frame = frame_of(picture((DEEP, 150), (PURPLE, 60)))
         ambience.draw(frame)
         shown = {tuple(value) for value in numpy.asarray(frame).reshape(-1, 4)}
@@ -847,7 +848,7 @@ class WindTests(unittest.TestCase):
             ambience.advance()
             self.assertEqual(ambience.streaks, [])
 
-    def test_gusts_balance_both_streak_styles_at_the_existing_cadence(self):
+    def test_gusts_keep_both_styles_balanced_with_shorter_pauses(self):
         ambience = RuinsAmbience(4, replace(night(6, 4), stars=()), random.Random(2))
         gusts = []
         for tick in range(60000):
@@ -857,7 +858,8 @@ class WindTests(unittest.TestCase):
             if new:
                 gusts.append((tick, new))
             ambience.advance_streaks()
-        self.assertGreater(len(gusts), 25)
+        self.assertGreater(len(gusts), 380)
+        self.assertLessEqual(gusts[0][0], 109)
         self.assertEqual({len(new) for _, new in gusts}, {1, 2})
         streaks = [streak for _, new in gusts for streak in new]
         winding = sum(isinstance(streak, ruins_ambience.WindingStreak) for streak in streaks)
@@ -869,8 +871,8 @@ class WindTests(unittest.TestCase):
                 self.assertGreaterEqual(new[1].y - new[0].y, SECOND_STREAK_BELOW[0])
                 self.assertLessEqual(new[1].y - new[0].y, SECOND_STREAK_BELOW[1])
         gaps = [b - a for (a, _), (b, _) in zip(gusts, gusts[1:])]
-        self.assertGreaterEqual(min(gaps), GUST_TICKS + TICKS_BETWEEN_GUSTS[0])
-        self.assertLessEqual(max(gaps), GUST_TICKS + TICKS_BETWEEN_GUSTS[1] + 1)
+        self.assertGreaterEqual(min(gaps), 104)
+        self.assertLessEqual(max(gaps), 154)
 
     def test_it_is_paler_than_what_it_crosses_and_behind_the_foreground(self):
         rgb = picture((DEEP, 150), (PURPLE, 60))
