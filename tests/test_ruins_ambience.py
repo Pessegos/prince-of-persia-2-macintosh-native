@@ -1383,7 +1383,11 @@ class EveryRuinsRoomTests(unittest.TestCase):
         for frame in (lower, higher):
             self.assertLessEqual(len(frame), 17)
             self.assertLessEqual(max(x for x, _, _ in frame) - min(x for x, _, _ in frame), 2)
-            self.assertLess(max(max(amount) for _, _, amount in frame), 30)
+            peak = max(max(amount) for _, _, amount in frame)
+            self.assertGreaterEqual(peak, 32)
+            self.assertLessEqual(peak, 35)
+            self.assertLess(max(frame[0][2]), peak)
+            self.assertLess(max(frame[-1][2]), peak)
         self.assertEqual(list(ruins_ambience.chasm_updraft_pixels(period - phase + 69)), [])
         for path, turn in ruins_ambience.CHASM_UPDRAFT_PATHS:
             self.assertGreater(turn, 90)
