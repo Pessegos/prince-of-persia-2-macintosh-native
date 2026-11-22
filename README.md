@@ -29,7 +29,7 @@ I'm trying to stay as close to the original as possible, while still making some
   - [Overlapping Sound Effects](#overlapping-sound-effects)
   - [Ledge Masking](#ledge-masking)
   - [Lava Overhaul](#lava-overhaul)
-  - [Cave Ambience](#cave-ambience)
+  - [Ambient Effects](#ambient-effects)
   - [Game Artwork](#game-artwork)
   - [Stone Gates](#stone-gates)
   - [Gate Sounds](#gate-sounds)
@@ -76,7 +76,7 @@ I wanted the menus to feel like part of the game itself, so I gave them differen
 
 ### Options
 
-Here you can adjust the sound and display settings, enable extras like Cave Ambience, or disable the original copy protection. I also added sounds for navigating the menus, which can be turned off separately from the game's audio.
+Here you can adjust the sound and display settings, enable extras like Ambient Effects, or disable the original copy protection. I also added sounds for navigating the menus, which can be turned off separately from the game's audio.
 
 <img src="docs/github readme/menus/options.png" alt="Options page with Sound, Display and Game settings" width="700">
 
@@ -210,18 +210,18 @@ The animation also required some careful masking to prevent overlapping, and I f
 
 <br/>
 
-## Cave Ambience
+## Ambient Effects
 
 I wanted the caverns to feel a little more alive, so I added optional visual ambience throughout levels 3-5. Torches and lava cast a subtle, shifting glow with a little heat haze, while water drips from stalactites and ash and dust float through the air.
 
 <p align="center">
-  <img src="docs/github readme/cave-ambience-preview.gif" alt="Cave ambience off for two seconds, then on for four seconds, as droplets land on the cavern floor and in lava" width="700">
+  <img src="docs/github readme/cave-ambience-preview.gif" alt="Ambient effects off for two seconds, then on for four seconds, as droplets land on the cavern floor and in lava" width="700">
 </p>
 
 The Prince also kicks up dust when running or landing, along with gates, doors and falling floors. I tried to keep everything subtle and close to the game's original palette.
 
 <p align="center">
-  <img src="docs/github readme/cave-ambience-action.gif" alt="Cave ambience off and on as the Level 4 entrance closes and the Prince runs a short distance to the left" width="700">
+  <img src="docs/github readme/cave-ambience-action.gif" alt="Ambient effects off and on as the Level 4 entrance closes and the Prince runs a short distance to the left" width="700">
 </p>
 
 The effects are off by default, but can be enabled through F1 > Options or with Alt+A. The setting is saved between sessions.
