@@ -51,8 +51,8 @@ off it, sweeps loose sand up off the plain, runs streams of sand along the groun
 the rocks (sand runs at a big rock's foot, grains bounce up its face, and the ground
 lies still in its lee) and now and then a small dust devil of sand grains spins along
 the crest for a while, each its own size, shape, ways and life. A few low grains curl
-around its foot, with short sprays of sand skipping away downwind. All of it is a little
-gentler than the sand's own colours, and none of it blows over the blue dunes far away.
+around its foot, with short sprays of sand skipping away to either side. All of it is
+a little gentler than the sand's own colours, and none of it blows over the blue dunes far away.
 """
 
 from collections import deque
@@ -1985,7 +1985,7 @@ class RuinsAmbience:
             self.devil = None
 
     def advance_foot(self, devil, strength, base_x, base_y):
-        """Twist a few grains around the foot and let others skip downwind."""
+        """Twist a few grains around the foot and spray others to either side."""
         rng = self.rng
         if devil.foot > 0 and strength > 0:
             for _ in range(some(rng, FOOT_GRAINS, strength)):
@@ -1994,9 +1994,10 @@ class RuinsAmbience:
                                         rng.randint(*FOOT_LIFE)))
             if strength >= 0.5 and self.tick >= devil.next_spray:
                 devil.next_spray = self.tick + rng.randint(*FOOT_SPRAY_TICKS)
+                side = rng.choice((-1, 1))
                 for _ in range(some(rng, FOOT_SPRAY_GRAINS, strength)):
-                    devil.thrown.append(Thrown(base_x + rng.uniform(-1, 2), base_y - rng.uniform(0, 1.5),
-                                               base_y, rng.uniform(*THROWN_DX), rng.uniform(*THROWN_DY)))
+                    devil.thrown.append(Thrown(base_x + side * rng.uniform(-1, 2), base_y - rng.uniform(0, 1.5),
+                                               base_y, side * rng.uniform(*THROWN_DX), rng.uniform(*THROWN_DY)))
         kicks = []
         for kick in devil.kicks:
             kick.angle += kick.spin

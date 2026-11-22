@@ -357,7 +357,8 @@ class DuneTests(unittest.TestCase):
         for x, y in changed:
             self.assertGreaterEqual(y, foot - ruins_ambience.DEVIL_HEIGHTS[1] - 12)
             self.assertLessEqual(y, foot + 3)
-            self.assertGreaterEqual(x, devil.start - 10)
+            # Sand sprayed left can travel about 31 pixels from the wandering base.
+            self.assertGreaterEqual(x, devil.start - devil.wander - 32)
         while ambience.devil is not None:
             ambience.advance()
         low, high = ruins_ambience.TICKS_BETWEEN_DEVILS
@@ -390,7 +391,9 @@ class DuneTests(unittest.TestCase):
         ambience = self.quiet(13, rock=False)
         ambience.devil_wait = 1
         plain = picture((PURPLE, 70), (DEEP, CREST - 70), (SAND, HEIGHT - CREST))
-        sprays_seen, kicks_seen, most_bright_pixels = 0, 0, 0
+        kicks_seen = 0
+        spray_sides = []
+        most_bright_pixels = {-1: 0, 1: 0}
         for _ in range(120):
             ambience.advance()
             self.assertFalse(ambience.clouds)
@@ -405,9 +408,13 @@ class DuneTests(unittest.TestCase):
                 self.assertLessEqual(abs(x - base_x), 4.25)
                 self.assertTrue(base_y - 2 <= y <= base_y + 1, (y, base_y))
             for grain in devil.thrown:
-                self.assertGreater(grain.dx, 0)
+                self.assertNotEqual(grain.dx, 0)
                 self.assertTrue(grain.ground - 6 <= grain.y < grain.ground + 1)
-            sprays_seen += sum(grain.age == 1 for grain in devil.thrown) >= 4
+            new_grains = [grain for grain in devil.thrown if grain.age == 1]
+            if len(new_grains) >= 4:
+                sides = {1 if grain.dx > 0 else -1 for grain in new_grains}
+                self.assertEqual(len(sides), 1)
+                spray_sides.extend(sides)
             pixels = list(ambience.desert_pixels())
             if devil.kicks:
                 self.assertTrue(any(abs(y - base_y) <= 2 and abs(x - base_x) <= devil.foot + 1
@@ -416,12 +423,14 @@ class DuneTests(unittest.TestCase):
                 frame = frame_of(plain)
                 canvas = frame.load()
                 ambience.put_sand(canvas)
-                spray = {(x, y) for x, y, _ in pixels
-                         if x > base_x + 4 and abs(y - base_y) <= 6 and canvas[x, y][1] >= SAND[1] + 15}
-                most_bright_pixels = max(most_bright_pixels, len(spray))
+                for side in most_bright_pixels:
+                    spray = {(x, y) for x, y, _ in pixels if (x - base_x) * side > 4
+                             and abs(y - base_y) <= 6 and canvas[x, y][1] >= SAND[1] + 15}
+                    most_bright_pixels[side] = max(most_bright_pixels[side], len(spray))
         self.assertGreater(kicks_seen, 0)
-        self.assertGreaterEqual(sprays_seen, 3)
-        self.assertGreaterEqual(most_bright_pixels, 5)
+        self.assertEqual(set(spray_sides), {-1, 1})
+        self.assertTrue(any(first == second for first, second in zip(spray_sides, spray_sides[1:])))
+        self.assertGreaterEqual(min(most_bright_pixels.values()), 5)
 
     def test_the_devil_s_foot_does_not_trip_on_a_dip_in_the_crest(self):
         crest = numpy.full(WIDTH, CREST)
