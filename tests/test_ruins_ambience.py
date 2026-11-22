@@ -1348,7 +1348,7 @@ class EveryRuinsRoomTests(unittest.TestCase):
         self.assertFalse(horse.sand[:310, 268:370].any())
         self.assertTrue(horse.open_sand[280:330, :80].any())
 
-    def test_chasm_has_two_sandy_banks_and_opposing_air_currents(self):
+    def test_chasm_sand_falls_from_each_ledge_and_a_little_rises_with_the_wind(self):
         air = self.rooms[9, ruins_ambience.CHASM_ROOM]
         self.assertTrue(air.chasm)
         self.assertFalse(air.windy)
@@ -1362,12 +1362,23 @@ class EveryRuinsRoomTests(unittest.TestCase):
         later = next(ruins_ambience.chasm_fall_pixels(18, sand))
         self.assertGreater(later[1], first[1])
         self.assertLess(later[0], 165)
+        falling = {(x, y) for tick in range(90) for x, y, _ in ruins_ambience.chasm_fall_pixels(tick, sand)}
+        for x_tip, y_tip in ((132, 241), (77, 284), (40, 325)):
+            self.assertTrue(any(x_tip <= x < x_tip + 20 and y_tip + 10 <= y < y_tip + 35
+                                for x, y in falling), (x_tip, y_tip))
+
         lower = next(ruins_ambience.chasm_updraft_pixels(12))
         higher = next(ruins_ambience.chasm_updraft_pixels(32))
         rim = next(ruins_ambience.chasm_updraft_pixels(37))
         self.assertGreater(lower[1], higher[1])
         self.assertGreater(higher[1], rim[1])
-        self.assertGreater(rim[0], higher[0])
+        self.assertLessEqual(max(lower[0], higher[0], rim[0]) - min(lower[0], higher[0], rim[0]), 3)
+        low_sand = next(ruins_ambience.chasm_rising_sand_pixels(8))
+        high_sand = next(ruins_ambience.chasm_rising_sand_pixels(20))
+        self.assertGreater(low_sand[1], high_sand[1])
+        self.assertLessEqual(abs(low_sand[0] - high_sand[0]), 2)
+        for tick in range(90):
+            self.assertLessEqual(len(list(ruins_ambience.chasm_rising_sand_pixels(tick))), 7)
 
     def test_no_random_shooting_star_over_the_desert(self):
         rng = random.Random(0)

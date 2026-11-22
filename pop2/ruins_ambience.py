@@ -46,8 +46,8 @@ the Prince's steps, skids and landings, a loose floor landing, a gate or a door 
 down. They are the caves' own puffs, in the pale rose of the ruins' grit.
 
 The desert. One wind runs from the chasm along the dunes of level nine and up to the
-horse. Sand trickles over the left cliff and a rising current follows the right wall,
-turning out over the sand bank.
+horse. Sand trickles off the ledges of the left cliff. Wisps of rising air carry a
+little sand on the right side of the gorge.
 The wind comes in stronger gusts, now and then two or
 three close together, then a lull, each its own strength, speed and stretch of the room,
 blowing harder and softer as it goes. Each runs along the crest of the near dune and blows a low spray of sand
@@ -1973,49 +1973,67 @@ class RuinsAmbience:
         return frame
 
 
+# Each painted ledge has its own lip, grain count and shortest time in free fall.
+CHASM_LEDGES = ((132, 241, 26, 23), (77, 284, 16, 17), (40, 325, 12, 12))
+
+
 def chasm_fall_pixels(tick, sand):
-    """Grains roll over the left lip, then fall away from the wall."""
+    """Grains spill from each exposed ledge on the left cliff."""
     colours = (NEAR_SANDS[0], SAND[0], FAR_SANDS[1])
-    for index in range(28):
-        life = 23 + index * 7 % 10
-        age = (tick + index * 17) % (54 + index * 11 % 25)
-        run = 6 + index * 3 % 9
-        fall = age - run
-        ridge = 242 + index * 5 % 7 - 3
-        if fall >= life:
-            continue
-        if fall < 0:
-            x = 132 + round(1.65 * fall)
-            y = ridge
-            if sand[y, x]:
-                yield x, y, SAND[0]
-            continue
-        x = 131 + index * 3 % 7 + round((0.21 + 0.09 * (index % 5)) * fall)
-        y = ridge + round(0.35 * fall + (0.07 + 0.009 * (index % 4)) * fall ** 2)
-        shade = min(2, fall * 3 // life)
-        yield x, y, colours[shade]
-        if index % 5 == 0 and 5 <= fall < 20:
-            yield x, y - 2, colours[min(2, shade + 1)]
+    for ledge, (lip_x, lip_y, grains, shortest_fall) in enumerate(CHASM_LEDGES):
+        for index in range(grains):
+            life = shortest_fall + index * 7 % 10
+            age = (tick + ledge * 13 + index * 17) % (54 + index * 11 % 25)
+            run = 6 + index * 3 % 9
+            fall = age - run
+            ridge = lip_y + index * 5 % 7 - 3
+            if fall >= life:
+                continue
+            if fall < 0:
+                x = lip_x + round(1.65 * fall)
+                if sand[ridge, x]:
+                    yield x, ridge, SAND[0]
+                continue
+            x = lip_x - 1 + index * 3 % 7 + round((0.21 + 0.09 * (index % 5)) * fall)
+            y = ridge + round(0.35 * fall + (0.07 + 0.009 * (index % 4)) * fall ** 2)
+            shade = min(2, fall * 3 // life)
+            yield x, y, colours[shade]
+            if index % 4 == 0 and 4 <= fall < 20:
+                yield x, y - 2, colours[min(2, shade + 1)]
 
 
 def chasm_updraft_pixels(tick):
-    """Air climbs just inside the right wall and bends over its sandy rim."""
-    for index in range(31):
-        life = 38 + index * 5 % 14
-        age = (tick + index * 19) % (57 + index * 7 % 25)
+    """Thin wisps of air rise through the open space next to the right cliff."""
+    for index in range(7):
+        life = 38 + index * 7 % 14
+        age = (tick + index * 19) % (60 + index * 7 % 25)
         if age >= life:
             continue
-        trail = 9 if index % 8 == 0 else 1
-        for step in range(trail):
-            progress = (age - 0.62 * step) / life
-            if progress < 0:
-                break
-            y = 355 + index % 9 - round(135 * progress ** 0.9)
-            wall = 339 + 0.43 * max(0, y - 243) + 1.27 * max(0, 243 - y)
-            sway = 3 * math.sin(6 * progress + index)
-            x = round(wall + (index % 11 - 5) * 1.85 + sway)
-            shade = 1 if progress < 0.12 or progress > 0.91 else max(1, 3 - step // 3)
+        head = 350 + index % 5 - round((119 + index * 2) * age / life)
+        length = 14 + index * 3 % 9
+        for tail in range(length):
+            if tail % 7 == 6:
+                continue
+            sway = 1.4 * math.sin(age * 0.15 - tail * 0.17 + index)
+            x = 312 + 6 * index + round(sway)
+            y = head + tail
+            lit = 4 <= tail < length - 4 and 4 <= age < life - 7
+            shade = 1
+            if lit:
+                shade = 3 if index % 3 == 0 else 2
             yield x, y, LILAC[shade]
+
+
+def chasm_rising_sand_pixels(tick):
+    """A few grains lift almost straight up inside the current."""
+    for index in range(7):
+        life = 25 + index * 5 % 8
+        age = (tick + index * 19) % (55 + index * 7 % 23)
+        if age >= life:
+            continue
+        x = 328 + index * 3 + round(math.sin(age * 0.19 + index))
+        y = 289 + index * 3 - round((60 + index * 3) * age / life)
+        yield x, y, SAND[min(2, age * 3 // life)]
 
 
 @dataclass
@@ -2389,7 +2407,8 @@ class DesertWind:
         drawn = {}
         pixels = ((x - origin, y, colour) for x, y, colour in self.desert_pixels(origin))
         if air.chasm:
-            pixels = chain(pixels, chasm_fall_pixels(self.tick, air.dunes.sand), chasm_updraft_pixels(self.tick))
+            pixels = chain(pixels, chasm_fall_pixels(self.tick, air.dunes.sand),
+                           chasm_updraft_pixels(self.tick), chasm_rising_sand_pixels(self.tick))
         for x, y, colour in pixels:
             if 0 <= x < WIDTH and 0 <= y < HEIGHT and not air.is_covered(x, y):
                 drawn[x, y] = inks[colour][:3]
