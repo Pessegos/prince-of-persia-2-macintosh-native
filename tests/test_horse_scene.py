@@ -137,6 +137,43 @@ class HorseSceneTests(unittest.TestCase):
                 self.assertIsNone(player.frame().convert('RGB').crop((510, 0, 512, 384)).getbbox())
             player.advance(6 / MAC_TICKS_PER_SECOND)
 
+    def test_the_exterior_shots_share_the_horse_room_stars_when_ambience_is_on(self):
+        from PIL import ImageChops
+        from pop2.caverns import cavern_room
+        from pop2.ruins_ambience import HORSE_ROOM, ruins_air
+        from tools.audit_temple_routes import Harness
+
+        h = Harness(9, draw=True, god=True)
+        try:
+            scene = h.scene
+            scene.audio = None
+            scene.cave_ambience_enabled = True
+            self.assertTrue(scene.start_temple_ride(lambda keep_music=False: None))
+            player = scene.intro
+            lit = player.frame()
+            air = ruins_air(9, HORSE_ROOM, cavern_room(HORSE_ROOM, level_number=9, retouched=True))
+            for x, y, kind in air.stars:
+                self.assertEqual(lit.getpixel((x, y)), air.inks[kind.steps[-1]])
+
+            for delta in (1, 7, 8, 8):
+                player.advance(delta)
+                lit = player.frame()
+                scene.cave_ambience_enabled = False
+                clear = player.frame()
+                scene.cave_ambience_enabled = True
+                sky, points = player.horse_stars[player.horse_sky_palette]
+                self.assertTrue(any(lit.getpixel((x, y)) != clear.getpixel((x, y)) for x, y, _ in points))
+                for x, y, _ in points:
+                    if player.display.getpixel((x, y)) not in sky:
+                        self.assertEqual(lit.getpixel((x, y)), clear.getpixel((x, y)))
+
+            player.advance(60)
+            lit = player.frame()
+            scene.cave_ambience_enabled = False
+            self.assertIsNone(ImageChops.difference(lit.convert('RGB'), player.frame().convert('RGB')).getbbox())
+        finally:
+            h.close()
+
     def test_the_arrival_statue_survives_the_first_gameplay_frame(self):
         from pop2.caverns import cavern_room
         from pop2.intro import IntroAssets, IntroPlayer

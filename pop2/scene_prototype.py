@@ -3121,7 +3121,8 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         self.after_vision = finish
         if self.audio is not None:
             self.audio.reset()
-        self.intro = IntroPlayer(assets, self.audio if part_index is None else None)
+        self.intro = IntroPlayer(assets, self.audio if part_index is None else None,
+                                 ambience=lambda: getattr(self, 'cave_ambience_enabled', False))
         if part_index is not None:
             self.intro.audio = self.audio
             self.intro.seek_operation(part_index)

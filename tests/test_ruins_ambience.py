@@ -1610,7 +1610,7 @@ class EveryRuinsRoomTests(unittest.TestCase):
 class RealSceneTests(unittest.TestCase):
     """The same inputs with the toggle off and on, in the hidden real scene."""
 
-    def test_the_opening_cliff_draws_wind_stars_and_sand_on_its_first_tick(self):
+    def test_the_opening_cliff_draws_sand_and_stars_before_the_wind_fades_in(self):
         from tools.audit_temple_routes import Harness
 
         harness = Harness(6, peaceful=True, draw=True, god=True)
@@ -1620,10 +1620,14 @@ class RealSceneTests(unittest.TestCase):
             self.assertEqual(scene.room_id, 26)
             with patch('pop2.ruins_ambience.RuinsWind',
                        return_value=ruins_ambience.RuinsWind(random.Random(2))):
-                harness.tick()
+                scene.render()
             ambience = scene.level_renderer.ambience
-            sky = ambience.air.cliff_wind_sky
             scenery = Image.alpha_composite(scene.background, scene.foreground)
+            first = scenery.copy()
+            ambience.draw_wind(first.load())
+            self.assertEqual(first.tobytes(), scenery.tobytes())
+            harness.tick()
+            sky = ambience.air.cliff_wind_sky
             frame = scenery.copy()
             ambience.draw_wind(frame.load())
             changed = (numpy.asarray(frame) != numpy.asarray(scenery)).any(axis=2)
@@ -1645,6 +1649,13 @@ class RealSceneTests(unittest.TestCase):
             self.assertTrue(stars_and_sand[319:, 375:387].any())
             self.assertLessEqual(int(grains.sum()), 30)
             self.assertFalse(grains[:, :150].any())
+
+            early_gain = (numpy.asarray(frame, dtype=int) - numpy.asarray(scenery)).sum()
+            harness.tick(ruins_ambience.CLIFF_WIND_FADE_TICKS - 1)
+            full_wind = scenery.copy()
+            ambience.draw_wind(full_wind.load())
+            self.assertGreater((numpy.asarray(full_wind, dtype=int) - numpy.asarray(scenery)).sum(),
+                               early_gain * 3)
         finally:
             harness.close()
 

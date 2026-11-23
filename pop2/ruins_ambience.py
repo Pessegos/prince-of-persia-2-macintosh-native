@@ -188,6 +188,8 @@ TICKS_BETWEEN_GUSTS = (26, 58)
 OPENING_CLIFF = (6, 26)
 OPEN_COURTYARD = (8, 8)
 CLIFF_WIND_ORIGIN = (267, 25)
+CLIFF_WIND_FADE_TICKS = 10
+RUINS_WIND_PRIME_TICKS = 12
 GUST_TICKS = 44
 STREAKS_A_GUST = (1, 2)
 SECOND_STREAK_BELOW = (16, 32)
@@ -578,10 +580,10 @@ class RuinsAir:
     def is_covered(self, x, y):
         return self.covered is not None and bool(self.covered[y, x])
 
-    def paler_than(self, behind, amount):
-        key = behind, amount
+    def paler_than(self, behind, amount, *, allow_same=False):
+        key = behind, amount, allow_same
         if key not in self.paler:
-            self.paler[key] = (*paler(behind, amount, self.palette), 255)
+            self.paler[key] = (*paler(behind, amount, self.palette, allow_same=allow_same), 255)
         return self.paler[key]
 
     def gentle(self, behind, drawn, amount=GENTLE):
@@ -597,13 +599,13 @@ class RuinsAir:
         return self.gentler[key]
 
 
-def paler(behind, amount, palette):
-    """The palette colour nearest to a few steps paler than behind, never behind itself."""
+def paler(behind, amount, palette, *, allow_same=False):
+    """The nearest paler palette colour, with the base eligible during a fade."""
     wanted = numpy.minimum(255, numpy.array(behind) + amount)
     distance = (((palette - wanted) * (2, 3, 2)) ** 2).sum(axis=1)
     for index in distance.argsort(kind='stable'):
         colour = tuple(int(value) for value in palette[index])
-        if colour != tuple(behind) and sum(colour) > sum(behind):
+        if sum(colour) > sum(behind) or (allow_same and colour == tuple(behind)):
             return colour
     return tuple(behind)
 
@@ -1490,7 +1492,7 @@ class RuinsWind:
 
     def prime(self):
         """Have the first gust in view when the Prince reaches open air."""
-        for _ in range(12):
+        for _ in range(RUINS_WIND_PRIME_TICKS):
             self.advance()
 
     def advance(self):
@@ -2120,6 +2122,11 @@ class RuinsAmbience:
     def draw_wind(self, canvas):
         air = self.air
         cliff_sky = air.cliff_wind_sky
+        opacity = 1.0
+        if cliff_sky is not None and self.wind is not None:
+            opacity = min(1.0, (self.wind.tick - RUINS_WIND_PRIME_TICKS) / CLIFF_WIND_FADE_TICKS)
+            if opacity <= 0:
+                return
         for streak in self.streaks:
             drawn = set()
             for x, y, amount in streak.visible_pixels():
@@ -2131,7 +2138,9 @@ class RuinsAmbience:
                     drawn.add((x, y))
                 if 0 <= x < WIDTH and 0 <= y < HEIGHT and not air.is_covered(x, y):
                     if cliff_sky is None or cliff_sky[y, x]:
-                        canvas[x, y] = air.paler_than(tuple(canvas[x, y][:3]), amount)
+                        if opacity < 1.0:
+                            amount = tuple(round(channel * opacity) for channel in amount)
+                        canvas[x, y] = air.paler_than(tuple(canvas[x, y][:3]), amount, allow_same=opacity < 1.0)
 
     def draw(self, frame):
         """Only on the sky, and only where the frame still shows it: a gate or a tile

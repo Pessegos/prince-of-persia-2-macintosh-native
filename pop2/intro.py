@@ -17,6 +17,9 @@ from pop2.paths import ASSET_DIR
 
 SIZE = (512, 384)
 CARPET_CLIFF_SHAPE, CARPET_CLIFF_PALETTE = 404650, 403502
+# Backdrop shape to sky palette for the horse, dunes, gorge and temple exterior.
+HORSE_SKY_PALETTES = {404250: 403500, 625385: 625379, 404264: 403500, 625371: 625371}
+TEMPLE_EXTERIOR_SKY = frozenset({206, 216})
 # Classic Macintosh VBL clock, also used by Mini vMac's host timer.
 MAC_TICKS_PER_SECOND = 60.14742
 STORY_RECT = (62, 64, 292, 448)
@@ -449,6 +452,8 @@ class IntroPlayer:
         self.ambience = ambience
         self.carpet_cliff = False
         self.carpet_stars = None
+        self.horse_sky_palette = None
+        self.horse_stars = None
         self.variant, self.prince = variant, prince
         program = assets.program
         self.operations = program["variants"][str(variant)] if variant is not None else program["operations"]
@@ -542,6 +547,8 @@ class IntroPlayer:
         self.target.paste(crop, region[:2], mask)
         if self.program_kind == "carpet" and resource_id == CARPET_CLIFF_SHAPE:
             self.carpet_cliff = True
+        elif self.program_kind == "temple" and resource_id in HORSE_SKY_PALETTES:
+            self.horse_sky_palette = HORSE_SKY_PALETTES[resource_id]
 
     def text(self, resource_id, index, initial, dx, dy, dialog=False):
         colors = ((8, 255), (6, 3), (5, 14))
@@ -817,6 +824,7 @@ class IntroPlayer:
             from pop2.caverns import room_indices, room_palette
 
             level, room = args
+            self.horse_sky_palette = None
             self.target.paste(room_indices(level, room - 1), (0, 0))
             if level == 10:
                 colors = room_palette(level)
@@ -1048,6 +1056,29 @@ class IntroPlayer:
         indices = {colour: index for index, colour in palette.items()}
         return [(x, y, int(backdrop[y, x]), indices[inks[kind.steps[-1]][:3]]) for x, y, kind in stars]
 
+    def horse_star_layers(self):
+        """Keep the desert's stars behind the silhouettes in each exterior shot."""
+        from pop2.caverns import cavern_room, scenery_available
+        from pop2.ruins_ambience import HORSE_ROOM, is_sky, nearest_colours, ruins_air
+
+        if not scenery_available(9):
+            return {}
+        stars = ruins_air(9, HORSE_ROOM, cavern_room(HORSE_ROOM, level_number=9, retouched=True)).stars
+        layers = {}
+        for palette_id in set(HORSE_SKY_PALETTES.values()):
+            palette = self.assets.palettes[palette_id]
+            if palette_id == 625371:
+                # The dark approach has its own muted blue and violet colours.
+                sky = TEMPLE_EXTERIOR_SKY
+                points = [(x, y, 149 if kind.cross else 191) for x, y, kind in stars]
+            else:
+                sky = {index for index, colour in palette.items() if is_sky(colour)}
+                inks = nearest_colours(palette, {kind.steps[-1] for _, _, kind in stars})
+                indices = {colour: index for index, colour in palette.items()}
+                points = [(x, y, indices[inks[kind.steps[-1]][:3]]) for x, y, kind in stars]
+            layers[palette_id] = sky, points
+        return layers
+
     def frame(self):
         if self.frame_cache is None:
             frame = self.display.convert("P")
@@ -1058,10 +1089,20 @@ class IntroPlayer:
             if self.status is not None:
                 self.frame_cache.paste(self.status, (0, 365))
         frame = self.frame_cache.copy()
-        if self.carpet_cliff and self.ambience is not None and self.ambience():
+        if self.ambience is None or not self.ambience():
+            return frame
+        if self.carpet_cliff:
             if self.carpet_stars is None:
                 self.carpet_stars = self.opening_star_indices()
             for x, y, background, ink in self.carpet_stars:
                 if self.display.getpixel((x, y)) == background:
                     frame.putpixel((x, y), (*self.palette[ink], 255))
+        elif self.horse_sky_palette is not None:
+            if self.horse_stars is None:
+                self.horse_stars = self.horse_star_layers()
+            if self.horse_sky_palette in self.horse_stars:
+                sky, points = self.horse_stars[self.horse_sky_palette]
+                for x, y, ink in points:
+                    if self.display.getpixel((x, y)) in sky:
+                        frame.putpixel((x, y), (*self.palette[ink], 255))
         return frame
