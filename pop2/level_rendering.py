@@ -181,7 +181,9 @@ class LevelRenderer:
 
     def advance_ambience(self, room_id, terrain, footing=None, thuds=(), shakes=()):
         """One game tick of the optional cave or ruins ambience; pixels only."""
-        from pop2.ruins_ambience import DESERT_ROOMS, HORSE_ROOM, RuinsAmbience, horse_shooting_star
+        from pop2.ruins_ambience import (
+            DESERT_ROOMS, HORSE_ROOM, HORSE_STAR_DELAY_TICKS, RuinsAmbience, horse_shooting_star,
+        )
 
         kind = self.ambience_kind()
         if kind is None:
@@ -207,7 +209,9 @@ class LevelRenderer:
         if self.ruins_wind is not None:
             self.ruins_wind.advance()
         self.ambience.advance(terrain, footing, thuds, shakes)
-        if self.level.number == 9 and room_id == HORSE_ROOM and not self.horse_star_seen:
+        # The first tick in the room draws the entry frame.
+        if (self.level.number == 9 and room_id == HORSE_ROOM and not self.horse_star_seen
+                and self.ambience.tick > HORSE_STAR_DELAY_TICKS):
             self.horse_star_seen = True
             self.ambience.shooter = horse_shooting_star()
 

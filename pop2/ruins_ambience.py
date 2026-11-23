@@ -21,7 +21,7 @@ are warm, rose or pale gold. Once in a long while a shooting star crosses the sk
 faint quick one, an ordinary one, one grazing low and slow, or most rarely a fireball
 that bursts at the end and leaves its trail a moment. Over the desert of level nine
 the sky has only a few stars, middling and bright. On the first visit to the horse's
-room, a large shooting star leaves a glowing line that sheds sparks.
+room, a large shooting star leaves a glowing line that sheds sparks after a short wait.
 
 The wind. In a room open to the sky one gust sends one or two waving streaks across
 the ruins. Each can roll briefly and run out or travel farther as it winds inward.
@@ -160,6 +160,7 @@ FAINT = ShooterKind('faint', 12.0, 4, 6, LILAC[2::-1], LILAC[2], (25, 40), 40)
 NORMAL = ShooterKind('normal', 11.0, 7, 11, LILAC[3::-1], LILAC[4], (20, 35), 35)
 GRAZER = ShooterKind('grazer', 6.0, 16, 18, LILAC[3::-1], LILAC[4], (6, 12), 18)
 FIREBALL = ShooterKind('fireball', 9.0, 10, 14, (LILAC[4], *LILAC[3::-1]), WHITE, (12, 20), 7, burst=2, linger=3)
+HORSE_STAR_DELAY_TICKS = 12
 HORSE_LINE_TICKS = 14
 HORSE_SPARK_DELAY, HORSE_SPARK_LIFE = (3, 10), (36, 48)
 HORSE_SPARK_FADE = 10

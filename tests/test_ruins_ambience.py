@@ -1844,7 +1844,7 @@ class RealSceneTests(unittest.TestCase):
             finally:
                 harness.close()
 
-    def test_the_horse_room_shows_the_big_star_only_on_first_entry(self):
+    def test_the_horse_room_shows_the_big_star_once_after_a_second_inside(self):
         from tools.audit_temple_routes import Harness, press
 
         horse = ruins_ambience.HORSE_ROOM
@@ -1866,6 +1866,21 @@ class RealSceneTests(unittest.TestCase):
                 self.fail(f'Prince did not reach room {room}')
 
             run_to(horse, 'L', 'R')
+            self.assertIsNone(renderer.ambience.shooter)
+            self.assertFalse(renderer.horse_star_seen)
+            scene.jump_to_room(7, row=2, x=112, facing=0)
+            harness.tick()
+            self.assertIsNone(renderer.ambience.shooter)
+            self.assertFalse(renderer.horse_star_seen)
+
+            run_to(horse, 'L', 'R')
+            press(harness, 'L', False)
+            self.assertIsNone(renderer.ambience.shooter)
+            for _ in range(11):
+                harness.tick()
+                self.assertEqual(scene.room_id, horse)
+                self.assertIsNone(renderer.ambience.shooter)
+            harness.tick()
             star = renderer.ambience.shooter
             self.assertIsNotNone(star)
             self.assertIs(star.kind, ruins_ambience.HORSE_STAR)
@@ -1873,6 +1888,9 @@ class RealSceneTests(unittest.TestCase):
             run_to(7, 'R', 'L')
             self.assertIsNone(renderer.ambience.shooter)
             run_to(horse, 'L', 'R')
+            press(harness, 'L', False)
+            harness.tick(12)
+            self.assertEqual(scene.room_id, horse)
             self.assertIsNone(renderer.ambience.shooter)
         finally:
             harness.close()
