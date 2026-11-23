@@ -1322,6 +1322,12 @@ class Pebble:
     vy: float = 0.3
     bounced: bool = False
     rest: int = 0
+    depth: int = 0
+
+
+@dataclass
+class GritFleck(Fleck):
+    settled: bool = False
 
 
 @dataclass
@@ -1336,6 +1342,7 @@ class Bit:
     floor: int
     bounces: int = 0
     age: int = 0
+    depth: int = 0
 
 
 def tangents(pixels):
@@ -1709,6 +1716,13 @@ class RuinsAmbience:
             return terrain.tile(above, column, 2).kind not in EMPTY_TILES
         return terrain.tile(self.room, column, row).kind not in EMPTY_TILES
 
+    def grit_bottom(self, x, top, fallback, depth=0):
+        """Find support below the particle on the current frame."""
+        if self.grit_floor is None:
+            return fallback
+        ground = grit_landing(self.grit_floor, None, self.room, round(x), top, depth)
+        return HEIGHT if ground is None else ground
+
     def mound_floor(self, terrain, x, bottom):
         """A common base for the heap, its slopes and its shadow."""
         row = row_of(bottom)
@@ -1775,7 +1789,7 @@ class RuinsAmbience:
         for trickle in rng.sample(near, min(len(near), rng.randint(*PEBBLES))):
             source = trickle.source
             self.pebbles.append(Pebble(float(source.x), float(source.top), source.bottom,
-                                       trickle.wait + rng.randint(0, 3)))
+                                       trickle.wait + rng.randint(0, 3), depth=trickle.depth))
 
     def quiet_trickle(self, terrain):
         """The room's own rhythm: now a sprinkle, now a pour, from one of its cracks."""
@@ -1831,7 +1845,6 @@ class RuinsAmbience:
             if mound is not None and self.mound_floor(terrain, mound.x, mound.bottom) != mound.bottom:
                 mound = trickle.mound = None
             grains = []
-            bottoms = {}
             for grain in trickle.grains:
                 was = grain.y
                 # A streak passing by carries the grain along its way, up in its curl.
@@ -1841,15 +1854,10 @@ class RuinsAmbience:
                 grain.wind += (push_x - grain.wind) * STREAK_TAKE
                 grain.x += grain.wind
                 x = int(round(grain.x))
-                bottom = source.bottom
-                if self.grit_floor is not None:
-                    if x not in bottoms:
-                        ground = grit_landing(self.grit_floor, terrain, self.room, x, source.top, trickle.depth)
-                        bottoms[x] = HEIGHT if ground is None else ground
-                    bottom = bottoms[x]
+                bottom = self.grit_bottom(x, was, source.bottom, trickle.depth)
                 hit = self.on_prince(x, was, min(grain.y, bottom))
                 if hit is not None:
-                    self.bounce_off(grain.x, hit - 1, grain.shade, bottom)
+                    self.bounce_off(grain.x, hit - 1, grain.shade, bottom, trickle.depth)
                     continue
                 if mound is not None:
                     # On top of the mound, where it has grown under the thread.
@@ -1862,7 +1870,9 @@ class RuinsAmbience:
                     self.land(grain.x, bottom, trickle.pour, trickle)
                     if grain.size == 'crumb':
                         # It breaks in two.
-                        self.land(grain.x + 1, bottom, False)
+                        edge = self.grit_bottom(grain.x + 1, was, bottom, trickle.depth)
+                        if edge <= grain.y:
+                            self.land(grain.x + 1, edge, False)
             trickle.grains = grains
             if trickle.running or trickle.grains:
                 kept.append(trickle)
@@ -1900,12 +1910,12 @@ class RuinsAmbience:
             return
         if rng.random() < (POUR_SPLASH_CHANCE if pour else SPLASH_CHANCE):
             for _ in range(rng.randint(*SPLASH_BITS)):
-                self.flecks.append(Fleck(x, bottom - 1, rng.choice((-1, 1)) * rng.uniform(*SPLASH_SIDE),
+                self.flecks.append(GritFleck(x, bottom - 1, rng.choice((-1, 1)) * rng.uniform(*SPLASH_SIDE),
                                          -rng.uniform(*SPLASH_LIFT), SPLASH_PULL, (GRIT_HEAD, GRIT_TAIL),
                                          rng.randint(*SPLASH_LIFE), bottom))
         if rng.random() < (POUR_REST_CHANCE if pour else REST_CHANCE):
-            self.flecks.append(Fleck(x + rng.choice((-1, 0, 0, 1)), bottom - rng.randint(0, 2), 0.0, 0.0, 0.0,
-                                     (GRIT_TAIL, GRIT_DIM), rng.randint(*REST_LIFE), HEIGHT))
+            self.flecks.append(GritFleck(x + rng.choice((-1, 0, 0, 1)), bottom - rng.randint(0, 2), 0.0, 0.0, 0.0,
+                                         (GRIT_TAIL, GRIT_DIM), rng.randint(*REST_LIFE), bottom, settled=True))
 
     def advance_mounds(self, terrain=None):
         rng, kept = self.rng, []
@@ -1945,14 +1955,17 @@ class RuinsAmbience:
                 pebble.wait -= 1
                 kept.append(pebble)
                 continue
-            if pebble.rest:
+            if pebble.rest and self.grit_bottom(pebble.x, pebble.y, pebble.bottom, pebble.depth) == pebble.bottom:
                 pebble.rest -= 1
                 if pebble.rest:
                     kept.append(pebble)
                 continue
+            was = pebble.y
+            pebble.rest = 0
             pebble.vy = min(PEBBLE_FASTEST, pebble.vy + PEBBLE_GRAVITY)
             pebble.y += pebble.vy
             pebble.x += pebble.vx
+            pebble.bottom = self.grit_bottom(pebble.x, was, pebble.bottom, pebble.depth)
             if pebble.y >= pebble.bottom:
                 if pebble.bottom >= HEIGHT:
                     continue
@@ -1972,6 +1985,16 @@ class RuinsAmbience:
         for fleck in self.flecks:
             fleck.age += 1
             fleck.x += fleck.dx
+            if isinstance(fleck, GritFleck):
+                # Settled grains can sit on the contact pixel itself.
+                top = min(fleck.y, fleck.floor - 1) if fleck.settled else fleck.y
+                depth = fleck.floor - floor_y(row_of(fleck.floor)) if fleck.floor < HEIGHT else 0
+                bottom = self.grit_bottom(fleck.x, top, fleck.floor, depth)
+                if fleck.settled and bottom != fleck.floor:
+                    fleck.settled = False
+                    fleck.dy = fleck.pull = GRIT_GRAVITY
+                    fleck.life = max(fleck.life, fleck.age + OFF_LIFE)
+                fleck.floor = bottom
             fleck.y += fleck.dy
             fleck.dy += fleck.pull
             if fleck.age < fleck.life and fleck.y <= fleck.floor:
@@ -1990,10 +2013,10 @@ class RuinsAmbience:
                 return y
         return None
 
-    def bounce_off(self, x, y, shade, floor):
+    def bounce_off(self, x, y, shade, floor, depth):
         rng = self.rng
         self.bits.append(Bit(float(x), float(y), rng.choice((-1, 1)) * rng.uniform(*OFF_SIDE), -rng.uniform(*OFF_UP),
-                             shade, floor))
+                             shade, floor, depth=depth))
 
     def advance_bits(self):
         rng, kept = self.rng, []
@@ -2002,7 +2025,8 @@ class RuinsAmbience:
             bit.dy += OFF_PULL
             bit.x += bit.dx
             bit.y += bit.dy
-            hit = self.on_prince(int(bit.x), was, bit.y) if bit.dy > 0 else None
+            bit.floor = self.grit_bottom(bit.x, was, bit.floor, bit.depth)
+            hit = self.on_prince(round(bit.x), was, min(bit.y, bit.floor)) if bit.dy > 0 else None
             if hit is not None and bit.bounces < OFF_BOUNCES:
                 # Again, off a shoulder or an arm, with less to it.
                 bit.bounces += 1

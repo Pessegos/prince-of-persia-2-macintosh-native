@@ -1441,6 +1441,53 @@ class EveryRuinsRoomTests(unittest.TestCase):
         self.assertEqual(mound.x, crack.x)
         self.assertFalse(air.sky[mound.bottom, mound.x - 3:mound.x + 6].any())
 
+    def test_grit_in_room_nine_falls_on_when_the_upper_slab_detaches(self):
+        from pop2.cavern_state import CavernState
+        from pop2.level_data import LevelDefinition
+        from pop2.level_rendering import LevelRenderer
+        from pop2.render_opening import load_resource_file
+        from pop2.terrain import LevelMap
+
+        room, x = 8, 452
+        level = LevelDefinition.read(load_resource_file('Prince.rsrc'), 6)
+        terrain = LevelMap(level.data)
+        terrain.caverns = world = CavernState()
+        renderer = LevelRenderer(level, preload_room=False)
+        renderer.enter_room(room, world)
+        renderer.advance_ambience(room, terrain)
+        ambience = renderer.ambience
+        ambience.quiet_wait = 1000
+        ambience.wind = None
+        old = ambience.grit_bottom(x, 5, None)
+        self.assertEqual(old, 106)
+
+        # A mix of falling grains, airborne rebound and grit already
+        # resting on the slab when its real controller removes it.
+        grain = ruins_ambience.Grain(104, 3, x, GRIT_HEAD)
+        trickle = ruins_ambience.Trickle(ruins_ambience.Crack(x, 5, old), 0, 0, grains=[grain])
+        bit = ruins_ambience.Bit(x, 105, 0.0, 2.0, GRIT_HEAD, old)
+        resting = ruins_ambience.GritFleck(x, 105, 0.0, 0.0, 0.0, (GRIT_HEAD,), 10, old, settled=True)
+        splash = ruins_ambience.GritFleck(x, 105, 0.0, 2.0, 0.5, (GRIT_HEAD,), 10, old)
+        pebble = ruins_ambience.Pebble(x, 105, old, 0, vy=0.0, bounced=True, rest=12)
+        ambience.trickles = [trickle]
+        ambience.bits = [bit]
+        ambience.flecks = [resting, splash]
+        ambience.pebbles = [pebble]
+
+        world.loose.trigger(terrain.tile(room, 8, 0), force=True)
+        world.loose.advance_tiles(terrain)
+        self.assertEqual(terrain.tile(room, 8, 0).kind, 0)
+        renderer.enter_room(room, world)
+        for _ in range(4):
+            renderer.advance_ambience(room, terrain)
+        self.assertIs(renderer.ambience, ambience)
+        self.assertEqual(ambience.grit_bottom(x, 105, None), 226)
+        for particle, active in ((grain, trickle.grains), (bit, ambience.bits), (resting, ambience.flecks),
+                                 (splash, ambience.flecks), (pebble, ambience.pebbles)):
+            with self.subTest(particle=type(particle).__name__):
+                self.assertIn(particle, active)
+                self.assertGreater(particle.y, old)
+
     def test_pours_across_the_ruins_only_heap_on_visible_ground(self):
         for place, air in self.rooms.items():
             for crack in air.grit:
