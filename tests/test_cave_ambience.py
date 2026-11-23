@@ -2759,6 +2759,39 @@ class RealSceneTests(unittest.TestCase):
         self.assertEqual(ambience.footing.action, scene.sequence_state.action)
         self.assertGreater(ambience.footing.action, 0)
 
+    @unittest.skipUnless((ASSET_DIR / 'ruins_level9.json').is_file(), 'Imported ruins resources required')
+    def test_grabbing_a_ledge_raises_no_landing_dust(self):
+        from tools.audit_temple_routes import Harness, press
+
+        for level, room, x, run_ticks in ((3, 22, 410, 6), (9, 4, 468, 3)):
+            with self.subTest(level=level, native_room=room + 1):
+                harness = Harness(level, draw=True)
+                try:
+                    scene = harness.scene
+                    scene.audio = None
+                    scene.cave_ambience_enabled = True
+                    scene.jump_to_room(room, row=0, x=x, facing=0)
+                    if level == 3:
+                        scene.game.caverns.plates.foreground[room, 1] = 0x200 | 184
+                    press(harness, 'L', True)
+                    harness.tick(run_ticks)
+                    scene.up_key(None)
+                    scene.shift_held = True
+                    was_falling = False
+                    for _ in range(28):
+                        harness.tick()
+                        if scene.ledge_hanging:
+                            break
+                        was_falling |= scene.terrain_motion.falling
+                    self.assertTrue(was_falling)
+                    self.assertTrue(scene.ledge_hanging)
+                    self.assertEqual((scene.room_id, scene.action), (room, 80))
+                    ambience = scene.level_renderer.ambience
+                    self.assertFalse(any(cloud.kind == LANDING_PUFF for cloud in ambience.clouds))
+                    self.assertIsNone(ambience.footing)
+                finally:
+                    harness.close()
+
     def test_a_shut_gate_takes_no_torch_light_in_the_real_scene(self):
         # Room 11 of level 4: the torch stands nine pixels from the gate on its right.
         from tools.audit_temple_routes import Harness

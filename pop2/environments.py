@@ -1203,7 +1203,9 @@ class Caverns(Environment):
 
         scene = self.scene
         state, motion = scene.sequence_state, scene.terrain_motion
-        if motion is None:
+        # A ledge catch ends the fall without the Prince's feet touching down.
+        # Forget the old footing until he gets back onto the floor.
+        if motion is None or scene.ledge_hanging or scene.ledge_climbing:
             return None
         record = scene.frames[state.action]
         return Footing(state.target_x, floor_contact_x(state.target_x, state.facing, record), floor_y(motion.row),
