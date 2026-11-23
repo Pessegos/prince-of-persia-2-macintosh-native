@@ -3,7 +3,7 @@
 import json
 import struct
 from dataclasses import dataclass
-from functools import lru_cache
+from functools import cached_property, lru_cache
 from itertools import product
 from pathlib import Path
 
@@ -79,6 +79,13 @@ class CavernRoom(OpeningRoom):
     torch_occlusion: dict | None = None
     exit_foreground: tuple = ()
     platform_contours: dict | None = None
+    ruins_floor_pieces: tuple = ()
+
+    @cached_property
+    def grit_floor(self):
+        from pop2.ruins_ambience import grit_floor_profile
+
+        return grit_floor_profile(self.ruins_floor_pieces)
 
     def actor_mask(self, row, bottom=None, state=None, bounds=None, record=None, peel=None):
         """`peel`, when given, is the frame's `gate_clips`: the stones the
@@ -399,6 +406,9 @@ FINAL_LEVELS = SCENERY_LEVELS[6]
 # Masked structural back pieces: floors and the side faces of solid walls.
 # Opaque fills, far walls, columns, and moving doors are separate pieces.
 CAVERN_CEILINGS = frozenset((*range(3525, 3529), *range(3550, 3558), 3568, 3614, 4226, 4227, 4228))
+# DrawRuinFloor's surfaces, lips, stairs and the floor attached to pillar/gate bases.
+RUINS_FLOOR_SHAPES = frozenset((*range(3514, 3519), 3520, 3521, 3523, 3531, 3535, 3536,
+                               3537, 3541, 3543, 3544, 3548, 3549, 3552, 3553, 3554, 3576))
 RUINS_CEILINGS = frozenset((*range(3514, 3518), 3520, 3521, 3523, 3525, 3526, 3552, 3553, 3554, 3576))
 TEMPLE_CEILINGS = frozenset((3521, 3528, 3541, 3542, 3543, 3544))
 # DrawCaveTorch 8:2ae8 and DrawTempTorch 10:1196-11cc, library 4.
@@ -1891,6 +1901,7 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
                   3545 if level_number in RUINS_LEVELS else
                   3579 if level_number in TEMPLE_LEVELS else None)
     platform_contours = {}
+    ruins_floor_pieces = []
     ceilings = {}
     ceiling_shapes = (CAVERN_CEILINGS if level_number in SCENERY_LEVELS[3] else
                       RUINS_CEILINGS if level_number in RUINS_LEVELS else
@@ -1918,6 +1929,9 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
         if clipped is None:
             continue
         sprite, position = clipped
+        if (level_number in RUINS_LEVELS and not customized and library == 4
+                and index in RUINS_FLOOR_SHAPES and 0 <= row < 3):
+            ruins_floor_pieces.append((row, sprite, position))
         destination = background if layer == 'back' else foreground
         destination.paste(sprite, position, sprite)
         if layer == 'back' and library == 4 and index == exit_shape:
@@ -2097,4 +2111,4 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
             visible_contours.setdefault(cell, []).append((cover, (x, y)))
     return CavernRoom(background, foreground, masks, (), (), room_id, 3, cell_masks,
                       redraw, floors, retained, gate_masks, custom_mask, torch_occlusion, tuple(visible_exits),
-                      visible_contours or None, ceiling_covers=ceilings)
+                      visible_contours or None, tuple(ruins_floor_pieces), ceiling_covers=ceilings)

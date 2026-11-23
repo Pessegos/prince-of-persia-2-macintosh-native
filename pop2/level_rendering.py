@@ -208,6 +208,8 @@ class LevelRenderer:
                 self.attach_ruins_wind()
         if self.ruins_wind is not None:
             self.ruins_wind.advance()
+        if isinstance(self.ambience, RuinsAmbience) and self.ambience.air.grit_floor is not None:
+            self.ambience.grit_floor = self.rooms[room_id].grit_floor
         self.ambience.advance(terrain, footing, thuds, shakes)
         # The first tick in the room draws the entry frame.
         if (self.level.number == 9 and room_id == HORSE_ROOM and not self.horse_star_seen

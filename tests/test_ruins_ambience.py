@@ -965,9 +965,9 @@ def grit_air(**changes):
     return replace(air, **changes)
 
 
-def run_out(ambience, ticks=400):
+def run_out(ambience, ticks=400, terrain=TERRAIN):
     for _ in range(ticks):
-        ambience.advance(TERRAIN)
+        ambience.advance(terrain)
         if not ambience.trickles:
             return
 
@@ -1104,6 +1104,26 @@ class GritTests(unittest.TestCase):
         run_out(ambience)
         self.assertEqual(len(ambience.mounds), 1)
         ambience.advance(FallenAbove(set(), floor_gone={1}))
+        self.assertEqual(ambience.mounds, [])
+
+    def test_a_pour_falls_past_a_gap_to_the_next_visible_floor(self):
+        from PIL import Image
+
+        strip = Image.new('RGBA', (21, 6), 'white')
+        floors = ruins_ambience.grit_floor_profile(((1, strip, (90, 235)), (2, strip, (90, 345))))
+        ambience = self.ambience(grit_floor=floors)
+        ambience.start(100, 125, 30, 0, True, TERRAIN)
+        self.assertEqual(ambience.trickles[0].source.bottom, 235)
+        for _ in range(6):
+            ambience.advance(TERRAIN)
+        ambience.grit_floor = floors.copy()
+        # The upper floor has fallen since the pour started.
+        ambience.grit_floor[1] = False
+        run_out(ambience)
+        self.assertEqual(len(ambience.mounds), 1)
+        self.assertGreaterEqual(ambience.mounds[0].bottom, 345)
+        ambience.grit_floor[2] = False
+        ambience.advance(TERRAIN)
         self.assertEqual(ambience.mounds, [])
 
     def test_a_bump_shakes_grit_down_right_over_his_hands(self):
@@ -1407,6 +1427,29 @@ class EveryRuinsRoomTests(unittest.TestCase):
         self.assertTrue(self.rooms[7, 4].grit)
         self.assertTrue(self.rooms[7, 19].grit)
         self.assertGreater(sum(bool(air.grit) for air in self.rooms.values()), 40)
+
+    def test_the_pour_in_level_six_room_thirteen_reaches_the_sloped_ledge(self):
+        air = self.rooms[6, 12]
+        crack = next(crack for crack in air.grit if crack.x == 368)
+        self.assertTrue(air.sky[349, crack.x])
+        self.assertGreaterEqual(crack.bottom, 354)
+        ambience = RuinsAmbience(12, air, random.Random(17))
+        ambience.quiet_wait = 1000
+        ambience.start(crack.x, crack.top, 30, 0, True)
+        run_out(ambience, terrain=None)
+        mound, = ambience.mounds
+        self.assertEqual(mound.x, crack.x)
+        self.assertFalse(air.sky[mound.bottom, mound.x - 3:mound.x + 6].any())
+
+    def test_pours_across_the_ruins_only_heap_on_visible_ground(self):
+        for place, air in self.rooms.items():
+            for crack in air.grit:
+                ambience = RuinsAmbience(place[1], air, random.Random(17))
+                ambience.quiet_wait = 1000
+                ambience.start(crack.x, crack.top, 30, 0, True)
+                run_out(ambience, terrain=None)
+                for mound in ambience.mounds:
+                    self.assertFalse(air.sky[mound.bottom, mound.x - 3:mound.x + 6].any(), (place, mound))
 
     def test_level_six_room_twelve_has_the_sky_that_was_approved(self):
         stars = [star for star in self.rooms[6, 11].stars if star[2] not in HAZE]

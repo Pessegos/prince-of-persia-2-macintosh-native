@@ -229,6 +229,7 @@ GRIT_UNDERSIDE = 30
 GRIT_NOT_FROM = (16, 17)
 GRIT_SHORTEST_FALL = 48
 GRIT_PATH_CLEAR = 0.9
+GRIT_FLOOR_DEPTH = 30
 # The room's own cracks: how many and how far apart.
 MOST_GRIT, GRIT_APART = 4, 60
 # Ceiling c is the underside over row c: within these pixels of c * TILE_HEIGHT + 5,
@@ -574,6 +575,7 @@ class RuinsAir:
     chasm: bool = False
     cliff_wind_sky: numpy.ndarray | None = None
     cliff_sand: numpy.ndarray | None = None
+    grit_floor: numpy.ndarray | None = None
 
     def in_sky(self, x, y):
         return 0 <= x < WIDTH and 0 <= y < HEIGHT and bool(self.sky[y, x])
@@ -635,7 +637,44 @@ def runs(picked, length, upward):
     return (count[high] - count[low] == length) & valid[:, None]
 
 
-def grit_sources(air, clear, stone, terrain, room, rng):
+def grit_floor_profile(pieces):
+    """Visible floor depth at each X, grouped by the three tile rows.
+
+    Only the course at the foot of a piece counts. A pillar, door or
+    staircase can share an image with a floor and rise above that course.
+    """
+    profile = numpy.zeros((3, GRIT_FLOOR_DEPTH, WIDTH), dtype=bool)
+    for row, sprite, (x, y) in pieces:
+        base = (row + 1) * TILE_HEIGHT + 5
+        band_top = base - GRIT_FLOOR_DEPTH
+        left, right = max(0, x), min(WIDTH, x + sprite.width)
+        top, bottom = max(band_top, y), min(base, y + sprite.height)
+        if left < right and top < bottom:
+            alpha = numpy.asarray(sprite.getchannel('A'))[top - y:bottom - y, left - x:right - x]
+            profile[row, top - band_top:bottom - band_top, left:right] |= alpha > 0
+    return profile
+
+
+def supported_depth(row, masked, wanted):
+    heights = numpy.flatnonzero(masked) + (row + 1) * TILE_HEIGHT + 5 - GRIT_FLOOR_DEPTH
+    return int(heights[numpy.abs(heights - wanted).argmin()]) if heights.size else None
+
+
+def grit_landing(floor, terrain, room, x, top, depth=0):
+    """Where grit meets a visible floor, or None when it falls through."""
+    if not 0 <= x < WIDTH:
+        return None
+    if floor is None:
+        ground = landing(terrain, room, x, top) if terrain is not None else None
+        return None if ground is None else ground + depth
+    for row in range(max(0, (int(top) - 5) // TILE_HEIGHT), 3):
+        ground = supported_depth(row, floor[row, :, x], floor_y(row) + depth)
+        if ground is not None and ground > top:
+            return ground
+    return None
+
+
+def grit_sources(air, clear, stone, terrain, room, rng, floor=None):
     """Cracks in the undersides of stone with open air below and a floor to land on."""
     candidates = (runs(stone, GRIT_STONE_ABOVE, True) & runs(clear, GRIT_CLEAR_BELOW, False))
     candidates[1:] &= ~air[:-1]
@@ -658,7 +697,9 @@ def grit_sources(air, clear, stone, terrain, room, rng):
                 continue
             path = clear[y:ground - FLOOR_STRIP, x]
             if path.size and path.mean() >= GRIT_PATH_CLEAR:
-                found.append(Crack(x, y, ground + rng.randint(*LANDING_DEPTH)))
+                depth = rng.randint(*LANDING_DEPTH)
+                bottom = grit_landing(floor, terrain, room, x, y, depth)
+                found.append(Crack(x, y, HEIGHT if bottom is None else bottom))
     rng.shuffle(found)
     chosen = []
     for crack in found:
@@ -806,7 +847,7 @@ def chasm_dunes(sand):
     return Dunes(numpy.full(WIDTH, -1), numpy.full(WIDTH, 238), sand, sand, ())
 
 
-def read_room(level_number, room, rgb, palette, covered=None, terrain=None, painted=False):
+def read_room(level_number, room, rgb, palette, covered=None, terrain=None, painted=False, *, grit_floor=None):
     """The air of a room from an RGB picture of its scenery, its palette, [y, x] of what
     its foreground covers and its tiles; a painted room sheds no grit."""
     sky, blue = sky_mask(rgb), blueness(rgb)
@@ -835,7 +876,7 @@ def read_room(level_number, room, rgb, palette, covered=None, terrain=None, pain
         air = numpy.frombuffer(open_air(luminance, terrain, room), dtype=numpy.uint8).reshape(HEIGHT, WIDTH) != 0
         clear = air if covered is None else air & ~covered
         stone = luminance >= TIP_LUMINANCE
-        grit = grit_sources(air, clear, stone, terrain, room, random.Random(seed))
+        grit = grit_sources(air, clear, stone, terrain, room, random.Random(seed), grit_floor)
         lines = ceilings(air, clear, stone, terrain, room)
     dunes = None
     if chasm:
@@ -846,7 +887,7 @@ def read_room(level_number, room, rgb, palette, covered=None, terrain=None, pain
                     windy=windy, covered=covered,
                     palette=palette_rgb(palette), grit=grit, ceilings=lines, luminance=luminance,
                     dunes=dunes, palette_key=tuple(sorted(palette.items())), chasm=chasm,
-                    cliff_wind_sky=cliff_wind_sky, cliff_sand=sand if place == OPENING_CLIFF else None)
+                    cliff_wind_sky=cliff_wind_sky, cliff_sand=sand if place == OPENING_CLIFF else None, grit_floor=grit_floor)
 
 
 def ruins_air(level_number, room, art, terrain=None, raised=None):
@@ -856,7 +897,9 @@ def ruins_air(level_number, room, art, terrain=None, raised=None):
     palette = room_assets(level_number, room)[2]
     rgb = numpy.asarray(Image.alpha_composite(art.background, art.foreground).convert('RGB'))
     covered = numpy.asarray(art.foreground.getchannel('A')) > 0
-    return read_room(level_number, room, rgb, palette, covered, terrain, room in customized_rooms(level_number))
+    painted = room in customized_rooms(level_number)
+    return read_room(level_number, room, rgb, palette, covered, terrain, painted,
+                     grit_floor=art.grit_floor if terrain is not None and not painted else None)
 
 
 @dataclass
@@ -1262,6 +1305,7 @@ class Trickle:
     mound: Mound | None = None
     # The row of the tile it comes out from under (-1: the room above's floor).
     stone: int | None = None
+    depth: int = 0
 
     @property
     def running(self):
@@ -1546,8 +1590,10 @@ class RuinsAmbience:
     # The puffs of dust from the floor.
     clouds: list = field(default_factory=list)
     tick: int = 0
+    grit_floor: numpy.ndarray | None = field(init=False)
 
     def __post_init__(self):
+        self.grit_floor = self.air.grit_floor
         self.twinkles = [[0, 0] for _ in self.air.stars]
         self.shooter_wait = self.rng.randint(*FIRST_SHOOTER)
         # Preserve the room-local random sequence now that its wind runs separately.
@@ -1663,11 +1709,18 @@ class RuinsAmbience:
             return terrain.tile(above, column, 2).kind not in EMPTY_TILES
         return terrain.tile(self.room, column, row).kind not in EMPTY_TILES
 
-    def floor_stands(self, terrain, x, bottom):
-        """Whether the floor something lies on at bottom is still there."""
-        if terrain is None or not 0 <= int(x) < WIDTH:
-            return True
-        return terrain.tile(self.room, int(x) // TILE_WIDTH, row_of(bottom)).kind not in EMPTY_TILES
+    def mound_floor(self, terrain, x, bottom):
+        """A common base for the heap, its slopes and its shadow."""
+        row = row_of(bottom)
+        if self.grit_floor is None:
+            if terrain is None or terrain.tile(self.room, x // TILE_WIDTH, row).kind not in EMPTY_TILES:
+                return bottom
+            return None
+        half = len(MOUND) // 2
+        left, right = x - half, x + half + 3
+        if 0 <= left < right <= WIDTH:
+            return supported_depth(row, self.grit_floor[row, :, left:right].all(axis=1), bottom)
+        return None
 
     def busy(self, x, pour=True):
         """Whether a crack near x is pouring, or for a new pour, running at all."""
@@ -1678,9 +1731,11 @@ class RuinsAmbience:
         stone = stone_row(top) if stone is None else stone
         if self.busy(x, pour) or not self.stands(terrain, x, stone):
             return
-        ground = landing(terrain, self.room, int(x), top) if terrain is not None else None
-        bottom = HEIGHT if ground is None else ground + self.rng.randint(*LANDING_DEPTH)
-        self.trickles.append(Trickle(Crack(int(x), top, bottom), wait, grains, pour, stone=stone))
+        ground = grit_landing(self.grit_floor, terrain, self.room, int(x), top)
+        depth = 0 if ground is None else self.rng.randint(*LANDING_DEPTH)
+        bottom = grit_landing(self.grit_floor, terrain, self.room, int(x), top, depth) if depth else ground
+        self.trickles.append(Trickle(Crack(int(x), top, HEIGHT if bottom is None else bottom),
+                                     wait, grains, pour, stone=stone, depth=depth))
 
     def shake(self, x, row, strength, name, terrain):
         """Grit shaken down from the ceilings, most near the blow, a little further off a
@@ -1773,7 +1828,10 @@ class RuinsAmbience:
                     trickle.gap -= 1
                 else:
                     self.release(trickle)
+            if mound is not None and self.mound_floor(terrain, mound.x, mound.bottom) != mound.bottom:
+                mound = trickle.mound = None
             grains = []
+            bottoms = {}
             for grain in trickle.grains:
                 was = grain.y
                 # A streak passing by carries the grain along its way, up in its curl.
@@ -1782,16 +1840,22 @@ class RuinsAmbience:
                 grain.y += grain.speed
                 grain.wind += (push_x - grain.wind) * STREAK_TAKE
                 grain.x += grain.wind
-                hit = self.on_prince(int(grain.x), was, grain.y)
-                if hit is not None:
-                    self.bounce_off(grain.x, hit - 1, grain.shade, source.bottom)
-                    continue
+                x = int(round(grain.x))
                 bottom = source.bottom
+                if self.grit_floor is not None:
+                    if x not in bottoms:
+                        ground = grit_landing(self.grit_floor, terrain, self.room, x, source.top, trickle.depth)
+                        bottoms[x] = HEIGHT if ground is None else ground
+                    bottom = bottoms[x]
+                hit = self.on_prince(x, was, min(grain.y, bottom))
+                if hit is not None:
+                    self.bounce_off(grain.x, hit - 1, grain.shade, bottom)
+                    continue
                 if mound is not None:
                     # On top of the mound, where it has grown under the thread.
-                    column = int(grain.x) - mound.x + len(MOUND) // 2
-                    if 0 <= column < len(MOUND):
-                        bottom -= mound.heights[column]
+                    column = x - mound.x + len(MOUND) // 2
+                    if 0 <= column < len(MOUND) and row_of(bottom) == row_of(mound.bottom):
+                        bottom = mound.bottom - mound.heights[column]
                 if grain.y < bottom:
                     grains.append(grain)
                 else:
@@ -1806,12 +1870,18 @@ class RuinsAmbience:
                 trickle.mound.stays = self.rng.randint(*MOUND_STAYS)
         self.trickles = kept
 
-    def heap(self, trickle, x):
+    def heap(self, trickle, x, bottom):
         """A grain of a pour settles on its mound, rolling off a side that is full."""
         mound = trickle.mound
+        x = int(round(x))
         if mound is None:
-            mound = trickle.mound = Mound(int(x), trickle.source.bottom)
+            bottom = self.mound_floor(None, x, bottom)
+            if bottom is None:
+                return False
+            mound = trickle.mound = Mound(x, bottom)
             self.mounds.append(mound)
+        elif abs(x - mound.x) > len(MOUND) // 2 or row_of(bottom) != row_of(mound.bottom):
+            return False
         rng, heights, middle = self.rng, mound.heights, len(MOUND) // 2
         c = max(0, min(len(MOUND) - 1, middle + round(rng.gauss(0, 1.2))))
         for _ in range(len(MOUND)):
@@ -1826,7 +1896,7 @@ class RuinsAmbience:
         rng = self.rng
         if bottom >= HEIGHT:
             return
-        if pour and trickle is not None and rng.random() < HEAP_CHANCE and self.heap(trickle, x):
+        if pour and trickle is not None and rng.random() < HEAP_CHANCE and self.heap(trickle, x, bottom):
             return
         if rng.random() < (POUR_SPLASH_CHANCE if pour else SPLASH_CHANCE):
             for _ in range(rng.randint(*SPLASH_BITS)):
@@ -1840,7 +1910,7 @@ class RuinsAmbience:
     def advance_mounds(self, terrain=None):
         rng, kept = self.rng, []
         for mound in self.mounds:
-            if not self.floor_stands(terrain, mound.x, mound.bottom):
+            if self.mound_floor(terrain, mound.x, mound.bottom) != mound.bottom:
                 # The floor it lay on fell.
                 continue
             for roller in list(mound.rolling):
