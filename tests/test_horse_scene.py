@@ -138,6 +138,8 @@ class HorseSceneTests(unittest.TestCase):
             player.advance(6 / MAC_TICKS_PER_SECOND)
 
     def test_the_exterior_shots_share_the_horse_room_stars_when_ambience_is_on(self):
+        from unittest.mock import patch
+
         from PIL import ImageChops
         from pop2.caverns import cavern_room
         from pop2.ruins_ambience import HORSE_ROOM, ruins_air
@@ -148,9 +150,12 @@ class HorseSceneTests(unittest.TestCase):
             scene = h.scene
             scene.audio = None
             scene.cave_ambience_enabled = True
-            self.assertTrue(scene.start_temple_ride(lambda keep_music=False: None))
-            player = scene.intro
-            lit = player.frame()
+            assets = scene.story_scene_assets['temple.json']
+            self.assertTrue(assets.horse_stars)
+            with patch('pop2.caverns.cavern_room', side_effect=AssertionError('Horse sky must already be prepared')):
+                self.assertTrue(scene.start_temple_ride(lambda keep_music=False: None))
+                player = scene.intro
+                lit = player.frame()
             air = ruins_air(9, HORSE_ROOM, cavern_room(HORSE_ROOM, level_number=9, retouched=True))
             for x, y, kind in air.stars:
                 self.assertEqual(lit.getpixel((x, y)), air.inks[kind.steps[-1]])
@@ -161,7 +166,7 @@ class HorseSceneTests(unittest.TestCase):
                 scene.cave_ambience_enabled = False
                 clear = player.frame()
                 scene.cave_ambience_enabled = True
-                sky, points = player.horse_stars[player.horse_sky_palette]
+                sky, points = player.assets.horse_stars[player.horse_sky_palette]
                 self.assertTrue(any(lit.getpixel((x, y)) != clear.getpixel((x, y)) for x, y, _ in points))
                 for x, y, _ in points:
                     if player.display.getpixel((x, y)) not in sky:
