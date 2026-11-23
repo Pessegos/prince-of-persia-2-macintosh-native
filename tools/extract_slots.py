@@ -260,7 +260,9 @@ def room_renderer(context, room, recover, progress=lambda _text: None):
         for index, state in zip(scythes, states[len(members):]):
             for source_room, cell in pairs[index]:
                 offset = 0x780 + source_room * 120 + cell * 4
-                foreground = struct.unpack_from('>H', mutable, offset)[0] & 0xff00
+                # MakeRubble (5:2eea) marks each struck half independently.
+                # The blade phase and blood can change without masking that rubble.
+                foreground = struct.unpack_from('>H', mutable, offset)[0] & 0xff20
                 struct.pack_into('>H', mutable, offset, foreground | SCYTHE_STATES[state])
         for (source_room, cell), state in zip(bridge, states[len(members) + len(scythes):]):
             offset = 0x780 + source_room * 120 + cell * 4

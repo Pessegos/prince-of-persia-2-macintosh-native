@@ -37,6 +37,30 @@ class SlotDrawingTests(unittest.TestCase):
             self.assertEqual(compose_list(lists['commands'], states), render(states)['commands']['commands'],
                              states)
 
+    def test_scythe_animation_keeps_the_rubble_on_each_struck_half(self):
+        import struct
+
+        from pop2.scythes import SCYTHE_STATES
+        from tools.extract_slots import room_renderer
+
+        level = bytearray(0x2200)
+        struct.pack_into('>2H', level, 25 * 2, 12, 13)
+        left, right = (0, 25), (0, 26)
+        offsets = [0x780 + cell * 4 for _, cell in (left, right)]
+        context = {
+            'program': None, 'caverns': None, 'prince': None, 'level': bytes(level),
+            'choices': {left: ((12, 0), (12, 0x20)), right: ((13, 0), (13, 0x20))},
+            'clears': {}, 'entry': None, 'pairs': [(right, left)], 'source': None,
+            'rects': {}, 'groups': [], 'planks': [],
+        }
+        _record, render, _counts, _cells = room_renderer(context, 0, recover=None)
+        for left_rubble, right_rubble in ((1, 0), (0, 1), (1, 1)):
+            for index, phase in enumerate(SCYTHE_STATES):
+                with self.subTest(left=left_rubble, right=right_rubble, phase=phase):
+                    drawn_level = render.scene_level((left_rubble, right_rubble, index))
+                    self.assertEqual([struct.unpack_from('>H', drawn_level, offset)[0] for offset in offsets],
+                                     [phase | left_rubble * 0x20, phase | right_rubble * 0x20])
+
     def test_dependencies_from_parts_of_the_single_renders_equal_the_whole(self):
         from tools.extract_slots import merge_dependencies, single_states, slot_dependencies
 
