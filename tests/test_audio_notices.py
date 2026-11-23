@@ -21,10 +21,11 @@ class AudioNoticeTimerTests(unittest.TestCase):
         host.render = Mock()
         return host
 
-    def test_all_four_labels_use_hud_colour_and_two_second_timer(self):
+    def test_toggle_labels_use_hud_colour_and_two_second_timer(self):
         for action, enabled, message in (
                 ('sound', False, 'Sounds Off'), ('sound', True, 'Sounds On'),
-                ('music', False, 'Ambient Music Off'), ('music', True, 'Ambient Music On')):
+                ('music', False, 'Ambient Music Off'), ('music', True, 'Ambient Music On'),
+                ('ambience', False, 'Ambient Effects Off'), ('ambience', True, 'Ambient Effects On')):
             with self.subTest(message=message):
                 host = self.host()
                 host.show_audio_notice(action, enabled)
@@ -154,7 +155,7 @@ class AudioNoticeSceneTests(unittest.TestCase):
         scene = self.scene
         ink = scene.pause_text.getbbox()
         pause_y = ROOM_HEIGHT + (VIEWPORT_HEIGHT - ROOM_HEIGHT - (ink[3] - ink[1])) // 2 - ink[1]
-        for action, label in (('sound', 'Sounds'), ('music', 'Ambient Music')):
+        for action, label in (('sound', 'Sounds'), ('music', 'Ambient Music'), ('ambience', 'Ambient Effects')):
             frames, sizes = [], []
             prefix = scene.ui_font.text(label + ' ', scene.hud_text_color)
             state_width = max(scene.ui_font.text('On').width, scene.ui_font.text('Off').width)

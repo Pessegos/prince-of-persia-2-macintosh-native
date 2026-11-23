@@ -829,7 +829,7 @@ class WindowControls(InputRouting):
         self.render()
 
     def show_audio_notice(self, action, enabled):
-        label = {"sound": "Sounds", "music": "Ambient Music", "ambience": "Cave Ambience"}[action]
+        label = {"sound": "Sounds", "music": "Ambient Music", "ambience": "Ambient Effects"}[action]
         message = f"{label} {'On' if enabled else 'Off'}"
         text = self.ui_font.text(message, self.hud_text_color)
         alternate = self.ui_font.text(f"{label} {'Off' if enabled else 'On'}", self.hud_text_color)
