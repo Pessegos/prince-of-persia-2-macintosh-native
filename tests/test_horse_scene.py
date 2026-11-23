@@ -179,6 +179,35 @@ class HorseSceneTests(unittest.TestCase):
         finally:
             h.close()
 
+    def test_the_temple_exterior_has_lilac_rose_and_gold_stars_that_follow_the_fade(self):
+        from pop2.intro import IntroAssets, IntroPlayer, TEMPLE_EXTERIOR
+
+        player = IntroPlayer(IntroAssets(program_name='temple.json'), ambience=lambda: True)
+        exterior = next(i for i, item in enumerate(player.operations)
+                        if item['op'] == 'shape' and item['args'][0] == TEMPLE_EXTERIOR)
+        fade = next(i for i in range(exterior, len(player.operations))
+                    if player.operations[i]['op'] == 'fade_in_both')
+        player.advance(60, stop_position=fade)
+        player.advance(0)
+        duration = player.transition[2]
+        player.advance(duration / 2)
+        halfway = player.frame()
+        player.advance(duration / 2)
+        full = player.frame()
+        sky, points = player.assets.horse_stars[TEMPLE_EXTERIOR]
+        self.assertGreaterEqual(len(points), 5)
+        colours = []
+        for x, y, index in points:
+            self.assertIn(player.display.getpixel((x, y)), sky)
+            colour = full.getpixel((x, y))[:3]
+            self.assertEqual(colour, player.palette[index])
+            self.assertLess(sum(halfway.getpixel((x, y))[:3]), sum(colour))
+            self.assertGreater(sum(halfway.getpixel((x, y))[:3]), 0)
+            colours.append(colour)
+        self.assertTrue(any(blue > red > 90 for red, green, blue in colours))
+        self.assertTrue(any(red > blue > green for red, green, blue in colours))
+        self.assertTrue(any(red > green > blue and red > 180 for red, green, blue in colours))
+
     def test_the_arrival_statue_survives_the_first_gameplay_frame(self):
         from pop2.caverns import cavern_room
         from pop2.intro import IntroAssets, IntroPlayer

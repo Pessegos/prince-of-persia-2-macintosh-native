@@ -18,7 +18,8 @@ from pop2.paths import ASSET_DIR
 SIZE = (512, 384)
 CARPET_CLIFF_SHAPE, CARPET_CLIFF_PALETTE = 404650, 403502
 # Backdrop shape to sky palette for the horse, dunes, gorge and temple exterior.
-HORSE_SKY_PALETTES = {404250: 403500, 625385: 625379, 404264: 403500, 625371: 625371}
+TEMPLE_EXTERIOR = 625371
+HORSE_SKY_PALETTES = {404250: 403500, 625385: 625379, 404264: 403500, TEMPLE_EXTERIOR: TEMPLE_EXTERIOR}
 TEMPLE_EXTERIOR_SKY = frozenset({206, 216})
 # Classic Macintosh VBL clock, also used by Mini vMac's host timer.
 MAC_TICKS_PER_SECOND = 60.14742
@@ -324,7 +325,9 @@ class IntroAssets:
     def prepare_horse_stars(self):
         """Keep the desert's stars behind the silhouettes in each exterior shot."""
         from pop2.caverns import cavern_room, scenery_available
-        from pop2.ruins_ambience import HORSE_ROOM, is_sky, nearest_colours, ruins_air
+        from pop2.ruins_ambience import (
+            BRIGHT, GOLD_BRIGHT, HORSE_ROOM, MID, ROSE_BRIGHT, ROSE_MID, is_sky, nearest_colours, ruins_air, warm_some,
+        )
 
         if not scenery_available(9):
             return {}
@@ -332,10 +335,14 @@ class IntroAssets:
         layers = {}
         for palette_id in set(HORSE_SKY_PALETTES.values()):
             palette = self.palettes[palette_id]
-            if palette_id == 625371:
-                # The dark approach has its own muted blue and violet colours.
+            if palette_id == TEMPLE_EXTERIOR:
                 sky = TEMPLE_EXTERIOR_SKY
-                points = [(x, y, 149 if kind.cross else 191) for x, y, kind in stars]
+                backdrop = self.shapes[TEMPLE_EXTERIOR]
+                visible = [(x, y, kind) for x, y, kind in stars if backdrop.getpixel((x, y)) in sky]
+                # These existing scene inks fade with the shot's two palette tables.
+                colours = {MID: 36, BRIGHT: 46, ROSE_MID: 66, ROSE_BRIGHT: 68, GOLD_BRIGHT: 22}
+                warmed = warm_some(visible, random.Random(900 + HORSE_ROOM))
+                points = [(x, y, colours[kind]) for x, y, kind in warmed]
             else:
                 sky = {index for index, colour in palette.items() if is_sky(colour)}
                 inks = nearest_colours(palette, {kind.steps[-1] for _, _, kind in stars})
