@@ -159,10 +159,10 @@ class CutsceneControls:
         collection.unlock_through(key)
         if not hasattr(self, 'cutscene_fresh'):
             self.cutscene_fresh = set()
-        # The opening's three chapters are open from the start, but a game's
-        # introduction shows them: the viewer reveals each once it has played.
-        fresh = (collection.seen - before) | ({key} if key in OPENING_ORDER else set())
-        self.cutscene_fresh |= fresh - collection.revealed
+        # Only a chapter this play opens is revealed. The introduction that
+        # follows the victory replays the opening of a collection that already
+        # holds it: revealing its chapters again showed them locked.
+        self.cutscene_fresh |= (collection.seen - before) - collection.revealed
 
     def watch_cutscene(self, key):
         """A chapter begins in the campaign: it is unlocked at once, and the

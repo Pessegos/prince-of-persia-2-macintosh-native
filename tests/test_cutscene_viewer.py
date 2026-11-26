@@ -897,6 +897,23 @@ class ViewerSceneTests(unittest.TestCase):
         scene.finish_intro()
         self.assertEqual(sorted(self.open_viewer().reveal), opening)
 
+    def test_the_introduction_after_the_victory_reveals_only_the_unseen_last_chapter(self):
+        scene = self.scene
+        # A loaded campaign played to the end: the viewer never showed the epilogue.
+        scene.cutscene_collection = CutsceneCollection.from_saved(CHAPTER_KEYS)
+        scene.cutscene_fresh = {'happy'}
+        scene.with_intro = True
+        scene.new_game_plus()
+        self.assertIsNotNone(scene.intro)
+        scene.finish_intro()                                           # skipped with space
+        # The replayed opening used to be revealed again, as if it were locked.
+        gallery = self.open_viewer()
+        self.assertEqual(sorted(gallery.reveal), [len(CHAPTERS) - 1])
+        self.assertTrue(all(gallery.chapter_unlocked(i) for i in range(len(CHAPTERS))))
+        scene.close_game_menu()
+        scene.new_game()                                               # Alt+N locks everything again
+        self.assertEqual(scene.cutscene_collection.seen, {'opening'})  # its introduction has begun
+
     def test_developer_replay_leaves_profile_world_and_normal_shortcut_locks_unchanged(self):
         scene = self.scene
         collection = scene.cutscene_collection
