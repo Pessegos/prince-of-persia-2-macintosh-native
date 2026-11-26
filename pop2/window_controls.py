@@ -629,9 +629,9 @@ class WindowControls(InputRouting):
                 width, height = self.canvas.winfo_width(), self.canvas.winfo_height()
                 if width <= 1 or height <= 1:
                     width, height = VISIBLE_SIZE[0] * 2, VISIBLE_SIZE[1] * 2
-                frame, _position = fit_viewport(width, height)
-                rect = menu.MAP_CONTROLS[4]
-                left, top, right, bottom = menu.projected_rect(rect, frame)
+                units, frame, _position = self.dev_map_placement(width, height)
+                rect = menu.map_area(units)
+                left, top, right, bottom = menu.projected_rect(rect, frame, units)
                 for size in ((rect[2] - rect[0], rect[3] - rect[1]), (right - left, bottom - top)):
                     atlas.detail(size)
             except Exception:  # noqa: BLE001 - best effort; the click loads it as before
@@ -1797,6 +1797,21 @@ class WindowControls(InputRouting):
             self.resolve_copy_challenge()
             self.render()
 
+    @staticmethod
+    def dev_map_placement(width, height):
+        """(units across, size, position) of the F3 map page in a window of this size.
+
+        A window wider than 4:3 gets a page as wide as itself, one unit as wide
+        as it is tall, so that the map grows into the width; a narrower one
+        keeps the classic 510-unit page fitted as the game is.
+        """
+        width, height = max(1, width), max(1, height)
+        if width * 384 <= height * 510:
+            return (510, *fit_viewport(width, height))
+        units = max(510, int(width * 384 / height))
+        size = (min(width, round(units * height / 384)), height)
+        return units, size, ((width - size[0]) // 2, 0)
+
     def dev_pointer(self, event):
         if hasattr(self, 'active_cutscene_gallery') and self.active_cutscene_gallery() is not None:
             return menu_viewport_point(
@@ -1811,6 +1826,13 @@ class WindowControls(InputRouting):
             if spread:   # the wide page uses the whole window; its panel starts `shift` units in
                 point = menu_viewport_point(event.x, event.y, width, height)
                 return None if point is None else (point[0] - shift, point[1])
+        dev = getattr(self, 'dev_menu', None)
+        if dev is not None and dev.map_enabled and dev.map_width != 510:
+            _units, size, (left, top) = self.dev_map_placement(width, height)
+            if not (left <= event.x < left + size[0] and top <= event.y < top + size[1]):
+                return None
+            return (1 + (event.x - left) * dev.map_width / size[0],
+                    (event.y - top) * VISIBLE_SIZE[1] / size[1])
         return viewport_point(
             event.x, event.y, self.canvas.winfo_width(), self.canvas.winfo_height()
         )
@@ -2329,6 +2351,19 @@ class WindowControls(InputRouting):
         if width <= 1 or height <= 1:
             width, height = VISIBLE_SIZE[0] * 2, VISIBLE_SIZE[1] * 2
         size, position = fit_viewport(width, height)
+        dev = getattr(self, 'dev_menu', None)
+        visible = VISIBLE_VIEWPORT
+        if dev is not None and dev.map_enabled:
+            units, map_size, map_position = self.dev_map_placement(width, height)
+            if dev.page_width != units:
+                # The window became wider or narrower: the map page is drawn for its new width.
+                dev.page_width = units
+                underlay = self.kept_menu_underlay()
+                self.native_viewport = self.draw_screenshot_notice(
+                    dev.draw(self.screenshot_viewport if underlay is None else underlay, self.ui_font))
+            if dev.map_width != 510:
+                size, position = map_size, map_position
+                visible = (1, 0, 1 + dev.map_width, VISIBLE_SIZE[1])
         # Kept only while the window shows menus drawn at the game's resolution (see patch_native_menu).
         native_menu, self.native_menu_frame = getattr(self, 'native_menu_frame', None), None
         # What the photo shown holds, should another take its place (show_photo keeps it).
@@ -2537,7 +2572,7 @@ class WindowControls(InputRouting):
             if game_menu is None:
                 self.save_menu_source = self.save_grounds = None   # kept while the menu is open
             menu = getattr(self, 'dev_menu', None)
-            source = self.native_viewport.crop(VISIBLE_VIEWPORT)
+            source = self.native_viewport.crop(visible)
             if menu is not None and menu.preview_enabled:
                 source = source.convert('RGB')  # cheaper here than on the enlarged frame
             elif (game_menu is not None or menu is not None or getattr(self, 'copy_challenge', None) is not None

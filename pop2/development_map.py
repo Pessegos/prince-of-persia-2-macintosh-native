@@ -236,13 +236,28 @@ class DevelopmentMap:
     exits: frozenset = frozenset()
     starts: frozenset = frozenset()
 
+    @property
+    def bounds(self):
+        """The box the rooms cover in the overview picture."""
+        rects = self.rooms.values()
+        if not rects:
+            return 0, 0, self.image.width, self.image.height
+        return (min(rect[0] for rect in rects), min(rect[1] for rect in rects),
+                max(rect[2] for rect in rects), max(rect[3] for rect in rects))
+
     def transform(self, size):
-        scale = min(size[0] / self.image.width, size[1] / self.image.height)
-        return scale, ((size[0] - self.image.width * scale) / 2,
-                       (size[1] - self.image.height * scale) / 2)
+        """(scale, offset) that fits the rooms, not the overview's margins, centred in ``size``.
+
+        A long level's strip of rooms then uses all of a wide area instead of
+        the overview's fixed proportions.
+        """
+        left, top, right, bottom = self.bounds
+        scale = min(size[0] / (right - left), size[1] / (bottom - top))
+        return scale, ((size[0] - (right - left) * scale) / 2 - left * scale,
+                       (size[1] - (bottom - top) * scale) / 2 - top * scale)
 
     def detail(self, size):
-        if size == self.image.size:
+        if size == self.image.size and self.transform(size) == (1, (0, 0)):
             return self.image
         if size not in self.scaled_images:
             image = Image.new('RGB', size, '#101010')

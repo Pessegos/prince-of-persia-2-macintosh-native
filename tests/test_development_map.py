@@ -168,10 +168,13 @@ class DevelopmentMapModelTests(unittest.TestCase):
     def test_map_preserves_aspect_ratio_and_hits_inside_taller_workspace(self):
         menu = self.menu()
         left, top, right, bottom = menu.control_rect(4)
-        scale, (ox, oy) = menu.map_preview.transform((right - left, bottom - top))
-        self.assertGreater(oy, 0)
-        self.assertEqual(ox, 0)
-        self.assertAlmostEqual(scale, (right - left) / MAP_SIZE[0])
+        preview = menu.map_preview
+        scale, (ox, oy) = preview.transform((right - left, bottom - top))
+        # The rooms, not the overview's margins, fill the area and stand centred in it.
+        x1, y1, x2, y2 = preview.bounds
+        self.assertAlmostEqual(scale, min((right - left) / (x2 - x1), (bottom - top) / (y2 - y1)))
+        self.assertAlmostEqual((x1 * scale + ox) * 2 + (x2 - x1) * scale, right - left)
+        self.assertAlmostEqual((y1 * scale + oy) * 2 + (y2 - y1) * scale, bottom - top)
         self.assertIsNone(menu.map_hit(left + 1, top + 1))
         for label in menu.map_preview.rooms:
             self.assertEqual(menu.map_hit(*room_point(menu, label)), label)
@@ -201,6 +204,38 @@ class DevelopmentMapModelTests(unittest.TestCase):
         self.assertEqual(menu.screen, 'Room 2')
         menu.key('Tab')
         self.assertEqual(menu.focus, 1)
+
+    def test_wide_page_keeps_the_classic_arrangement_and_widens_the_map(self):
+        classic = self.menu()
+        menu = self.menu()
+        menu.page_width = 682   # a 16:9 window
+        self.assertEqual(menu.map_width, 682)
+        extra = 682 - 510
+        # Back and Return stay at the left, the level's controls are centred, Go and
+        # Resume move to the right edge; every control keeps its size.
+        for control, shift in ((7, 0), (1, 0), (5, extra // 2), (0, extra // 2), (6, extra // 2),
+                               (2, extra), (3, extra)):
+            x1, y1, x2, y2 = classic.control_rect(control)
+            self.assertEqual(menu.control_rect(control), (x1 + shift, y1, x2 + shift, y2))
+        x1, y1, x2, y2 = classic.control_rect(4)
+        self.assertEqual(menu.control_rect(4), (x1, y1, x2 + extra, y2))
+        level = menu.control_rect(0)
+        self.assertEqual(level[0] + level[2], classic.control_rect(0)[0] + classic.control_rect(0)[2] + extra)
+        for control in menu.controls:
+            self.assertTrue(1 < menu.control_rect(control)[0] < menu.control_rect(control)[2] < 682)
+        # The map grows with the area, and its rooms are still hit where they are drawn.
+        self.assertGreater(menu.map_preview.transform((x2 + extra - x1, y2 - y1))[0],
+                           menu.map_preview.transform((x2 - x1, y2 - y1))[0] - 1e-9)
+        for label in menu.map_preview.rooms:
+            self.assertEqual(menu.map_hit(*room_point(menu, label)), label)
+        font = SimpleNamespace(text=lambda value, color=None: Image.new('RGBA', (6 * len(value), 10), 'white'))
+        self.assertEqual(menu.draw(Image.new('RGBA', (512, 384)), font).size, (684, 384))
+        # The tools hub stays the classic centred panel whatever the window.
+        menu.close_map()
+        classic.close_map()
+        self.assertEqual(menu.map_width, 510)
+        self.assertEqual(menu.control_rect(4), classic.control_rect(4))
+        self.assertEqual(menu.draw(Image.new('RGBA', (512, 384)), font).size, (512, 384))
 
     def test_hover_is_transient_and_click_is_direct_teleport(self):
         menu = self.menu()
@@ -697,7 +732,7 @@ class ImportedDevelopmentMapTests(unittest.TestCase):
                         self.assertIs(s.image_ref, photo)
                         actual = ImageTk.getimage(photo).convert('RGB')
                         native = menu.draw(s.screenshot_viewport, s.ui_font)
-                        low = native.crop((1, 0, 511, 384)).resize(actual.size, Image.Resampling.NEAREST)
+                        low = native.crop((1, 0, 1 + menu.map_width, 384)).resize(actual.size, Image.Resampling.NEAREST)
                         expected = menu.present_map(low, s.ui_font).convert('RGB')
                         self.assertEqual(actual.tobytes(), expected.tobytes())
         self.assertEqual(before, (s.game, s.room_id, s.player_x, s.combat.world_frame,
@@ -890,7 +925,7 @@ class ImportedDevelopmentMapTests(unittest.TestCase):
                 self.assertIs(s.image_ref, photo)
                 actual = ImageTk.getimage(photo).convert('RGB')
                 native = menu.draw(s.screenshot_viewport, s.ui_font)
-                low = native.crop((1, 0, 511, 384)).resize(actual.size, Image.Resampling.NEAREST)
+                low = native.crop((1, 0, 1 + menu.map_width, 384)).resize(actual.size, Image.Resampling.NEAREST)
                 self.assertEqual(actual.tobytes(), menu.present_map(low, s.ui_font).convert('RGB').tobytes())
 
             menu.popup_start = 0
@@ -971,7 +1006,7 @@ class ImportedDevelopmentMapTests(unittest.TestCase):
                     self.assertIs(s.image_ref, photo)
                     actual = ImageTk.getimage(photo).convert('RGB')
                     native = menu.draw(s.screenshot_viewport, s.ui_font)
-                    low = native.crop((1, 0, 511, 384)).resize(actual.size, Image.Resampling.NEAREST)
+                    low = native.crop((1, 0, 1 + menu.map_width, 384)).resize(actual.size, Image.Resampling.NEAREST)
                     expected = menu.present_map(low, s.ui_font).convert('RGB')
                     self.assertEqual(actual.tobytes(), expected.tobytes(), f'step {index}')
                 self.assertTrue(menu.map_enabled)
@@ -996,8 +1031,11 @@ class ImportedDevelopmentMapTests(unittest.TestCase):
                 scheduled.pop(0)()
             expected = [3, numbers[(here + 1) % len(numbers)], numbers[here - 1]]
             self.assertEqual([call.args[0] for call in load.call_args_list], expected)
-            size, _ = fit_viewport(2560, 1440)
-            left, top, right, bottom = menu.projected_rect(menu.MAP_CONTROLS[4], size)
+            # A 16:9 window's map page is as wide as the window (s.dev_map_placement).
+            units, size, _ = s.dev_map_placement(2560, 1440)
+            self.assertEqual((units, size[1]), (682, 1440))
+            self.assertLessEqual(2560 - size[0], 3)
+            left, top, right, bottom = menu.projected_rect(menu.map_area(units), size, units)
             for number in expected:
                 self.assertIn((right - left, bottom - top), s.development_map(number).scaled_images)
             s.apply_dev_action(menu.activate())  # open the map
@@ -1010,6 +1048,37 @@ class ImportedDevelopmentMapTests(unittest.TestCase):
             scheduled.pop()()  # a step left over after closing does nothing
             load.assert_not_called()
 
+    def test_wide_window_map_fills_the_width_and_pointer_finds_its_rooms(self):
+        from PIL import ImageTk
+        from tests.test_terrain import RooftopSceneTests
+
+        RooftopSceneTests.setUp(self)
+        s = self.scene
+        s.load_level(3)
+        s.open_dev_mode()
+        s.apply_dev_action(s.dev_menu.activate())
+        menu = s.dev_menu
+        with patch.object(s.canvas, 'winfo_width', return_value=1920), \
+                patch.object(s.canvas, 'winfo_height', return_value=1080):
+            s.present_viewport()
+            units, size, (left, top) = s.dev_map_placement(1920, 1080)
+            self.assertEqual(menu.map_width, units)
+            self.assertEqual(ImageTk.getimage(s.image_ref).size, size)
+            self.assertLessEqual(1920 - size[0], 3)
+            x1, _y1, x2, _y2 = menu.projected_rect(menu.control_rect(4), size)
+            self.assertGreater(x2 - x1, 1800)   # the 4:3 page's map was 1376 pixels across
+            for label in ('Room 1', 'Room 15', 'Room 32'):
+                ux, uy = room_point(menu, label)
+                event = SimpleNamespace(x=round(left + (ux - 1) * size[0] / units),
+                                        y=round(top + uy * size[1] / 384))
+                point = s.dev_pointer(event)
+                self.assertEqual(menu.map_hit(*point), label)
+            self.assertIsNone(s.dev_pointer(SimpleNamespace(x=1919 if size[0] < 1920 else 1920, y=2000)))
+            # Back to the hub: the classic panel, fitted as the game is.
+            menu.close_map()
+            s.redraw_dev_menu()
+            self.assertEqual(ImageTk.getimage(s.image_ref).size, fit_viewport(1920, 1080)[0])
+
     def test_actual_presenter_uses_high_resolution_map_after_resize(self):
         from PIL import ImageTk
         from tests.test_terrain import RooftopSceneTests
@@ -1019,14 +1088,16 @@ class ImportedDevelopmentMapTests(unittest.TestCase):
         s.load_level(3)
         s.open_dev_mode()
         s.apply_dev_action(s.dev_menu.activate())
-        native = s.native_viewport.copy()
+        menu = s.dev_menu
         for width, height in ((1020, 768), (1920, 1080), (2560, 1440)):
             with self.subTest(size=(width, height)), \
                     patch.object(s.canvas, 'winfo_width', return_value=width), \
                     patch.object(s.canvas, 'winfo_height', return_value=height):
+                s.present_viewport()   # a new width draws the page for it
+                native = s.native_viewport.copy()
                 s.present_viewport()
                 actual = ImageTk.getimage(s.image_ref).convert('RGB')
-                low = native.crop((1, 0, 511, 384)).resize(actual.size, Image.Resampling.NEAREST)
+                low = native.crop((1, 0, 1 + menu.map_width, 384)).resize(actual.size, Image.Resampling.NEAREST)
                 expected = s.dev_menu.present_map(low.copy(), s.ui_font).convert('RGB')
                 self.assertEqual(actual.tobytes(), expected.tobytes())
                 self.assertIsNotNone(ImageChops.difference(actual, low.convert('RGB')).getbbox())

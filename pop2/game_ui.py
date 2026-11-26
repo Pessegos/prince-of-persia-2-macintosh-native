@@ -82,6 +82,9 @@ class DevelopmentMenu:
     map_layers: dict = field(default_factory=dict, repr=False, compare=False)
     # The plain map on the theme's ground by size, before any marker or highlight.
     map_bases: dict = field(default_factory=dict, repr=False, compare=False)
+    # How many units across the map page is: a window wider than 4:3 gets a wider
+    # page (set by the window), the map growing to fill it. The tools hub stays 510.
+    page_width: int = 510
 
     CONTROLS = ((200, 138, 392, 166), (120, 180, 392, 210),
                 (120, 231, 252, 263), (264, 231, 392, 263))
@@ -181,9 +184,22 @@ class DevelopmentMenu:
     def selected_index(self):
         return self.field_selected_index(self.dropdown_control if self.dropdown else self.focus)
 
+    @property
+    def map_width(self):
+        """Units across the page the map is shown on (510 but for a wide window's map)."""
+        return max(510, self.page_width) if self.map_enabled else 510
+
     def control_rect(self, index):
         if self.map_enabled:
-            return self.MAP_CONTROLS[index]
+            left, top, right, bottom = self.MAP_CONTROLS[index]
+            extra = self.map_width - 510
+            # A wide page keeps the classic arrangement: the back arrow and Return at
+            # the left, the level's controls centred, Go and Resume at the right edge,
+            # and the map between the toolbar and the footer as wide as the page.
+            shift = {5: extra // 2, 0: extra // 2, 6: extra // 2, 2: extra, 3: extra}.get(index, 0)
+            if index == 4:
+                return self.map_area(self.map_width)
+            return left + shift, top, right + shift, bottom
         if self.page == 'tools' and (self.map_available or not self.level_available):
             return self.position_rect(self.GAME_CONTROLS[index])
         if self.page == 'tools' and self.level_options:
@@ -274,10 +290,15 @@ class DevelopmentMenu:
         x1, _y1, x2, y2 = self.control_rect(self.dropdown_control)
         return x1, y2, x2 + 1, y2 + self.popup_count * self.OPTION_HEIGHT + 1
 
-    @staticmethod
-    def projected_rect(rect, size):
-        """A menu rectangle in the pixels of a visible frame of this size."""
-        sx, sy = size[0] / VISIBLE_SIZE[0], size[1] / VISIBLE_SIZE[1]
+    def map_area(self, width=510):
+        """The map's box on a map page ``width`` units across."""
+        left, top, right, bottom = self.MAP_CONTROLS[4]
+        return left, top, right + max(510, width) - 510, bottom
+
+    def projected_rect(self, rect, size, width=None):
+        """A menu rectangle in the pixels of a visible frame of this size (of a page
+        ``width`` units across; the page shown, by default)."""
+        sx, sy = size[0] / (width or self.map_width), size[1] / VISIBLE_SIZE[1]
         left, top, right, bottom = rect
         return round((left - 1) * sx), round(top * sy), round((right - 1) * sx), round(bottom * sy)
 
@@ -421,7 +442,11 @@ class DevelopmentMenu:
         return self.activate()
 
     def draw(self, viewport, font):
-        image = menu_theme.ground(viewport, None if self.map_enabled else self.panel_rect)
+        if self.map_width != 510:
+            # The wide map page is drawn over all of itself: it needs no picture under it.
+            image = Image.new('RGBA', (self.map_width + 2, viewport.height), (0, 0, 0, 255))
+        else:
+            image = menu_theme.ground(viewport, None if self.map_enabled else self.panel_rect)
         draw = ImageDraw.Draw(image)
         gold, white, muted = c("#f4d873"), c("#eeeeee"), c("#b9b9b9")
         offset = self.layout_offset
@@ -512,9 +537,11 @@ class DevelopmentMenu:
 
     def draw_map(self, image, draw, font, text):
         gold, white = c('#f4d873'), c('#eeeeee')
-        draw.rectangle((1, 0, 510, 383), fill=c('#101010'))
-        draw.line((12, 47, 500, 47), fill=c('#383838'))
-        draw.line((12, 340, 500, 340), fill=c('#383838'))
+        width = self.map_width
+        extra = width - 510
+        draw.rectangle((1, 0, width, 383), fill=c('#101010'))
+        draw.line((12, 47, width - 10, 47), fill=c('#383838'))
+        draw.line((12, 340, width - 10, 340), fill=c('#383838'))
         for control in (7, 5, 0, 6, 1, 2, 3):
             if control not in self.controls and control != 1:
                 continue
@@ -522,7 +549,7 @@ class DevelopmentMenu:
             draw.rectangle(rect, fill=c('#303030') if self.focus == control else c('#222222'),
                            outline=gold if self.focus == control else c('#626262'))
         left, top, right, _bottom = self.control_rect(0)
-        text(self.field_options(0)[self.level_index], 250, top + 8,
+        text(self.field_options(0)[self.level_index], 250 + extra // 2, top + 8,
              centered=True, max_width=right - left - 34)
         draw.polygon(((right - 15, top + 10), (right - 7, top + 10),
                       (right - 11, top + 14)), fill=white)
@@ -544,13 +571,13 @@ class DevelopmentMenu:
         label = (f'Return to {destination}' if destination is not None else 'Return to last room')
         text(label, 160, 355, white if destination is not None else c('#777777'),
              centered=True, max_width=256)
-        text('Go', 354, 355, centered=True, max_width=64)
-        text('Resume', 450, 355, centered=True, max_width=88)
+        text('Go', 354 + extra, 355, centered=True, max_width=64)
+        text('Resume', 450 + extra, 355, centered=True, max_width=88)
         if self.error:
             # Just above the line, on the ground: drawn across it, the line struck it through.
             # The tail of an "f" ends a pixel above the line.
-            draw.rectangle((12, 325, 500, 339), fill=c('#101010'))
-            text(self.error, 12, 326, c('#ff9b9b'), max_width=488)
+            draw.rectangle((12, 325, width - 10, 339), fill=c('#101010'))
+            text(self.error, 12, 326, c('#ff9b9b'), max_width=width - 22)
         tooltip = self.map_tooltip(font)
         if tooltip is not None:
             label, rect = tooltip
@@ -564,7 +591,7 @@ class DevelopmentMenu:
         label = labels[self.hovered_control]
         x1, _y1, _x2, y2 = self.control_rect(self.hovered_control)
         width = font.text(label).width + 12
-        x1 = min(x1, 500 - width)
+        x1 = min(x1, self.map_width - 10 - width)
         y1 = y2 + 3 if y2 < 300 else self.control_rect(self.hovered_control)[1] - 22
         return label, (x1, y1, x1 + width, y1 + 18)
 

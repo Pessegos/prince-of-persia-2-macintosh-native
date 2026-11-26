@@ -115,9 +115,21 @@ The native menu buffer retains the pixel-art font. At presentation time,
 the map is composed directly at the actual fitted window resolution from
 the original 510x360 room images, rather than enlarging the tiny native menu
 thumbnail. Room hit regions stay in native viewport coordinates. Hover
-outlines/tooltips scale with the map. The overview is uniformly fitted inside
-the taller workspace, preserving room aspect ratios and inverse pointer
-mapping. The level popup and toolbar tooltips are restored above the detailed
+outlines/tooltips scale with the map. The rooms themselves (not the
+overview picture's fixed margins) are uniformly fitted and centred inside the
+workspace, preserving room aspect ratios and inverse pointer mapping.
+
+A window wider than 4:3 (for example 1920x1080) gets a map page as wide as
+itself: one unit stays as wide as it is tall, so the page has more units
+across (682 at 16:9) instead of being stretched. It keeps the classic
+arrangement: the back arrow and Return at the left, the level selector and its
+arrows centred, Go and Resume at the right edge, every control at its own size,
+and the map area between the toolbar and the footer as wide as the page. The
+map grows into that width (at 1920x1080 the level 3 map went from 1376 to
+1856 pixels across); an ultrawide window is limited by the map's height
+instead. The compact tools hub stays the classic centred panel, and the
+level map closes back to it fitted as before. 4:3 and taller windows keep
+the classic 510-unit page. The level popup and toolbar tooltips are restored above the detailed
 map without changing the rest of the presented frame.
 
 Map creation waits for Open map, not F3 itself, with no startup precomputation
