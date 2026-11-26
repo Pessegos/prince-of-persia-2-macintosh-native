@@ -137,6 +137,62 @@ class HorseSceneTests(unittest.TestCase):
                 self.assertIsNone(player.frame().convert('RGB').crop((510, 0, 512, 384)).getbbox())
             player.advance(6 / MAC_TICKS_PER_SECOND)
 
+    def test_desert_wind_moves_in_the_three_desert_shots_and_stays_behind_the_rider(self):
+        import numpy as np
+        from pop2.horse_desert import HORSE_GALLOP_BACKDROP, HORSE_GORGE_BACKDROP, HORSE_STATUE_BACKDROP
+        from pop2.intro import IntroAssets, IntroPlayer, TEMPLE_EXTERIOR
+
+        assets = IntroAssets(program_name='temple.json')
+        ambience = True
+        player = IntroPlayer(assets, ambience=lambda: ambience)
+        clear = IntroPlayer(assets)
+        display, revision = player.display.tobytes(), player.revision
+        player.advance(1 / 12)
+        self.assertGreater(player.revision, revision)
+        self.assertEqual(player.display.tobytes(), display)
+
+        shots = ((0.5, HORSE_STATUE_BACKDROP), (10.5, HORSE_GALLOP_BACKDROP), (12.3, HORSE_GALLOP_BACKDROP),
+                 (14.5, HORSE_GORGE_BACKDROP), (17.4, HORSE_GORGE_BACKDROP), (24, TEMPLE_EXTERIOR), (32, None))
+        for time, backdrop in shots:
+            with self.subTest(time=time):
+                player.advance(time - player.time)
+                clear.advance(time - clear.time)
+                self.assertEqual(player.horse_backdrop, backdrop)
+                self.assertEqual((player.position, player.wait_until, player.playing, player.palette),
+                                 (clear.position, clear.wait_until, clear.playing, clear.palette))
+                self.assertEqual(player.display.tobytes(), clear.display.tobytes())
+                difference = np.any(np.asarray(player.frame()) != np.asarray(clear.frame()), axis=2)
+                self.assertFalse(difference[365:].any())
+                self.assertFalse(difference[:, 510:].any())
+                difference[:200] = False  # Fixed stars belong to the sky.
+                self.assertEqual(difference.any(), backdrop not in (TEMPLE_EXTERIOR, None))
+                if backdrop == HORSE_GALLOP_BACKDROP:
+                    rider_and_rocks = np.asarray(player.horse_covered) > 0
+                    self.assertTrue(rider_and_rocks[210:330].any())
+                    self.assertFalse((difference & rider_and_rocks).any())
+                elif backdrop == HORSE_GORGE_BACKDROP:
+                    self.assertTrue(difference[211:, :172].any())     # Crosswind and falls on the left bank.
+                    self.assertTrue(difference[220:, 305:345].any())  # Updraft and sand inside the gorge.
+                ambience = False
+                self.assertEqual(player.frame().tobytes(), clear.frame().tobytes())
+                ambience = True
+
+    def test_the_viewer_uses_the_same_desert_wind_when_replaying_the_ride(self):
+        from pop2.cutscene_viewer import CHAPTER_BY_KEY, chapter_player
+        from pop2.intro import IntroAssets, IntroPlayer
+
+        assets = IntroAssets(program_name='temple.json')
+        ambience = False
+        replay = chapter_player(CHAPTER_BY_KEY['horse'], assets, ambience=lambda: ambience)
+        live = IntroPlayer(assets, ambience=lambda: True)
+        replay.advance(12)
+        live.advance(12)
+        quiet = replay.frame().crop((0, 200, 510, 365)).tobytes()
+        ambience = True
+        windy = replay.frame().crop((0, 200, 510, 365)).tobytes()
+        self.assertNotEqual(quiet, windy)
+        self.assertEqual(windy, live.frame().crop((0, 200, 510, 365)).tobytes())
+
     def test_the_exterior_shots_share_the_horse_room_stars_when_ambience_is_on(self):
         from unittest.mock import patch
 

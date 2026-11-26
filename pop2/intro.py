@@ -11,16 +11,20 @@ from PIL import Image, ImageOps
 
 from pop2.audio import scene_sound_key
 from pop2.game_ui import MacintoshFont
+from pop2.horse_desert import (
+    DESERT_SHOTS, GALLOP_DUNE, GALLOP_GROUND, HORSE_GALLOP_BACKDROP, HORSE_GORGE_BACKDROP,
+    HORSE_STATUE_BACKDROP, HorseDesert,
+)
 from pop2.mac_resources import parse_resource_fork
 from pop2.paths import ASSET_DIR
+from pop2.ruins_ambience import HORSE_AMBIENCE_TICKS_PER_SECOND
 
 
 SIZE = (512, 384)
 CARPET_CLIFF_SHAPE, CARPET_CLIFF_PALETTE = 404650, 403502
 # Backdrop shape to sky palette for the horse, dunes, gorge and temple exterior.
-HORSE_STATUE_BACKDROP = 404250
 TEMPLE_EXTERIOR = 625371
-HORSE_SKY_PALETTES = {HORSE_STATUE_BACKDROP: 403500, 625385: 625379, 404264: 403500,
+HORSE_SKY_PALETTES = {HORSE_STATUE_BACKDROP: 403500, HORSE_GALLOP_BACKDROP: 625379, HORSE_GORGE_BACKDROP: 403500,
                      TEMPLE_EXTERIOR: TEMPLE_EXTERIOR}
 TEMPLE_EXTERIOR_SKY = frozenset({206, 216})
 # Classic Macintosh VBL clock, also used by Mini vMac's host timer.
@@ -322,19 +326,29 @@ class IntroAssets:
         self.title_shapes = {key: indexed_shape(value["data"]) for key, value in title["SHAP"].items()}
         self.title_palette = palette_colors(title["CTBL"][25001]["data"])
         self.title_script = title["SCRP"][25004]["data"]
-        self.horse_stars = self.prepare_horse_stars() if self.program.get("kind") == "temple" else {}
-        self.horse_meteor_frames = self.prepare_horse_meteor() if self.horse_stars else ()
+        self.horse_stars = {}
+        self.horse_meteor_frames = ()
+        self.horse_desert = None
+        if self.program.get("kind") == "temple":
+            self.prepare_horse_ambience()
 
-    def prepare_horse_stars(self):
-        """Keep the desert's stars behind the silhouettes in each exterior shot."""
+    def prepare_horse_ambience(self):
         from pop2.caverns import cavern_room, scenery_available
-        from pop2.ruins_ambience import (
-            BRIGHT, GOLD_BRIGHT, HORSE_ROOM, MID, ROSE_BRIGHT, ROSE_MID, is_sky, nearest_colours, ruins_air, warm_some,
-        )
+        from pop2.ruins_ambience import HORSE_ROOM, ruins_air
 
         if not scenery_available(9):
-            return {}
-        stars = ruins_air(9, HORSE_ROOM, cavern_room(HORSE_ROOM, level_number=9, retouched=True)).stars
+            return
+        air = ruins_air(9, HORSE_ROOM, cavern_room(HORSE_ROOM, level_number=9, retouched=True))
+        self.horse_stars = self.prepare_horse_stars(air.stars)
+        self.horse_meteor_frames = self.prepare_horse_meteor()
+        self.horse_desert = HorseDesert(self.shapes, self.palettes, HORSE_SKY_PALETTES, air.dunes)
+
+    def prepare_horse_stars(self, stars):
+        """Keep the desert's stars behind the silhouettes in each exterior shot."""
+        from pop2.ruins_ambience import (
+            BRIGHT, GOLD_BRIGHT, HORSE_ROOM, MID, ROSE_BRIGHT, ROSE_MID, is_sky, nearest_colours, warm_some,
+        )
+
         layers = {}
         for palette_id in set(HORSE_SKY_PALETTES.values()):
             palette = self.palettes[palette_id]
@@ -503,6 +517,9 @@ class IntroPlayer:
         self.carpet_cliff = False
         self.carpet_stars = None
         self.horse_backdrop = None
+        self.horse_desert = getattr(assets, 'horse_desert', None) if ambience is not None else None
+        self.horse_covered = None
+        self.horse_crest_x = 0
         self.horse_meteor_frames = assets.horse_meteor_frames if horse_meteor else ()
         self.variant, self.prince = variant, prince
         program = assets.program
@@ -599,6 +616,16 @@ class IntroPlayer:
             self.carpet_cliff = True
         elif self.program_kind == "temple" and resource_id in HORSE_SKY_PALETTES:
             self.horse_backdrop = resource_id
+            self.horse_covered = None
+        elif self.horse_backdrop == HORSE_GALLOP_BACKDROP and self.horse_desert is not None:
+            if resource_id == GALLOP_DUNE:
+                self.horse_crest_x = x
+            elif resource_id == GALLOP_GROUND:
+                self.horse_covered = Image.new('L', SIZE)
+            elif self.horse_covered is not None:
+                # Gallop draws the rocks and rider after the plain. Keep their
+                # exact silhouettes, including pixels whose inks match the ground.
+                self.horse_covered.paste(255, region, mask)
 
     def text(self, resource_id, index, initial, dx, dy, dialog=False):
         colors = ((8, 255), (6, 3), (5, 14))
@@ -1036,18 +1063,26 @@ class IntroPlayer:
                     audio.play_intro(cue, kind, offset=elapsed)
 
     def advance(self, seconds, stop_position=None):
-        meteor_age = self.horse_meteor_age()
+        tick = self.horse_desert_tick()
         self.advance_program(seconds, stop_position)
-        if meteor_age != self.horse_meteor_age() and self.ambience is not None and self.ambience():
+        if tick != self.horse_desert_tick() and self.ambience():
             # Redraw the overlay even when the animation is holding its picture.
             self.revision += 1
+
+    def horse_desert_tick(self):
+        if self.horse_desert is not None and self.horse_backdrop in DESERT_SHOTS:
+            return self.horse_scene_tick()
+        return None
+
+    def horse_scene_tick(self):
+        return math.floor(self.time * HORSE_AMBIENCE_TICKS_PER_SECOND + 1e-9)
 
     def horse_meteor_age(self):
         if self.horse_backdrop != HORSE_STATUE_BACKDROP or not self.horse_meteor_frames:
             return None
-        from pop2.ruins_ambience import HORSE_STAR_DELAY_TICKS, HORSE_STAR_TICKS_PER_SECOND
+        from pop2.ruins_ambience import HORSE_STAR_DELAY_TICKS
 
-        age = math.floor(self.time * HORSE_STAR_TICKS_PER_SECOND + 1e-9) - HORSE_STAR_DELAY_TICKS
+        age = self.horse_scene_tick() - HORSE_STAR_DELAY_TICKS
         if 0 <= age < len(self.horse_meteor_frames):
             return age
         return None
@@ -1150,4 +1185,10 @@ class IntroPlayer:
                 for x, y, ink in (*points, *meteor):
                     if self.display.getpixel((x, y)) in sky:
                         frame.putpixel((x, y), (*self.palette[ink], 255))
+            tick = self.horse_desert_tick()
+            gallop = self.horse_backdrop == HORSE_GALLOP_BACKDROP
+            if tick is not None and (not gallop or self.horse_covered is not None):
+                self.horse_desert.draw(frame, self.display, self.palette, self.horse_backdrop, tick,
+                                       scenery=None if gallop else self.background,
+                                       covered=self.horse_covered, crest_x=self.horse_crest_x)
         return frame
