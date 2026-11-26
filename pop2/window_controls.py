@@ -1175,6 +1175,8 @@ class WindowControls(InputRouting):
                 self.redraw_menu()
         elif action in ('slot_save', 'slot_load', 'slot_delete', 'slot_create', 'slot_rename'):
             self.apply_save_action(action)
+        elif action == 'slot_move':
+            self.apply_save_move()
         elif action == "hall":
             self.open_hall_of_fame()
         elif action == 'hall_saved':
@@ -1420,6 +1422,25 @@ class WindowControls(InputRouting):
         browser.focus = 32 if browser.editing else 27
         self.pause_resume_keys.update(self.window_keys_down)
         self.render()
+
+    def apply_save_move(self):
+        """Keep the order the saves page shows now, after the player moved a save on it."""
+        from pop2.save_slots import SAVE_DIRECTORY, list_slots, write_order
+
+        browser = self.game_menu.save_browser
+        path = browser.entry.path
+        try:
+            write_order(browser.slots, SAVE_DIRECTORY)
+            browser.slots = list_slots(SAVE_DIRECTORY)
+            browser.selected = next((i for i, slot in enumerate(browser.slots) if slot.path == path),
+                                    max(0, min(browser.selected, len(browser.items) - 1)))
+            browser.focus = 100 + browser.selected
+            browser.ensure_visible()
+        except OSError as error:
+            browser.error = 'Could not keep this order.'
+            self.status.set(str(error))
+        self.redraw_save_menu()
+        self.schedule_save_scroll()
 
     def play_menu_sound(self, kind):
         audio = getattr(self, 'audio', None)
@@ -1819,6 +1840,8 @@ class WindowControls(InputRouting):
                     gallery.begin_drag(*point)
                 self.save_scroll_dragging = (self.game_menu.page == 'saves'
                     and self.game_menu.save_browser.hit(*point) == 24)
+                if self.game_menu.page == 'saves' and not self.save_scroll_dragging:
+                    self.game_menu.save_browser.begin_move(*point)   # a save dragged moves
                 self.screenshot_scroll_dragging = (self.game_menu.page == 'screenshots'
                     and self.game_menu.screenshot_gallery is not None
                     and self.game_menu.screenshot_gallery.hit(*point) == 14)
@@ -1875,6 +1898,17 @@ class WindowControls(InputRouting):
         if getattr(self, 'save_scroll_dragging', False):
             self.save_scroll_dragging = False
             return 'break'
+        browser = getattr(getattr(self, 'game_menu', None), 'save_browser', None)
+        if browser is not None and browser.held is not None and getattr(event, 'num', 1) == 1:
+            moved = browser.moving
+            action = browser.end_move()
+            if moved:
+                self.set_window_cursor('')
+                if action == 'slot_move':
+                    self.apply_save_move()
+                else:
+                    self.redraw_save_menu()
+                return 'break'
         challenge = getattr(self, "copy_challenge", None)
         if challenge is None:
             self.copy_pointer_held = False
@@ -1926,6 +1960,14 @@ class WindowControls(InputRouting):
                     (point[1] - gallery.LIST[1]) / (gallery.LIST[3] - gallery.LIST[1])))
                 self.redraw_screenshot_gallery()
                 self.schedule_screenshot_gallery()
+            return 'break'
+        browser = getattr(getattr(self, 'game_menu', None), 'save_browser', None)
+        if browser is not None and browser.held is not None and self.game_menu.page == 'saves':
+            point = self.dev_pointer(event)
+            if point is not None and browser.move_held(*point):
+                self.set_window_cursor('fleur')
+                self.redraw_save_menu()
+                self.schedule_save_scroll()   # held at the list's top or foot, it scrolls
             return 'break'
         if (getattr(self, 'save_scroll_dragging', False) and self.game_menu is not None
                 and self.game_menu.page == 'saves'):
@@ -2210,6 +2252,7 @@ class WindowControls(InputRouting):
         if (menu is None or menu.page != 'saves'
                 or menu.save_browser.editing or menu.save_browser.confirmation
                 or abs(menu.save_browser.scroll - menu.save_browser.scroll_target) < 0.1
+                and not menu.save_browser.edge_pull
                 or getattr(self, 'save_scroll_after_id', None) is not None):
             return
         browser = menu.save_browser

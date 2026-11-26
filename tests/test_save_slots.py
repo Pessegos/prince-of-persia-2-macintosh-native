@@ -15,7 +15,8 @@ from pop2.game_session import GameSession
 from pop2.rebirth import RebirthSnapshot
 from pop2.save_game import (SaveGameError, capture, decode_preview, encode_preview,
                            read_save, write_save)
-from pop2.save_slots import SaveBrowser, SaveSlot, list_slots, read_slot, rename_quill
+from pop2.save_slots import (ORDER_FILE, SaveBrowser, SaveSlot, list_slots, read_order, read_slot,
+                             rename_quill, write_order)
 from tests.test_game_session import EmptyEncounter, resources
 
 
@@ -550,6 +551,124 @@ class SaveBrowserTests(unittest.TestCase):
         self.assertEqual([call.args[0] for call in reads.call_args_list], [second])
         second.unlink()
         self.assertEqual([slot.name for slot in list_slots(self.folder)], ['First'])
+
+    def write_saves(self, *names):
+        for index, name in enumerate(names):
+            path = self.folder / f'{name}.pop2save'
+            path.write_text(json.dumps({'format': 'pop2-macintosh-native-save', 'version': 2,
+                'level': 3, 'name': name, 'resume': {'checkpoint': None, 'max_life': 3}}))
+            os.utime(path, (1000 + index, 1000 + index))
+
+    def test_arranged_order_is_kept_and_newer_saves_come_first(self):
+        self.write_saves('a', 'b', 'c')
+        self.assertEqual([slot.name for slot in list_slots(self.folder)], ['c', 'b', 'a'])
+        write_order(tuple(SaveSlot(self.folder / f'{name}.pop2save', name) for name in 'acb'), self.folder)
+        self.assertEqual(read_order(self.folder), ['a.pop2save', 'c.pop2save', 'b.pop2save'])
+        self.assertEqual([slot.name for slot in list_slots(self.folder)], ['a', 'c', 'b'])
+        self.write_saves('a', 'b', 'c', 'd')   # saved again: each keeps its place; the new one is on top
+        self.assertEqual([slot.name for slot in list_slots(self.folder)], ['d', 'a', 'c', 'b'])
+        (self.folder / 'c.pop2save').unlink()
+        self.assertEqual([slot.name for slot in list_slots(self.folder)], ['d', 'a', 'b'])
+        self.assertEqual(sorted(path.name for path in self.folder.iterdir()),
+                         ['a.pop2save', 'b.pop2save', 'd.pop2save', ORDER_FILE])
+
+    def test_damaged_order_file_only_loses_the_arrangement(self):
+        self.write_saves('a', 'b')
+        for content in ('corrupt', '{"a.pop2save": 1}', '[3, null]'):
+            with self.subTest(content=content):
+                (self.folder / ORDER_FILE).write_text(content)
+                self.assertEqual(read_order(self.folder), [])
+                self.assertEqual([slot.name for slot in list_slots(self.folder)], ['b', 'a'])
+        # Only plain save names count: b is placed, a is not, so it is on top.
+        (self.folder / ORDER_FILE).write_text('["../x.pop2save", 3, "b.pop2save", "c.txt"]')
+        self.assertEqual(read_order(self.folder), ['b.pop2save'])
+        self.assertEqual([slot.name for slot in list_slots(self.folder)], ['a', 'b'])
+
+    def test_dragging_a_save_moves_it_and_a_click_does_not(self):
+        slots = tuple(SaveSlot(self.folder / f'{i}.pop2save', f'Save {i}', True) for i in range(8))
+        menu = SaveBrowser(slots)
+        rect = menu.row_rect(1)
+        x, y = rect[0] + 20, rect[1] + 10
+        menu.click(x, y)
+        self.assertTrue(menu.begin_move(x, y))
+        self.assertFalse(menu.move_held(x, y + menu.MOVE_FROM - 1))
+        self.assertIsNone(menu.end_move())   # a click: nothing moved
+        self.assertIs(menu.slots, slots)
+        menu.begin_move(x, y)
+        self.assertTrue(menu.move_held(x, y + 2 * menu.ROW_HEIGHT + 5))
+        self.assertEqual(menu.drop, 3)
+        self.assertEqual([menu.shown(place) for place in range(8)], [0, 2, 3, 1, 4, 5, 6, 7])
+        self.assertEqual(menu.end_move(), 'slot_move')
+        self.assertEqual([slot.name for slot in menu.slots],
+                         ['Save 0', 'Save 2', 'Save 3', 'Save 1', 'Save 4', 'Save 5', 'Save 6', 'Save 7'])
+        self.assertEqual((menu.selected, menu.focus), (3, 103))
+        self.assertEqual(list(self.folder.iterdir()), [])   # the window writes the order
+        menu.begin_move(x, menu.row_rect(3)[1] + 10)   # back where it was: no move
+        menu.move_held(x, menu.row_rect(3)[1] + 30)
+        self.assertEqual(menu.end_move(), 'changed')
+        menu.begin_move(x, menu.row_rect(3)[1] + 10)   # far above the list: to the top
+        menu.move_held(x, -500)
+        self.assertEqual(menu.drop, 0)
+        self.assertEqual(menu.end_move(), 'slot_move')
+        self.assertEqual(menu.slots[0].name, 'Save 1')
+
+    def test_ctrl_arrows_move_the_selected_save(self):
+        slots = tuple(SaveSlot(self.folder / f'{i}.pop2save', f'Save {i}', True) for i in range(3))
+        menu = SaveBrowser(slots)
+        self.assertEqual(menu.key('Up', control=True), 'changed')
+        self.assertIs(menu.slots, slots)
+        self.assertEqual(menu.key('Down', control=True), 'slot_move')
+        self.assertEqual([slot.name for slot in menu.slots], ['Save 1', 'Save 0', 'Save 2'])
+        self.assertEqual(menu.selected, 1)
+        menu.key('Down', control=True)
+        self.assertEqual(menu.key('Down', control=True), 'changed')
+        self.assertEqual(menu.selected, 2)
+
+    def test_a_save_held_at_the_list_foot_scrolls_it(self):
+        slots = tuple(SaveSlot(self.folder / f'{i}.pop2save', f'Save {i}', True) for i in range(20))
+        menu = SaveBrowser(slots)
+        rect = menu.row_rect(0)
+        menu.begin_move(rect[0] + 20, rect[1] + 10)
+        menu.move_held(rect[0] + 20, menu.LIST[3] - 2)
+        drop = menu.drop
+        self.assertGreater(menu.edge_pull, 0)
+        for _ in range(200):
+            if not menu.animate(1 / 60):
+                break
+        self.assertEqual(menu.scroll, menu.max_scroll)
+        self.assertEqual(menu.drop, 19)
+        self.assertGreater(menu.drop, drop)
+        self.assertEqual(menu.edge_pull, 0)
+        self.assertEqual(menu.end_move(), 'slot_move')
+        self.assertEqual(menu.slots[-1].name, 'Save 0')
+
+    def test_frames_drawn_in_place_while_dragging_match_full_redraws(self):
+        font = SimpleNamespace(glyphs=dict.fromkeys(range(128)), text=lambda value, color:
+            Image.new('RGBA', (max(1, len(value)) * 7, 11), color))
+        entries = tuple(SaveSlot(self.folder / str(i), f'Save {i}', True, level=i % 3 + 1,
+                                date='20 Oct 2026  12:00') for i in range(12))
+        for size in ((512, 384), (1434, 1080), (2560, 1080)):
+            browser = SaveBrowser(entries)
+            source = Image.new('RGBA', size, '#0d1117')
+            browser.draw(source, font, in_place=True)
+            rect = browser.row_rect(1)
+            browser.click(rect[0] + 20, rect[1] + 10)
+            browser.draw(source, font, in_place=True)
+            browser.begin_move(rect[0] + 20, rect[1] + 10)
+            for y in (rect[1] + 12, rect[1] + 40, rect[1] + 97, browser.LIST[3] - 3, rect[1] + 10):
+                with self.subTest(size=size, y=y):
+                    browser.move_held(rect[0] + 20, y)
+                    browser.animate(1 / 30)
+                    kept = browser.draw(source, font, in_place=True).copy()
+                    fresh = SaveBrowser(entries, selected=browser.selected, focus=browser.focus)
+                    for name in ('held', 'held_from', 'grip', 'held_y', 'moving', 'scroll', 'scroll_target'):
+                        setattr(fresh, name, getattr(browser, name))
+                    self.assertEqual(kept.tobytes(), fresh.draw(source, font).tobytes())
+            browser.end_move()
+            kept = browser.draw(source, font, in_place=True).copy()
+            fresh = SaveBrowser(browser.slots, selected=browser.selected, focus=browser.focus,
+                                scroll=browser.scroll, scroll_target=browser.scroll_target)
+            self.assertEqual(kept.tobytes(), fresh.draw(source, font).tobytes())
 
     def test_names_come_from_metadata_and_do_not_change_file_paths(self):
         path = self.folder / 'slot-01.pop2save'

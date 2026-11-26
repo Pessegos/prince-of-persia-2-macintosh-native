@@ -3,8 +3,11 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 from functools import lru_cache
+import json
 import math
+import os
 import stat
+import tempfile
 from pathlib import Path
 
 from PIL import Image, ImageDraw
@@ -94,7 +97,47 @@ def list_slots(directory=SAVE_DIRECTORY):
         _READ_SLOTS.pop(path, None)
         remember(_READ_SLOTS, path, (version, slot), 128)
         entries.append(slot)
-    return tuple(sorted(entries, key=lambda slot: (-slot.modified, slot.path.name.casefold())))
+    # The order the player gave by dragging (read_order); saves it does not name yet, the
+    # ones made since, come first, the newest at the top, as with no order at all.
+    order = {name: index for index, name in enumerate(read_order(directory))}
+    return tuple(sorted(entries, key=lambda slot: (
+        slot.path.name in order, order.get(slot.path.name, 0), -slot.modified, slot.path.name.casefold())))
+
+
+# The saves' order, as the player arranged them on the page: their file names, top first.
+ORDER_FILE = 'order.json'
+
+
+def read_order(directory=SAVE_DIRECTORY):
+    """The file names in the order the player gave them, or none: a missing or damaged
+    order file only loses the arrangement, never a save."""
+    try:
+        with (Path(directory) / ORDER_FILE).open('rb') as stream:
+            names = json.loads(stream.read(1 << 20))
+    except (OSError, ValueError):
+        return []
+    if not isinstance(names, list):
+        return []
+    return [name for name in names if isinstance(name, str) and name.endswith('.pop2save')
+            and Path(name).name == name]
+
+
+def write_order(slots, directory=SAVE_DIRECTORY):
+    """Keep these saves' order (top first) for the next listing, written whole or not at all."""
+    directory = Path(directory)
+    directory.mkdir(parents=True, exist_ok=True)
+    payload = (json.dumps([slot.path.name for slot in slots]) + '\n').encode('utf-8')
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(dir=directory, prefix='.pop2-order-', delete=False) as output:
+            temporary = Path(output.name)
+            output.write(payload)
+            output.flush()
+            os.fsync(output.fileno())
+        os.replace(temporary, directory / ORDER_FILE)
+    finally:
+        if temporary is not None and temporary.exists():
+            temporary.unlink()
 
 
 @dataclass
@@ -141,6 +184,14 @@ class SaveBrowser:
     spread: int = field(default=0, compare=False)
     shift: float = field(default=0.0, compare=False)
     name_rows: int = field(default=1, compare=False)   # lines the selected save's name took when last drawn
+    # Moving a save by dragging it: the row pressed (None: none), the pointer's height at
+    # the press, how far down its row it held it, and where the pointer is now; ``moving``
+    # once it went far enough (MOVE_FROM) for the row to follow it.
+    held: int | None = field(default=None, compare=False)
+    held_from: float = field(default=0.0, compare=False)
+    grip: float = field(default=0.0, compare=False)
+    held_y: float = field(default=0.0, compare=False)
+    moving: bool = field(default=False, compare=False)
 
     TABS = ((40, 53, 144, 79), (150, 53, 254, 79))
     ROW_HEIGHT = 42
@@ -152,6 +203,9 @@ class SaveBrowser:
     WIDE_PREVIEW = menu_theme.WIDE_SPREAD + 2 * WIDE_PAD   # a 16:9 window: up to here the extra width enlarges the preview
     DETAIL_GAP = 49      # wide page: the details never climb above name (22) + Rename tip (4 + 17) + 6
     WIDE_LIMIT = 222     # wider windows give the list a little more room for long names, then stop (before the pad)
+    MOVE_FROM = 4        # how far the pointer goes, pressed on a save, before the save moves with it
+    EDGE = 16            # a save held this near the list's top or foot scrolls it
+    EDGE_SPEED = 260     # units a second, the pointer at the edge or past it
 
     def __post_init__(self):
         if self.mode == 'save' and not self.slots and self.focus == 100:
@@ -292,6 +346,13 @@ class SaveBrowser:
     def animate(self, seconds):
         if self.editing or self.confirmation:
             return False
+        pull = self.edge_pull
+        if pull:
+            # The held save stays under the pointer: the list itself moves, at once.
+            self.scroll = self.scroll_target = max(0, min(self.max_scroll,
+                self.scroll + pull * self.EDGE_SPEED * min(0.05, max(0, seconds))))
+            self.scroll_velocity = 0
+            return True
         distance = self.scroll_target - self.scroll
         if abs(distance) < 0.025 and abs(self.scroll_velocity) < 0.1:
             self.scroll = self.scroll_target
@@ -351,6 +412,86 @@ class SaveBrowser:
             return changed
         self.focus = index
         return True
+
+    def begin_move(self, x, y):
+        """A press at (x, y): on a save, the one a drag would move."""
+        self.held, self.moving = None, False
+        if self.confirmation or self.editing or len(self.items) < 2:
+            return False
+        index = self.hit(x, y)
+        if index is None or not 100 <= index < 100 + len(self.items):
+            return False
+        self.held, self.held_from, self.held_y = index - 100, y, y
+        self.grip = y - self.row_rect(self.held)[1]
+        return True
+
+    @property
+    def held_top(self):
+        """Where the save being moved is, its row's top in the list's own units (row 0 at 0)."""
+        top = self.held_y - self.grip - self.LIST[1] + self.scroll
+        return max(0, min((len(self.items) - 1) * self.ROW_HEIGHT, top))
+
+    @property
+    def drop(self):
+        """The place the save being moved would take: the row nearest to it."""
+        return max(0, min(len(self.items) - 1, round(self.held_top / self.ROW_HEIGHT)))
+
+    def shown(self, place):
+        """The save drawn at this place in the list: while one is moved, the others close up
+        around the place it would take (drop)."""
+        if not self.moving or self.held is None:
+            return place
+        drop, held = self.drop, self.held
+        if place == drop:
+            return held
+        others = place if place < drop else place - 1   # its place among the saves not moved
+        return others if others < held else others + 1
+
+    def move_held(self, x, y):
+        """The pointer, still pressed, at (x, y): whether the page changed."""
+        if self.held is None or self.confirmation or self.editing:
+            self.held, self.moving = None, False
+            return False
+        if not self.moving and abs(y - self.held_from) < self.MOVE_FROM:
+            return False
+        before = self.moving, self.drop, self.held_top
+        self.moving, self.held_y = True, y
+        self.hovered = None
+        return (self.moving, self.drop, self.held_top) != before
+
+    @property
+    def edge_pull(self):
+        """How fast the list scrolls under a save held at its top or foot (-1 to 1 of EDGE_SPEED)."""
+        if not self.moving or self.held is None:
+            return 0
+        top, bottom = self.LIST[1] + self.EDGE - self.held_y, self.held_y - (self.LIST[3] - self.EDGE)
+        if top > 0 and self.scroll > 0:
+            return -min(1, max(0.25, top / self.EDGE))
+        if bottom > 0 and self.scroll < self.max_scroll:
+            return min(1, max(0.25, bottom / self.EDGE))
+        return 0
+
+    def end_move(self):
+        """The pointer let go: 'slot_move' when a save was moved to another place (the
+        window keeps the new order), 'changed' when one was let go where it was."""
+        if self.held is None:
+            return None
+        moving, held, drop = self.moving, self.held, self.drop
+        self.held, self.moving = None, False
+        if not moving:
+            return None
+        if drop == held:
+            return 'changed'
+        return self.move_slot(held, drop)
+
+    def move_slot(self, start, end):
+        slots = list(self.slots)
+        slots.insert(end, slots.pop(start))
+        self.slots = tuple(slots)
+        self.selected, self.focus = end, 100 + end
+        self.error = self.status = ''
+        self.ensure_visible()
+        return 'slot_move'
 
     def switch(self, mode):
         self.mode = mode
@@ -442,6 +583,7 @@ class SaveBrowser:
         return self.activate()
 
     def key(self, key, backwards=False, char='', control=False):
+        self.held, self.moving = None, False
         if self.editing:
             if key == 'Escape':
                 self.editing, self.focus = None, 27
@@ -465,6 +607,11 @@ class SaveBrowser:
         if self.confirmation:
             if key in ('Left', 'Right', 'Up', 'Down', 'Tab'):
                 self.focus = 31 if self.focus == 30 else 30
+        elif key in ('Up', 'Down') and control:
+            # Ctrl with an arrow moves the selected save, as dragging it does.
+            end = self.selected + (-1 if key == 'Up' else 1)
+            if self.entry.exists and 0 <= end < len(self.items):
+                return self.move_slot(self.selected, end)
         elif key in ('Up', 'Down'):
             self.selected = max(0, min(len(self.items) - 1, self.selected + (-1 if key == 'Up' else 1)))
             self.focus = 100 + self.selected
@@ -661,14 +808,15 @@ class SaveBrowser:
             origin = clip[:2]
             image = Image.new('RGBA', (clip[2] - clip[0], clip[3] - clip[1]), c('#181818'))
             draw = ImageDraw.Draw(image)
-            for row in rows:
-                slot, rect = self.items[row], self.row_rect(row)
-                if rect[3] <= self.LIST[1] or rect[1] >= self.LIST[3]:
-                    continue
-                selected = self.selected == row
+            moving = self.moving and self.held is not None
+
+            def row_at(index, rect, lifted=False):
+                slot = self.items[index]
+                selected = self.selected == index
                 current = slot.path == self.active_path
                 rectangle(rect, fill=c('#253033') if selected else c('#222222'),
-                          outline=gold if self.focus == 100 + row else cyan if selected else c('#404040'))
+                          outline=gold if lifted or self.focus == 100 + index and not moving
+                          else cyan if selected else c('#404040'))
                 text(slot.name, rect[0] + 8, rect[1] + 7, cyan if selected else white, 100 + grown, True, True)
                 text(f'Level {slot.level}' if slot.level else '---', rect[2] - 8, rect[1] + 7,
                      muted, 59, True, align='right')
@@ -677,6 +825,21 @@ class SaveBrowser:
                     text('Current', rect[0] + 8, rect[1] + 25, cyan, 42, True)
                 text(slot.error or slot.date, rect[2] - 8, rect[1] + 25,
                      muted, (120 if current else 164) + grown, True, align='right')
+
+            for row in rows:
+                rect = self.row_rect(row)
+                if rect[3] <= self.LIST[1] or rect[1] >= self.LIST[3]:
+                    continue
+                if moving and row == self.drop:
+                    # The place the save being moved would take, left open for it.
+                    rectangle(rect, fill=c('#181818'), outline=c('#303030'))
+                else:
+                    row_at(self.shown(row), rect)
+            if moving:
+                # The save being moved, over the others, under the pointer.
+                left, _, right_edge, _ = self.row_rect(0)
+                top = self.LIST[1] + self.held_top - self.scroll
+                row_at(self.held, (left, top, right_edge, top + self.ROW_HEIGHT - 3), lifted=True)
             background.paste(image, origin)
             image, origin = background, (0, 0)
             draw = ImageDraw.Draw(image)
@@ -773,9 +936,11 @@ class SaveBrowser:
             image, origin = background, (0, 0)
             draw = ImageDraw.Draw(image)
 
+        moved = (self.drop, self.held_top) if self.moving and self.held is not None else None
+
         def keep():
             if in_place:
-                self.kept_pages[visible] = list_key, image, self.focus, self.scroll, named
+                self.kept_pages[visible] = list_key, image, self.focus, self.scroll, named, moved
             return image
 
         if kept is not None:
@@ -791,18 +956,19 @@ class SaveBrowser:
                     menu_theme.watermark(image, self.PANEL, point, within=box)
                     parts.append((box, before))
 
-            _, _, focus, scroll, shown = kept
+            _, _, focus, scroll, shown, was_moved = kept
             listed = (*point(*self.LIST[:2]), *point(*self.LIST[2:]))   # where the rows are drawn
             if shown != named:
                 area = drawn(self.NAME_AREA)
                 area = (max(0, area[0]), max(0, area[1]), min(image.width, area[2]), min(image.height, area[3]))
                 again(area, name_over, area)
-            if scroll != self.scroll:
+            if scroll != self.scroll or was_moved != moved:
                 again(drawn(self.LIST), draw_list, compare=False)   # a list that moved changes all over
             for index in ((focus, self.focus) if focus != self.focus else ()):
                 if index in buttons:
                     again(drawn(buttons[index][0]), lit, index)
-                elif scroll == self.scroll and isinstance(index, int) and 100 <= index < 100 + len(self.items):
+                elif (scroll == self.scroll and moved is None and was_moved is None and isinstance(index, int)
+                      and 100 <= index < 100 + len(self.items)):
                     # The row by itself, cut to the list: its neighbours are 3 units away.
                     row = drawn(self.row_rect(index - 100))
                     clip = (max(row[0], listed[0]), max(row[1], listed[1]),

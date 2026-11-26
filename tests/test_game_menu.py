@@ -1438,6 +1438,53 @@ class GameMenuSceneTests(unittest.TestCase):
                         point = scene.dev_pointer(SimpleNamespace(x=origin[0] + x, y=origin[1] + y))
                         self.assertEqual(browser.hit(*point), index)
 
+    def test_dragging_a_save_on_the_page_keeps_the_new_order(self):
+        import json
+        import os
+        from pop2.save_slots import ORDER_FILE, list_slots
+
+        scene = self.scene
+        with TemporaryDirectory() as directory:
+            folder = Path(directory)
+            for index, name in enumerate(('a', 'b', 'c')):
+                (folder / f'{name}.pop2save').write_text(json.dumps({
+                    'format': 'pop2-macintosh-native-save', 'version': 2, 'level': 3, 'name': name,
+                    'resume': {'checkpoint': None, 'max_life': 3}}))
+                os.utime(folder / f'{name}.pop2save', (1000 + index, 1000 + index))
+            with patch('pop2.save_slots.SAVE_DIRECTORY', folder), \
+                    patch.object(scene.canvas, 'winfo_width', return_value=1920), \
+                    patch.object(scene.canvas, 'winfo_height', return_value=1080):
+                scene.apply_game_action('open')
+                browser = scene.game_menu.save_browser
+                browser.slots = list_slots(folder)
+                scene.redraw_save_menu()
+                self.assertEqual([slot.name for slot in browser.slots], ['c', 'b', 'a'])
+                frame = scene.save_menu_frame[1]
+                origin = ((1920 - frame.width) // 2, (1080 - frame.height) // 2)
+
+                def at(x, y):   # page units to a window event
+                    left, top, _, _ = browser.pixel_rect((x, y, x, y), frame.size)
+                    return SimpleNamespace(x=origin[0] + left, y=origin[1] + top, num=1)
+
+                rect = browser.row_rect(0)
+                x, y = rect[0] + 30, rect[1] + 10
+                scene.dev_click(at(x, y))
+                for step in range(1, 12):
+                    scene.dev_hover(at(x, y + step * 8))
+                    actual = ImageTk.getimage(scene.image_ref).convert('RGB')
+                    self.assertEqual(actual.tobytes(), scene.save_menu_frame[1].convert('RGB').tobytes())
+                self.assertTrue(browser.moving)
+                scene.dev_release(at(x, y + 88))
+                self.assertFalse(browser.moving)
+                self.assertEqual([slot.name for slot in browser.slots], ['b', 'a', 'c'])
+                self.assertEqual(json.loads((folder / ORDER_FILE).read_text()),
+                                 ['b.pop2save', 'a.pop2save', 'c.pop2save'])
+                self.assertEqual(browser.entry.name, 'c')
+                scene.dev_click(at(x, browser.row_rect(0)[1] + 10))   # a click selects, moves nothing
+                scene.dev_release(at(x, browser.row_rect(0)[1] + 10))
+                self.assertEqual(browser.entry.name, 'b')
+                self.assertEqual([slot.name for slot in list_slots(folder)], ['b', 'a', 'c'])
+
     def test_wide_screenshots_page_answers_the_pointer_where_it_is_drawn(self):
         scene = self.scene
         with TemporaryDirectory() as directory:
