@@ -18,8 +18,10 @@ from pop2.paths import ASSET_DIR
 SIZE = (512, 384)
 CARPET_CLIFF_SHAPE, CARPET_CLIFF_PALETTE = 404650, 403502
 # Backdrop shape to sky palette for the horse, dunes, gorge and temple exterior.
+HORSE_STATUE_BACKDROP = 404250
 TEMPLE_EXTERIOR = 625371
-HORSE_SKY_PALETTES = {404250: 403500, 625385: 625379, 404264: 403500, TEMPLE_EXTERIOR: TEMPLE_EXTERIOR}
+HORSE_SKY_PALETTES = {HORSE_STATUE_BACKDROP: 403500, 625385: 625379, 404264: 403500,
+                     TEMPLE_EXTERIOR: TEMPLE_EXTERIOR}
 TEMPLE_EXTERIOR_SKY = frozenset({206, 216})
 # Classic Macintosh VBL clock, also used by Mini vMac's host timer.
 MAC_TICKS_PER_SECOND = 60.14742
@@ -321,6 +323,7 @@ class IntroAssets:
         self.title_palette = palette_colors(title["CTBL"][25001]["data"])
         self.title_script = title["SCRP"][25004]["data"]
         self.horse_stars = self.prepare_horse_stars() if self.program.get("kind") == "temple" else {}
+        self.horse_meteor_frames = self.prepare_horse_meteor() if self.horse_stars else ()
 
     def prepare_horse_stars(self):
         """Keep the desert's stars behind the silhouettes in each exterior shot."""
@@ -350,6 +353,21 @@ class IntroAssets:
                 points = [(x, y, indices[inks[kind.steps[-1]][:3]]) for x, y, kind in stars]
             layers[palette_id] = sky, points
         return layers
+
+    def prepare_horse_meteor(self):
+        """Reuse the playable room's meteor with the statue shot's indexed sky inks."""
+        from pop2.ruins_ambience import horse_shooting_star, nearest_colours, shooter_pixels
+
+        meteor = horse_shooting_star()
+        palette = self.palettes[HORSE_SKY_PALETTES[HORSE_STATUE_BACKDROP]]
+        colours = nearest_colours(palette, (*meteor.kind.colours, meteor.kind.head))
+        indices = {colour: index for index, colour in palette.items()}
+        inks = {colour: indices[rgba[:3]] for colour, rgba in colours.items()}
+        frames = []
+        for age in range(meteor.kind.lasts):
+            meteor.age = age
+            frames.append(tuple((x, y, inks[colour]) for x, y, colour in shooter_pixels(meteor)))
+        return tuple(frames)
 
 
 class ScriptAnimation:
@@ -473,7 +491,8 @@ def area_words(rect):
 
 
 class IntroPlayer:
-    def __init__(self, assets, audio=None, music=None, variant=None, prince=None, status=None, *, ambience=None):
+    def __init__(self, assets, audio=None, music=None, variant=None, prince=None, status=None, *,
+                 ambience=None, horse_meteor=False):
         """`music`: (cue, seconds played, game_song metadata) of a game song
         still playing when the scene starts; its cue markers pace the scene.
         `variant` picks one of the program's variants (the throne scene: the
@@ -483,7 +502,8 @@ class IntroPlayer:
         self.ambience = ambience
         self.carpet_cliff = False
         self.carpet_stars = None
-        self.horse_sky_palette = None
+        self.horse_backdrop = None
+        self.horse_meteor_frames = assets.horse_meteor_frames if horse_meteor else ()
         self.variant, self.prince = variant, prince
         program = assets.program
         self.operations = program["variants"][str(variant)] if variant is not None else program["operations"]
@@ -578,7 +598,7 @@ class IntroPlayer:
         if self.program_kind == "carpet" and resource_id == CARPET_CLIFF_SHAPE:
             self.carpet_cliff = True
         elif self.program_kind == "temple" and resource_id in HORSE_SKY_PALETTES:
-            self.horse_sky_palette = HORSE_SKY_PALETTES[resource_id]
+            self.horse_backdrop = resource_id
 
     def text(self, resource_id, index, initial, dx, dy, dialog=False):
         colors = ((8, 255), (6, 3), (5, 14))
@@ -854,7 +874,7 @@ class IntroPlayer:
             from pop2.caverns import room_indices, room_palette
 
             level, room = args
-            self.horse_sky_palette = None
+            self.horse_backdrop = None
             self.target.paste(room_indices(level, room - 1), (0, 0))
             if level == 10:
                 colors = room_palette(level)
@@ -1003,7 +1023,7 @@ class IntroPlayer:
         if not 0 <= index < len(self.operations):
             raise ValueError("Intro part is outside the scene program")
         audio = self.audio
-        self.__init__(self.assets, ambience=self.ambience)
+        self.__init__(self.assets, ambience=self.ambience, horse_meteor=bool(self.horse_meteor_frames))
         while not self.done and self.position <= index:
             self.advance(max(0, self.wait_until - self.time), stop_position=index + 1)
         self.advance(0)
@@ -1016,6 +1036,23 @@ class IntroPlayer:
                     audio.play_intro(cue, kind, offset=elapsed)
 
     def advance(self, seconds, stop_position=None):
+        meteor_age = self.horse_meteor_age()
+        self.advance_program(seconds, stop_position)
+        if meteor_age != self.horse_meteor_age() and self.ambience is not None and self.ambience():
+            # Redraw the overlay even when the animation is holding its picture.
+            self.revision += 1
+
+    def horse_meteor_age(self):
+        if self.horse_backdrop != HORSE_STATUE_BACKDROP or not self.horse_meteor_frames:
+            return None
+        from pop2.ruins_ambience import HORSE_STAR_DELAY_TICKS, HORSE_STAR_TICKS_PER_SECOND
+
+        age = math.floor(self.time * HORSE_STAR_TICKS_PER_SECOND + 1e-9) - HORSE_STAR_DELAY_TICKS
+        if 0 <= age < len(self.horse_meteor_frames):
+            return age
+        return None
+
+    def advance_program(self, seconds, stop_position):
         if seconds < 0:
             raise ValueError("Intro cannot run backwards")
         end = self.time + seconds
@@ -1104,11 +1141,13 @@ class IntroPlayer:
             for x, y, background, ink in self.carpet_stars:
                 if self.display.getpixel((x, y)) == background:
                     frame.putpixel((x, y), (*self.palette[ink], 255))
-        elif self.horse_sky_palette is not None:
-            layer = self.assets.horse_stars.get(self.horse_sky_palette)
+        elif self.horse_backdrop is not None:
+            layer = self.assets.horse_stars.get(HORSE_SKY_PALETTES[self.horse_backdrop])
             if layer is not None:
                 sky, points = layer
-                for x, y, ink in points:
+                age = self.horse_meteor_age()
+                meteor = self.horse_meteor_frames[age] if age is not None else ()
+                for x, y, ink in (*points, *meteor):
                     if self.display.getpixel((x, y)) in sky:
                         frame.putpixel((x, y), (*self.palette[ink], 255))
         return frame

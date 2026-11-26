@@ -3090,8 +3090,11 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
     def start_temple_ride(self, finish, part_index=None):
         """NISTemple after level nine; `finish(keep_music=...)` runs after it.
         Returns False when the scene is not imported."""
+        # The leap skips the gameplay room. Its first shot can show the
+        # room's meteor if the Prince has not already seen it on foot.
+        horse_meteor = part_index is None and not self.level_renderer.horse_star_seen
         return self.start_story_scene('temple.json', finish, 'The ride to the temple',
-                                      part_index=part_index)
+                                      part_index=part_index, horse_meteor=horse_meteor)
 
     def start_tower_flight(self, finish):
         """NIS 3 (15:7226) after level thirteen: the horse flies from the
@@ -3109,7 +3112,7 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
             cache[program_name] = IntroAssets(program_name=program_name)
         return cache[program_name]
 
-    def start_story_scene(self, program_name, finish, status, part_index=None):
+    def start_story_scene(self, program_name, finish, status, part_index=None, *, horse_meteor=False):
         from pop2.intro import IntroPlayer
 
         assets = self.prepare_story_scene(program_name)
@@ -3122,7 +3125,8 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         if self.audio is not None:
             self.audio.reset()
         self.intro = IntroPlayer(assets, self.audio if part_index is None else None,
-                                 ambience=lambda: getattr(self, 'cave_ambience_enabled', False))
+                                 ambience=lambda: getattr(self, 'cave_ambience_enabled', False),
+                                 horse_meteor=horse_meteor)
         if part_index is not None:
             self.intro.audio = self.audio
             self.intro.seek_operation(part_index)

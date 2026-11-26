@@ -142,6 +142,7 @@ class HorseSceneTests(unittest.TestCase):
 
         from PIL import ImageChops
         from pop2.caverns import cavern_room
+        from pop2.intro import HORSE_SKY_PALETTES
         from pop2.ruins_ambience import HORSE_ROOM, ruins_air
         from tools.audit_temple_routes import Harness
 
@@ -166,7 +167,7 @@ class HorseSceneTests(unittest.TestCase):
                 scene.cave_ambience_enabled = False
                 clear = player.frame()
                 scene.cave_ambience_enabled = True
-                sky, points = player.assets.horse_stars[player.horse_sky_palette]
+                sky, points = player.assets.horse_stars[HORSE_SKY_PALETTES[player.horse_backdrop]]
                 self.assertTrue(any(lit.getpixel((x, y)) != clear.getpixel((x, y)) for x, y, _ in points))
                 for x, y, _ in points:
                     if player.display.getpixel((x, y)) not in sky:
@@ -248,6 +249,9 @@ class HorseSceneTests(unittest.TestCase):
 
     def test_the_column_leap_plays_the_real_scene_then_enters_level_ten(self):
         from unittest.mock import Mock, patch
+
+        from PIL import ImageChops
+        from pop2.ruins_ambience import horse_shooting_star
         from tests.test_terrain import RooftopSceneTests
 
         RooftopSceneTests.setUp(self)
@@ -255,6 +259,7 @@ class HorseSceneTests(unittest.TestCase):
         scene.load_level(9)
         prepared = scene.story_scene_assets['temple.json']
         scene.peaceful = True
+        scene.cave_ambience_enabled = True
         scene.jump_to_screen('Room 8')
         scene.in_animation_tick = True
         scene.horizontal_key(None, -1, True)
@@ -275,12 +280,60 @@ class HorseSceneTests(unittest.TestCase):
         scene.audio.death_ready.assert_not_called()
         self.assertEqual(scene.sequence_state.action, 41)
         self.assertEqual(scene.room_id, 7)
+        self.assertFalse(scene.level_renderer.horse_star_seen)
+
+        player = scene.intro
+        meteor = horse_shooting_star()
+        samples = ((0.99, None), (1, 0), (1 + 1 / 12, 1), (1.25, 3), (4, 36), (6.5, None), (8, None))
+        for time, age in samples:
+            with self.subTest(time=time):
+                revision = player.revision
+                player.advance(time - player.time)
+                with_star = player.frame().convert('RGB')
+                scene.cave_ambience_enabled = False
+                without = player.frame().convert('RGB')
+                scene.cave_ambience_enabled = True
+                # Both versions differ at the fixed stars. Compare only the
+                # region swept by the meteor, below the opening stars.
+                difference = ImageChops.difference(with_star, without).crop((130, 12, 386, 64))
+                if age is None:
+                    self.assertIsNone(difference.getbbox())
+                else:
+                    self.assertIsNotNone(difference.getbbox())
+                    self.assertGreater(player.revision, revision)
+                    if age < meteor.kind.ticks:
+                        head = meteor.at(age * meteor.kind.speed)
+                        self.assertNotEqual(with_star.getpixel(head), without.getpixel(head))
         scene.intro.advance(60)
         self.assertTrue(scene.intro.done)
         scene.finish_tree()
         self.assertEqual((scene.game.level.number, scene.room_id), (10, 21))
         self.assertIsNone(scene.intro)
         self.assertTrue(scene.combat.player.alive)
+
+    def test_the_shooting_star_does_not_repeat_after_a_playable_visit(self):
+        from PIL import ImageChops
+        from pop2.intro import IntroPlayer
+        from pop2.ruins_ambience import HORSE_ROOM, HORSE_STAR_DELAY_TICKS
+        from tests.test_terrain import RooftopSceneTests
+
+        RooftopSceneTests.setUp(self)
+        scene = self.scene
+        scene.load_level(9)
+        scene.audio = None
+        scene.peaceful = True
+        scene.cave_ambience_enabled = True
+        scene.jump_to_room(HORSE_ROOM, 2, 350, 0)
+        RooftopSceneTests.tick(self, HORSE_STAR_DELAY_TICKS + 1)
+        self.assertTrue(scene.level_renderer.horse_star_seen)
+        self.assertTrue(scene.start_temple_ride(lambda: None))
+        player = scene.intro
+        replay = IntroPlayer(player.assets, ambience=lambda: True)
+        for time in (1, 1.25, 2.5):
+            player.advance(time - player.time)
+            replay.advance(time - replay.time)
+            self.assertIsNone(ImageChops.difference(player.frame().convert('RGB'),
+                                                    replay.frame().convert('RGB')).getbbox())
 
 
 if __name__ == '__main__':

@@ -161,6 +161,8 @@ NORMAL = ShooterKind('normal', 11.0, 7, 11, LILAC[3::-1], LILAC[4], (20, 35), 35
 GRAZER = ShooterKind('grazer', 6.0, 16, 18, LILAC[3::-1], LILAC[4], (6, 12), 18)
 FIREBALL = ShooterKind('fireball', 9.0, 10, 14, (LILAC[4], *LILAC[3::-1]), WHITE, (12, 20), 7, burst=2, linger=3)
 HORSE_STAR_DELAY_TICKS = 12
+# Use the room's 12 Hz ambience cadence when drawing the same effect in NIS 2.
+HORSE_STAR_TICKS_PER_SECOND = 12
 HORSE_LINE_TICKS = 14
 HORSE_SPARK_DELAY, HORSE_SPARK_LIFE = (3, 10), (36, 48)
 HORSE_SPARK_FADE = 10
