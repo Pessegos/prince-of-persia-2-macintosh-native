@@ -10,6 +10,9 @@ from pop2.cutscenes import CHAPTERS, CHAPTER_KEYS, OPENING_KEYS, CutsceneCollect
 from pop2 import menu_theme
 from pop2.cutscene_gallery import CutsceneGallery
 from pop2.cutscene_viewer import ReplayAudio
+
+# The viewer opens on the furthest unlocked chapter: the introduction's last one here.
+OPENED = max(i for i, chapter in enumerate(CHAPTERS) if chapter.key in OPENING_KEYS)
 from pop2.game_menu import GameMenu
 from pop2.paths import ASSET_DIR
 
@@ -739,6 +742,7 @@ class ViewerSceneTests(unittest.TestCase):
                 shown = self.displayed_gallery()
                 # The same as the page drawn by a viewer of its own.
                 fresh = CutsceneGallery(scene.cutscene_collection, scene.cutscene_preview)
+                fresh.select_latest()
                 source = scene.cutscene_gallery_source(shown.size, keep=False)
                 expected = fresh.draw(source, scene.ui_font, visible=True).convert('RGB')
                 self.assertIsNone(ImageChops.difference(shown, expected).getbbox())
@@ -897,6 +901,24 @@ class ViewerSceneTests(unittest.TestCase):
         scene.finish_intro()
         self.assertEqual(sorted(self.open_viewer().reveal), opening)
 
+    def test_the_viewer_opens_on_the_furthest_unlocked_chapter_after_its_reveal(self):
+        scene = self.scene
+        scene.cutscene_collection.unlock('voyage', 'discovery', 'carpet')
+        latest = next(i for i, chapter in enumerate(CHAPTERS) if chapter.key == 'carpet')
+        gallery = self.open_viewer()
+        # It always opened on the first chapter, unless one was being revealed.
+        self.assertEqual((gallery.index, gallery.reveal), (latest, {}))
+        left = gallery.cell(latest)[0] * gallery.PITCH
+        self.assertTrue(gallery.scroll <= left <= gallery.scroll + (gallery.COLUMNS - 1) * gallery.PITCH)
+        scene.close_game_menu()
+        scene.mark_cutscene_seen('vision')                             # its reveal selects it
+        self.assertEqual(self.open_viewer().index, latest + 1)
+        scene.close_game_menu()
+        self.assertEqual(self.open_viewer().index, latest + 1)         # and so does every later opening
+        developer = CutsceneGallery(scene.cutscene_collection, scene.cutscene_preview, developer=True)
+        developer.select_latest()
+        self.assertEqual(developer.index, 0)                           # developer access keeps the first
+
     def test_the_introduction_after_the_victory_reveals_only_the_unseen_last_chapter(self):
         scene = self.scene
         # A loaded campaign played to the end: the viewer never showed the epilogue.
@@ -1001,7 +1023,7 @@ class ViewerSceneTests(unittest.TestCase):
             strip_photo = scene._cutscene_gallery_grid_photo[1]
             scene.dev_scroll(SimpleNamespace(delta=-60, num=None))
             self.assertGreater(gallery.scroll_target, 0)
-            self.assertEqual(gallery.index, 0)
+            self.assertEqual(gallery.index, OPENED)
             gallery.advance(1 / 60)
             scene.present_viewport()
             self.assertIs(scene.image_ref, photo)
@@ -1338,6 +1360,7 @@ class ViewerSceneTests(unittest.TestCase):
         scene.canvas.winfo_width = lambda: 1920
         scene.canvas.winfo_height = lambda: 1080
         gallery = self.open_viewer()       # the introduction's three chapters are open, then locked ones
+        self.assertEqual(gallery.index, OPENED)
         scene.present_viewport()
         photo, grid, page = scene._cutscene_gallery_strip.photo, gallery.grid_cache[1], scene.image_ref
         written = []
@@ -1355,10 +1378,10 @@ class ViewerSceneTests(unittest.TestCase):
             return other.draw(scene.cutscene_gallery_source((1920, 1080), keep=False), scene.ui_font,
                               visible=True, background_key=id(scene.screenshot_viewport)).convert('RGB')
 
-        # Right reaches an open chapter, Down a locked one (its message appears), Right and Left
-        # other locked ones, Up an open one again (the message goes).
-        for key, locked in (('Right', False), ('Down', True), ('Right', True), ('Left', True), ('Up', False),
-                            ('Home', False)):
+        # Left and Right reach open chapters, Down a locked one (its message appears), Right and
+        # Left other locked ones, Up an open one again (the message goes).
+        for key, locked in (('Left', False), ('Right', False), ('Down', True), ('Right', True), ('Left', True),
+                            ('Up', False), ('Home', False)):
             written.clear()
             with self.subTest(key=key), \
                     patch.object(scene, 'cutscene_gallery_frame', side_effect=AssertionError('composed the page')), \
@@ -1411,9 +1434,10 @@ class ViewerSceneTests(unittest.TestCase):
         self.assertTrue(blank(left + 3, top + 3))           # a new photo, left blank there
         self.assertFalse(blank(left - 1, top - 1))
         source = scene.cutscene_gallery_source((photo.width(), photo.height()), keep=False)
-        expected = CutsceneGallery(scene.cutscene_collection, scene.cutscene_preview).draw(
-            source, scene.ui_font, visible=True).convert('RGB')
-        self.assertEqual(gallery.index, 0)
+        own = CutsceneGallery(scene.cutscene_collection, scene.cutscene_preview)
+        own.select_latest()
+        expected = own.draw(source, scene.ui_font, visible=True).convert('RGB')
+        self.assertEqual(gallery.index, OPENED)
         self.assertIsNone(ImageChops.difference(self.displayed_gallery(), expected).getbbox())
 
     def test_pointer_drag_does_not_play_or_select_and_leave_cancels_the_drag(self):
@@ -1425,7 +1449,7 @@ class ViewerSceneTests(unittest.TestCase):
             scene.dev_hover(SimpleNamespace())
             scene.dev_release(SimpleNamespace(num=1))
         self.assertEqual(gallery.scroll, 40)
-        self.assertEqual(gallery.index, 0)
+        self.assertEqual(gallery.index, OPENED)
         self.assertIsNone(scene.cutscene_replay)
         with patch.object(scene, 'dev_pointer', return_value=(220, 150)):
             scene.dev_click(SimpleNamespace(num=1))
@@ -1504,7 +1528,7 @@ class ViewerSceneTests(unittest.TestCase):
         scene.stop_cutscene_replay()
         self.assertEqual((original.position, original.time), position)
         self.assertIs(scene.intro, original)
-        self.assertEqual(gallery.index, 0)
+        self.assertEqual(gallery.index, OPENED)
         scene.close_game_menu()
         self.assertIs(scene.intro, original)
 

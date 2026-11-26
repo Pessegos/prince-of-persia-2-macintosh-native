@@ -232,6 +232,16 @@ class CutsceneGallery:
             return None
         return (frame - self.reveal_stages) / self.REVEAL_RATE
 
+    def select_latest(self):
+        """Open on the story's furthest unlocked chapter, in view; the first
+        one when none is (or every one is, for developer access)."""
+        if self.developer:
+            return
+        self.index = max((index for index in range(len(self.chapters)) if self.chapter_unlocked(index)),
+                         default=0)
+        self.move(0)
+        self.scroll = self.scroll_target
+
     def begin_reveal(self, indices):
         """Show these newly unlocked chapters resolving out of their veil, the first one selected."""
         indices = sorted(index for index in indices if self.chapter_unlocked(index))

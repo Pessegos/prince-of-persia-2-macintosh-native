@@ -123,6 +123,7 @@ def cutscene_steps(scene, size, font, theme, done):
     if caches is None:
         caches = scene.cutscene_viewer_caches = {'text_cache': {}, 'image_cache': {}, 'card_cache': {}}
     viewer = CutsceneGallery(scene.cutscene_collection, scene.cutscene_preview, **caches)
+    viewer.select_latest()   # as the viewer opens
     if ('cutscenes', theme.name, size) not in done:
         for index, chapter in enumerate(CHAPTERS):
             if chapter_available(chapter):

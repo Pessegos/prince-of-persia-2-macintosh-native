@@ -228,6 +228,7 @@ class CutsceneControls:
             caches = self.cutscene_viewer_caches = {'text_cache': {}, 'image_cache': {}, 'card_cache': {}}
         gallery = self.game_menu.cutscene_viewer = CutsceneGallery(
             self.cutscene_collection, self.cutscene_preview, developer=developer, **caches)
+        gallery.select_latest()   # a reveal below selects its first chapter instead
         self.pause_resume_keys.update(self.window_keys_down)
         # Warm the source thumbnails before scrolling begins: loading a newly
         # exposed story program must not stall the moving shelf. Locked
