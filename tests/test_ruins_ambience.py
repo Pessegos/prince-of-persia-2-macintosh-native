@@ -1814,6 +1814,43 @@ class RealSceneTests(unittest.TestCase):
         self.assertGreaterEqual(on.pop('shaken'), 3)
         self.assertEqual(off, on)
 
+    def test_running_jumps_make_no_footstep_puff_on_entering_free_fall(self):
+        from tools.audit_temple_routes import Harness
+
+        for level, room, row, x, facing in ((6, 4, 1, 5, 1), (9, 5, 0, 413, 0)):
+            with self.subTest(level=level, native_room=room + 1):
+                harness = Harness(level, draw=True)
+                try:
+                    scene = harness.scene
+                    scene.audio = None
+                    scene.cave_ambience_enabled = True
+                    scene.jump_to_room(room, row=row, x=x, facing=facing)
+                    scene.shift_held = True
+                    # Start at takeoff in the running-jump sequence from each clip.
+                    scene.start_sequence(4)
+                    grounded_steps = 0
+                    for _ in range(20):
+                        harness.tick()
+                        if scene.room_id != room or scene.ledge_hanging:
+                            break
+                        ambience = scene.level_renderer.ambience
+                        puffs = [cloud for cloud in ambience.clouds if cloud.age.max() == 1]
+                        if scene.terrain_motion.falling and scene.action == 106:
+                            self.assertFalse(puffs)
+                            self.assertGreater(grounded_steps, 0)
+                            break
+                        if not scene.terrain_motion.falling:
+                            grounded_steps += sum(cloud.kind is STEP_PUFF for cloud in puffs)
+                    else:
+                        self.fail('The running jump did not reach free fall')
+                    self.assertEqual((scene.room_id, scene.action), (room, 106))
+                    self.assertTrue(scene.terrain_motion.falling)
+                    if level == 9:
+                        harness.tick(4)
+                        self.assertTrue(scene.ledge_hanging)
+                finally:
+                    harness.close()
+
     def run_along(self, enabled):
         from tools.audit_temple_routes import Harness, press
 

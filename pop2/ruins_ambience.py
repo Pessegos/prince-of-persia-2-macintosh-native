@@ -1686,7 +1686,7 @@ class RuinsAmbience:
         """(x, row, strength, name) of what hit the ceilings or the floor this tick."""
         last, self.footing = self.footing, footing
         blows = []
-        if last is not None and footing is not None and last.falling and not footing.falling:
+        if last is not None and footing is not None and last.falling and footing.on_floor:
             if last.speed >= HARD_LANDING:
                 blows.append((footing.foot, row_of(footing.floor), min(1.0, last.speed / (2 * HARD_LANDING)),
                               'landing'))

@@ -1208,8 +1208,13 @@ class Caverns(Environment):
         if motion is None or scene.ledge_hanging or scene.ledge_climbing:
             return None
         record = scene.frames[state.action]
-        return Footing(state.target_x, floor_contact_x(state.target_x, state.facing, record), floor_y(motion.row),
-                       bool(record.aux & 0x40), motion.falling, state.vertical_velocity, state.action)
+        foot = floor_contact_x(state.target_x, state.facing, record)
+        # A frame may carry the foot flag during a jump or fall.
+        grounded = (not motion.falling and state.current_y == 0
+                    and state.animation_state in (0, 1, 5, 7, 8)
+                    and scene.level_map.supports(motion.room, character_column(foot), motion.row))
+        return Footing(state.target_x, foot, floor_y(motion.row), bool(record.aux & 0x40),
+                       motion.falling, state.vertical_velocity, state.action, grounded=grounded)
 
     def thuds(self):
         """What came down in this room this tick, for the dust. The tiles are taken, as

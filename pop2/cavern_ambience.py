@@ -901,6 +901,11 @@ class Footing:
     falling: bool
     speed: int = 0
     action: int = 0
+    grounded: bool = True
+
+    @property
+    def on_floor(self):
+        return self.grounded and not self.falling
 
 
 @dataclass(frozen=True)
@@ -925,8 +930,10 @@ def foot_down(footing):
 
 def footfalls(last, footing):
     """[Thud] of the dust his feet raise this tick: a landing, a skid or a step."""
+    if not footing.on_floor:
+        return []
     moved = footing.x - last.x
-    if last.falling and not footing.falling:
+    if last.falling:
         lobes = min(MOST_LANDING_LOBES, LANDING_PUFF.lobes + last.speed // LANDING_FALL)
         return [Thud(footing.foot - 3, footing.foot + 3, footing.floor, footing.floor,
                      replace(LANDING_PUFF, lobes=lobes))]
