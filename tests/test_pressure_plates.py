@@ -36,6 +36,18 @@ class PressurePlateTests(unittest.TestCase):
     def push(self):
         return self.plates.push(self.terrain, self.terrain.tile(0, 4, 1))
 
+    def test_level_13s_altar_room_plates_press_without_a_click(self):
+        # PushPlate 5:2488-249c skips AddSound(27) for a plate in native
+        # room 4 of level 13: the hidden plate 4:12 the shadow steps on.
+        # Before, the port clicked when the shadow opened the exit.
+        struct.pack_into('>H', self.level, 0x218a, 13)
+        self.set_tile(3, 12, 5, 2)
+        self.set_link(2, 1, 15)
+        self.assertEqual(self.plates.push(self.terrain, self.terrain.tile(3, 2, 1)), ())
+        self.assertEqual(self.plates.active[3, 12], 1)
+        # The same level's other rooms still click.
+        self.assertEqual(self.push(), (27,))
+
     def test_button_click_depresses_the_plate_before_its_five_tick_release(self):
         self.assertEqual(self.push(), (27,))
         self.assertEqual(self.plates.active, {(0, 14): 1, (0, 15): 2})

@@ -118,7 +118,12 @@ class PressurePlates:
             self.timers[index] = 5
             if timer < 2:
                 self.add(key, 1)
-                if action != 185:
+                # PushPlate 5:2480-24a2: no click for a dead Kid's pose 185,
+                # nor for the plates of native room 4 of level 13 (the altar's
+                # hidden plate 4:12 the shadow steps on).
+                altar = (tile.room == 3
+                         and struct.unpack_from('>H', terrain.level, 0x218a)[0] == 13)
+                if action != 185 and not altar:
                     cues.append(27)
         cues.extend(self.trigger(terrain, index, tile.kind, bool(tile.foreground & 0x2000), impact,
                                  shut_only, sword_type=sword_type, gate_permanent=gate_permanent,
