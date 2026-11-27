@@ -155,7 +155,11 @@ class GuardArtwork:
             sword_x = x + body.width + dx - sword.width
         else:
             sword_x = x - dx
-        image.paste(sword, (sword_x, y + body.height + dy - sword.height), sword)
+        sword_y = y + body.height + dy - sword.height
+        image.paste(sword, (sword_x, sword_y), sword)
+        # SetupSword 3:0b16-0d18: the sword is its own object; its rectangle
+        # (inclusive, as `bounds`) marks cells for a front redraw too.
+        return (sword_x, sword_y, sword_x + sword.width - 1, sword_y + sword.height - 1)
 
     def bounds(self, state, floor_y):
         from pop2.combat import actor_frame_index
@@ -330,7 +334,8 @@ class OpponentArtwork:
         elif art is self.clones:
             art.draw(image, state, floor_y)
         else:
-            art.draw(image, state, floor_y, palette_variant)
+            return art.draw(image, state, floor_y, palette_variant)
+        return None
 
     def bounds(self, state, floor_y, piece=None):
         art = self._art(state)

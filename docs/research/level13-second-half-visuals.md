@@ -83,3 +83,50 @@ comparison (`recover_room`, phases 0-79 of every exit of levels 10-13,
 480 cases) now matches the port's commands exactly; the temple's stone gates
 (1,968 cases) and the ruins' gates and exits already did. The caverns' gate
 3562 differs on purpose (its clean-cut cap, `pressure_drawing_commands`).
+
+## 6. A sword behind the next cell's front pieces
+
+SetupSword 3:0ac8 adds the attached sword or flask as its own object
+(AddCharObj 5, 3:0cce) and, except for a tumble (animation state 9,
+3:0d04-0d0a), marks the cells of its rectangle for a front redraw
+(MarkBufsForRect 5:19f8 with MarkFRedraw, 3:0d0c-0d18). MarkFRedraw 5:48e8
+unites each cell's marked rectangles, clipped to the cell. The port masked
+the character's layer, sword included, with the front pieces of the cells
+of the body's rectangle only: a guard's blade reaching into the next cell
+was drawn over that cell's pillar. In room 32 a guard at column 8 facing the
+Prince by the checkpoint (column 9) now has the tip of his sword behind the
+front of pillar 3540, as the code draws it. `composite_actor` adds the
+cells of the sword's rectangle (`GuardArtwork.draw` returns it; the Prince's
+comes from his attachment). Not modelled: the sword's own place in the
+object sort (the port draws it in its character's layer), the hit star's
+and the flame's rectangles (the flame is a separate layer).
+
+## Checked, no difference
+
+- Every exit, gate and plate of levels 10-13, every phase: `recover_room`
+  against `pressure_drawing_commands` (section 5).
+- Front pieces per dirty cell, levels 10-13 (`tools.probe_foreground_cells`
+  at rest, `--pressure`, `--variants`): 98,400 cells, no missing, bleeding
+  or extra pixel. Temple candles (`tools.probe_temple_candles`): 128 rooms,
+  no mismatch. What hides the Prince in rooms 32, 2, 28, 13, 15, 29 and 4
+  (`tools.probe_actor_cover --level 13`): 1,651 frames, none missing or extra
+  (moving objects, items and the exit frame are counted apart by design).
+- The flask: DrawFlask 3:46fc reads PIEC 3500 +0xd6 and +0x4c0, which are the
+  same in Caverns, Ruins, Temple and Final, so the bubble offsets verified on
+  level 3 hold in room 29. Its ink choice (3:48a0) and quiet phases match.
+- Room 32's bottom strip: every redraw path (DoCleanCut 2:606e -> 3:1a9c ->
+  RedrawCellFast 3:1c64, used for cuts and rebirth after PrepCut 2:532c sets
+  the room and calls 3:1ab0; the dirty redraw 3:3260) runs GetBelowAry per
+  row, and the native code draws dark wall 3509 for all ten columns. The
+  lighter columns 0-4 in the user's capture are not explained by the code.
+- Doors over guards (pair 9/10): no front piece of an exit cell exists in
+  rooms 32 and 28, ClipChar's exit clip (4:416a) is the Kid's only, and the
+  exits are back items; nothing in the code draws a door over an opponent.
+
+## Room 29's music
+
+SpecialMusic 5:5388 (called from 5:4ff8 for the room's ambient song) returns
+song 253 in level 13 for native rooms 4 and 29 (5:543c-545a); in room 4 a
+Kid of actor type 1 with more than 2 HP gets 252 instead (5:53ec-5416). The
+port plays the same (`Temple.ambient_audio`). No other level 13 code tests
+room 29; its only mechanism is the flask.

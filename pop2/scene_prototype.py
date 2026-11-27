@@ -3788,8 +3788,10 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
                 getattr(self, 'level_map', None), getattr(caverns, 'loose', None),
                 self.room_id, row, state, record)
         plan = getattr(self, 'gate_peel_plan', None)
-        mask = ((room.actor_mask(row, bottom, state, bounds, record, peel=plan) if plan is not None
-                 else room.actor_mask(row, bottom, state, bounds, record))
+        attachment = getattr(self, 'attachment_rects', {}).get(id(layer))
+        options = {} if attachment is None else {'attachment': attachment}
+        mask = ((room.actor_mask(row, bottom, state, bounds, record, peel=plan, **options) if plan is not None
+                 else room.actor_mask(row, bottom, state, bounds, record, **options))
                 if room is not None and row is not None else self.foreground.getchannel("A"))
         if floor_exclusion is not None:
             mask = room.contact_floor_mask(mask, floor_exclusion)
@@ -3977,6 +3979,9 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
             frame = self.level_renderer.ambient_layer(frame, self.room_id)
         hide_guards = getattr(self, "peaceful", False) and getattr(self, "demo", None) is None
         actors = []
+        # The rectangle of the sword or flask drawn into a character's layer,
+        # by id(layer), for its own front-redraw cells (composite_actor).
+        self.attachment_rects = {}
         crush_poses = getattr(self, 'slab_crush_poses', {})
         if combat is not None and not hide_guards:
             for guard in (*combat.visible_guards(), *combat.visible_ruins()):
@@ -3991,7 +3996,9 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
                     state = replace(state, target_x=neck[0] - shift,
                                     current_y=neck[1] - ground - record.offset_y)
                 piece = getattr(getattr(guard, 'flame_sword', None), 'piece', None)
-                self.guard_art.draw(layer, state, ground, guard.palette_variant, piece=piece)
+                sword = self.guard_art.draw(layer, state, ground, guard.palette_variant, piece=piece)
+                if sword is not None:
+                    self.attachment_rects[id(layer)] = sword
                 bounds = self.guard_art.bounds(state, ground, piece=piece)
                 actors.append((state, record, bounds, guard.row, layer))
         opponents = list(actors)
@@ -4045,6 +4052,8 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
                     flame_layer.paste(sword, (sword_x, sword_y), sword)
                 else:
                     player_layer.paste(sword, (sword_x, sword_y), sword)
+                    self.attachment_rects[id(player_layer)] = (
+                        sword_x, sword_y, sword_x + sword.width - 1, sword_y + sword.height - 1)
 
         motion = getattr(self, "terrain_motion", None)
         player_bounds = self.player_bounds() if motion is not None else None

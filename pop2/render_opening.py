@@ -199,8 +199,8 @@ class OpeningRoom:
             return self.ceiling_covers.get(row)
         return None
 
-    def actor_mask(self, row, bottom=None, state=None, bounds=None, record=None):
-        mask = self._actor_mask(row, bottom, state, bounds, record)
+    def actor_mask(self, row, bottom=None, state=None, bounds=None, record=None, attachment=None):
+        mask = self._actor_mask(row, bottom, state, bounds, record, attachment)
         ceiling = self.short_jump_ceiling(row, state)
         if ceiling is not None:
             cover, top = ceiling
@@ -209,13 +209,20 @@ class OpeningRoom:
                 add_alpha(mask, cover, 0, top)
         return mask
 
-    def _actor_mask(self, row, bottom, state, bounds, record):
+    def _actor_mask(self, row, bottom, state, bounds, record, attachment=None):
         if self.level_kind != 5:
             if bounds is None:
                 return self.actor_occlusion[max(-1, min(4, row))]
             if self.actor_cell_occlusion is not None:
                 mask = Image.new("L", (ROOM_WIDTH, ROOM_HEIGHT))
-                for cell in native_buffer_cells(bounds):
+                cells = dict.fromkeys(native_buffer_cells(bounds))
+                if attachment is not None and getattr(state, 'animation_state', None) != 9:
+                    # SetupSword 3:0d04-0d18: the attached sword or flask marks
+                    # the cells of its own rectangle (MarkBufsForRect 5:19f8),
+                    # except for a tumble (mode 9). Their front pieces then
+                    # cover it, as the body's cells cover the body.
+                    cells.update(dict.fromkeys(native_buffer_cells(attachment)))
+                for cell in cells:
                     positioned = self.actor_cell_occlusion.get(cell)
                     if positioned is not None:
                         cell_mask, (x, y) = positioned

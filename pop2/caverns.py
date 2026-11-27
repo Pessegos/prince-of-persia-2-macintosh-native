@@ -87,10 +87,12 @@ class CavernRoom(OpeningRoom):
 
         return grit_floor_profile(self.ruins_floor_pieces)
 
-    def actor_mask(self, row, bottom=None, state=None, bounds=None, record=None, peel=None):
+    def actor_mask(self, row, bottom=None, state=None, bounds=None, record=None, peel=None,
+                   attachment=None):
         """`peel`, when given, is the frame's `gate_clips`: the stones the
-        original draws over every character inside each clip."""
-        mask = super().actor_mask(row, bottom, state, bounds, record)
+        original draws over every character inside each clip. `attachment`
+        is the rectangle of the sword or flask drawn in the same layer."""
+        mask = super().actor_mask(row, bottom, state, bounds, record, attachment)
         if self.custom_occlusion is not None:
             # Global front items: DrawCustomRoomImgs 3:239e-23b2 repeats
             # CUST for every dirty cell; DrawHorse 3:23f0-2414 adds the
