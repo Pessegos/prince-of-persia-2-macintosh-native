@@ -1815,7 +1815,7 @@ class WindowControls(InputRouting):
             event.x, event.y, self.canvas.winfo_width(), self.canvas.winfo_height()
         )
 
-    def dev_click(self, event):
+    def dev_click(self, event, *, double=False):
         if getattr(self, 'cutscene_replay', None) is not None:
             # One click on a card starts its film. The second press of a
             # double click made out of habit must not pause it at once.
@@ -1840,8 +1840,8 @@ class WindowControls(InputRouting):
                     gallery.begin_drag(*point)
                 self.save_scroll_dragging = (self.game_menu.page == 'saves'
                     and self.game_menu.save_browser.hit(*point) == 24)
-                if self.game_menu.page == 'saves' and not self.save_scroll_dragging:
-                    self.game_menu.save_browser.begin_move(*point)   # a save dragged moves
+                if self.game_menu.page == 'saves':
+                    self.game_menu.save_browser.begin_move(*point, double=double)
                 self.screenshot_scroll_dragging = (self.game_menu.page == 'screenshots'
                     and self.game_menu.screenshot_gallery is not None
                     and self.game_menu.screenshot_gallery.hit(*point) == 14)
@@ -1866,7 +1866,7 @@ class WindowControls(InputRouting):
     def dev_double_click(self, event):
         viewer = self.active_cutscene_gallery() if hasattr(self, 'active_cutscene_gallery') else None
         if viewer is None:
-            return self.dev_click(event)
+            return self.dev_click(event, double=True)
         point = self.dev_pointer(event)
         if point is not None:
             action = viewer.double_click(*point)
@@ -1901,7 +1901,10 @@ class WindowControls(InputRouting):
         browser = getattr(getattr(self, 'game_menu', None), 'save_browser', None)
         if browser is not None and browser.held is not None and getattr(event, 'num', 1) == 1:
             moved = browser.moving
-            action = browser.end_move()
+            action = browser.end_move(self.dev_pointer(event))
+            if action == 'slot_load':
+                self.apply_game_action(action)
+                return 'break'
             if moved:
                 self.set_window_cursor('')
                 if action == 'slot_move':

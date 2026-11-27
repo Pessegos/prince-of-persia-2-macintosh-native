@@ -192,6 +192,8 @@ class SaveBrowser:
     grip: float = field(default=0.0, compare=False)
     held_y: float = field(default=0.0, compare=False)
     moving: bool = field(default=False, compare=False)
+    clicked_save: Path | None = field(default=None, init=False, repr=False, compare=False)
+    double_pressed: bool = field(default=False, init=False, repr=False, compare=False)
 
     TABS = ((40, 53, 144, 79), (150, 53, 254, 79))
     ROW_HEIGHT = 42
@@ -413,16 +415,18 @@ class SaveBrowser:
         self.focus = index
         return True
 
-    def begin_move(self, x, y):
-        """A press at (x, y): on a save, the one a drag would move."""
-        self.held, self.moving = None, False
-        if self.confirmation or self.editing or len(self.items) < 2:
+    def begin_move(self, x, y, *, double=False):
+        """Track a row press until it becomes a drag or a completed click."""
+        clicked_save, self.clicked_save = self.clicked_save, None
+        self.held, self.moving, self.double_pressed = None, False, False
+        if len(self.items) < 2 and self.mode != 'load':
             return False
         index = self.hit(x, y)
         if index is None or not 100 <= index < 100 + len(self.items):
             return False
         self.held, self.held_from, self.held_y = index - 100, y, y
         self.grip = y - self.row_rect(self.held)[1]
+        self.double_pressed = double and self.items[self.held].path == clicked_save
         return True
 
     @property
@@ -454,6 +458,9 @@ class SaveBrowser:
             return False
         if not self.moving and abs(y - self.held_from) < self.MOVE_FROM:
             return False
+        if len(self.items) < 2:
+            self.held = None
+            return False
         before = self.moving, self.drop, self.held_top
         self.moving, self.held_y = True, y
         self.hovered = None
@@ -471,14 +478,19 @@ class SaveBrowser:
             return min(1, max(0.25, bottom / self.EDGE))
         return 0
 
-    def end_move(self):
-        """The pointer let go: 'slot_move' when a save was moved to another place (the
-        window keeps the new order), 'changed' when one was let go where it was."""
+    def end_move(self, point=None):
+        """Finish a row drag or load after a double-click on the same save."""
         if self.held is None:
             return None
         moving, held, drop = self.moving, self.held, self.drop
         self.held, self.moving = None, False
         if not moving:
+            if (self.mode == 'load' and self.primary_enabled and held == self.selected
+                    and point is not None and abs(point[1] - self.held_from) < self.MOVE_FROM
+                    and self.hit(*point) == 100 + held):
+                if self.double_pressed:
+                    return 'slot_load'
+                self.clicked_save = self.entry.path
             return None
         if drop == held:
             return 'changed'
@@ -584,6 +596,7 @@ class SaveBrowser:
 
     def key(self, key, backwards=False, char='', control=False):
         self.held, self.moving = None, False
+        self.clicked_save = None
         if self.editing:
             if key == 'Escape':
                 self.editing, self.focus = None, 27

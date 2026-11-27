@@ -1438,6 +1438,39 @@ class GameMenuSceneTests(unittest.TestCase):
                         point = scene.dev_pointer(SimpleNamespace(x=origin[0] + x, y=origin[1] + y))
                         self.assertEqual(browser.hit(*point), index)
 
+    def test_double_click_on_a_save_resumes_it_without_the_load_button(self):
+        from pop2.save_game import capture, write_save
+
+        scene = self.scene
+        with TemporaryDirectory() as directory:
+            folder = Path(directory)
+            path = folder / 'journey.pop2save'
+            scene.load_level(2)
+            write_save(path, capture(scene.game))
+            scene.load_level(1)
+            scene.root.update_idletasks()
+            scene.canvas.winfo_id()
+            with patch('pop2.save_slots.SAVE_DIRECTORY', folder), \
+                    patch.object(scene.canvas, 'winfo_width', return_value=1920), \
+                    patch.object(scene.canvas, 'winfo_height', return_value=1080):
+                scene.apply_game_action('open')
+                browser = scene.game_menu.save_browser
+                frame = scene.save_menu_frame[1]
+                self.assertEqual(frame.size, (1920, 1080))
+                left, top, right, bottom = browser.pixel_rect(browser.row_rect(0), frame.size)
+                point = dict(x=(left + right) // 2, y=(top + bottom) // 2)
+                scene.canvas.event_generate('<ButtonPress-1>', time=1000, **point)
+                scene.canvas.event_generate('<ButtonRelease-1>', time=1020, **point)
+                self.assertIs(scene.game_menu.save_browser, browser)
+                self.assertIsNone(browser.confirmation)
+                scene.canvas.event_generate('<ButtonPress-1>', time=1100, **point)
+                self.assertIs(scene.game_menu.save_browser, browser)
+                scene.canvas.event_generate('<ButtonRelease-1>', time=1120, **point)
+                self.assertIsNone(scene.game_menu, scene.status.get())
+                self.assertFalse(scene.paused)
+                self.assertEqual(scene.active_save_path, path)
+                self.assertEqual(scene.game.level.number, 2)
+
     def test_dragging_a_save_on_the_page_keeps_the_new_order(self):
         import json
         import os

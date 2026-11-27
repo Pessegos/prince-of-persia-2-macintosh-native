@@ -86,8 +86,9 @@ Edit menu's V entry. Pause and gameplay bindings are unchanged.
 Save/Load use an integrated slot browser and a versioned `.pop2save` progress
 format, not the original Macintosh save-file format. Loading resumes at the
 activated checkpoint or normal level entry, never the exact saved position.
-The browser includes named saves, previews, dates, smooth scrolling and confirmation
-before overwriting/loading/deleting. Existing version-one snapshots remain
+The browser includes named saves, previews, dates and smooth scrolling. Double-click
+a save in the Load tab to resume it immediately. Overwrite, Load game and Delete
+still ask for confirmation. Existing version-one snapshots remain
 readable with the new resume rules. Saves live outside the project directory.
 A cancelled or invalid load leaves the running game intact; cutscenes/death/
 transitions disable saving without disabling Load. Details and validation

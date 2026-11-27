@@ -207,6 +207,35 @@ class SaveBrowserTests(unittest.TestCase):
             self.assertEqual(menu.key('Return'), 'slot_' + action)
             menu.key('Escape')
 
+    def test_double_click_loads_only_a_valid_save_clicked_twice_without_dragging(self):
+        slots = (
+            SaveSlot(self.folder / 'first.pop2save', 'First', True),
+            SaveSlot(self.folder / 'second.pop2save', 'Second', True),
+            SaveSlot(self.folder / 'broken.pop2save', 'Broken', True, error='Save unavailable'),
+        )
+        menu = SaveBrowser(slots)
+
+        def press(row, *, double=False):
+            left, top, _, _ = menu.row_rect(row)
+            point = left + 20, top + 10
+            menu.begin_move(*point, double=double)
+            menu.click(*point)
+            return point
+
+        self.assertIsNone(menu.end_move(press(0)))
+        self.assertIsNone(menu.end_move(press(1, double=True)))
+        x, y = press(1, double=True)
+        menu.move_held(x, y + menu.ROW_HEIGHT)
+        self.assertEqual(menu.end_move((x, y + menu.ROW_HEIGHT)), 'slot_move')
+        self.assertIsNone(menu.end_move(press(2, double=True)))
+        self.assertEqual(menu.end_move(press(2, double=True)), 'slot_load')
+        self.assertIsNone(menu.end_move(press(1)))
+        self.assertIsNone(menu.end_move(press(1, double=True)))
+        menu.switch('save')
+        self.assertIsNone(menu.end_move(press(0)))
+        self.assertIsNone(menu.end_move(press(0, double=True)))
+        self.assertIsNone(menu.confirmation)
+
     def test_legacy_files_and_corrupt_files_remain_visible_and_can_be_deleted(self):
         (self.folder / 'my old save.pop2save').write_text(json.dumps({
             'format': 'pop2-macintosh-native-save', 'version': 1, 'level': 1}))

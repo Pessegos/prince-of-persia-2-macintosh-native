@@ -67,8 +67,10 @@ Bounded glyph, text, thumbnail and modal-background caches avoid repeated
 rendering while editing names. Menu input does not redraw gameplay. Presentation
 reuses the frozen game background, static menu regions and Tk image, uploading only changed pixels;
 typing and scrolling restrict damage checks to the dialog or list respectively.
-Saving to an occupied slot, loading and deleting require an in-game confirmation
-which defaults to Cancel. Successful saving stays in the browser. Loading
+In the Load tab, double-click a save to resume it immediately. A single click
+selects the save, and the Load game button still asks for confirmation.
+Overwriting and deleting also ask for confirmation. Confirmations default to
+Cancel. Successful saving stays in the browser. Loading
 resumes play; Back preserves an existing user pause and returns to F1 when that
 was the entry point. File errors remain inside the browser.
 
