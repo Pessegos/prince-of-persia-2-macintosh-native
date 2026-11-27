@@ -60,5 +60,11 @@ and the frame flags; JumpSeq, the song, the life, the set load and the record
 save are sinks that record their calls. There is no full FrameAdv, so the timing
 of the first frame after the release is not proven.
 
+Song 244 (JPoof, AddSong at 4:1ebe) was not imported before 2026-11-27, so the
+release was silent; it is now prepared with the temple music. JGrows (245),
+which SpecialMusic gives a fight whose first opponent is type 12, needs a
+fight: TriggerJinnee leaves his a5-0x5024 at 0 (4:1e90), so OppToFight does
+not count him and it is not expected to play.
+
 `tests/test_jinnee.py` runs the real scene: the Prince drinks, the gate stays
 shut and plate 169 is pressed. Before this work the flask stayed on the floor.

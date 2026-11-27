@@ -259,3 +259,13 @@ precedes the last crawl. These are replay choices, not timing claims.
 Open: the Prince hit in room 7 at X 498 crossed into room 12 and the next
 frame stood at X 516 in room 7 (seen in a rejected `swordpass` variant);
 not investigated. Static CODE reading, no new CPU probe.
+
+## Music (2026-11-27)
+
+SpecialMusic 5:5388 runs before the room's ambient lookup when OppToFight
+6:2392 reports a fight. If the room's first opponent (a5-0x5200, the type of
+slot 0 of the room's table) is type 10, it returns JFight (246, 5:53d8-53ea),
+so the fight with the flaming sword has its own song instead of the temple's
+combat songs 232-235; type 12 would give JGrows (245, 5:53c2-53d4). The
+resting sword (alert 0) is no fight. Both songs are now imported with the
+temple music. `room_ambient` passes them; `test_the_flame_sword_fight_plays_jfight`.

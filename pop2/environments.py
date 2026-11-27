@@ -152,8 +152,15 @@ class Environment:
         if not chasing:
             # SpecialMusic 5:5398-53bc: BrgFight for fights in level five's
             # bridge rooms 7, 10 and 12.
-            if special is None:
-                special = 119 if bridge_checked(scene.game.level.number, scene.room_id) else None
+            if fighting and bridge_checked(scene.game.level.number, scene.room_id):
+                special = 119
+            elif fighting:
+                # 5:53c2-53ea: JGrows (245) or JFight (246) when the room's
+                # first opponent (a5-0x5200, slot 0's type) is type 12 or
+                # the flaming sword (type 10), before the level-13 songs.
+                first = next(iter(scene.combat.active_guards()), None)
+                kind = first.state.actor_type if first is not None else None
+                special = {12: 245, 10: 246}.get(kind, special)
             column = character_column(int(contact))
             options = {'special_when_idle': True} if special_when_idle else {}
             if not fighting and not scene.peaceful:

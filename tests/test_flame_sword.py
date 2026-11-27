@@ -294,6 +294,30 @@ class LevelTwelveFlameSwordTests(unittest.TestCase):
         self.tick(40)
         self.assertLess(self.scene.combat.player.life, 3)
 
+    def test_the_flame_sword_fight_plays_jfight(self):
+        # SpecialMusic 5:53d8-53ea: a fight whose first opponent is type 10
+        # plays JFight (246) instead of the temple's combat songs. Asleep it
+        # is no fight, and the room keeps its ordinary ambience.
+        from pop2.environments import environment_for
+
+        sword = self.enter(290)
+        calls = []
+
+        class Audio:
+            def room_song(self, *args):
+                pass
+
+            def ambient(self, room, row, column, fighting=False, alive=True, special=None, **options):
+                calls.append((fighting, special))
+
+        environment = environment_for(self.scene)
+        environment.ambient_audio(Audio(), self.scene.terrain_motion)
+        self.assertEqual(calls[-1], (False, None))
+        self.tick(1)
+        self.assertEqual(sword.alert_mode, 3)
+        environment.ambient_audio(Audio(), self.scene.terrain_motion)
+        self.assertEqual(calls[-1], (True, 246))
+
     def test_arriving_in_landing_recovery_does_not_leave_the_awakened_sword_waiting(self):
         from pop2.combat import select_sequence
 

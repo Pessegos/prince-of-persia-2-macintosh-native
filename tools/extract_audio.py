@@ -30,7 +30,10 @@ LATE_CAVERN_SONGS = (111, 112, 114, 115, 116, 119, 120, 121)
 # The ruins: ambient 139-174, the level end 124, 183; the flip flask 176/177;
 # the heads' InjrHead 136 and KillHead 137; level nine's Horse 185 and Chasm 292;
 # level eight's throne: SeeThron 179, Throne1 180, Throne2 181 and Throne4 182.
-RUINS_SONGS = (*range(139, 175), 124, 183, 176, 177, 136, 137, 185, 292, *range(179, 183))
+# HeadKill 135 and SnakKill 129: the Kid's death songs for a head or a
+# serpent (CheckStab 6:5726/574a, methods 6 and 7 of a5-0x4396).
+RUINS_SONGS = (*range(139, 175), 124, 183, 176, 177, 136, 137, 185, 292, *range(179, 183),
+               129, 135)
 SYNTH_DIR = Path(__file__).resolve().parents[1] / "vendor" / "smssynth"
 
 
