@@ -1,6 +1,7 @@
 """Clean level scenery and spatial room selection for the F3 map."""
 
 import copy
+import math
 from collections import deque
 from dataclasses import dataclass, field
 import random
@@ -224,6 +225,22 @@ def clean_room_frames(renderer, terrain, positions, enemies=None):
         yield room, frame.crop((0, 0, *ROOM_SIZE)).convert('RGB')
 
 
+def scaled_room(source, size):
+    """A room picture at ``size``: smoothed when made smaller, its pixels kept when larger.
+
+    The rooms' art is 510x360 and has no larger version. A map of few rooms in
+    a big window (level 2's three shore rooms at 3440x1440 are about 1120
+    pixels across) enlarged it smoothly, which looked blurred: it is enlarged
+    by whole pixels first, as the game window does, then brought down to the
+    size by averaging, so that no pixel is wider than its neighbours.
+    """
+    if size[0] <= source.width and size[1] <= source.height:
+        return source.resize(size, Image.Resampling.LANCZOS)
+    factor = math.ceil(max(size[0] / source.width, size[1] / source.height))
+    enlarged = source.resize((source.width * factor, source.height * factor), Image.Resampling.NEAREST)
+    return enlarged.resize(size, Image.Resampling.BOX)
+
+
 @dataclass(frozen=True)
 class DevelopmentMap:
     image: Image.Image
@@ -268,8 +285,8 @@ class DevelopmentMap:
                 source = self.source_frames.get(label)
                 if source is None:
                     source = self.image.crop(rect)
-                image.paste(source.resize((max(1, right - left), max(1, bottom - top)),
-                                          Image.Resampling.LANCZOS), (left, top))
+                image.paste(scaled_room(source, (max(1, right - left), max(1, bottom - top))),
+                            (left, top))
             # Native menu and HD presentation alternate on every redraw.
             if len(self.scaled_images) >= 2:
                 del self.scaled_images[next(iter(self.scaled_images))]

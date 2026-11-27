@@ -3889,6 +3889,10 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         if viewport.mode != 'RGBA':
             viewport = viewport.convert('RGBA')
         text = self.ui_font.text(message, (253, 255, 168, 255))
+        if not visible and viewport.width * VIEWPORT_HEIGHT > viewport.height * VIEWPORT_WIDTH:
+            # A page wider than the game's at its resolution (the F3 map in a wide window):
+            # its units are as wide as they are tall, so the message is not stretched.
+            uniform = True
         sx = viewport.width / (510 if visible else VIEWPORT_WIDTH)
         sy = viewport.height / VIEWPORT_HEIGHT
         page_width = VIEWPORT_WIDTH

@@ -779,11 +779,13 @@ class WindowControls(InputRouting):
                 source = self.screenshot_viewport.resize((512 * scale, 384 * scale), Image.Resampling.NEAREST)
                 viewport = self.draw_screenshot_notice(menu.screenshot_gallery.draw(source, self.ui_font))
             elif include_ui and self.dev_menu is not None and self.dev_menu.preview_enabled:
+                # The map page as the window shows it: a wide window's page is as wide (map_width).
                 scale = self.screenshot_settings.scale
-                source = viewport.resize((512 * scale, 384 * scale), Image.Resampling.NEAREST)
-                visible = source.crop((scale, 0, 511 * scale, 384 * scale))
-                source.paste(self.dev_menu.present_map(visible, self.ui_font), (scale, 0))
-                viewport = source
+                width = self.dev_menu.map_width
+                source = viewport.resize(((width + 2) * scale, 384 * scale), Image.Resampling.NEAREST)
+                visible = source.crop((scale, 0, (width + 1) * scale, 384 * scale))
+                viewport = self.dev_menu.present_map(visible, self.ui_font)
+                framed_ui = True
             path = (save_screenshot(viewport, self.screenshot_settings, framed_ui=True) if framed_ui
                     else save_screenshot(viewport, self.screenshot_settings))
         except (OSError, ValueError) as exc:

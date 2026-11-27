@@ -96,6 +96,33 @@ class CliffMapTests(unittest.TestCase):
                             actual.size, Image.Resampling.NEAREST).convert('RGB')
                         self.assertTrue(actual.tobytes() == expected_clean.tobytes())
 
+    def test_wide_ui_map_capture_keeps_the_wide_page_and_an_unstretched_notice(self):
+        s = self.scene
+        s.load_level(8)
+        s.open_dev_mode()
+        s.apply_dev_action(s.dev_menu.activate())
+        menu = s.dev_menu
+        with patch.object(s.canvas, 'winfo_width', return_value=1920), \
+                patch.object(s.canvas, 'winfo_height', return_value=1080):
+            s.present_viewport()
+        self.assertEqual(menu.map_width, 682)
+        self.assertEqual(s.native_viewport.size, (684, 384))
+        with TemporaryDirectory() as directory, patch.object(s, 'show_screenshot_toast'):
+            s.screenshot_settings = ScreenshotSettings(Path(directory), 2)
+            low = s.native_viewport.crop((1, 0, 683, 384)).resize((682 * 2, 384 * 2), Image.Resampling.NEAREST)
+            expected = menu.present_map(low.copy(), s.ui_font).convert('RGB')
+            with Image.open(s.capture_screenshot(include_ui=True)) as actual:
+                self.assertEqual(actual.size, (682 * 2, 384 * 2))   # not squeezed into 4:3
+                self.assertTrue(actual.tobytes() == expected.tobytes())
+        # The capture's notice over the wide page keeps the font's own proportions.
+        s.screenshot_toast = 'Saved screenshot as PoP2 test.png'
+        try:
+            classic = s.draw_screenshot_notice(Image.new('RGBA', (512, 384)))
+            wide = s.draw_screenshot_notice(Image.new('RGBA', (684, 384)))
+        finally:
+            s.screenshot_toast = None
+        self.assertEqual(wide.getbbox()[2] - wide.getbbox()[0], classic.getbbox()[2] - classic.getbbox()[0])
+
     def test_cliff_exit_closure_reaches_the_closing_audio_lane_once(self):
         from pop2.audio import AudioEngine
         from pop2.mechanism_audio import GateSound

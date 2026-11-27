@@ -10,7 +10,7 @@ from unittest.mock import Mock, patch
 from PIL import Image, ImageChops
 
 from pop2.development_map import (DevelopmentMap, MAP_SIZE, build_development_map,
-                                  level_landmarks, map_positions, room_positions)
+                                  level_landmarks, map_positions, room_positions, scaled_room)
 from pop2.game_ui import DevelopmentMenu, fit_viewport
 from pop2.paths import ASSET_DIR
 
@@ -318,6 +318,25 @@ class DevelopmentMapModelTests(unittest.TestCase):
         menu.focus = 6
         menu.activate()
         self.assertEqual(menu.return_screen, 'Room 2')
+
+    def test_rooms_enlarged_past_their_art_keep_hard_pixels(self):
+        # Level 2's three rooms at 3440x1440 are about 1120 pixels across, from 510.
+        room = Image.new('RGB', (510, 360), 'black')
+        room.paste('white', (0, 0, 255, 360))
+        for x in range(0, 510, 2):
+            room.putpixel((x, 100), (255, 0, 0))   # a row of single pixels
+        big = scaled_room(room, (1119, 790))
+        row = [big.getpixel((x, 500)) for x in range(1119)]
+        blended = [x for x, colour in enumerate(row) if colour not in ((0, 0, 0), (255, 255, 255))]
+        self.assertLessEqual(len(blended), 1)   # one averaged column at the edge, no blur or ringing
+        # Each art pixel stays two or three pixels wide; none is lost or doubled.
+        line = [big.getpixel((x, round(100.5 * 790 / 360))) for x in range(1119)]
+        reds = sum(1 for previous, colour in zip([None] + line, line)
+                   if colour == (255, 0, 0) and previous != (255, 0, 0))
+        self.assertEqual(reds, 255)
+        # Made smaller, a room is smoothed as before.
+        self.assertEqual(scaled_room(room, (169, 119)).tobytes(),
+                         room.resize((169, 119), Image.Resampling.LANCZOS).tobytes())
 
     def test_invalid_flat_map_links_are_rejected(self):
         links = {(0, 'right'): 1, (1, 'down'): 0}
