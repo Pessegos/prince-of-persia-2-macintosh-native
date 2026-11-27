@@ -409,8 +409,11 @@ FOOT_SPRAY_TICKS, FOOT_SPRAY_GRAINS = (9, 15), (8, 11)
 THROWN_DX, THROWN_DY, THROWN_FALL = (0.68, 1.76), (-1.25, -0.5), 0.24
 FOOT_HIGHLIGHT = (240, 196, 196)
 NEAR_SIDE, FAR_SIDE, FLUNG = (166, 131, 131), (149, 106, 90), (125, 88, 68)
-# Every pixel of blown sand sits this much of the way back toward the colour behind it.
+# Every pixel of blown sand sits this much of the way back toward the colour behind it;
+# the sand his feet kick up and the wind takes off him less (the user, 2026-11-27: with
+# the puffs gone it could be a little less subtle).
 GENTLE = 0.4
+PRINCE_GENTLE = 0.25
 # The Prince on the sand of the desert (the user's ideas, 2026-11-27). His running steps
 # kick a few grains back off his heel, a landing throws them to both sides and a skid
 # sprays them ahead of his toe: how many, how fast back (or ahead) and up, how fast they
@@ -424,7 +427,7 @@ KICK_FALL, KICK_DRAG, KICK_LIFE = 0.35, 0.9, (4, 9)
 # Where his foot comes down it leaves a print in the sand, about half his shoe long: two
 # rows darker than the sand, the far one darkest and shorter. It stays a second, then the
 # sand fills it in from its ends, a pixel each end every PRINT_FILL ticks.
-PRINT_WIDTH, PRINT_SHADOW, PRINT_DARKER = (6, 8), 0.28, 0.15
+PRINT_WIDTH, PRINT_SHADOW, PRINT_DARKER = (6, 8), 0.34, 0.2
 PRINT_HOLD, PRINT_FILL = (12, 16), 3
 # A new print only where his foot has moved on this far from the last.
 PRINT_APART = 6
@@ -2428,7 +2431,7 @@ def ledge_fall_pixels(tick, sand, ledges, *, approaches=()):
                 yield x, y - 2, colours[min(2, shade + 1)]
 
 
-def draw_sand_pixels(canvas, air, pixels):
+def draw_sand_pixels(canvas, air, pixels, amount=GENTLE):
     """Draw sand in the room's palette, blended toward the scenery behind it."""
     drawn = {}
     for x, y, colour in pixels:
@@ -2437,7 +2440,7 @@ def draw_sand_pixels(canvas, air, pixels):
     for (x, y), colour in drawn.items():
         behind = tuple(canvas[x, y][:3])
         if colour != behind:
-            canvas[x, y] = air.gentle(behind, colour)
+            canvas[x, y] = air.gentle(behind, colour, amount)
 
 
 CHASM_UPDRAFT_PATHS = tuple(winding_streak_path(*shape) for shape in (
@@ -2902,7 +2905,6 @@ class DesertWind:
             yield from self.breeze_pixels(origin)
         yield from self.devil_pixels(origin)
         yield from self.gust_pixels()
-        yield from self.prince_pixels()
 
     def devil_pixels(self, origin):
         tick = self.tick
@@ -2979,6 +2981,7 @@ class DesertWind:
             pixels = chain(pixels, chasm_fall_pixels(self.tick, air.dunes.sand),
                            chasm_rising_sand_pixels(self.tick))
         draw_sand_pixels(canvas, air, pixels)
+        draw_sand_pixels(canvas, air, ((x - origin, y, colour) for x, y, colour in self.prince_pixels()), PRINCE_GENTLE)
         if air.chasm:
             wisps = chain(chasm_updraft_pixels(self.tick), chasm_crosswind_pixels(self.tick))
             for x, y, amount in wisps:
