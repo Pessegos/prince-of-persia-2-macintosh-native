@@ -124,9 +124,19 @@ and the flame's rectangles (the flame is a separate layer).
   the room and calls 3:1ab0; the dirty redraw 3:3260) runs GetBelowAry per
   row, and the native code draws dark wall 3509 for all ten columns. The
   lighter columns 0-4 in the user's capture are not explained by the code.
-- Doors over guards (pair 9/10): no front piece of an exit cell exists in
-  rooms 32 and 28, ClipChar's exit clip (4:416a) is the Kid's only, and the
-  exits are back items; nothing in the code draws a door over an opponent.
+- Doors over guards (pair 9/10): the ordinary exit pieces are back items
+  and ClipChar's exit rectangle (4:416a) applies to the Kid. During stair
+  poses 217-226, DrawTempExitMovable (10:0652-0690) also promotes SHAP 3579
+  (see the [doorway probe](temple-exit-handoff.md#follow-up-the-doorways-front-table-piece)).
+  The port repainted that whole piece after drawing the Kid, which covered
+  the fallen birdhead in room 32 when it was sorted behind him. The port
+  now uses the SHAP alpha to clip only the Kid's layer. The room 32
+  regression places a birdhead in the flat death pose overlapping the
+  jamb and checks every stair pose against the same frame with the
+  doorway repaint bypassed. Placing the same pose at each of the six
+  temple exits exposed 87 covered birdhead pixels per door in the old
+  compositor. The native probe repeated 4,320 BF-item comparisons with
+  zero mismatches and excludes live scheduling and opponent compositing.
 
 ## Room 29's music
 

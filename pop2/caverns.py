@@ -99,12 +99,11 @@ class CavernRoom(OpeningRoom):
             # arrival statue to plane 1 independently of the actor's cell.
             mask = ImageChops.lighter(mask, self.custom_occlusion)
         kind = getattr(state, 'level_kind', None)
-        if (self.exit_foreground and kind in (3, 4) and state.actor_type == 0
+        if (self.exit_foreground and kind in (2, 3, 4) and state.actor_type == 0
                 and 217 <= state.action <= 226
                 and (kind != 3 or state.current_y < -24)):
-            # Cave8:1cfe/ruins7:27c0 put the irregular frame in front.
-            # Mask the actor rather than repainting static RGB over the
-            # cave ambience already drawn on the stone behind him.
+            # Clip the Prince to the doorway contour, preserving the
+            # previously drawn actors and scenery under his layer.
             mask = mask.copy()
             for sprite, (x, y) in self.exit_foreground:
                 rect = (x, y, x + sprite.width, y + sprite.height)
@@ -216,15 +215,7 @@ class CavernRoom(OpeningRoom):
 
     def draw_actor_foreground(self, frame, state, bounds, floor_exclusion=None):
         frame = self.draw_actor_floor_foreground(frame, state, bounds, floor_exclusion)
-        frame = self.draw_walkoff_tip(frame, state, bounds)
-        if (self.exit_foreground and state.actor_type == 0
-                and 217 <= state.action <= 226
-                and getattr(state, 'level_kind', None) not in (3, 4)):
-            # Retain the accepted temple front-table paint after the actor's
-            # floor repaint (DrawTempExitMovable10:0652-0690).
-            for sprite, position in self.exit_foreground:
-                frame.paste(sprite, position, sprite)
-        return frame
+        return self.draw_walkoff_tip(frame, state, bounds)
 
     def draw_walkoff_tip(self, frame, state, bounds):
         if (not self.platform_contours or bounds is None or state.actor_type != 0
@@ -2115,15 +2106,6 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
     retained = ImageChops.invert(ImageChops.lighter(
         background.getchannel('A'), foreground.getchannel('A')))
     background = Image.alpha_composite(Image.new('RGBA', background.size, 'black'), background)
-    visible_exits = []
-    for sprite, (x, y) in exit_foreground:
-        # The promotion supplies an actor occluder, not a scenery change.
-        # Later cells already cover the jamb's bottom corner with floor.
-        # Retain those composed colours under the original doorway alpha.
-        rect = (x, y, x + sprite.width, y + sprite.height)
-        cover = Image.alpha_composite(background.crop(rect), foreground.crop(rect))
-        cover.putalpha(sprite.getchannel('A'))
-        visible_exits.append((cover, (x, y)))
     visible_contours = {}
     for cell, records in platform_contours.items():
         for sprite, (x, y) in records:
@@ -2132,5 +2114,5 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
             cover.putalpha(sprite.getchannel('A'))
             visible_contours.setdefault(cell, []).append((cover, (x, y)))
     return CavernRoom(background, foreground, masks, (), (), room_id, 3, cell_masks,
-                      redraw, floors, retained, gate_masks, custom_mask, torch_occlusion, tuple(visible_exits),
+                      redraw, floors, retained, gate_masks, custom_mask, torch_occlusion, tuple(exit_foreground),
                       visible_contours or None, tuple(ruins_floor_pieces), ceiling_covers=ceilings)

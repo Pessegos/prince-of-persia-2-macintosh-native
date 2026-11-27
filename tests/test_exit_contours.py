@@ -42,17 +42,12 @@ class ExitContourTests(unittest.TestCase):
                 room.draw_actor_foreground(frame, state, (100, 100, 200, 240))
                 active = actor == 0 and 217 <= pose <= 226 and (kind != 3 or y < -24)
                 mask = room.actor_mask(1, state=state, bounds=(100, 100, 200, 240))
-                if kind in (3, 4):
-                    self.assertIsNone(frame.getbbox(), 'Cave/ruins scenery must not be repainted')
-                    if active:
-                        self.assertEqual(mask.crop((120, 130, 132, 142)).tobytes(),
-                                         stone.getchannel('A').tobytes())
-                    else:
-                        self.assertIsNone(mask.getbbox())
-                elif active:
-                    self.assertEqual(frame.crop((120, 130, 132, 142)).tobytes(), stone.tobytes())
+                self.assertIsNone(frame.getbbox(), 'The doorway must not repaint the scene')
+                if active:
+                    self.assertEqual(mask.crop((120, 130, 132, 142)).tobytes(),
+                                     stone.getchannel('A').tobytes())
                 else:
-                    self.assertIsNone(frame.getbbox())
+                    self.assertIsNone(mask.getbbox())
 
     def test_mask_keeps_live_background_colours_and_leaves_the_aperture_open(self):
         size = (510, 365)
@@ -60,7 +55,7 @@ class ExitContourTests(unittest.TestCase):
         stone.putpixel((5, 5), (0, 0, 0, 0))
         room = CavernRoom(Image.new('RGBA', size), Image.new('RGBA', size), {}, (), (), 0, 3,
                           actor_cell_occlusion={}, exit_foreground=((stone, (120, 130)),))
-        for kind in (3, 4):
+        for kind in (2, 3, 4):
             with self.subTest(kind=kind):
                 state = SequenceState(70, actor_type=0, action=224, level_kind=kind, current_y=-25)
                 # A distinct backdrop stands in for a live light/particle

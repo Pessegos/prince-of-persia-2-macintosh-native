@@ -20,6 +20,11 @@ from pop2.terrain import LevelMap
 DOORS = ((10, 18, 15), (11, 23, 25), (12, 6, 23),
          (13, 27, 16), (13, 31, 12), (13, 31, 15))
 INSTALLED = all((ASSET_DIR / f'temple_level{number}.json').is_file() for number in (10, 11, 12, 13))
+ACTOR_MASK = CavernRoom.actor_mask
+
+
+def without_exit_contour(room, *args, **kwargs):
+    return ACTOR_MASK(replace(room, exit_foreground=()), *args, **kwargs)
 
 
 class TempleExitClipTests(unittest.TestCase):
@@ -31,10 +36,12 @@ class TempleExitClipTests(unittest.TestCase):
                           {1: empty}, (), (), 0, 2, {}, exit_foreground=((cover, (0, 0)),))
         for actor, pose, y in product((0, 2), (216, 217, 226, 227), (0, -24, -25, -42)):
             with self.subTest(actor=actor, pose=pose, y=y):
-                state = SequenceState(70, actor_type=actor, action=pose, current_y=y)
+                state = SequenceState(70, actor_type=actor, action=pose, current_y=y, level_kind=2)
                 frame = room.draw_actor_foreground(Image.new('RGBA', empty.size),
                                                    state, (300, 120, 350, 220))
-                self.assertEqual(frame.getbbox(), cover.getbbox()
+                self.assertIsNone(frame.getbbox())
+                mask = room.actor_mask(1, state=state, bounds=(300, 120, 350, 220))
+                self.assertEqual(mask.getbbox(), cover.getbbox()
                                  if actor == 0 and 217 <= pose <= 226 else None)
         self.assertIsNone(room.actor_mask(1).getbbox())
 
@@ -86,6 +93,63 @@ class TempleExitSceneTests(unittest.TestCase):
         self.assertIsNotNone(self.scene.game.exit, 'Temple completion must schedule its exit, not freeze')
         self.assertEqual(self.scene.game.exit.song, 187)
 
+    def test_room_32_exit_leaves_the_fallen_birdhead_in_front(self):
+        from pop2.combat import select_sequence
+
+        scene = self.scene
+        scene.audio = None
+        scene.peaceful = False
+        self.open_exit(13, 31, 12)
+        combat = scene.combat
+        point, = combat.generation_points
+        point.countdown = 0
+        combat.world_frame = 1
+        with patch.object(combat, '_supporting_column', return_value=4):
+            combat.generate_opponents()
+        guard, = combat.guards
+        point.remaining = 0
+        guard.life = 0
+        guard.entry_x = None
+        guard.state.facing = 1
+        guard.state.current_x = guard.state.target_x = 125
+        select_sequence(guard, 85)
+        for _ in range(20):
+            guard.runtime.next_frame()
+            if guard.state.action == 185:
+                break
+        self.assertEqual(guard.state.action, 185)
+
+        original = scene.composite_actor
+
+        def without_player(frame, layer, row=None, bottom=None, state=None, bounds=None, record=None):
+            if state is not None and state.actor_type == 0:
+                layer = Image.new('RGBA', layer.size)
+            return original(frame, layer, row, bottom, state, bounds, record)
+
+        with patch.object(scene, 'composite_actor', side_effect=without_player):
+            for pose in range(217, 227):
+                self.assertEqual(scene.sequence_state.action, pose)
+                scene.render()
+                actual = scene.native_viewport.convert('RGB')
+                with patch.object(CavernRoom, 'draw_actor_foreground',
+                                  CavernRoom.draw_actor_floor_foreground):
+                    scene.render()
+                    expected = scene.native_viewport.convert('RGB')
+                    with patch.object(combat, 'visible_guards', return_value=()):
+                        scene.render()
+                        empty = scene.native_viewport.convert('RGB')
+                corpse = ImageChops.difference(expected, empty)
+                room = scene.room_cache[31]
+                self.assertTrue(any(
+                    ImageChops.multiply(
+                        corpse.crop((ROOM_ORIGIN_X + x, y, ROOM_ORIGIN_X + x + stone.width,
+                                     y + stone.height)),
+                        stone.getchannel('A').convert('RGB')).getbbox()
+                    for stone, (x, y) in room.exit_foreground))
+                with self.subTest(pose=pose):
+                    self.assertIsNone(ImageChops.difference(actual, expected).getbbox())
+                self.harness.tick()
+
     def test_each_door_keeps_its_stone_pixels_in_front_through_the_whole_entry(self):
         scene = self.scene
         scene.audio = None
@@ -115,8 +179,7 @@ class TempleExitSceneTests(unittest.TestCase):
                     if 217 <= state.action <= 226:
                         scene.render()
                         fixed = scene.native_viewport.crop(room_rect).convert('RGB')
-                        # Remove the sprite, retaining exactly the same floor
-                        # repaint and front-table drawing at this pose.
+                        # Remove the sprite, retaining the floor repaint.
                         with patch.object(scene, 'composite_actor', side_effect=without_player):
                             scene.render()
                             stone = scene.native_viewport.crop(room_rect).convert('RGB')
@@ -127,8 +190,7 @@ class TempleExitSceneTests(unittest.TestCase):
                         observed.add((site, state.action))
                         # A control with this promotion disabled must expose
                         # actual Prince pixels on the jamb, as in the report.
-                        with patch.object(CavernRoom, 'draw_actor_foreground',
-                                          CavernRoom.draw_actor_floor_foreground):
+                        with patch.object(CavernRoom, 'actor_mask', without_exit_contour):
                             scene.render()
                             unmasked = scene.native_viewport.crop(room_rect).convert('RGB')
                         difference = ImageChops.difference(unmasked, stone)
@@ -158,8 +220,7 @@ class TempleExitSceneTests(unittest.TestCase):
                     if 217 <= state.action <= 226:
                         scene.render()
                         fixed = scene.native_viewport.crop(room_rect).convert('RGB')
-                        with patch.object(CavernRoom, 'draw_actor_foreground',
-                                          CavernRoom.draw_actor_floor_foreground):
+                        with patch.object(CavernRoom, 'actor_mask', without_exit_contour):
                             scene.render()
                             ordinary = scene.native_viewport.crop(room_rect).convert('RGB')
                         for point in corners:
