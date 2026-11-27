@@ -414,12 +414,13 @@ GENTLE = 0.4
 # The Prince on the sand of the desert (the user's ideas, 2026-11-27). His running steps
 # kick a few grains back off his heel, a landing throws them to both sides and a skid
 # sprays them ahead of his toe: how many, how fast back (or ahead) and up, how fast they
-# fall back and how long they fly at most.
-STEP_KICK, STEP_KICK_BACK, STEP_KICK_UP = (3, 5), (0.7, 1.9), (0.9, 2.0)
-LANDING_KICK, LANDING_KICK_SIDE, LANDING_KICK_UP = (6, 9), (0.6, 2.2), (0.6, 1.6)
+# fall back and how long they fly at most. The user, 2026-11-27: with the puffs gone,
+# more of it (it was 3-5, 6-9 and 4-6, and 2-4 a tick off his legs).
+STEP_KICK, STEP_KICK_BACK, STEP_KICK_UP = (5, 8), (0.7, 1.9), (0.9, 2.0)
+LANDING_KICK, LANDING_KICK_SIDE, LANDING_KICK_UP = (9, 13), (0.6, 2.2), (0.6, 1.6)
 # A landing's grains leave from beyond the ends of his shoes, which would hide them.
 LANDING_KICK_FROM = 7
-SKID_KICK, SKID_KICK_AHEAD, SKID_KICK_UP = (4, 6), (1.5, 3.0), (0.3, 1.0)
+SKID_KICK, SKID_KICK_AHEAD, SKID_KICK_UP = (6, 9), (1.5, 3.0), (0.3, 1.0)
 KICK_FALL, KICK_DRAG, KICK_LIFE = 0.35, 0.9, (4, 9)
 # Where his foot comes down it leaves a print in the sand, about half his shoe long: two
 # rows darker than the sand, the far one darkest and shorter. It stays a second, then the
@@ -432,7 +433,7 @@ PRINT_APART = 6
 # downwind side: how far past, grains a tick at full strength, from how high up his legs,
 # and their flight.
 SHED_BEHIND = 30
-SHED_GRAINS, SHED_HIGH = (2, 4), 22
+SHED_GRAINS, SHED_HIGH = (3, 6), 22
 SHED_SPEED, SHED_LIFT, SHED_SETTLE, SHED_LIFE = (2.5, 4.5), (-0.3, 0.2), 0.06, (6, 12)
 DESERT_COLOURS = (*SAND, *FAR_SANDS, *NEAR_SANDS, NEAR_SIDE, FAR_SIDE, FLUNG, FOOT_HIGHLIGHT)
 
