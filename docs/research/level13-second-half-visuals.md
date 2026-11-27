@@ -49,3 +49,24 @@ Birdhead, Guard, Skeleton, Head, Jinnee or FlameSword uses index 255, so every
 black pixel inside the room is another entry and takes the colour. The flash
 now fills the room area except pure white, and the death message (also inks
 1-254) is flashed before it is drawn. The black around the room stays.
+
+## 3. The altar plate's click
+
+PushPlate 5:2480-24a2 skips AddSound(27) for a dead Kid's pose 185 and for a
+plate in native room 4 of level 13 (a5-0x34aa = 4, LEVL 0x218a = 13): the
+hidden plate 4:12 the shadow steps on makes no sound. The port clicked.
+
+## 4. The flare covers the shadow
+
+DrawTempSacredFlame 10:2d5a runs in a cell's pass 11 under the full room clip
+(10:2d7e). An ordinary record stays a pass-11 back item, behind the
+characters. A flare (counter bit 0x80) draws a5-0x2b7c[counter & 0x7f] with
+the CUST record's pass word set to 1 for the call (10:2dbe-2dce): a front
+item, dumped after the objects, so the tongue covers the shadow taking the
+flame, as the user's capture of the original shows (pose 15 of SEQS 232,
+record 16). The port drew every record behind the characters; a flare is now
+drawn in `Temple.after_actors`.
+
+Not modelled: whether the original repaints the flare's pixels outside the
+ordinary flame when the flare ends (the front item is drawn under the full
+clip; what restores those pixels was not traced).

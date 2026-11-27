@@ -403,6 +403,31 @@ class AltarSceneTests(unittest.TestCase):
             if plain.getpixel((x, y))[3]:
                 self.assertEqual(burning.getpixel((x, y)), plain.getpixel((x, y)))
 
+    def test_a_flare_is_drawn_over_the_characters_and_the_ordinary_flame_behind(self):
+        # DrawTempSacredFlame 10:2dbe-2dce adds a flare's record with pass 1,
+        # to the front table dumped after the objects: the tongue covers the
+        # shadow (the user's capture of the original). Before, the port drew
+        # every flame record in the scenery, behind the characters.
+        from PIL import Image
+
+        from pop2.caverns import FLARE
+
+        scene = self.scene
+        scene.load_level(13)
+        scene.jump_to_room(3, row=1, x=480, facing=0)
+        environment = environment_for(scene)
+        caverns = scene.game.caverns
+        blank = Image.new('RGBA', (510, 365))
+        caverns.flame = 3
+        self.assertIsNotNone(environment.scenery_layer(blank, scene.terrain_motion).getbbox())
+        self.assertIsNone(environment.after_actors(blank, None).getbbox())
+        caverns.flame = FLARE
+        self.assertIsNone(environment.scenery_layer(blank, scene.terrain_motion).getbbox())
+        front = environment.after_actors(blank, None)
+        # Record 14 (a5-0x2b7c[5]): SHAP 4089 at X 48, bottom 208.
+        self.assertEqual(front.getbbox()[3], 208)
+        self.assertLessEqual(front.getbbox()[0], 60)
+
     def test_the_door_opens_in_silence_from_the_altar(self):
         # 5:1f72-1f7e: no OpenDoor song on level 13. 5:162c/1656: no door
         # cues while the Prince is in native room 4.

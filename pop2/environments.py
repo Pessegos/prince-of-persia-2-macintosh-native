@@ -2516,8 +2516,10 @@ class Temple(Caverns):
 
         scene = self.scene
         frame = super().scenery_layer(frame, motion)
-        frame = draw_temple_flame(frame, scene.room_id, scene.game.caverns.flame,
-                                  level_number=scene.game.level.number)
+        if not scene.game.caverns.flame & 0x80:
+            # A flare is a front item, drawn in after_actors.
+            frame = draw_temple_flame(frame, scene.room_id, scene.game.caverns.flame,
+                                      level_number=scene.game.level.number)
         frame = draw_trapdoors(frame, scene.room_id, scene.game.caverns.trapdoors.drawn,
                                scene.level_map, level_number=scene.game.level.number,
                                art=scene.level_renderer.room(scene.room_id, scene.game.caverns))
@@ -2530,10 +2532,17 @@ class Temple(Caverns):
         and the guards. The room's foreground still covers them."""
         from PIL import Image
 
-        from pop2.caverns import draw_slide_rocks
+        from pop2.caverns import draw_slide_rocks, draw_temple_flame
 
         scene = self.scene
         caverns = scene.game.caverns
+        if caverns is not None and caverns.flame & 0x80:
+            # DrawTempSacredFlame 10:2dbe-2dce: a flare's record is added with
+            # pass 1, to the front table (dumped after the objects, 3:3362-
+            # 3378), under the full room clip (10:2d7e). It covers the shadow
+            # and the Prince. The ordinary flame (pass 11) stays behind them.
+            frame = draw_temple_flame(frame, scene.room_id, caverns.flame,
+                                      level_number=scene.game.level.number)
         if caverns is None or not caverns.rocks.bank:
             return frame
         layer = draw_slide_rocks(Image.new('RGBA', frame.size), scene.room_id, caverns.rocks,
