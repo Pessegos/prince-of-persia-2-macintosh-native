@@ -18,6 +18,7 @@ from pop2.cavern_ambience import (
 from pop2.paths import ASSET_DIR
 from pop2 import ruins_ambience
 from pop2.ruins_ambience import (
+    FAR_BAT, FIRST_BATS, NEAR_BAT, TICKS_BETWEEN_BATS, Bat, bat_flight,
     BODY_PALER, BRIGHT, CURL_RADIUS, CURL_RISE, CURL_SPEED, DESERT_ROOMS, DESERT_STAR_APART, DESERT_STAR_CLEAR, DESERT_STARS,
     DIM, DIP_TICKS, FAINT, FIREBALL, FIRST_SHOOTER, GOLD_BRIGHT, GRAZER, GRIT_HEAD, HAZE_APART, HAZE_DIM,
     HAZE_MID, HEIGHT, MID, NORMAL, ROSE_BRIGHT, ROSE_MID, SECOND_STREAK_BELOW, SHOOTERS, STAR_APART, STAR_CLEAR, STARS_PER_SKY,
@@ -766,6 +767,114 @@ class ShootingStarTests(unittest.TestCase):
             self.assertIsNotNone(ambience.shooter)
         ambience.advance_shooter()
         self.assertIsNone(ambience.shooter)
+
+
+class BatTests(unittest.TestCase):
+    """Bats far away in the ruins' sky (the user, 2026-11-27: as if part of the game)."""
+
+    def ambience(self, seed, *bands):
+        return RuinsAmbience(11, replace(night(6, 11, *bands), stars=()), random.Random(seed),
+                             bat_rng=random.Random(seed))
+
+    def test_a_flight_of_one_to_three_comes_every_twenty_five_to_sixty_seconds(self):
+        self.assertEqual((FIRST_BATS, TICKS_BETWEEN_BATS), ((96, 300), (300, 720)))
+        ambience = self.ambience(3)
+        starts, flying = [], False
+        for tick in range(12 * 60 * 30):
+            ambience.advance()
+            if ambience.bats and not flying:
+                starts.append(tick)
+            flying = bool(ambience.bats)
+        self.assertLessEqual(FIRST_BATS[0] - 1, starts[0])
+        self.assertLessEqual(starts[0], FIRST_BATS[1])
+        self.assertGreater(len(starts), 20)
+        self.assertLess(len(starts), 50)
+        self.assertGreaterEqual(min(b - a for a, b in zip(starts, starts[1:])), TICKS_BETWEEN_BATS[0])
+        rng = random.Random(4)
+        sizes = [len(bat_flight(ambience.air, rng)) for _ in range(2000)]
+        self.assertGreater(sizes.count(1), sizes.count(2))
+        self.assertGreater(sizes.count(2), sizes.count(3))
+        self.assertGreater(sizes.count(3), 0)
+
+    def test_each_comes_in_off_a_side_flits_near_its_height_and_leaves(self):
+        air = night(6, 11, (DEEP, 150), (PURPLE, 60))
+        self.assertEqual(air.bat_band, (0, 209))
+        rng = random.Random(6)
+        crossed = total = 0
+        for _ in range(200):
+            flight = bat_flight(air, rng)
+            self.assertIn(len(flight), (1, 2, 3))
+            self.assertEqual(len({(bat.kind, bat.way) for bat in flight}), 1)
+            for bat in flight:
+                self.assertTrue(bat.x < 0 if bat.way > 0 else bat.x >= WIDTH)
+                way, keep, ticks, heights = bat.way, bat.keep, 0, []
+                while not bat.gone():
+                    bat.advance(rng)
+                    heights.append(bat.y)
+                    ticks += 1
+                    self.assertLess(ticks, 400)
+                crossed += bat.way == way
+                total += 1
+                self.assertLess(max(abs(y - keep) for y in heights), 45)
+        # Most go on their way; now and then one turns back.
+        self.assertGreater(crossed, 0.7 * total)
+        self.assertLess(crossed, total)
+
+    def test_the_far_ones_are_smaller_lower_and_fainter(self):
+        width = {kind: max(dx for frame in kind.frames for dx, _ in frame) * 2 + 1 for kind in (FAR_BAT, NEAR_BAT)}
+        self.assertEqual(width, {FAR_BAT: 5, NEAR_BAT: 7})
+        self.assertGreater(FAR_BAT.height[0], NEAR_BAT.height[0])
+        self.assertLess(FAR_BAT.darker, NEAR_BAT.darker)
+        self.assertLess(max(FAR_BAT.speed), max(NEAR_BAT.speed))
+
+    def test_it_beats_its_wings_round_its_body_every_three_ticks(self):
+        bat = Bat(NEAR_BAT, 100, 100, 1, 100, 6.0)
+        rng, seen = random.Random(1), []
+        for _ in range(6):
+            seen.append(bat.flap)
+            body = round(bat.x), round(bat.y)
+            self.assertIn((body[0], body[1] + 1), bat.pixels())
+            bat.advance(rng)
+        self.assertEqual(seen, [0, 1, 2, 0, 1, 2])
+
+    def test_it_is_drawn_only_on_the_sky_still_showing_in_front_of_the_stars(self):
+        rgb = picture((DEEP, 150), (PURPLE, 60))
+        # The ruins' palettes have darks below the sky's colours.
+        palette = {**PALETTE, len(PALETTE): (6, 0, 46, 255), len(PALETTE) + 1: (0, 0, 20, 255)}
+        air = read_room(6, 11, rgb, palette)
+        bat = Bat(NEAR_BAT, 150, 100, 1, 100, 6.0, flap=1)
+        star = bat.pixels()[0]
+        ambience = RuinsAmbience(11, replace(air, stars=((*star, BRIGHT),)), random.Random(1))
+        ambience.bats = [bat]
+        # A gate down in front of part of the sky, after the room was read.
+        rgb[:, 151:] = STONE
+        frame = frame_of(rgb)
+        ambience.draw(frame)
+        after = numpy.asarray(frame)[..., :3]
+        drawn = {(x, y) for y, x in zip(*numpy.nonzero((after != rgb).any(axis=2)))}
+        self.assertEqual(drawn, {(x, y) for x, y in bat.pixels() if x <= 150})
+        inks = {tuple(int(value) for value in after[y, x]) for x, y in drawn}
+        self.assertEqual(inks, {(6, 0, 46)})
+
+    def test_none_over_the_desert_or_a_thin_strip_of_sky(self):
+        for air in (read_room(9, 11, picture((PURPLE, 70), (SAND, 200)), PALETTE), night(6, 11, (DEEP, 40))):
+            self.assertIsNone(air.bat_band)
+            ambience = RuinsAmbience(11, air, random.Random(2), bat_rng=random.Random(2))
+            for _ in range(FIRST_BATS[1] + TICKS_BETWEEN_BATS[1] * 2):
+                ambience.advance()
+                self.assertEqual(ambience.bats, [])
+
+    def test_their_own_random_numbers_leave_the_room_s_alone(self):
+        air = night()
+        with_bats = RuinsAmbience(11, air, random.Random(5), bat_rng=random.Random(5))
+        without = RuinsAmbience(11, replace(air, bat_band=None), random.Random(5))
+        seen = 0
+        for _ in range(2000):
+            with_bats.advance()
+            without.advance()
+            seen += bool(with_bats.bats)
+        self.assertGreater(seen, 0)
+        self.assertEqual(with_bats.rng.getstate(), without.rng.getstate())
 
 
 class DrawingTests(unittest.TestCase):

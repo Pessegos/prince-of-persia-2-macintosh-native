@@ -24,6 +24,11 @@ the sky has only a few stars, middling and bright, and its shooting stars stay w
 the thin band of sky over the mountains. On the first visit to the horse's
 room, a large shooting star leaves a glowing line that sheds sparks after a short wait.
 
+The bats. Once in a while one, two or three bats cross the ruins' sky far away, small
+dark shapes beating their wings as they flit, dart and now and then turn back. The
+farthest are the smallest, lowest and faintest; they pass behind the ruins and in
+front of the stars. None fly over the desert.
+
 The wind. In a room open to the sky one gust sends one or two waving streaks across
 the ruins. Each can roll briefly and run out or travel farther as it winds inward.
 Both styles share a gust clock that runs across room changes. The desert has its own wind.
@@ -442,6 +447,53 @@ SHED_GRAINS, SHED_HIGH = (4, 8), 22
 SHED_SPEED, SHED_LIFT, SHED_SETTLE, SHED_LIFE = (2.5, 4.5), (-0.3, 0.2), 0.06, (6, 12)
 DESERT_COLOURS = (*SAND, *FAR_SANDS, *NEAR_SANDS, NEAR_SIDE, FAR_SIDE, FLUNG, FOOT_HIGHLIGHT)
 
+
+@dataclass(frozen=True)
+class BatKind:
+    """How far away a bat is: its frames (per frame, the (dx, dy) of its pixels from its
+    body), its speed in pixels a tick, how much darker than the sky it is, the share of
+    its flight band it keeps to (0 the top, 1 the bottom) and its weight."""
+
+    name: str
+    frames: tuple
+    speed: tuple
+    darker: float
+    height: tuple
+    weight: float
+
+
+# Wings up, out, down round a body two pixels tall, its wingtips drooping as they come
+# down: a beat every three ticks, four a second.
+FAR_BAT = BatKind('far', (
+    ((-2, -1), (2, -1), (-1, 0), (0, 0), (1, 0), (0, 1)),
+    ((-2, 0), (-1, 0), (0, 0), (1, 0), (2, 0), (0, 1)),
+    ((-1, 0), (0, 0), (1, 0), (-2, 1), (0, 1), (2, 1)),
+), (4.6, 5.6), 0.4, (0.45, 0.95), 0.65)
+NEAR_BAT = BatKind('near', (
+    ((-3, -2), (3, -2), (-2, -1), (2, -1), (-1, 0), (0, 0), (1, 0), (0, 1)),
+    ((-2, 0), (-1, 0), (0, 0), (1, 0), (2, 0), (-3, 1), (0, 1), (3, 1)),
+    ((-1, 0), (0, 0), (1, 0), (-2, 1), (0, 1), (2, 1), (-3, 2), (3, 2)),
+), (5.6, 7.0), 0.62, (0.1, 0.6), 0.35)
+BAT_KINDS = (FAR_BAT, NEAR_BAT)
+# The first bats come 8-25 s after the Prince comes in, then a flight every 25-60 s,
+# of one, two or three.
+FIRST_BATS = (96, 300)
+TICKS_BETWEEN_BATS = (300, 720)
+BATS_A_FLIGHT = ((1, 0.55), (2, 0.3), (3, 0.15))
+# A flight keeps loosely together: each bat behind the first and above or below it.
+BAT_BEHIND, BAT_ABOVE = (8, 34), (-14, 14)
+# Rows of the room at least this share sky make its flight band, which must be this tall.
+BAT_SKY_ROW, BAT_LEAST_BAND = 0.5, 60
+# Each tick a bat steers back toward its way and its height, keeps some of its turn
+# and wobbles; now and then it darts aside, and once in a while it turns back.
+BAT_STEER, BAT_KEEP, BAT_WOBBLE = 0.22, 0.45, 0.12
+BAT_HOLD, BAT_CLIMB = 0.04, 0.7
+BAT_DART_CHANCE, BAT_DART = 0.09, (0.4, 0.9)
+BAT_TURN_BACK_CHANCE, BAT_TURN_BACK_BEFORE = 0.002, 160
+BAT_PACE = (0.8, 1.15)
+# Off the side of the room, where it comes in and where it is gone.
+BAT_OFF = 8
+
 # Every colour the effects use, each shown as the nearest of the room's palette.
 INK_COLOURS = ALL_COLOURS | frozenset(GRIT_COLOURS) | frozenset(DESERT_COLOURS)
 
@@ -619,6 +671,10 @@ class RuinsAir:
     cliff_wind_sky: numpy.ndarray | None = None
     cliff_sand: numpy.ndarray | None = None
     grit_floor: numpy.ndarray | None = None
+    # [y, RGB] of the mean colour of each row's sky, and (top, bottom) of the rows the
+    # bats fly in, or None.
+    sky_rows: numpy.ndarray | None = None
+    bat_band: tuple | None = None
 
     def in_sky(self, x, y):
         return 0 <= x < WIDTH and 0 <= y < HEIGHT and bool(self.sky[y, x])
@@ -964,11 +1020,34 @@ def read_room(level_number, room, rgb, palette, covered=None, terrain=None, pain
         dunes = chasm_dunes(sand)
     elif desert:
         dunes = read_dunes(sand, horse=(level_number, room) == (9, HORSE_ROOM))
+    sky_rows, bat_band = None, None
+    if not (desert or chasm or painted or cliff_wind_sky is not None):
+        sky_rows, bat_band = bat_sky(rgb, sky)
     return RuinsAir(sky, blue, tuple(stars), nearest_colours(palette, INK_COLOURS), desert,
                     windy=windy, covered=covered,
                     palette=palette_rgb(palette), grit=grit, ceilings=lines, luminance=luminance,
                     dunes=dunes, palette_key=tuple(sorted(palette.items())), chasm=chasm,
-                    cliff_wind_sky=cliff_wind_sky, cliff_sand=sand if place == OPENING_CLIFF else None, grit_floor=grit_floor)
+                    cliff_wind_sky=cliff_wind_sky, cliff_sand=sand if place == OPENING_CLIFF else None, grit_floor=grit_floor,
+                    sky_rows=sky_rows, bat_band=bat_band)
+
+
+def bat_sky(rgb, sky):
+    """([y, RGB] of the mean colour of each row's sky, (top, bottom) of the longest run of
+    rows that are mostly sky, or None when it is too thin for bats)."""
+    counts = sky.sum(axis=1)
+    sums = (rgb.astype(numpy.float32) * sky[..., None]).sum(axis=1)
+    rows = numpy.where(counts[:, None] > 0, sums / numpy.maximum(counts, 1)[:, None], 0)
+    best, start = None, None
+    for y, open_row in enumerate(chain(counts >= BAT_SKY_ROW * WIDTH, (False,))):
+        if open_row and start is None:
+            start = y
+        elif not open_row and start is not None:
+            if best is None or y - start > best[1] - best[0] + 1:
+                best = start, y - 1
+            start = None
+    if best is None or best[1] - best[0] + 1 < BAT_LEAST_BAND:
+        return rows, None
+    return rows, best
 
 
 def ruins_air(level_number, room, art, terrain=None, raised=None):
@@ -1678,6 +1757,67 @@ class RuinsWind:
 
 
 @dataclass
+class Bat:
+    kind: BatKind
+    x: float
+    y: float
+    # Which way it is going (1 right, -1 left), the height it keeps to, its speed.
+    way: int
+    keep: float
+    speed: float
+    heading: float = 0.0
+    turn: float = 0.0
+    flap: int = 0
+    age: int = 0
+
+    def gone(self):
+        return self.x < -BAT_OFF if self.way < 0 else self.x > WIDTH + BAT_OFF
+
+    def advance(self, rng):
+        """One tick of flight: its way, a little toward its height, a wobble, now and then
+        a dart aside or, early on, a turn back."""
+        self.age += 1
+        self.flap = (self.flap + 1) % len(self.kind.frames)
+        if self.age < BAT_TURN_BACK_BEFORE and rng.random() < BAT_TURN_BACK_CHANCE:
+            self.way = -self.way
+        climb = max(-BAT_CLIMB, min(BAT_CLIMB, (self.keep - self.y) * BAT_HOLD))
+        wanted = (0.0 if self.way > 0 else math.pi) + self.way * climb
+        off = (wanted - self.heading + math.pi) % (2 * math.pi) - math.pi
+        self.turn = self.turn * BAT_KEEP + off * BAT_STEER + rng.gauss(0, BAT_WOBBLE)
+        if rng.random() < BAT_DART_CHANCE:
+            self.turn += rng.choice((-1, 1)) * rng.uniform(*BAT_DART)
+        self.heading += self.turn
+        pace = self.speed * rng.uniform(*BAT_PACE)
+        self.x += math.cos(self.heading) * pace
+        self.y += math.sin(self.heading) * pace
+
+    def pixels(self):
+        bx, by = int(round(self.x)), int(round(self.y))
+        return [(bx + dx, by + dy) for dx, dy in self.kind.frames[self.flap]]
+
+
+def bat_flight(air, rng):
+    """[Bat] of one flight coming in from one side, or [] where the room has no band."""
+    if air.bat_band is None:
+        return []
+    top, bottom = air.bat_band
+    count = rng.choices([count for count, _ in BATS_A_FLIGHT], weights=[weight for _, weight in BATS_A_FLIGHT])[0]
+    kind = rng.choices(BAT_KINDS, weights=[kind.weight for kind in BAT_KINDS])[0]
+    way = rng.choice((1, -1))
+    low, high = (top + (bottom - top) * share for share in kind.height)
+    keep = rng.uniform(low, high)
+    flight = []
+    for number in range(count):
+        behind = rng.uniform(*BAT_BEHIND) * number
+        x = (-BAT_OFF + 1 - behind) if way > 0 else (WIDTH + BAT_OFF - 1 + behind)
+        y = keep + (rng.uniform(*BAT_ABOVE) if number else 0)
+        y = max(top + 2, min(bottom - 2, y))
+        flight.append(Bat(kind, x, y, way, y, rng.uniform(*kind.speed), 0.0 if way > 0 else math.pi,
+                          flap=rng.randrange(len(kind.frames))))
+    return flight
+
+
+@dataclass
 class RuinsAmbience:
     room: int
     air: RuinsAir
@@ -1702,6 +1842,11 @@ class RuinsAmbience:
     # Whether his feet are on the desert's sand, which raises its own sand instead of puffs
     # (the user, 2026-11-27: the puffs covered it).
     on_sand: bool = False
+    # The bats in the sky, the ticks until the next flight, and their own random numbers
+    # so that the room's other effects keep their sequence.
+    bats: list = field(default_factory=list)
+    bat_wait: int = 0
+    bat_rng: random.Random = field(default_factory=random.Random)
     tick: int = 0
     grit_floor: numpy.ndarray | None = field(init=False)
 
@@ -1715,6 +1860,7 @@ class RuinsAmbience:
         # Keep the room-local random sequence now that desert wind has its own clock.
         self.rng.randint(*FIRST_DESERT_GUST)
         self.rng.randint(*FIRST_DEVIL)
+        self.bat_wait = self.bat_rng.randint(*FIRST_BATS)
 
     @property
     def streaks(self):
@@ -1729,6 +1875,7 @@ class RuinsAmbience:
         self.tick += 1
         self.twinkle()
         self.advance_shooter()
+        self.advance_bats()
         last = self.footing
         blows = self.hits(footing, thuds, shakes)
         self.puff(last, footing, thuds)
@@ -2313,6 +2460,23 @@ class RuinsAmbience:
         if path is not None:
             self.shooter = Shooter(kind, *path)
 
+    def advance_bats(self):
+        for bat in self.bats:
+            bat.advance(self.bat_rng)
+        self.bats = [bat for bat in self.bats if not bat.gone()]
+        if self.air.bat_band is None or self.bats:
+            return
+        self.bat_wait -= 1
+        if self.bat_wait <= 0:
+            self.bat_wait = self.bat_rng.randint(*TICKS_BETWEEN_BATS)
+            self.bats = bat_flight(self.air, self.bat_rng)
+
+    def bat_ink(self, bat):
+        """A bat's one colour: the sky of its row, made its kind's share darker."""
+        y = max(0, min(HEIGHT - 1, int(round(bat.y))))
+        behind = tuple(int(round(value)) for value in self.air.sky_rows[y])
+        return self.air.darker_than(behind, bat.kind.darker)
+
     def sky_pixels(self):
         """(x, y, RGB) of the stars and the shooting star, the later over the earlier."""
         for (x, y, kind), (dipped, flared) in zip(self.air.stars, self.twinkles):
@@ -2357,6 +2521,13 @@ class RuinsAmbience:
             if air.in_sky(x, y) and ((x, y) in drawn or matches_sky(canvas[x, y])):
                 canvas[x, y] = inks[colour]
                 drawn.add((x, y))
+        # The bats, nearer than the stars, the nearer over the farther.
+        for bat in sorted(self.bats, key=lambda bat: bat.kind is NEAR_BAT):
+            ink = self.bat_ink(bat)
+            for x, y in bat.pixels():
+                if air.in_sky(x, y) and ((x, y) in drawn or matches_sky(canvas[x, y])):
+                    canvas[x, y] = ink
+                    drawn.add((x, y))
         if self.clouds:
             colours = colours_of(air.palette_key)
             for cloud in self.clouds:
