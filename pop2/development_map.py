@@ -288,7 +288,7 @@ class DevelopmentMap:
 
 
 def level_landmarks(level, terrain, labels):
-    """Native entry, all usable exit doors, and the two custom level endings."""
+    """Return the level's Start and End labels for the development map."""
     # An exit opens only through a plate link (LEVL +0x1680). Level six's
     # room-1 door has none and its room-3 door is the cliff's entrance.
     data = getattr(level, 'data', None)
@@ -306,6 +306,9 @@ def level_landmarks(level, terrain, labels):
         # Three open-shore rooms: a start and an end marker only clutter the
         # picture (the exit is the stone chamber's own door), so none are drawn.
         return None, frozenset()
+    elif level.number == 13:
+        # Only native room 32 is marked as the level ending on the map.
+        exits.intersection_update({31})
     return labels.get(level.start_room), frozenset(labels[room] for room in exits if room in labels)
 
 

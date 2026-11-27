@@ -94,6 +94,7 @@ no Start or End markers: its three open-shore rooms read as one picture
 Levels 1 and 2 label their rooms Room 1, Room 2, ... in route order (level 1's
 hidden room is Room 11), like the later levels' Room labels; their numbers are
 not native room IDs.
+Level 13 marks only Room 32 as End. Room 28 remains selectable.
 Keyboard destination selection is white only after arrow-key navigation; opening
 the map, changing levels or moving the mouse clears that pending marker. It does
 not move the current-room marker to a different room/level. Hovering brightens only the room

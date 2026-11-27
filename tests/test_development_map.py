@@ -449,6 +449,11 @@ class ImportedDevelopmentMapTests(unittest.TestCase):
                     self.assertEqual(atlas.hit((left + right) / 2, (top + bottom) / 2), label)
                     self.assertEqual(atlas.source_frames[label].size, (510, 360))
 
+    def test_level_13_keeps_room_28_selectable_and_only_marks_room_32_as_end(self):
+        atlas = build_development_map(self.resources.level(13), include_enemies=False)
+        self.assertIn('Room 28', atlas.rooms)
+        self.assertEqual(atlas.exits, {'Room 32'})
+
     def test_desert_map_includes_closed_door_and_settled_stones_without_changing_rng(self):
         from pop2.desert import DesertScene
         from pop2.desert_state import DesertState
