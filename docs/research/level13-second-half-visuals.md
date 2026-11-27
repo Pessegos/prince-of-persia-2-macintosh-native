@@ -86,10 +86,15 @@ comparison (`recover_room`, phases 0-79 of every exit of levels 10-13,
 
 ## 6. A sword behind the next cell's front pieces
 
-SetupSword 3:0ac8 adds the attached sword or flask as its own object
-(AddCharObj 5, 3:0cce) and, except for a tumble (animation state 9,
-3:0d04-0d0a), marks the cells of its rectangle for a front redraw
-(MarkBufsForRect 5:19f8 with MarkFRedraw, 3:0d0c-0d18). MarkFRedraw 5:48e8
+GetCharAttach 4:2a8e copies the frame's attachment record (type, shape, X
+and Y offsets) to a5-0x521a (4:2b92-2ba6). For type 1, the sword, 3:0e14
+adds it as its own object (AddCharObj 3:0130, kind 3 for the Kid from
+3:08aa, 9 for an opponent from 3:09f6) and, unless animation state
+a5-0x5046 is 9 (3:0e6c-0e72), marks the cells of its rectangle for a front
+redraw (MarkBufsForRect 5:19f8 with MarkFRedraw, 3:0e74-0e80). The flask
+(type 3, 3:0e9c-0ee2) is marked the same way, always. The body has its own
+setup (3:0ac8 from 3:0d88, marked at 3:0daa-0db6); 3:0ba4-0d18 is the hit
+star's. MarkFRedraw 5:48e8
 unites each cell's marked rectangles, clipped to the cell. The port masked
 the character's layer, sword included, with the front pieces of the cells
 of the body's rectangle only: a guard's blade reaching into the next cell

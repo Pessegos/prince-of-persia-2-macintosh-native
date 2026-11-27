@@ -21,7 +21,7 @@ def room_with_pillar():
 
 class AttachmentCellTests(unittest.TestCase):
     def test_a_sword_reaching_the_next_cell_takes_that_cells_front_pieces(self):
-        # SetupSword 3:0d04-0d18: MarkBufsForRect(MarkFRedraw, sword rect).
+        # 3:0e74-0e80: MarkBufsForRect(MarkFRedraw, sword rect).
         room = room_with_pillar()
         state = SequenceState(150, actor_type=2, facing=1, level_kind=2)
         body, sword = (410, 140, 455, 240), (430, 170, 480, 180)
@@ -30,7 +30,7 @@ class AttachmentCellTests(unittest.TestCase):
         self.assertEqual(mask.getbbox(), (467, 125, 501, 240))
 
     def test_a_tumbling_character_marks_no_sword_cells(self):
-        # 3:0d04-0d0a: animation state 9 skips the sword's MarkBufsForRect.
+        # 3:0e6c-0e72: animation state 9 skips the sword's MarkBufsForRect.
         room = room_with_pillar()
         state = SequenceState(150, actor_type=2, facing=1, level_kind=2, animation_state=9)
         mask = room.actor_mask(1, state=state, bounds=(410, 140, 455, 240),

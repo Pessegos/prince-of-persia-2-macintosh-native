@@ -217,10 +217,11 @@ class OpeningRoom:
                 mask = Image.new("L", (ROOM_WIDTH, ROOM_HEIGHT))
                 cells = dict.fromkeys(native_buffer_cells(bounds))
                 if attachment is not None and getattr(state, 'animation_state', None) != 9:
-                    # SetupSword 3:0d04-0d18: the attached sword or flask marks
-                    # the cells of its own rectangle (MarkBufsForRect 5:19f8),
-                    # except for a tumble (mode 9). Their front pieces then
-                    # cover it, as the body's cells cover the body.
+                    # The sword marks the cells of its own rectangle
+                    # (3:0e74-0e80, MarkBufsForRect 5:19f8) except in mode 9
+                    # (3:0e6c); the flask always does (3:0ed6-0ee2). Their
+                    # front pieces then cover it, as the body's cells cover
+                    # the body.
                     cells.update(dict.fromkeys(native_buffer_cells(attachment)))
                 for cell in cells:
                     positioned = self.actor_cell_occlusion.get(cell)
