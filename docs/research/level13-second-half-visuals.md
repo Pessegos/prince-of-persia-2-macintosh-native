@@ -29,8 +29,9 @@ default). Exports carry `cell_readers: 1`; `run_game` asks an older temple
 export for a reimport ("needs the native bottom strip").
 
 Check: every room of levels 3-14 drawn cell by cell equals the native
-whole-room traversal 3:1c64 (`_native_scene`), commands and pixels, except
-level 13 room 4, which that audit cannot draw (its CUST flame needs Kid.rsrc).
+whole-room traversal 3:1c64 (`_native_scene`), commands and pixels. Level 13
+room 4 needs the (Temple.rsrc, Kid.rsrc) artwork tuple for its CUST flame
+(SHAP 4077); with it, its export also equals the native traversal.
 Changed pixels against the previous export: level 11 rooms 11 and 30 and
 level 13 rooms 2, 15, 23, 26, 28, 29 and 32 (8,575-12,275 px each, the strip).
 Other changed rooms and the loose-floor variants of levels 3, 7-13 differ
