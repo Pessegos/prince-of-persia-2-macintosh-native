@@ -409,6 +409,9 @@ CAVERN_CEILINGS = frozenset((*range(3525, 3529), *range(3550, 3558), 3568, 3614,
 # DrawRuinFloor's surfaces, lips, stairs and the floor attached to pillar/gate bases.
 RUINS_FLOOR_SHAPES = frozenset((*range(3514, 3519), 3520, 3521, 3523, 3531, 3535, 3536,
                                3537, 3541, 3543, 3544, 3548, 3549, 3552, 3553, 3554, 3576))
+# The broken slab a fallen loose floor leaves on the floor below (tile kind 14):
+# its back and its front, which only ever comes with it.
+RUINS_DEBRIS_SHAPES = frozenset((3519, 3522))
 RUINS_CEILINGS = frozenset((*range(3514, 3518), 3520, 3521, 3523, 3525, 3526, 3552, 3553, 3554, 3576))
 TEMPLE_CEILINGS = frozenset((3521, 3528, 3541, 3542, 3543, 3544))
 # DrawCaveTorch 8:2ae8 and DrawTempTorch 10:1196-11cc, library 4.
@@ -1930,8 +1933,8 @@ def cavern_room(room_id=0, entry_frame=0, animated=False, loose_key='', pressure
             continue
         sprite, position = clipped
         if (level_number in RUINS_LEVELS and not customized and library == 4
-                and index in RUINS_FLOOR_SHAPES and 0 <= row < 3):
-            ruins_floor_pieces.append((row, sprite, position))
+                and index in RUINS_FLOOR_SHAPES | RUINS_DEBRIS_SHAPES and 0 <= row < 3):
+            ruins_floor_pieces.append((row, sprite, position, index in RUINS_DEBRIS_SHAPES))
         destination = background if layer == 'back' else foreground
         destination.paste(sprite, position, sprite)
         if layer == 'back' and library == 4 and index == exit_shape:

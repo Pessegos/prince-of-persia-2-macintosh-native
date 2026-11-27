@@ -232,6 +232,11 @@ GRIT_NOT_FROM = (16, 17)
 GRIT_SHORTEST_FALL = 48
 GRIT_PATH_CLEAR = 0.9
 GRIT_FLOOR_DEPTH = 30
+# In the floor profile: a floor's own pixels, and the broken slab of a fallen loose floor
+# lying on one. The lowest pixels of each run of floor in a column are a face, not a
+# surface: the front lip, or the cut side of a slab's end where the next tile is gone.
+GRIT_FLOOR, GRIT_DEBRIS = 1, 2
+GRIT_FACE = 5
 # The room's own cracks: how many and how far apart.
 MOST_GRIT, GRIT_APART = 4, 60
 # Ceiling c is the underside over row c: within these pixels of c * TILE_HEIGHT + 5,
@@ -648,22 +653,39 @@ def grit_floor_profile(pieces):
 
     Only the course at the foot of a piece counts. A pillar, door or
     staircase can share an image with a floor and rise above that course.
+    Pieces are (row, sprite, position[, debris]) in drawing order, so a broken
+    slab covers the floor it lies on.
     """
-    profile = numpy.zeros((3, GRIT_FLOOR_DEPTH, WIDTH), dtype=bool)
-    for row, sprite, (x, y) in pieces:
+    profile = numpy.zeros((3, GRIT_FLOOR_DEPTH, WIDTH), dtype=numpy.uint8)
+    for row, sprite, (x, y), *debris in pieces:
         base = (row + 1) * TILE_HEIGHT + 5
         band_top = base - GRIT_FLOOR_DEPTH
         left, right = max(0, x), min(WIDTH, x + sprite.width)
         top, bottom = max(band_top, y), min(base, y + sprite.height)
         if left < right and top < bottom:
             alpha = numpy.asarray(sprite.getchannel('A'))[top - y:bottom - y, left - x:right - x]
-            profile[row, top - band_top:bottom - band_top, left:right] |= alpha > 0
+            profile[row, top - band_top:bottom - band_top, left:right][alpha > 0] = (
+                GRIT_DEBRIS if debris and debris[0] else GRIT_FLOOR)
     return profile
 
 
 def supported_depth(row, masked, wanted):
-    heights = numpy.flatnonzero(masked) + (row + 1) * TILE_HEIGHT + 5 - GRIT_FLOOR_DEPTH
-    return int(heights[numpy.abs(heights - wanted).argmin()]) if heights.size else None
+    """Where grit falling at wanted's depth stops in one column of the row, or None when
+    it falls past: over a gap, or in front of the lowest GRIT_FACE pixels of floor, the
+    front lip or the cut side of a slab's end."""
+    band_top = (row + 1) * TILE_HEIGHT + 5 - GRIT_FLOOR_DEPTH
+    column = numpy.asarray(masked)
+    debris = numpy.flatnonzero(column == GRIT_DEBRIS)
+    # A broken slab that rises to the spot catches the grain on its top.
+    if debris.size and band_top + debris[0] <= wanted:
+        return band_top + int(debris[0])
+    heights = numpy.flatnonzero(column) + band_top
+    if not heights.size or wanted > heights[-1] - GRIT_FACE:
+        return int(band_top + debris[0]) if debris.size else None
+    surface = heights[heights <= heights[-1] - GRIT_FACE]
+    if not surface.size:
+        return int(heights[0])  # A sliver of floor in front of the spot hides the rest of the fall.
+    return int(surface[numpy.abs(surface - wanted).argmin()])
 
 
 def grit_landing(floor, terrain, room, x, top, depth=0):
@@ -1739,7 +1761,10 @@ class RuinsAmbience:
         half = len(MOUND) // 2
         left, right = x - half, x + half + 3
         if 0 <= left < right <= WIDTH:
-            return supported_depth(row, self.grit_floor[row, :, left:right].all(axis=1), bottom)
+            under = self.grit_floor[row, :, left:right]
+            if (under == GRIT_DEBRIS).any():
+                return None  # No heap on the rubble.
+            return supported_depth(row, under.all(axis=1), bottom)
         return None
 
     def busy(self, x, pour=True):

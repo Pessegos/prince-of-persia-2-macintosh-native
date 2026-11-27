@@ -1109,11 +1109,13 @@ class GritTests(unittest.TestCase):
     def test_a_pour_falls_past_a_gap_to_the_next_visible_floor(self):
         from PIL import Image
 
-        strip = Image.new('RGBA', (21, 6), 'white')
-        floors = ruins_ambience.grit_floor_profile(((1, strip, (90, 235)), (2, strip, (90, 345))))
+        # Floors as deep as the ruins' own, lip included: a thin strip is all lip.
+        strip = Image.new('RGBA', (21, 30), 'white')
+        floors = ruins_ambience.grit_floor_profile(((1, strip, (90, 215)), (2, strip, (90, 335))))
         ambience = self.ambience(grit_floor=floors)
         ambience.start(100, 125, 30, 0, True, TERRAIN)
-        self.assertEqual(ambience.trickles[0].source.bottom, 235)
+        depth = ambience.trickles[0].depth
+        self.assertEqual(ambience.trickles[0].source.bottom, 226 + depth)
         for _ in range(6):
             ambience.advance(TERRAIN)
         ambience.grit_floor = floors.copy()
@@ -1121,9 +1123,43 @@ class GritTests(unittest.TestCase):
         ambience.grit_floor[1] = False
         run_out(ambience)
         self.assertEqual(len(ambience.mounds), 1)
-        self.assertGreaterEqual(ambience.mounds[0].bottom, 345)
+        self.assertEqual(ambience.mounds[0].bottom, 346 + depth)
         ambience.grit_floor[2] = False
         ambience.advance(TERRAIN)
+        self.assertEqual(ambience.mounds, [])
+
+    def test_grit_falls_past_the_cut_side_of_a_slab_end(self):
+        from PIL import Image
+
+        # A slab in row 0 whose top ends at y 100 in column 100, then its 5-pixel cut
+        # side down to 104: what stays when the next tile has fallen. A floor below.
+        end = Image.new('RGBA', (1, 10), 'white')
+        lower = Image.new('RGBA', (1, 30), 'white')
+        floors = ruins_ambience.grit_floor_profile(((0, end, (100, 95)), (1, lower, (100, 215))))
+        # It used to settle on the side's lowest pixel, 104, as though on a ledge.
+        for depth in (-3, 0, 3):
+            self.assertEqual(ruins_ambience.grit_landing(floors, None, 4, 100, 10, depth), 226 + depth)
+        # Further back, on the top itself, it still lies on the slab.
+        self.assertEqual(ruins_ambience.grit_landing(floors, None, 4, 100, 10, -7), 99)
+        # A floor's front lip is not a ledge either: grit lands on its top, then stops.
+        whole = ruins_ambience.grit_floor_profile(((0, Image.new('RGBA', (1, 30), 'white'), (100, 95)),))
+        for depth in (-3, 0, 3):
+            self.assertEqual(ruins_ambience.grit_landing(whole, None, 4, 100, 10, depth), 106 + depth)
+
+    def test_grit_lands_on_the_broken_slab_not_the_floor_under_it(self):
+        from PIL import Image
+
+        floor = Image.new('RGBA', (21, 30), 'white')
+        rubble = Image.new('RGBA', (11, 12), 'white')
+        floors = ruins_ambience.grit_floor_profile(((1, floor, (90, 215)), (1, rubble, (95, 220), True)))
+        self.assertEqual(ruins_ambience.grit_landing(floors, None, 4, 100, 125, 0), 220)
+        # Beside it, the floor itself.
+        self.assertEqual(ruins_ambience.grit_landing(floors, None, 4, 92, 125, 0), 226)
+        # A pour on the rubble raises no heap there: it would sit inside the slab.
+        ambience = self.ambience(grit_floor=floors)
+        ambience.start(100, 125, 30, 0, True, TERRAIN)
+        self.assertEqual(ambience.trickles[0].source.bottom, 220)
+        run_out(ambience)
         self.assertEqual(ambience.mounds, [])
 
     def test_a_bump_shakes_grit_down_right_over_his_hands(self):
@@ -1746,6 +1782,34 @@ class RealSceneTests(unittest.TestCase):
             ambience.draw_wind(full_wind.load())
             self.assertGreater((numpy.asarray(full_wind, dtype=int) - numpy.asarray(scenery)).sum(),
                                early_gain * 3)
+        finally:
+            harness.close()
+
+    def test_grit_after_a_loose_floor_falls_in_level_6_room_9(self):
+        """The user's screenshots, 2026-11-27: the loose floor of row 0, column 8 falls
+        onto the floor below. Grit settled on the cut side of the slab left behind, and
+        on that floor under the broken slab, as though through it."""
+        from tools.audit_temple_routes import Harness
+
+        harness = Harness(6, peaceful=True, draw=True, god=True)
+        try:
+            scene = harness.scene
+            scene.cave_ambience_enabled = True
+            scene.jump_to_room(8, row=2, facing=1)
+            scene.render()
+            scene.game.caverns.loose.trigger(scene.level_map.tile(8, 8, 0), force=True)
+            harness.tick(80)
+            scene.render()
+            self.assertEqual(scene.level_map.tile(8, 8, 1).kind, 14)
+            floor = scene.level_renderer.ambience.grit_floor
+            land = ruins_ambience.grit_landing
+            # The slab's end, cut on a slant: 106, 104 and 101 were its pale side.
+            self.assertGreater(land(floor, None, 8, 436, 10, 0), 125)
+            self.assertGreater(land(floor, None, 8, 442, 10, 3), 125)
+            self.assertEqual(land(floor, None, 8, 420, 10, 0), 106)
+            # The broken slab: 240 was the lip of the floor under it.
+            for x in (440, 452):
+                self.assertLessEqual(land(floor, None, 8, x, 125, 0), 220, x)
         finally:
             harness.close()
 
