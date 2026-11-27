@@ -51,6 +51,28 @@ class AltarRuleTests(unittest.TestCase):
         final.next_frame()
         self.assertEqual(final.state.sequence_events, [(-24, (209,))])
 
+    @unittest.skipUnless((ASSET_DIR / 'Kid.rsrc').exists(), 'requires imported Kid.rsrc')
+    def test_the_flash_whitens_the_whole_room_but_not_the_frame_around_it(self):
+        # SetPaletteToColorIdx 3:4fbc sets entries 1-254. No scenery or
+        # character image uses entry 255, so the original's room turns
+        # completely white (the user's level-13 capture). Before, the port
+        # kept every black pixel of the room, a 1-bit outline of the scene.
+        from PIL import Image
+
+        from pop2.caverns import flash_viewport
+
+        viewport = Image.new('RGBA', (8, 6), (0, 0, 0, 255))
+        viewport.putpixel((2, 1), (200, 40, 10, 255))
+        viewport.putpixel((3, 2), (255, 255, 255, 255))
+        flashed = flash_viewport(viewport, 225, (1, 0, 7, 4))
+        room = [flashed.getpixel((x, y)) for x in range(1, 7) for y in range(4)]
+        self.assertEqual(set(room), {(255, 255, 255, 255)})
+        # Around the room (the HUD row, the side columns) black is entry 255.
+        self.assertEqual(flashed.getpixel((0, 1)), (0, 0, 0, 255))
+        self.assertEqual(flashed.getpixel((3, 5)), (0, 0, 0, 255))
+        # Without a room box, as for the HUD's text, black still stays.
+        self.assertEqual(flash_viewport(viewport, 225).getpixel((4, 1)), (0, 0, 0, 255))
+
     def test_the_burn_death_song_is_the_seventeenth_entry(self):
         # AddKidDeathSong 5:4afc reads a5-0x4396[16] = 250 for method 16.
         from pop2.audio import AudioEngine

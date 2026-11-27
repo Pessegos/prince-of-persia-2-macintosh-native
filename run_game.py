@@ -165,6 +165,10 @@ def missing_assets(project=PROJECT):
             # Before 2026-11-16 a loose floor kept only phase 1's shake image.
             if not cavern['loose_floors'].get('shake_pairs'):
                 missing.append(f'{name} (needs the second loose-floor shake)')
+            # Before 2026-11-27 a room without a lower link left its bottom
+            # strip undrawn instead of the native wall (GetBelowAry 5:03bc).
+            elif not cavern.get('cell_readers'):
+                missing.append(f'{name} (needs the native bottom strip)')
         except (OSError, ValueError, KeyError, TypeError, AttributeError):
             missing.append(f'{name} (needs the temple blades)')
     final_path = project / 'assets' / 'final_level14.json'

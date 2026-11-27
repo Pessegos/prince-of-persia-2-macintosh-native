@@ -835,11 +835,17 @@ FLARE_RECORDS = (14, 14, 15, 16, 16, 14)
 FLARE = 0x85
 
 
-def flash_viewport(image, index):
+def flash_viewport(image, index, room=None):
     """SetPaletteToColorIdx 3:4fbc: entries 1-254 take colour `index`;
     entry 0 (white) and 255 (black) keep theirs. The port's frames hold
     colours, not indices: pure white and black pixels stand for 0 and 255.
-    Index 225 is the flame's white (Kid CTBL 4077, stored at 224-239)."""
+    Index 225 is the flame's white (Kid CTBL 4077, stored at 224-239).
+
+    `room`, a (left, top, right, bottom) box, is the scenery area: no
+    scenery or character image uses index 255 (every SHAP of the temple,
+    final, Kid and opponent files), so its black pixels are other entries
+    and take the colour too. The original's flash leaves the whole room
+    white (level 13 room 4); only the area around it stays black."""
     import numpy
 
     kid = load_resource_file('Kid.rsrc')
@@ -848,7 +854,11 @@ def flash_viewport(image, index):
         return image
     pixels = numpy.array(image.convert('RGBA'))
     rgb = pixels[..., :3]
-    kept = numpy.all(rgb == 0, axis=-1) | numpy.all(rgb == 255, axis=-1)
+    white = numpy.all(rgb == 255, axis=-1)
+    kept = numpy.all(rgb == 0, axis=-1) | white
+    if room is not None:
+        left, top, right, bottom = room
+        kept[top:bottom, left:right] = white[top:bottom, left:right]
     pixels[~kept, :3] = color[:3]
     return Image.fromarray(pixels, 'RGBA')
 

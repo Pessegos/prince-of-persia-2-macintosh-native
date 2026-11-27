@@ -75,7 +75,7 @@ def recovery_inputs(program, caverns, prince):
     # 3:25ae is DrawForeImg's return from CheckGateInFore (`gate_peel`).
     primitives = {(3, offset) for offset in (4, 0x29e2, 0x29b6, 0x2ac4, 0x06c4, 0x2324, 0x26e4, 0x2482, 0x2438,
                                             0x25ae, 0x533a)}
-    primitives.update((5, offset) for offset in (0x21c, 0x230, 0x08c4, 0x1990))
+    primitives.update((5, offset) for offset in (0x21c, 0x230, 0x1990))
     primitives.update((8, offset) for offset in (0x176c, 0x20a6, 0x1ca4, 0x1752, 0x1f86))
     # The ruins drawers (CODE 7) call the same SectRect (a5-0x1f58) and
     # UnionRect (a5-0x1f5c) glue.
@@ -637,10 +637,6 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
         elif segment == 3 and offset == 0x2324 and not long(a5 - 0x4c9e):
             # DrawCustomRoomImgs runs natively only for a loaded CUST room.
             result = 0
-        elif segment == 5 and offset == 0x08c4:
-            # PieceRightId 5:0904 advances the requested column before lookup.
-            column, row = struct.unpack_from('>2h', stacked, 4)
-            result = tile_at(column + 1, row).kind
         elif segment == 3 and offset == 0x26e4:
             if gate_peel is None:
                 result = 0
@@ -732,11 +728,24 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
         if only is not None and all(slot[0] != -1 for slot in only):
             needed = {(row, column) for row, column, _pass in only}
             rows = tuple(row for row in rows if any(cell[0] == row for cell in needed))
+        # The cell readers run natively, as RedrawCellFast 3:1c64-1c9a calls
+        # them: GetLeftAry 5:0b50 once (the left room's last column, with a
+        # CUST room's 0xc000 cover, 5:0bbc-0be2), then per row GetAboveAry
+        # 5:026a and GetBelowAry 5:03bc, and per cell GetCells 5:0a4c (the
+        # cell, its left and right neighbours). A cell in a missing room is
+        # GetObject 5:053e's default, not GetBlock's collision wall 20: below
+        # the bottom row of a room without a lower link GetBelowAry asks for
+        # kind 0 (5:03ee-03f8, 5:0426), which the temple draws as back wall
+        # 3509 in the bottom strip (Y 340-365) with background 9 (5:056c).
+        current_slot[0] = None
+        if rows and rows[0] != -1:
+            execute(5, 0x0b50)
         for draw_row in rows:
-            # GetCells' row below: (kind word, foreground/background long)
-            # for columns -1..9 at a5-0x4a84, the same for every column.
-            below_cells = b''.join(struct.pack('>HI', below.kind, (below.foreground << 16) | below.background)
-                                   for below in (tile_at(col - 1, draw_row + 1) for col in range(11)))
+            if draw_row != -1:
+                current_slot[0] = None
+                put_word(a5 - 0x45f6, draw_row)
+                execute(5, 0x026a)
+                execute(5, 0x03bc)
             if draw_row == -1:
                 # RedrawCellFast 3:1cb6-1cda draws the upper room's last row,
                 # with the current room below it. Missing rooms use GetCells'
@@ -761,20 +770,8 @@ def recover_room(program, caverns, level, room_id=0, prince=None, climb_action=N
                     execute(5, 0x0a4c)
                     put_word(a5 - 0x4832, repaint)
                 else:
-                    tile, previous = tile_at(draw_column, draw_row), tile_at(draw_column - 1, draw_row)
-                    cpu.mem_write(a5 - 0x4818, struct.pack('>IH', (tile.foreground << 16) | tile.background,
-                                                           tile.kind))
-                    previous_foreground = previous.foreground
-                    if custom is not None and draw_column == 0:
-                        # 5:0bbc-0be2: a CUST room hides the left room's last
-                        # column (0xc000), except rows 1-2 of CUST kind 0x1f.
-                        if int.from_bytes(custom['data'][:2], 'big') == 0x1f and draw_row in (1, 2):
-                            previous_foreground &= 0x3fff
-                        else:
-                            previous_foreground |= 0xc000
-                    cpu.mem_write(a5 - 0x49d6, struct.pack('>HI', previous.kind,
-                                                           (previous_foreground << 16) | previous.background))
-                    cpu.mem_write(a5 - 0x4a84, below_cells)
+                    current_slot[0] = None
+                    execute(5, 0x0a4c)
                 for layer, entry, draw_pass in passes:
                     if only is not None and (draw_row, draw_column, draw_pass) not in only:
                         continue
@@ -877,7 +874,10 @@ def _prepare_caverns(program, caverns, prince, progress, recover, *, level_numbe
         scenes[str(room)] = recover(program, caverns, level, room, prince)
     result = {'version': 17 if definition.kind == 4 else 16, 'level': level_number,
               'rooms': {room: scene['commands'] for room, scene in scenes.items()},
-              'torches': {room: scene['torches'] for room, scene in scenes.items()}}
+              'torches': {room: scene['torches'] for room, scene in scenes.items()},
+              # The cell inputs come from the native readers (GetCells,
+              # GetBelowAry, ...); before 2026-11-27 Python supplied them.
+              'cell_readers': 1}
     if definition.kind == 6:
         result['fills'] = {room: scene['fills'] for room, scene in scenes.items() if scene['fills']}
     result['climb_redraw'], result['floor_redraw'] = {}, {}

@@ -4107,10 +4107,14 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
         if flash is not None:
             from pop2.caverns import flash_viewport
 
-            viewport = flash_viewport(viewport, flash)
+            viewport = flash_viewport(viewport, flash, (ROOM_ORIGIN_X, 0, ROOM_ORIGIN_X + frame.width,
+                                                        min(ROOM_HEIGHT, frame.height)))
         self.screenshot_viewport = viewport.copy()
         if self.death.prompt_visible:
             text = self.restart_text
+            if flash is not None:
+                # The message's inks are palette entries 1-254 as well.
+                text = flash_viewport(text, flash)
             ink = text.getbbox()
             y = ROOM_HEIGHT + (VIEWPORT_HEIGHT - ROOM_HEIGHT - (ink[3] - ink[1])) // 2 - ink[1]
             self.screenshot_viewport.paste(text, ((VIEWPORT_WIDTH - text.width) // 2, y), text)
@@ -4120,6 +4124,8 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
                     self.pause_text if self.paused else
                     self.restart_text if self.death.prompt_visible else
                     self.ui_font.text(message, self.hud_text_color) if message else None)
+        if flash is not None and notice is None and not self.paused and hud_text is not None:
+            hud_text = flash_viewport(hud_text, flash)
         demo_paused = self.paused and getattr(self, "demo", None) is not None
         if (hud_text is not None and not demo_paused
                 and self.dev_menu is None and self.game_menu is None):

@@ -89,9 +89,15 @@ class InstallationTests(unittest.TestCase):
 
     def test_temple_exports_without_the_second_shake_image_request_reimport(self):
         path = self.project / 'assets' / 'temple_level11.json'
-        program = {'scythes': {'schema': 1}, 'loose_floors': {'schema': 2, 'shake_pairs': True}}
+        program = {'scythes': {'schema': 1}, 'loose_floors': {'schema': 2, 'shake_pairs': True},
+                   'cell_readers': 1}
         path.write_text(json.dumps(program))
         self.assertEqual(run_game.missing_assets(self.project), [])
+        del program['cell_readers']
+        path.write_text(json.dumps(program))
+        self.assertEqual(run_game.missing_assets(self.project),
+                         ['temple_level11.json (needs the native bottom strip)'])
+        program['cell_readers'] = 1
         del program['loose_floors']['shake_pairs']
         path.write_text(json.dumps(program))
         self.assertEqual(run_game.missing_assets(self.project),

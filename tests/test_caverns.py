@@ -465,7 +465,10 @@ class CavernDrawingTests(unittest.TestCase):
                   self.assertRaisesRegex(ValueError, 'Cavern renderer failed')):
                 recover_room(b'program', b'artwork', bytes(level))
             self.assertEqual(released, [[], [], []])
-        self.assertEqual(len(observed), 270)
+        # Per room: setup, 30 cells x 3 passes, the border row, and the
+        # native cell readers RedrawCellFast calls (GetLeftAry once, per row
+        # GetAboveAry and GetBelowAry, GetCells per cell): 135 + 37.
+        self.assertEqual(len(observed), 344)
         self.assertEqual(set(observed), {(1, (0, 0, 365, 510))})
 
     def test_repaint_export_keeps_live_flames_out_of_static_scenery(self):
@@ -921,6 +924,24 @@ class OriginalCavernTests(unittest.TestCase):
                 self.assertTrue(all(command[3] == 5 and command[6][0:3:2] == [0, 5]
                                     for command in commands))
                 self.assertFalse(any(command[1] == 3537 for command in commands))
+
+    @unittest.skipUnless((ASSET_DIR / 'temple_level13.json').exists(), 'requires imported temple scenery')
+    def test_rooms_without_a_lower_link_draw_the_temple_wall_in_the_bottom_strip(self):
+        # GetBelowAry 5:03bc asks GetObject 5:053e for kind 0 below a room
+        # without a lower link (background 9 in the temple, 5:056c), drawn
+        # as back wall 3509 in rows 340-365, as the user's capture of level
+        # 13 room 29 shows. Before, the export supplied GetBlock's collision
+        # wall 20, drew nothing there and kept the previous room's pixels.
+        program = json.loads((ASSET_DIR / 'temple_level13.json').read_text(encoding='ascii'))
+        terrain = LevelMap(LevelDefinition.read(load_resource_file('Prince.rsrc'), 13).data)
+        for native in (2, 28, 29, 32):
+            room = native - 1
+            self.assertIsNone(terrain.neighbor(room, 'down'))
+            with self.subTest(room=native):
+                strip = [command for command in program['rooms'][str(room)] if command[5] == 3]
+                self.assertEqual({command[1] for command in strip}, {3509})
+                self.assertEqual({tuple(command[6][0:3:2]) for command in strip}, {(340, 365)})
+                self.assertEqual(sorted({command[8] for command in strip}), list(range(10)))
 
     def test_entry_closes_updates_scenery_and_resets_on_restart(self):
         from tests.test_terrain import RooftopSceneTests
