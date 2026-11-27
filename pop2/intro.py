@@ -12,8 +12,8 @@ from PIL import Image, ImageOps
 from pop2.audio import scene_sound_key
 from pop2.game_ui import MacintoshFont
 from pop2.horse_desert import (
-    DESERT_SHOTS, GALLOP_DUNE, GALLOP_GROUND, HORSE_GALLOP_BACKDROP, HORSE_GORGE_BACKDROP,
-    HORSE_STATUE_BACKDROP, HorseDesert,
+    DESERT_SHOTS, GALLOP_DUNE, GALLOP_FRAME_TICKS, GALLOP_GROUND, HORSE_GALLOP_BACKDROP, HORSE_GORGE_BACKDROP,
+    HORSE_STATUE_BACKDROP, HorseDesert, gallop_scroll,
 )
 from pop2.mac_resources import parse_resource_fork
 from pop2.paths import ASSET_DIR
@@ -520,6 +520,7 @@ class IntroPlayer:
         self.horse_desert = getattr(assets, 'horse_desert', None) if ambience is not None else None
         self.horse_covered = None
         self.horse_crest_x = 0
+        self.horse_gallop_at = None
         self.horse_meteor_frames = assets.horse_meteor_frames if horse_meteor else ()
         self.variant, self.prince = variant, prince
         program = assets.program
@@ -615,6 +616,8 @@ class IntroPlayer:
         if self.program_kind == "carpet" and resource_id == CARPET_CLIFF_SHAPE:
             self.carpet_cliff = True
         elif self.program_kind == "temple" and resource_id in HORSE_SKY_PALETTES:
+            if resource_id == HORSE_GALLOP_BACKDROP and self.horse_backdrop != resource_id:
+                self.horse_gallop_at = self.time
             self.horse_backdrop = resource_id
             self.horse_covered = None
         elif self.horse_backdrop == HORSE_GALLOP_BACKDROP and self.horse_desert is not None:
@@ -1063,16 +1066,22 @@ class IntroPlayer:
                     audio.play_intro(cue, kind, offset=elapsed)
 
     def advance(self, seconds, stop_position=None):
-        tick = self.horse_desert_tick()
+        ambience_state = self.horse_ambience_state()
         self.advance_program(seconds, stop_position)
-        if tick != self.horse_desert_tick() and self.ambience():
+        if ambience_state != self.horse_ambience_state() and self.ambience():
             # Redraw the overlay even when the animation is holding its picture.
             self.revision += 1
 
-    def horse_desert_tick(self):
-        if self.horse_desert is not None and self.horse_backdrop in DESERT_SHOTS:
-            return self.horse_scene_tick()
-        return None
+    def horse_ambience_state(self):
+        if self.horse_desert is None or self.horse_backdrop not in DESERT_SHOTS:
+            return None
+        gallop_motion = None
+        if self.horse_backdrop == HORSE_GALLOP_BACKDROP:
+            elapsed = self.time - self.horse_gallop_at
+            local_tick = math.floor(elapsed * HORSE_AMBIENCE_TICKS_PER_SECOND + 1e-9)
+            travel = round(gallop_scroll(elapsed * MAC_TICKS_PER_SECOND / GALLOP_FRAME_TICKS))
+            gallop_motion = local_tick, travel
+        return self.horse_backdrop, self.horse_scene_tick(), gallop_motion
 
     def horse_scene_tick(self):
         return math.floor(self.time * HORSE_AMBIENCE_TICKS_PER_SECOND + 1e-9)
@@ -1185,10 +1194,11 @@ class IntroPlayer:
                 for x, y, ink in (*points, *meteor):
                     if self.display.getpixel((x, y)) in sky:
                         frame.putpixel((x, y), (*self.palette[ink], 255))
-            tick = self.horse_desert_tick()
+            ambience_state = self.horse_ambience_state()
             gallop = self.horse_backdrop == HORSE_GALLOP_BACKDROP
-            if tick is not None and (not gallop or self.horse_covered is not None):
-                self.horse_desert.draw(frame, self.display, self.palette, self.horse_backdrop, tick,
+            if ambience_state is not None and (not gallop or self.horse_covered is not None):
+                backdrop, tick, motion = ambience_state
+                self.horse_desert.draw(frame, self.display, self.palette, backdrop, tick,
                                        scenery=None if gallop else self.background,
-                                       covered=self.horse_covered, crest_x=self.horse_crest_x)
+                                       covered=self.horse_covered, crest_x=self.horse_crest_x, gallop_motion=motion)
         return frame

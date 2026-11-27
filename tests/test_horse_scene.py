@@ -193,6 +193,47 @@ class HorseSceneTests(unittest.TestCase):
         self.assertNotEqual(quiet, windy)
         self.assertEqual(windy, live.frame().crop((0, 200, 510, 365)).tobytes())
 
+    def test_gallop_particles_follow_the_scroll_and_the_whirl_passes_once(self):
+        from pop2.horse_desert import HORSE_GALLOP_BACKDROP
+        from pop2.intro import IntroAssets, IntroPlayer, MAC_TICKS_PER_SECOND
+
+        assets = IntroAssets(program_name='temple.json')
+        player = IntroPlayer(assets, ambience=lambda: True)
+        frame_time = 6 / MAC_TICKS_PER_SECOND
+        gallop_start = 64 * frame_time
+        player.advance(gallop_start)
+        self.assertEqual(player.horse_backdrop, HORSE_GALLOP_BACKDROP)
+        display = player.display.tobytes()
+        revision = player.revision
+        player.advance(frame_time / 2)
+        self.assertEqual(player.display.tobytes(), display)
+        self.assertGreater(player.revision, revision)
+        self.assertEqual(player.horse_ambience_state()[2][1], 61)
+
+        # These are the observed crest offsets, including the next wrap.
+        for number, offset in enumerate((122, 244, 371, 497), 1):
+            player.advance(gallop_start + number * frame_time - player.time)
+            self.assertEqual(player.horse_ambience_state()[2][1], offset)
+            self.assertLessEqual((player.horse_crest_x - offset) % 497, 1)
+
+        # Mark the actual funnel's particles to observe that group independently of the gusts.
+        marker = object()
+        wind = assets.horse_desert
+        for elapsed, expected in ((3.55, None), (3.82, (35, 70)), (4, (250, 300)),
+                                  (4.12, (410, 450)), (4.6, None)):
+            with self.subTest(elapsed=elapsed):
+                player.advance(gallop_start + elapsed - player.time)
+                backdrop, tick, (local_tick, travel) = player.horse_ambience_state()
+                whirl = [(x, y, marker) for x, y, _ in wind.sand_at(backdrop, tick)]
+                self.assertTrue(whirl)
+                xs = [x for x, _, shade in wind.gallop.in_view(local_tick, travel, whirl)
+                      if shade is marker and 0 <= x < 510]
+                if expected is None:
+                    self.assertFalse(xs)
+                else:
+                    self.assertTrue(xs)
+                    self.assertTrue(expected[0] <= sum(xs) / len(xs) <= expected[1])
+
     def test_the_exterior_shots_share_the_horse_room_stars_when_ambience_is_on(self):
         from unittest.mock import patch
 

@@ -21,8 +21,45 @@ GALLOP_GROUND = 625397
 GALLOP_DUNE_Y = 242
 GALLOP_CREST = 245
 GALLOP_PLAIN = 263
+# ANI25012's repeating near-dune layer, unwrapped at the tile seam.
+GALLOP_DUNE_SCROLL = (0, 122, 244, 371, 497)
+GALLOP_FRAME_TICKS = 6
+GALLOP_WHIRL_PASS_FRAME = 40
 # Match the level's west-to-east wind through the gorge, dunes and statue.
 DESERT_SHOTS = (HORSE_GORGE_BACKDROP, HORSE_GALLOP_BACKDROP, HORSE_STATUE_BACKDROP)
+
+
+def gallop_scroll(frame):
+    """Distance travelled by the near dunes since the first gallop frame."""
+    cycle, phase = divmod(frame, len(GALLOP_DUNE_SCROLL) - 1)
+    index = int(phase)
+    left, right = GALLOP_DUNE_SCROLL[index:index + 2]
+    return cycle * GALLOP_DUNE_SCROLL[-1] + left + (phase - index) * (right - left)
+
+
+class GallopSand:
+    """Wind over the dunes that the camera tracks past during the gallop."""
+
+    def __init__(self, dunes):
+        # Give the wind a longer repeat than the near dune's four-frame texture cycle.
+        self.wind = DesertWind(Dunes.join((dunes,) * 4), random.Random(22))
+        self.wind.prime()
+        self.frames = []
+
+    def in_view(self, tick, travel, whirl):
+        while len(self.frames) <= tick:
+            breeze = chain.from_iterable(self.wind.breeze_pixels(origin) for origin in range(0, self.wind.width, WIDTH))
+            self.frames.append((tuple(breeze), tuple(self.wind.gust_pixels())))
+            self.wind.advance()
+        breeze, gusts = self.frames[tick]
+        for x, y, shade in breeze:
+            yield (x + travel) % self.wind.width, y, shade
+        # The funnel occupies one position along the route and exits to the right.
+        whirl_travel = travel - gallop_scroll(GALLOP_WHIRL_PASS_FRAME)
+        for x, y, shade in whirl:
+            yield x + whirl_travel, y, shade
+        for x, y, shade in gusts:
+            yield (x + travel) % self.wind.width, y, shade
 
 
 class SandPalette:
@@ -61,12 +98,12 @@ class HorseDesert:
         rgb = numpy.array([gorge_palette.get(i, (0, 0, 0)) for i in range(256)], dtype=numpy.uint8)[gorge]
         self.gorge = chasm_dunes(numpy.pad(sand_mask(rgb), ((GORGE_Y, 0), (0, 0))))
 
-        # Keep the wind in camera space while the gallop's short dune texture scrolls.
-        # At draw time the spray follows the actual height of that texture's crest.
+        # The travelling sand follows the height of the animated crest at draw time.
         dune = numpy.asarray(shapes[GALLOP_DUNE])
         self.gallop_crest = GALLOP_DUNE_Y + (dune != 0).argmax(axis=0)
         ground = numpy.broadcast_to(numpy.arange(HEIGHT)[:, None] >= GALLOP_CREST, (HEIGHT, WIDTH))
         gallop = Dunes(numpy.full(WIDTH, GALLOP_CREST), numpy.full(WIDTH, GALLOP_PLAIN), ground, ground, ())
+        self.gallop = GallopSand(gallop)
         self.wind = DesertWind(Dunes.join((self.gorge, gallop, statue_dunes)), random.Random(21))
         self.wind.prime()
         self.first_tick = self.wind.tick
@@ -82,13 +119,14 @@ class HorseDesert:
             frames = {}
             for section, shot in enumerate(DESERT_SHOTS):
                 origin = section * WIDTH
-                frames[shot] = tuple((x - origin, y, shade) for x, y, shade in self.wind.desert_pixels(origin)
+                pixels = self.wind.devil_pixels(origin) if shot == HORSE_GALLOP_BACKDROP else self.wind.desert_pixels(origin)
+                frames[shot] = tuple((x - origin, y, shade) for x, y, shade in pixels
                                      if origin <= x < origin + WIDTH and 0 <= y < HEIGHT)
             self.frames.append(frames)
             self.wind.advance()
         return self.frames[tick][backdrop]
 
-    def draw(self, frame, display, palette, backdrop, tick, *, scenery, covered, crest_x):
+    def draw(self, frame, display, palette, backdrop, tick, *, scenery, covered, crest_x, gallop_motion):
         inks = self.inks[backdrop]
         sand = self.sand_at(backdrop, tick)
         wisps = ()
@@ -98,6 +136,8 @@ class HorseDesert:
             sand = chain(sand, chasm_fall_pixels(phase, self.gorge.sand), chasm_rising_sand_pixels(phase))
             wisps = chain(chasm_updraft_pixels(phase), chasm_crosswind_pixels(phase))
         elif backdrop == HORSE_GALLOP_BACKDROP:
+            local_tick, travel = gallop_motion
+            sand = self.gallop.in_view(local_tick, travel, sand)
             sand = self.follow_crest(sand, crest_x)
 
         display = display.load()
@@ -129,6 +169,8 @@ class HorseDesert:
 
     def follow_crest(self, sand, crest_x):
         for x, y, shade in sand:
+            if not 0 <= x < WIDTH:
+                continue
             if y < GALLOP_PLAIN:
                 height = self.gallop_crest[(x - crest_x) % len(self.gallop_crest)]
                 # Keep the ground streams level as they move below the crest spray.

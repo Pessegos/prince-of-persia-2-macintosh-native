@@ -2692,6 +2692,10 @@ class DesertWind:
         """World (x, y, RGB) of the blown sand, the later over the earlier."""
         if self.room_count > 1:
             yield from self.breeze_pixels(origin)
+        yield from self.devil_pixels(origin)
+        yield from self.gust_pixels()
+
+    def devil_pixels(self, origin):
         tick = self.tick
         for devil in self.devils:
             base_x, base_y = devil.base(tick, self.dunes.crest)
@@ -2716,6 +2720,8 @@ class DesertWind:
                         continue
                     x, y = (int(round(value)) for value in devil.point(grain, tick, base_x, base_y))
                     yield x, y, NEAR_SIDE if near else FAR_SIDE
+
+    def gust_pixels(self):
         for grain in self.spray:
             x, y = int(grain.x), int(grain.y)
             step = min(2, grain.age * 3 // grain.life)
