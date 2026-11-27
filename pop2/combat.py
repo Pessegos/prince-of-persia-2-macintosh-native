@@ -2600,10 +2600,11 @@ class CombatEncounter:
         target.state.current_x = target.state.target_x
         death_method = None
         if name == "player" and not target.alive:
-            # CheckStab 6:5704-5748: ordinary type-2 guards on supported
-            # levels (LEVL 21a4 == 0) select 14, not skeleton method 2.
+            # CheckStab 6:5704-5748: a type-2 guard selects GardKill (14)
+            # where LEVL 21a4 is 0 and BirdKill (10) elsewhere, the temple's
+            # bird-headed guards (6:5738-5746); not skeleton method 2.
             # 6:570e: a type-6 killer selects method 17 (6:574e).
-            death_method = (14 if attacker.state.actor_type == 2 else
+            death_method = ((14 if self._opponent_set() == 0 else 10) if attacker.state.actor_type == 2 else
                             FLAME_DEATH_METHOD if attacker.state.actor_type == 10 else
                             17 if attacker.state.actor_type == 6 else 2)
         return CombatEvent("hit" if target.alive else "death", name, death_method)

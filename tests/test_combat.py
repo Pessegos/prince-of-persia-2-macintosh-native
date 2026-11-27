@@ -1,4 +1,5 @@
 import random
+import struct
 import unittest
 from unittest.mock import patch
 
@@ -832,6 +833,16 @@ class GuardCombatTests(unittest.TestCase):
         self.assertEqual((event.kind, event.actor, event.death_method),
                          ("death", "player", 14))
         self.assertIsNone(c._hurt("guard", c.guard, c.player).death_method)
+
+    def test_a_temple_guard_kill_selects_birdkill(self):
+        # CheckStab 6:5738-5746: LEVL 21a4 nonzero (7 in levels 10-13) gives
+        # method 10, BirdKill (188), not GardKill (14).
+        c = self.encounter()
+        level = bytearray(0x49ca)
+        struct.pack_into('>h', level, 0x21a4, 7)
+        c.level = bytes(level)
+        c.player.life = 1
+        self.assertEqual(c._hurt("player", c.player, c.guard).death_method, 10)
 
     def test_guard_lowers_sword_after_kill_only_at_native_ready_poses(self):
         for action in (158, 170, 171):

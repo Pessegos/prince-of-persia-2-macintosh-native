@@ -91,7 +91,8 @@ for the distinction between MIDI events and host sampler output.
 `CheckStab` dispatches on the attacker's type, not the victim's type
 (6:5704-570c). The type-2 entry in the indirect jump table at 570e leads to
 5738: a zero LEVL word at 21a4 selects death method 14 (`GardKill.mmf`);
-nonzero selects method 10, outside the supported ordinary-guard levels.
+nonzero selects method 10 (`BirdKill.mmf`), which the temple's bird-headed
+guards of levels 10-13 (21a4 = 7) use.
 Method 2 selects `SkelKill.mmf`, not the ordinary-guard cue. This table branch
 was absent from the recursive disassembly and must be read from CODE bytes.
 Using method 2 for every fatal sword hit incorrectly added about six seconds.
