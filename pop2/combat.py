@@ -33,7 +33,7 @@ from pop2.opponent_generation import (
     WALL_TILES, OBSTACLE_TILES, EMPTY_TILES,
 )
 from pop2.terrain import (
-    LevelMap, RooftopPhysics, TerrainMotion, TILE_HEIGHT, character_row,
+    LevelMap, RooftopPhysics, TerrainMotion, TILE_HEIGHT, VOID_DEATH_Y, character_row,
     floor_contact_x, floor_edge_distance, floor_y,
 )
 
@@ -2050,6 +2050,31 @@ class CombatEncounter:
         # bank ends with a corpse or an armed guard (or is empty).
         self.player.state.callback_flag = 0
         self._present_flame_swords()
+
+    def remove_tumbled_guards(self):
+        """CutOpponent 6:424c after PrepCut (2:62a8), for temple tumbles."""
+        if self.level_kind != 2 or getattr(self, 'terrain', None) is None:
+            return
+        bank = self.active_guards()
+        previous_count = len(bank)
+        slot = 0
+        while slot < len(bank):
+            guard = bank[slot]
+            state = guard.state
+            if (state.actor_type == 2 and state.source_sequence_id == 185
+                    and floor_y(guard.row) + state.current_y >= VOID_DEATH_Y
+                    and self._position_room(guard) is None):
+                # UpdateOppInfo 6:3186/3268 removes a record whose Cut has
+                # no destination. The next slot shifts down before 6:4362
+                # advances the index, so it is checked on the next pass.
+                self.room_encounters[guard.room][0].remove(guard)
+                guard.bank_room = None
+                bank.pop(slot)
+            slot += 1
+        if len(bank) != previous_count:
+            for slot, guard in enumerate(bank):
+                guard.bank_slot = slot
+            self.refresh_target()
 
     def final_prince_view(self):
         from pop2.final_tower import PrinceView

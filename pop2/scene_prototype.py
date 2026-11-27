@@ -2011,6 +2011,8 @@ class ScenePrototype(CutsceneControls, WindowControls, ArmedControls, LowControl
                     environment_for(self).harbor_phase()
             elif phase == 'entry':
                 self.finish_room_entry()
+                if self.combat is not None:
+                    self.combat.remove_tumbled_guards()
             elif phase == 'level_events':
                 self.advance_level_events()
             elif phase == 'rebirth':

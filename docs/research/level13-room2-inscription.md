@@ -72,3 +72,43 @@ scene. An earlier guard still outside native room 19 would hold the
 reinforcement timer through the ship catch. The port retains its existing
 right-corridor spacing in that rooftop room so arriving guards take part
 in the cinematic stand-down.
+
+## A tumble frees a slot for the next reinforcement
+
+The follow-up Macintosh clip shows birdheads arriving from the right at
+about 18.5 s and 22 s. The port clip shows one at about 23 s, then a pause
+with the Prince still in the room. The port could fill the five slots
+with the resident, a corpse imported from room 32, both left reinforcements
+and the first right reinforcement. A birdhead that had tumbled into the
+void still occupied its slot at Y730.
+
+FrameAdv 2:62a8 calls CutOpponent 6:424c after PrepCut. At Y730, its
+6:429c–430a branch sends an ordinary corpse through UpdateOppInfo 6:30b0.
+An out-of-bounds cached cell selects Cut 6:472a. With no destination
+below, UpdateOppInfo calls RemoveOpp 6:3462 at 6:3268. It compacts the
+bank before the next CheckOppGenPts call at 2:6252. Corpses on the floor
+continue to occupy slots. Two adjacent corpses reaching the limit in
+the same pass are removed over two passes because the scan advances
+past the slot that just shifted down.
+
+An original-code probe used LEVL 2012 and five supplied active bank
+records, with the Prince on row 1, supporting column 2, left quota spent
+and right countdown 22. At Y729 the five records and the timer held.
+At Y730, a corpse with cached row 4 was removed with either column 2 or
+column −1. The next 23 eligible calls executed GenerateOpponent 6:3a84,
+which wrote a two-HP birdhead at native X768, selected SEQS 84, reset the
+countdown to 22 and used one unit of right quota. Standing armed,
+standing unarmed and the running pose gave the same result. Column 7
+held the right countdown. The probe executed the real wall query and
+record bookkeeping. It supplied actor snapshots, the world counter and
+level globals, and stubbed DrawOppMeter 3:4a8e, JumpSeq 6:0006 and the
+first AnimChar 4:2c0c. It excluded input, combat and rendering.
+
+The hidden-scene regression enters from room 32, uses the real room-2
+points, supplies a fatal hit and lets the room tick through the tumble
+and the next right arrival. A separate replay supplied the Prince's
+ready pose and the first right guard's approach distance, then used
+Down and Left to reach room 28 with both right reinforcements alive.
+The port applies this removal to temple
+SEQS 185 tumbles with no Cut destination. Other CutOpponent branches
+remain outside this change.

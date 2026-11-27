@@ -301,9 +301,8 @@ class TemplePlaytestTests(unittest.TestCase):
         scene.advance_audio()
         self.assertEqual(audio.current_music, 252)
 
-    @unittest.skipUnless((ASSET_DIR / 'temple_level13.json').is_file(), 'Imported level 13 required')
-    def test_inscription_guard_draws_after_entry_footstep_with_corpse_in_bank(self):
-        harness = self.harness(13, peaceful=False)
+    def enter_inscription_with_corpse(self, *, draw=True):
+        harness = self.harness(13, peaceful=False, draw=draw)
         scene = harness.scene
         scene.audio = None
         scene.jump_to_room(31, 1, 40, 0, redraw=False)
@@ -327,6 +326,12 @@ class TemplePlaytestTests(unittest.TestCase):
         self.assertEqual((scene.room_id, scene.action), (1, 8))
         resident, carried = combat.guards
         self.assertIs(carried, corpse)
+        return harness, resident
+
+    @unittest.skipUnless((ASSET_DIR / 'temple_level13.json').is_file(), 'Imported level 13 required')
+    def test_inscription_guard_draws_after_entry_footstep_with_corpse_in_bank(self):
+        harness, resident = self.enter_inscription_with_corpse()
+        scene = harness.scene
         self.assertEqual(resident.state.action, 166)
         harness.tick()  # Pose 9's footstep prevents the draw for this one tick.
         self.assertEqual(resident.state.action, 166)
@@ -366,6 +371,53 @@ class TemplePlaytestTests(unittest.TestCase):
         for _ in range(23):
             combat.generate_opponents()
         self.assertEqual((left.remaining, right.remaining), (2, 4))
+        self.assertEqual(combat.guards[-1].state.target_x, right.x)
+
+    @unittest.skipUnless((ASSET_DIR / 'temple_level13.json').is_file(), 'Imported level 13 required')
+    def test_tumbled_birdhead_frees_room2_slot_for_another_right_reinforcement(self):
+        harness, resident = self.enter_inscription_with_corpse(draw=False)
+        scene = harness.scene
+        combat = scene.combat
+        scene.jump_to_room(1, 1, 350, 0, reset_guards=False, redraw=False)
+        resident.life, resident.native_alive = 0, False
+        select_sequence(resident, 193)
+        resident.runtime.next_frame()
+        left, right = combat.generation_points
+        for _ in range(9):
+            combat.generate_opponents()
+        first_left = combat.guards[-1]
+        first_left.life, first_left.native_alive = 0, False
+        first_left.state.current_x = first_left.state.target_x = 170
+        select_sequence(first_left, 193)
+        first_left.runtime.next_frame()
+        for _ in range(32):
+            combat.generate_opponents()
+        self.assertEqual((len(combat.guards), left.remaining, right.remaining), (5, 0, 4))
+        second_left, first_right = combat.guards[-2:]
+        self.assertEqual((second_left.state.target_x, first_right.state.target_x), (left.x, right.x))
+
+        scene.jump_to_room(1, 1, 150, 0, reset_guards=False, redraw=False)
+        scene.set_god_mode(True)
+        second_left.life = 1
+        second_left.entry_x = first_right.entry_x = None
+        second_left.state.current_x = second_left.state.target_x = 100
+        first_right.state.current_x = first_right.state.target_x = 405
+        select_sequence(second_left, 90)
+        second_left.runtime.next_frame()
+        # Supply the fatal hit, then run the original SEQS and real world ticks.
+        with patch.object(combat.rng, 'randrange', return_value=0):
+            combat._hurt('guard', second_left, combat.player)
+        self.assertEqual(second_left.state.source_sequence_id, 185)
+        harness.tick(11)
+        self.assertEqual((len(combat.guards), right.countdown), (5, 22))
+        self.assertLess(floor_y(second_left.row) + second_left.state.current_y, 730)
+        harness.tick()
+        self.assertEqual(floor_y(second_left.row) + second_left.state.current_y, 730)
+        self.assertEqual((len(combat.guards), right.countdown), (4, 22))
+        self.assertIs(combat.guards[-1], first_right)
+        self.assertEqual(first_right.bank_slot, 3)
+        harness.tick(23)
+        self.assertEqual((len(combat.guards), right.remaining, right.countdown), (5, 3, 22))
         self.assertEqual(combat.guards[-1].state.target_x, right.x)
 
     def climb_room10_from_below(self, harness):
