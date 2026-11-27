@@ -60,8 +60,10 @@ pictures retain their native horizon/perspective seams. Retained scenery uses
 the same deterministic route as the clean map exporter. Setup preserves the global RNG; no live actor,
 gate, potion, animation clock or room buffer is borrowed or advanced.
 
-Original opponent records and artwork are included at their initial positions
-and poses. Skeletons remain bones, including inert decorative piles; they are
+The temple shows its candles, flasks and the altar's sacred flame in their
+resting states. Original opponent records and artwork are included at their
+initial positions and poses, including birdheads and the resting flaming sword.
+Skeletons remain bones, including inert decorative piles; they are
 not awakened for the map. Actor-aware masks and cavern foreground redraws use
 the current room implementation, including overlap fixes. No AI ticks run.
 

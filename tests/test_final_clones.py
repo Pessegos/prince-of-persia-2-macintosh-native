@@ -71,7 +71,7 @@ class FinalCloneTests(unittest.TestCase):
         art, actors = map_enemies(self.resources.level(14), {5: (0, 0)})
         self.assertEqual(len(actors[5]), 4)
         actor = actors[5][0]
-        clone = art.final_clones.body(actor.state)
+        clone = art.body(actor.state)
         guard = art.body(replace(actor.state, actor_type=2, action=166), actor.palette_variant)
         self.assertEqual(clone.size, (18, 79))
         self.assertEqual(clone.getpixel((7, 20)), (168, 4, 63, 255))

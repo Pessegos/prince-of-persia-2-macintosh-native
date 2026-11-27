@@ -82,37 +82,30 @@ def _linked_positions(terrain, origin, hidden=()):
 def map_enemies(level, positions):
     from pop2.animation_data import sequence_words
     from pop2.combat import Fighter, GuardSpawn
-    from pop2.combat_art import FinalCloneArtwork, GuardArtwork, sword_palette_for_level
+    from pop2.combat_art import opponent_artwork, sword_palette_for_level
     from pop2.opponent_records import GuardRoomRecord
     from pop2.render_opening import load_resource_file
     from pop2.sequence_runtime import SequenceRuntime, SequenceState
     from pop2.skeleton import Skeleton
 
-    if struct.unpack_from('>h', level.data, 0x21a4)[0] in (5, 6):
+    if level.opponent_type in (5, 6):
         return _map_ruins_actors(level, positions)
-    if struct.unpack_from('>h', level.data, 0x21a4)[0] not in (-1, 0, 2):
+    if level.opponent_type not in (-1, 0, 2, 7):
         return None, {}
     spawns = {room: GuardSpawn.all_from_level(level.data, room) for room in positions}
     if not any(spawns.values()):
         return None, {}
     prince = load_resource_file('Prince.rsrc')
     sequences = {i: sequence_words(item['data']) for i, item in prince['SEQS'].items()}
-    art = GuardArtwork(load_resource_file('Skeleton.rsrc' if level.kind == 3 else 'Guard.rsrc'),
-                       prince['SHAP'], int.from_bytes(prince['SHPL'][1000]['data'][:2], 'big'),
-                       sword_palette_for_level(prince, level.kind))
-    if level.kind == 6:
-        from pop2.animation_data import parse_frame_records
-        from pop2.render_opening import decode_ctbl
-
-        kid = load_resource_file('Kid.rsrc')
-        art.final_clones = FinalCloneArtwork(
-            kid, parse_frame_records(kid['FRAM'][25001]['data']),
-            int.from_bytes(kid['SHPL'][25001]['data'][:2], 'big'),
-            decode_ctbl(kid['CTBL'][25008]['data']))
+    art = opponent_artwork(level, prince['SHAP'],
+                           int.from_bytes(prince['SHPL'][1000]['data'][:2], 'big'),
+                           sword_palette_for_level(prince, level.kind))
     actors = {}
     for room, entries in spawns.items():
         actors[room] = []
         for slot, spawn in enumerate(entries):
+            if spawn.actor_type == 10 and art.flame is None:
+                continue
             state = SequenceState(spawn.sequence_id, target_x=spawn.x, current_x=spawn.x,
                                   facing=spawn.facing, actor_type=spawn.actor_type,
                                   level_kind=level.kind)
@@ -120,13 +113,13 @@ def map_enemies(level, positions):
                             room, spawn.row, palette_variant=spawn.palette_variant)
             actor.final_clone = spawn.actor_type == 6
             actor.runtime.next_frame()
-            if level.kind == 6 and spawn.guard_words:
-                # The final tower's LEVL records are saved opponent records.
-                # InitOpps restores zero cursors by actor type: ordinary
-                # guard SEQS 77, scripted copies SEQS 2/197 with Kid frames.
+            if spawn.guard_words and (level.kind == 6 or
+                                      level.opponent_type == 7 and spawn.actor_type == 2):
+                # The tower and temple guards use saved opponent records.
+                # The temple's sleeping sword keeps its SEQS 105 pose.
                 words = spawn.guard_words
                 GuardRoomRecord(words[4], words[5], words[9], bool(words[8]),
-                                words[0], words[14]).restore(actor, slot)
+                                words[0], words[14]).restore(actor, slot, level.opponent_type)
             if spawn.skeleton_words:
                 Skeleton.from_spawn(spawn).initialize(actor)
             actors[room].append(actor)
@@ -138,7 +131,7 @@ def _map_ruins_actors(level, positions):
     from types import SimpleNamespace
 
     from pop2.animation_data import sequence_words
-    from pop2.combat_art import GuardArtwork, sword_palette_for_level
+    from pop2.combat_art import opponent_artwork, sword_palette_for_level
     from pop2.render_opening import load_resource_file
     from pop2.ruins_ai import RuinsCreatures
 
@@ -153,15 +146,16 @@ def _map_ruins_actors(level, positions):
             actors[room] = list(creatures.actors(room))
     if not actors:
         return None, {}
-    art = GuardArtwork(load_resource_file('Head.rsrc'), prince['SHAP'],
-                       int.from_bytes(prince['SHPL'][1000]['data'][:2], 'big'),
-                       sword_palette_for_level(prince, level.kind))
+    art = opponent_artwork(level, prince['SHAP'],
+                           int.from_bytes(prince['SHPL'][1000]['data'][:2], 'big'),
+                           sword_palette_for_level(prince, level.kind), artwork='Head.rsrc')
     return art, actors
 
 
 def clean_room_frames(renderer, terrain, positions, enemies=None):
     """Use a private world/buffer so browsing cannot alter a running game."""
     from pop2.cavern_state import CavernState
+    from pop2.caverns import draw_temple_flame
     from pop2.desert_state import DesertState
     from pop2.harbor import Harbor
 
@@ -173,7 +167,7 @@ def clean_room_frames(renderer, terrain, positions, enemies=None):
         # Show the settled puzzle, rather than omitting its animated pieces.
         for stone in desert.stones:
             stone.phase = 13
-    if renderer.level.kind == 3:
+    if renderer.level.kind in (2, 3):
         world = CavernState()
         world.configure_entry(renderer.cavern_program.get('entry_exit'), renderer.level.start_room)
         world.configure_lava(renderer.cavern_program.get('lava'))
@@ -205,31 +199,26 @@ def clean_room_frames(renderer, terrain, positions, enemies=None):
         if parent is not None and getattr(art, 'retained_mask', None) is not None:
             frame.paste(scenery[parent], (0, 0), art.retained_mask)
         frame = renderer.animated_layer(frame, room, harbor, desert=desert, caverns=world)
+        if renderer.level.kind == 2:
+            frame = draw_temple_flame(frame, room, state.flame, level_number=renderer.level.number)
         frame = Image.alpha_composite(frame, art.foreground)
         scenery[room] = frame.copy()
         if enemies is not None:
-            from pop2.combat import actor_frame_index
             from pop2.terrain import floor_y
 
             artwork, actors = enemies
             for actor in actors.get(room, ()):
                 layer = Image.new('RGBA', frame.size)
-                clone_art = (getattr(artwork, 'final_clones', None)
-                             if getattr(actor, 'final_clone', False) else None)
-                if clone_art is not None:
-                    clone_art.draw(layer, actor.state, floor_y(actor.row))
-                    bounds = clone_art.bounds(actor.state, floor_y(actor.row))
-                    record = clone_art.record(actor.state)
-                else:
-                    artwork.draw(layer, actor.state, floor_y(actor.row), actor.palette_variant)
-                    bounds = artwork.bounds(actor.state, floor_y(actor.row))
-                    record = artwork.frames[actor_frame_index(actor.state)]
+                ground = floor_y(actor.row)
+                artwork.draw(layer, actor.state, ground, actor.palette_variant)
+                bounds = artwork.bounds(actor.state, ground)
+                record = artwork.record(actor.state)
                 # Use the current room's actor-aware masks, including the
                 # corrected cavern redraw ordering, not a flattened PNG mask.
                 mask = art.actor_mask(actor.row, bounds[3], actor.state, bounds, record)
                 layer.putalpha(ImageChops.multiply(layer.getchannel('A'), ImageChops.invert(mask)))
                 frame = Image.alpha_composite(frame, layer)
-                if renderer.level.kind == 3:
+                if renderer.level.kind in (2, 3):
                     frame = art.draw_actor_foreground(frame, actor.state, bounds)
         frame = renderer.animated_layer(frame, room, harbor, front=True, desert=desert, caverns=world)
         yield room, frame.crop((0, 0, *ROOM_SIZE)).convert('RGB')

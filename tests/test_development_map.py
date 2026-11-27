@@ -454,6 +454,42 @@ class ImportedDevelopmentMapTests(unittest.TestCase):
         self.assertIn('Room 28', atlas.rooms)
         self.assertEqual(atlas.exits, {'Room 32'})
 
+    def test_temple_maps_draw_all_initial_opponents(self):
+        expected_rooms = {
+            10: (10, 13, 18, 20, 27),
+            11: (23, 26),
+            12: (6, 7, 9, 20),  # Room 7 contains the resting flaming sword.
+            13: (2, 4, 10),
+        }
+        before = random.getstate()
+        for number, rooms in expected_rooms.items():
+            with self.subTest(level=number):
+                level = self.resources.level(number)
+                atlas = build_development_map(level)
+                clean = build_development_map(level, include_enemies=False)
+                expected = {f'Room {room}' for room in rooms}
+                self.assertEqual(atlas.enemy_rooms, expected)
+                visible = {room for room, frame in atlas.source_frames.items()
+                           if ImageChops.difference(frame, clean.source_frames[room]).getbbox()}
+                self.assertEqual(visible, expected)
+        self.assertEqual(random.getstate(), before)
+
+    def test_temple_map_draws_the_altar_flame_and_floor_flasks(self):
+        from pop2.development_map import clean_room_frames
+        from pop2.level_rendering import LevelRenderer
+        from pop2.terrain import LevelMap
+
+        level = self.resources.level(13)
+        renderer = LevelRenderer(level, preload_room=False)
+        terrain = LevelMap(level.data)
+        frames = dict(clean_room_frames(renderer, terrain, (3, 5)))
+        for room, area in ((3, (44, 135, 82, 206)), (5, (437, 334, 449, 350))):
+            with self.subTest(room=room + 1):
+                art = renderer.room(room)
+                bare = Image.alpha_composite(art.background, art.foreground).convert('RGB')
+                self.assertIsNotNone(ImageChops.difference(
+                    bare.crop(area), frames[room].crop(area)).getbbox())
+
     def test_desert_map_includes_closed_door_and_settled_stones_without_changing_rng(self):
         from pop2.desert import DesertScene
         from pop2.desert_state import DesertState
