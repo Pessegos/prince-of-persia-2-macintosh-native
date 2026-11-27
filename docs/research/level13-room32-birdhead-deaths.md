@@ -50,3 +50,21 @@ trajectory corrected. The scene regression compares the rendered
 birdhead pixels below the balcony against the opaque sprite pixels.
 A checkpoint restart check with supplied rolls 0, 1 and 3 renders two
 tumbles and one flat death, and reads back a temporary save after all three.
+
+## God mode K and the room 2 to 28 cut
+
+The clip crosses 32 → 2 → 28. The port passed K through CheckStab's sword-hit
+logic. In a replay with the room 2 initial birdhead followed by its left
+reinforcement, both started SEQS 185. The reinforcement was at X−45 when
+killed and appeared at X383, Y369 on the room 28 cut. With the direct
+SEQS 85 selection it stays at floor Y226 through the cut.
+
+The native CheckCheatKeys slot loop loads each opponent at 2:4c12–4c1a.
+An isolated execution of 2:4c1c–4cb0 used LEVL 2012 and supplied type-2
+records in room 2 at Y226. A living guard at native X407 with 3 HP and one
+at X162 with 2 HP both set ALIVE to 0, queued their respective life loss
+and requested JumpSeq(85). An already dead record requested no sequence.
+The output anchors were (407, 226) and (162, 226). JumpSeq 6:0006 and the
+slot write at 4:4a46 were recorded and stubbed. The probe excluded input,
+the surrounding loop, AnimChar, the room cut and audio. The regression uses
+the port's K input, room 2 generator and running jump into room 28.

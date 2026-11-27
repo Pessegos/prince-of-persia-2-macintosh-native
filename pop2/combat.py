@@ -2623,8 +2623,17 @@ class CombatEncounter:
                     actor.runtime.next_frame()
                 continue
             if actor.alive:
-                actor.life = 1
-                self._hurt('guard', actor, self.player)
+                if actor.state.actor_type == 2:
+                    # CheckCheatKeys 2:4c1c-4caa selects SEQS 85 directly.
+                    # CheckStab's tumble roll can pitch an offscreen
+                    # reinforcement through the floor of the next room.
+                    actor.life = 0
+                    actor.recovering = False
+                    select_sequence(actor, 85)
+                    actor.runtime.next_frame()
+                else:
+                    actor.life = 1
+                    self._hurt('guard', actor, self.player)
                 actor.state.sound_events.append(59 if actor.state.level_kind == 3 else 31)
             if actor.skeleton is not None:
                 actor.skeleton.marker = -1

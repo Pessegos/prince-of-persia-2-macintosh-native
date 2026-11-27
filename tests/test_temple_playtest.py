@@ -102,6 +102,49 @@ class TemplePlaytestTests(unittest.TestCase):
         return harness
 
     @unittest.skipUnless((ASSET_DIR / 'temple_level13.json').is_file(), 'Imported level 13 required')
+    def test_god_mode_k_keeps_room2_birdhead_deaths_on_the_floor(self):
+        harness = self.harness(13, peaceful=False, god=True, draw=False)
+        scene = harness.scene
+        scene.jump_to_room(1, row=1, x=395, facing=0, redraw=False)
+        combat = scene.combat
+        initial, = combat.guards
+
+        def kill_with_key():
+            event = SimpleNamespace(keysym='k', state=0)
+            # This roll allowed the old sword-hit path to pick the tumble.
+            with patch.object(combat.rng, 'randrange', return_value=0):
+                self.assertEqual(scene.dev_key_press(event), 'break')
+                scene.dev_key_release(event)
+
+        kill_with_key()
+        first_death = initial.state.source_sequence_id, initial.state.action
+        point = combat.generation_points[0]
+        self.assertTrue(point.tumble_enabled)
+        point.countdown = 0
+        combat.world_frame = 1
+        combat.generate_opponents()
+        _, reinforcement = combat.guards
+        harness.tick(7)
+        self.assertLess(reinforcement.state.target_x, 0)
+
+        # Place the Prince at the last jump in the clip. The real room cut
+        # brings the offscreen reinforcement into native room 28.
+        scene.jump_to_room(1, row=1, x=10, facing=0, reset_guards=False, redraw=False)
+        scene.start_sequence(4)
+        press(harness, 'L', True)
+        kill_with_key()
+        second_death = reinforcement.state.source_sequence_id, reinforcement.state.action
+        heights = []
+        for _ in range(3):
+            harness.tick()
+            heights.append(floor_y(reinforcement.row) + reinforcement.state.current_y)
+        self.assertEqual((scene.room_id, reinforcement.room), (27, 27))
+        self.assertTrue(any(guard is reinforcement for guard in combat.active_guards()))
+        self.assertFalse(reinforcement.alive)
+        self.assertEqual((first_death, second_death), ((85, 179), (85, 179)))
+        self.assertEqual(heights, [floor_y(1)] * 3)
+
+    @unittest.skipUnless((ASSET_DIR / 'temple_level13.json').is_file(), 'Imported level 13 required')
     def test_room32_birdhead_tumbles_in_front_of_the_floor_on_a_fatal_hit(self):
         scene = self.harness(13, peaceful=False).scene
         scene.audio = None
