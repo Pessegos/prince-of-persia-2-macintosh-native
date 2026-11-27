@@ -210,9 +210,11 @@ class LevelRenderer:
             self.ruins_wind.advance()
         if self.desert_wind is not None:
             # His feet on the desert's sand: kicked grains, prints, sand off his legs.
-            on_sand = room_id in DESERT_ROOMS and self.ambience.air.desert
-            self.desert_wind.prince(footing if on_sand else None,
-                                    DESERT_ROOMS.index(room_id) * WIDTH if on_sand else 0)
+            desert = room_id in DESERT_ROOMS and self.ambience.air.desert
+            on_sand = self.desert_wind.prince(footing if desert else None,
+                                              DESERT_ROOMS.index(room_id) * WIDTH if desert else 0)
+            # There it takes the place of the puffs of dust from his feet.
+            self.ambience.on_sand = on_sand
         if isinstance(self.ambience, RuinsAmbience) and self.ambience.air.grit_floor is not None:
             self.ambience.grit_floor = self.rooms[room_id].grit_floor
         self.ambience.advance(terrain, footing, thuds, shakes)

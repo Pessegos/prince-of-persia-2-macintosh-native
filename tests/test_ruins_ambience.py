@@ -597,6 +597,19 @@ class PrinceOnTheSandTests(unittest.TestCase):
             self.assertLess(grain.y, FEET)
             self.assertGreater(grain.x, standing.x)
 
+    def test_on_the_sand_it_takes_the_place_of_the_puffs_from_his_feet(self):
+        # The user, 2026-11-27: the old puffs covered the new sand; one or the other.
+        wind = self.quiet()
+        self.assertTrue(wind.prince(STEP_FROM))
+        self.assertFalse(wind.prince(replace(STEP_TO, floor=100)))
+        self.assertFalse(wind.prince(None))
+        for on_sand in (False, True):
+            ambience = RuinsAmbience(11, dunes_air(rock=False), random.Random(5))
+            ambience.on_sand = on_sand
+            ambience.advance(None, STEP_FROM)
+            ambience.advance(None, STEP_TO)
+            self.assertEqual(bool(ambience.clouds), not on_sand)
+
     def test_leaving_the_desert_forgets_his_feet(self):
         wind = self.quiet()
         wind.prince(STEP_FROM)

@@ -41,8 +41,8 @@ and all of it is a little gentler than its own colours.
 The paintings (the start room, the throne room, the horse and the desert) shed none.
 
 The puffs. Whatever comes down knocks up a puff of dust from the floor, as in the caves:
-the Prince's steps, skids and landings, a loose floor landing, a gate or a door coming
-down. They are the caves' own puffs, in the pale rose of the ruins' grit.
+the Prince's steps, skids and landings (but on the desert's sand, which raises sand
+instead), a loose floor landing, a gate or a door coming down. They are the caves' own puffs, in the pale rose of the ruins' grit.
 
 The desert. One wind runs from the chasm along the dunes of level nine and up to the
 horse. Wisps sweep across the left bank as sand trickles off its ledges. Rising
@@ -1693,6 +1693,9 @@ class RuinsAmbience:
     before_actors: Image.Image | None = None
     # The puffs of dust from the floor.
     clouds: list = field(default_factory=list)
+    # Whether his feet are on the desert's sand, which raises its own sand instead of puffs
+    # (the user, 2026-11-27: the puffs covered it).
+    on_sand: bool = False
     tick: int = 0
     grit_floor: numpy.ndarray | None = field(init=False)
 
@@ -1742,7 +1745,7 @@ class RuinsAmbience:
     def puff(self, last, footing, thuds):
         """The puffs his feet and whatever came down raise this tick."""
         raised = list(thuds)
-        if last is not None and footing is not None:
+        if last is not None and footing is not None and not self.on_sand:
             raised += footfalls(last, footing)
         for thud in raised:
             cloud = Cloud(thud, self.rng)
@@ -2546,15 +2549,16 @@ class DesertWind:
 
     def prince(self, footing, origin=0):
         """The Prince's feet this tick in the room that starts at origin in the strip, or
-        None where he is not on the desert's sand. Only read."""
+        None where he is not in the desert. Only read. Returns whether he is on its sand,
+        where this sand takes the place of the puffs of dust his feet raise elsewhere."""
         if footing is not None:
             footing = replace(footing, x=footing.x + origin, foot=footing.foot + origin)
         last, self.footing = self.footing, footing
         if footing is None:
             self.last_print = None
-            return
+            return False
         if not self.on_sand(footing.foot, footing.floor):
-            return
+            return False
         if last is not None:
             for thud in footfalls(last, footing):
                 self.kick(thud, footing.floor)
@@ -2565,6 +2569,7 @@ class DesertWind:
         if footing.on_floor:
             self.stamp(footing)
             self.shed_sand(footing)
+        return True
 
     def kick(self, thud, floor):
         """The grains a step, a skid or a landing throws up."""
