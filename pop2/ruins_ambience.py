@@ -42,7 +42,8 @@ The paintings (the start room, the throne room, the horse and the desert) shed n
 
 The puffs. Whatever comes down knocks up a puff of dust from the floor, as in the caves:
 the Prince's steps, skids and landings (but on the desert's sand, which raises sand
-instead), a loose floor landing, a gate or a door coming down. They are the caves' own puffs, in the pale rose of the ruins' grit.
+instead), a loose floor landing, a gate or a door coming down. They are the caves' own
+puffs, in the pale rose of the ruins' grit.
 
 The desert. One wind runs from the chasm along the dunes of level nine and up to the
 horse. Wisps sweep across the left bank as sand trickles off its ledges. Rising
@@ -415,12 +416,16 @@ GENTLE = 0.4
 # kick a few grains back off his heel, a landing throws them to both sides and a skid
 # sprays them ahead of his toe: how many, how fast back (or ahead) and up, how fast they
 # fall back and how long they fly at most. The user, 2026-11-27: with the puffs gone,
-# more of it (it was 3-5, 6-9 and 4-6, and 2-4 a tick off his legs).
-STEP_KICK, STEP_KICK_BACK, STEP_KICK_UP = (5, 8), (0.7, 1.9), (0.9, 2.0)
-LANDING_KICK, LANDING_KICK_SIDE, LANDING_KICK_UP = (9, 13), (0.6, 2.2), (0.6, 1.6)
-# A landing's grains leave from beyond the ends of his shoes, which would hide them.
-LANDING_KICK_FROM = 7
-SKID_KICK, SKID_KICK_AHEAD, SKID_KICK_UP = (6, 9), (1.5, 3.0), (0.3, 1.0)
+# more of it, and then more still, a lot more on a skid (round 1 had 3-5, 6-9 and 4-6, and
+# 2-4 a tick off his legs).
+STEP_KICK, STEP_KICK_BACK, STEP_KICK_UP = (7, 11), (0.7, 1.9), (0.9, 2.0)
+LANDING_KICK, LANDING_KICK_SIDE, LANDING_KICK_UP = (12, 17), (0.6, 2.2), (0.6, 1.6)
+# A landing's grains leave from beyond the ends of his shoes, and a skid's from beyond
+# his toe, as the shoes would hide them; spread this far about there.
+LANDING_KICK_FROM, SKID_KICK_FROM, KICK_SPREAD = 7, 10, 3
+SKID_KICK, SKID_KICK_AHEAD, SKID_KICK_UP = (15, 22), (1.0, 4.5), (0.8, 2.6)
+# All the while his feet slide as he stops a run (its frames), a few more a tick.
+SLIDE_FRAMES, SLIDE_KICK, SLIDE_MOVED = frozenset(range(53, 57)), (5, 8), 2
 KICK_FALL, KICK_DRAG, KICK_LIFE = 0.35, 0.9, (4, 9)
 # Where his foot comes down it leaves a print in the sand, about half his shoe long: two
 # rows darker than the sand, the far one darkest and shorter. It stays a second, then the
@@ -433,7 +438,7 @@ PRINT_APART = 6
 # downwind side: how far past, grains a tick at full strength, from how high up his legs,
 # and their flight.
 SHED_BEHIND = 30
-SHED_GRAINS, SHED_HIGH = (3, 6), 22
+SHED_GRAINS, SHED_HIGH = (4, 8), 22
 SHED_SPEED, SHED_LIFT, SHED_SETTLE, SHED_LIFE = (2.5, 4.5), (-0.3, 0.2), 0.06, (6, 12)
 DESERT_COLOURS = (*SAND, *FAR_SANDS, *NEAR_SANDS, NEAR_SIDE, FAR_SIDE, FLUNG, FOOT_HIGHLIGHT)
 
@@ -2567,25 +2572,32 @@ class DesertWind:
                 # Down from a jump, which the puffs do not count as a landing.
                 self.kick(Thud(footing.foot - 3, footing.foot + 3, footing.floor, footing.floor, LANDING_PUFF),
                           footing.floor)
+            moved = footing.x - last.x
+            if footing.on_floor and footing.action in SLIDE_FRAMES and abs(moved) >= SLIDE_MOVED:
+                ahead = 1 if moved > 0 else -1
+                self.kick(Thud(footing.foot, footing.foot, footing.floor, footing.floor, SKID_PUFF, only=ahead),
+                          footing.floor, SLIDE_KICK)
         if footing.on_floor:
             self.stamp(footing)
             self.shed_sand(footing)
         return True
 
-    def kick(self, thud, floor):
+    def kick(self, thud, floor, count=None):
         """The grains a step, a skid or a landing throws up."""
         rng = self.rng
         x = (thud.left + thud.right) / 2
         if thud.kind is STEP_PUFF:
-            count, side, up = STEP_KICK, STEP_KICK_BACK, STEP_KICK_UP
+            count, side, up = count or STEP_KICK, STEP_KICK_BACK, STEP_KICK_UP
         elif thud.kind is SKID_PUFF:
-            count, side, up = SKID_KICK, SKID_KICK_AHEAD, SKID_KICK_UP
+            count, side, up = count or SKID_KICK, SKID_KICK_AHEAD, SKID_KICK_UP
         else:
-            count, side, up = LANDING_KICK, LANDING_KICK_SIDE, LANDING_KICK_UP
+            count, side, up = count or LANDING_KICK, LANDING_KICK_SIDE, LANDING_KICK_UP
         for _ in range(rng.randint(*count)):
             way = thud.only or rng.choice((-1, 1))
-            start = x if thud.only else x + way * LANDING_KICK_FROM
-            self.kicked.append(Blown(start + rng.uniform(-1, 1), float(floor - 1), float(floor), 1.0,
+            start = (x + way * SKID_KICK_FROM if thud.kind is SKID_PUFF else x if thud.only
+                     else x + way * LANDING_KICK_FROM)
+            self.kicked.append(Blown(start + rng.uniform(-KICK_SPREAD, KICK_SPREAD), float(floor - 1),
+                                     float(floor), 1.0,
                                      way * rng.uniform(*side), -rng.uniform(*up), KICK_FALL,
                                      rng.randint(*KICK_LIFE)))
 

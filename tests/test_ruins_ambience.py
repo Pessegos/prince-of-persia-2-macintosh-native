@@ -510,7 +510,7 @@ class PrinceOnTheSandTests(unittest.TestCase):
             for grain in wind.kicked:
                 self.assertLess(grain.dx, 0)
                 self.assertLess(grain.dy, 0)
-                self.assertLessEqual(abs(grain.x - heel), 2)
+                self.assertLessEqual(abs(grain.x - heel), ruins_ambience.KICK_SPREAD)
             for _ in range(ruins_ambience.KICK_LIFE[1]):
                 wind.advance()
                 self.assertTrue(all(grain.y < FEET for grain in wind.kicked))
@@ -596,6 +596,23 @@ class PrinceOnTheSandTests(unittest.TestCase):
             self.assertGreater(grain.dx, 0)
             self.assertLess(grain.y, FEET)
             self.assertGreater(grain.x, standing.x)
+
+    def test_stopping_a_run_sprays_sand_ahead_of_his_toe_all_the_way(self):
+        # The user, 2026-11-27: a lot more when he stops.
+        wind = self.quiet(2)
+        x = 100
+        wind.prince(Footing(x, x, FEET, True, False, action=12))
+        sprays = []
+        for action in sorted(ruins_ambience.SLIDE_FRAMES):
+            x += 4
+            before = len(wind.kicked)
+            wind.prince(Footing(x, x, FEET, True, False, action=action))
+            sprays.append(len(wind.kicked) - before)
+            self.assertTrue(all(grain.dx > 0 for grain in wind.kicked[before:]))
+            self.assertTrue(all(grain.x >= x + ruins_ambience.SKID_KICK_FROM - ruins_ambience.KICK_SPREAD
+                                for grain in wind.kicked[before:]))
+        self.assertTrue(all(count >= ruins_ambience.SLIDE_KICK[0] for count in sprays))
+        self.assertGreaterEqual(sum(sprays), 4 * ruins_ambience.SLIDE_KICK[0] + ruins_ambience.SKID_KICK[0])
 
     def test_on_the_sand_it_takes_the_place_of_the_puffs_from_his_feet(self):
         # The user, 2026-11-27: the old puffs covered the new sand; one or the other.
