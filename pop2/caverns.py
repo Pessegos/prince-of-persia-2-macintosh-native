@@ -1568,8 +1568,11 @@ def cavern_gates_up(program, room_id, phases):
 # Row clip of a moving door's SHAP relative to its row's top: the export
 # shows the ruins gate (3542) clipped 19 pixels above it and their exit
 # (3547) 10 above, against the caverns' 31 and 1 below. The temple gate
-# also uses row*120-19 (DrawTempGateMovable10:09ac-09b8).
-DOOR_CLIP_TOP = {3562: -31, 3563: -31, 3566: 1, 3542: -19, 3547: -10, 3576: -19}
+# also uses row*120-19 (DrawTempGateMovable10:09ac-09b8) and its exit
+# (3583) row*120-10 (DrawTempExitMovable 10:06c6-06d2).
+DOOR_CLIP_TOP = {3562: -31, 3563: -31, 3566: 1, 3542: -19, 3547: -10, 3576: -19, 3583: -10}
+# The temple exit stops 77 pixels up (10:06f6-0708, min(phase, 0x4d)).
+EXIT_TRAVEL = {3583: 77}
 
 
 def pressure_drawing_commands(commands, records, phases, resources):
@@ -1625,7 +1628,11 @@ def pressure_drawing_commands(commands, records, phases, resources):
             exit_door = record['kind'] == 17
             initial = (min(record['foreground'] & 255, 79) if exit_door else
                        min(record['foreground'] & 255, 184) // 4)
-            command[3] -= (1 if exit_door else 2) * (phase - initial)
+            travel = EXIT_TRAVEL.get(command[1])
+            if exit_door and travel is not None:
+                command[3] -= min(phase, travel) - min(initial, travel)
+            else:
+                command[3] -= (1 if exit_door else 2) * (phase - initial)
             height = struct.unpack_from('>H', resources['SHAP'][command[1]]['data'], 6)[0]
             clip = list(command[6])
             clip[0] = max(0, command[5] * 120 + DOOR_CLIP_TOP.get(command[1], 1 if exit_door else -31),

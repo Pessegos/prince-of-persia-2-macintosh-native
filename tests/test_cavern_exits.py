@@ -82,6 +82,17 @@ class CavernExitTests(unittest.TestCase):
             self.assertEqual(pressure_drawing_commands([command], records, (phase,), resources), [expected])
         self.assertEqual(command[3], 335)
 
+    def test_temple_exit_stops_77_pixels_up_under_its_row_clip(self):
+        # DrawTempExitMovable 10:06c6-0732: clip top row*120-10, travel
+        # min(phase, 77). Level 13 room 32's exit, drawn natively per phase.
+        command = ['back', 3583, 111, 210, 16, 1, [113, 111, 210, 179], 4, 2, 1]
+        records = [{'kind': 17, 'foreground': 0, 'commands': [('back', 3583, 4, 2, 1)]}]
+        resources = {'SHAP': {3583: {'data': struct.pack('>4H', 0, 0, 68, 97)}}}
+        for phase, bottom, top in ((0, 210, 113), (1, 209, 112), (2, 208, 111), (3, 207, 110),
+                                   (76, 134, 110), (77, 133, 110), (79, 133, 110)):
+            expected = [*command[:3], bottom, *command[4:6], [top, 111, bottom, 179], *command[7:]]
+            self.assertEqual(pressure_drawing_commands([command], records, (phase,), resources), [expected])
+
     def test_exit_actor_clip_begins_only_after_native_stair_height(self):
         record = SimpleNamespace(offset_x=0, aux=0)
         state = SequenceState(70, action=224, target_x=280, facing=0,

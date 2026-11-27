@@ -70,3 +70,15 @@ drawn in `Temple.after_actors`.
 Not modelled: whether the original repaints the flare's pixels outside the
 ordinary flame when the flare ends (the front item is drawn under the full
 clip; what restores those pixels was not traced).
+
+## 5. The temple exit's top
+
+DrawTempExitMovable 10:069a clips the exit SHAP (3583) to row*120-10
+(10:06c6-06d2, intersected with the room clip) and lifts it min(phase, 0x4d)
+pixels (10:06f6-0708): it stops 77 pixels up, not 79. The port clipped it at
+row*120+1, so the closed door lost its top eight rows (native 113 against
+121 in room 32), and drew the open door two pixels higher. A per-phase native
+comparison (`recover_room`, phases 0-79 of every exit of levels 10-13,
+480 cases) now matches the port's commands exactly; the temple's stone gates
+(1,968 cases) and the ruins' gates and exits already did. The caverns' gate
+3562 differs on purpose (its clean-cut cap, `pressure_drawing_commands`).
