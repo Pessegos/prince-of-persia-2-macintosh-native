@@ -483,6 +483,129 @@ class DuneTests(unittest.TestCase):
         self.assertNotEqual(local.tobytes(), previous)
 
 
+FEET = 346
+# A running step: the body on 6 pixels, the foot holding him up 12 pixels ahead.
+STEP_FROM = Footing(100, 105, FEET, True, False, action=3)
+STEP_TO = Footing(106, 117, FEET, True, False, action=4)
+
+
+class PrinceOnTheSandTests(unittest.TestCase):
+    """The user's ideas, 2026-11-27: sand kicked by his steps, the wind taking sand off
+    his legs, and prints that fill in after a second or two."""
+
+    def quiet(self, seed=1):
+        wind = DesertWind(dunes_air(rock=False).dunes, random.Random(seed))
+        wind.desert_gust_wait = wind.devil_wait = 10 ** 6
+        return wind
+
+    def test_a_running_step_kicks_a_few_grains_back_off_his_heel(self):
+        for seed in range(8):
+            wind = self.quiet(seed)
+            wind.prince(STEP_FROM)
+            self.assertEqual(wind.kicked, [])
+            wind.prince(STEP_TO)
+            low, high = ruins_ambience.STEP_KICK
+            self.assertTrue(low <= len(wind.kicked) <= high, seed)
+            heel = STEP_TO.foot - 12
+            for grain in wind.kicked:
+                self.assertLess(grain.dx, 0)
+                self.assertLess(grain.dy, 0)
+                self.assertLessEqual(abs(grain.x - heel), 2)
+            for _ in range(ruins_ambience.KICK_LIFE[1]):
+                wind.advance()
+                self.assertTrue(all(grain.y < FEET for grain in wind.kicked))
+            self.assertEqual(wind.kicked, [])
+
+    def test_a_landing_throws_sand_to_both_sides(self):
+        wind = self.quiet(3)
+        wind.prince(Footing(100, 100, FEET, False, True, speed=20))
+        wind.prince(Footing(100, 100, FEET, True, False))
+        low, high = ruins_ambience.LANDING_KICK
+        self.assertTrue(low <= len(wind.kicked) <= high)
+        self.assertTrue(any(grain.dx < 0 for grain in wind.kicked) and any(grain.dx > 0 for grain in wind.kicked))
+        # So does coming down from a running jump, in the air without falling.
+        wind = self.quiet(3)
+        wind.prince(Footing(100, 100, FEET, False, False, action=43, grounded=False))
+        wind.prince(Footing(104, 104, FEET, True, False, action=44))
+        self.assertTrue(low <= len(wind.kicked) <= high)
+
+    def test_his_feet_leave_prints_that_fill_in_from_their_ends(self):
+        wind = self.quiet()
+        wind.prince(STEP_FROM)
+        wind.prince(STEP_TO)
+        self.assertEqual([footprint.x for footprint in wind.prints], [105, 117])
+        # Standing on, he makes no more.
+        for _ in range(3):
+            wind.prince(STEP_TO)
+        self.assertEqual(len(wind.prints), 2)
+        air = dunes_air(rock=False)
+        plain = picture((PURPLE, 70), (DEEP, CREST - 70), (SAND, HEIGHT - CREST))
+
+        def dent():
+            frame = frame_of(plain)
+            wind.put_prints(frame.load(), air)
+            changed = (numpy.asarray(frame.convert('RGB')) != plain).any(axis=2)
+            ys, xs = numpy.nonzero(changed)
+            darker = (numpy.asarray(frame.convert('RGB'), dtype=int).sum(axis=2) < plain.sum(axis=2))[changed]
+            return set(ys.tolist()), int(changed.sum()), bool(darker.all())
+
+        rows, whole, darker = dent()
+        self.assertEqual(rows, {FEET, FEET + 1})
+        self.assertTrue(darker)
+        footprint = wind.prints[1]
+        self.assertEqual(whole, sum(2 * p.width - 2 for p in wind.prints))
+        # It stays whole a second or so, then fills in, and is gone within two seconds.
+        sizes = []
+        while wind.prints:
+            wind.advance()
+            sizes.append(len(footprint.pixels(wind.tick)))
+        self.assertEqual(sizes[:ruins_ambience.PRINT_HOLD[0] - 1], [footprint.width] * (ruins_ambience.PRINT_HOLD[0] - 1))
+        self.assertEqual(sizes, sorted(sizes, reverse=True))
+        self.assertGreaterEqual(len(sizes), 18)
+        self.assertLessEqual(len(sizes), 25)
+
+    def test_prints_only_on_the_sand_and_never_under_what_covers_it(self):
+        wind = self.quiet()
+        # In the sky above the dunes: not on sand.
+        wind.prince(replace(STEP_FROM, floor=100))
+        wind.prince(replace(STEP_TO, floor=100))
+        self.assertEqual((wind.prints, wind.kicked), ([], []))
+        wind.prince(STEP_FROM)
+        covered = numpy.zeros((HEIGHT, WIDTH), dtype=bool)
+        covered[:, :WIDTH // 2] = True
+        air = replace(dunes_air(rock=False), covered=covered)
+        plain = picture((PURPLE, 70), (DEEP, CREST - 70), (SAND, HEIGHT - CREST))
+        frame = frame_of(plain)
+        wind.put_prints(frame.load(), air)
+        self.assertEqual(frame.tobytes(), frame_of(plain).tobytes())
+
+    def test_a_gust_going_by_blows_sand_off_his_legs_downwind(self):
+        wind = self.quiet()
+        standing = Footing(200, 200, FEET, True, False)
+        for _ in range(6):
+            wind.advance()
+            wind.prince(standing)
+        self.assertEqual(wind.shed, [])
+        # Its front has just gone past him.
+        wind.desert_gusts.append(replace(steady_gust(born=wind.tick - 3), start=180.0, crest=False))
+        for _ in range(4):
+            wind.advance()
+            wind.prince(standing)
+        self.assertGreater(len(wind.shed), 3)
+        for grain in wind.shed:
+            self.assertGreater(grain.dx, 0)
+            self.assertLess(grain.y, FEET)
+            self.assertGreater(grain.x, standing.x)
+
+    def test_leaving_the_desert_forgets_his_feet(self):
+        wind = self.quiet()
+        wind.prince(STEP_FROM)
+        wind.prince(None)
+        # Back on the sand, no step is read across the gap.
+        wind.prince(STEP_TO)
+        self.assertEqual(wind.kicked, [])
+
+
 class TwinkleTests(unittest.TestCase):
     def test_a_star_mostly_holds_its_light_and_dips_a_few_ticks_at_a_time(self):
         ambience = RuinsAmbience(11, night(6, 11, (DEEP, HEIGHT)), random.Random(3))
@@ -1431,12 +1554,12 @@ class EveryRuinsRoomTests(unittest.TestCase):
             if not air.desert and air.cliff_wind_sky is None and air.sky.mean() > 0.1:
                 self.assertTrue(any(kind in HAZE for *_, kind in air.stars), place)
 
-    def test_shooting_stars_in_every_room_with_much_sky_but_the_desert(self):
+    def test_shooting_stars_in_every_room_with_much_sky(self):
         rng = random.Random(1)
         for place, air in self.rooms.items():
             if air.cliff_wind_sky is not None:
                 self.assertIsNone(shooter_path(air, FAINT, rng), place)
-            elif not air.desert and air.sky.mean() > 0.1:
+            elif air.sky.mean() > 0.1:
                 self.assertIsNotNone(shooter_path(air, FAINT, rng), place)
 
     def test_the_horizontal_wind_blows_in_open_ruins_outside_the_desert_and_chasm(self):
@@ -1673,12 +1796,20 @@ class EveryRuinsRoomTests(unittest.TestCase):
                 self.assertGreaterEqual(max(winding[-2][0][2]), 37)
                 self.assertFalse(winding[-1])
 
-    def test_no_random_shooting_star_over_the_desert(self):
+    def test_shooting_stars_over_the_desert_too_in_its_own_sky(self):
+        # The user, 2026-11-27: the desert had none; now every kind crosses its sky too,
+        # all of the way over the sky.
         rng = random.Random(0)
-        for place, air in self.rooms.items():
-            if air.desert:
-                for kind in SHOOTERS:
-                    self.assertIsNone(shooter_path(air, kind, rng), place)
+        deserts = [place for place, air in self.rooms.items() if air.desert]
+        self.assertGreaterEqual(len(deserts), 5)
+        for place in deserts:
+            air = self.rooms[place]
+            for kind in SHOOTERS:
+                path = shooter_path(air, kind, rng)
+                self.assertIsNotNone(path, (place, kind.name))
+                shooter = Shooter(kind, *path)
+                for step in range(int(kind.speed * kind.ticks)):
+                    self.assertTrue(air.in_sky(*shooter.at(step)), (place, kind.name, step))
 
     def test_the_horse_arrival_star_has_a_white_head_and_lingering_sparks(self):
         air = self.rooms[9, ruins_ambience.HORSE_ROOM]
@@ -1964,21 +2095,25 @@ class RealSceneTests(unittest.TestCase):
                 wind.desert_gust_wait = wind.devil_wait = 1
             press(harness, 'R', True)
             harness.tick(6)
+            printed = None if wind is None else len(wind.prints)
             press(harness, 'R', False)
             harness.tick(30)
             state = scene.sequence_state
             return dict(random=random.getstate(), room=scene.room_id, x=scene.player_x, action=scene.action,
                         sequence=state.sequence_id, y=state.current_y,
-                        sand=None if wind is None else (len(wind.blown) + len(wind.spray), bool(wind.devils)))
+                        sand=None if wind is None else (len(wind.blown) + len(wind.spray), bool(wind.devils),
+                                                        printed))
         finally:
             harness.close()
 
     def test_the_desert_s_sand_changes_no_game_state(self):
         off, on = self.walk_the_desert(False), self.walk_the_desert(True)
         self.assertIsNone(off.pop('sand'))
-        grains, devil = on.pop('sand')
+        grains, devil, prints = on.pop('sand')
         self.assertGreater(grains, 0)
         self.assertTrue(devil)
+        # His prints in the sand change nothing either.
+        self.assertGreater(prints, 0)
         self.assertEqual(off, on)
         self.assertEqual(on['room'], 11)
 

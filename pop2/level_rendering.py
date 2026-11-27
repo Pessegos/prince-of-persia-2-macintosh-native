@@ -182,7 +182,7 @@ class LevelRenderer:
     def advance_ambience(self, room_id, terrain, footing=None, thuds=(), shakes=()):
         """One game tick of the optional cave or ruins ambience; pixels only."""
         from pop2.ruins_ambience import (
-            DESERT_ROOMS, HORSE_ROOM, HORSE_STAR_DELAY_TICKS, RuinsAmbience, horse_shooting_star,
+            DESERT_ROOMS, HORSE_ROOM, HORSE_STAR_DELAY_TICKS, WIDTH, RuinsAmbience, horse_shooting_star,
         )
 
         kind = self.ambience_kind()
@@ -208,6 +208,11 @@ class LevelRenderer:
                 self.attach_ruins_wind()
         if self.ruins_wind is not None:
             self.ruins_wind.advance()
+        if self.desert_wind is not None:
+            # His feet on the desert's sand: kicked grains, prints, sand off his legs.
+            on_sand = room_id in DESERT_ROOMS and self.ambience.air.desert
+            self.desert_wind.prince(footing if on_sand else None,
+                                    DESERT_ROOMS.index(room_id) * WIDTH if on_sand else 0)
         if isinstance(self.ambience, RuinsAmbience) and self.ambience.air.grit_floor is not None:
             self.ambience.grit_floor = self.rooms[room_id].grit_floor
         self.ambience.advance(terrain, footing, thuds, shakes)

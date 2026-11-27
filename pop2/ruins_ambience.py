@@ -20,7 +20,8 @@ moment, and a bright one flares a small cross. A few of the middling and bright 
 are warm, rose or pale gold. Once in a long while a shooting star crosses the sky: a
 faint quick one, an ordinary one, one grazing low and slow, or most rarely a fireball
 that bursts at the end and leaves its trail a moment. Over the desert of level nine
-the sky has only a few stars, middling and bright. On the first visit to the horse's
+the sky has only a few stars, middling and bright, and its shooting stars stay within
+the thin band of sky over the mountains. On the first visit to the horse's
 room, a large shooting star leaves a glowing line that sheds sparks after a short wait.
 
 The wind. In a room open to the sky one gust sends one or two waving streaks across
@@ -55,11 +56,15 @@ lies still in its lee) and now and then a small dust devil of sand grains spins 
 the crest for a while, each its own size, shape, ways and life. A few low grains curl
 around its foot, with short sprays of sand skipping away to either side. All of it is
 a little gentler than the sand's own colours, and none of it blows over the blue dunes far away.
+On the sand the Prince's running steps kick a few grains back off his heel, a landing
+throws some to both sides and a skid sprays them ahead of his toe; his feet leave
+prints that stay a second and then fill in from their ends; and a gust going by him
+blows sand off his legs and feet, downwind.
 """
 
 from collections import deque
 from itertools import chain
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 import math
 import random
 
@@ -68,8 +73,8 @@ from PIL import Image
 
 from pop2.cavern_ambience import (
     CLOUD_CRUMBLE, CLOUD_PALER, CLOUD_STEPS, EMPTY_TILES, FLOOR_STRIP, LANDING_DEPTH, MOST_CLOUDS, SHUT_PUFF,
-    SLAM_PUFF, TILE_HEIGHT, TILE_PUFF, TILE_WIDTH, TIP_LUMINANCE, Cloud, Fleck, colours_of, floor_y,
-    footfalls, landing, open_air,
+    LANDING_PUFF, SKID_PUFF, SLAM_PUFF, STEP_PUFF, TILE_HEIGHT, TILE_PUFF, TILE_WIDTH, TIP_LUMINANCE, Cloud, Fleck,
+    Thud, colours_of, floor_y, footfalls, landing, open_air,
 )
 
 WIDTH, HEIGHT = 510, 365
@@ -406,6 +411,29 @@ FOOT_HIGHLIGHT = (240, 196, 196)
 NEAR_SIDE, FAR_SIDE, FLUNG = (166, 131, 131), (149, 106, 90), (125, 88, 68)
 # Every pixel of blown sand sits this much of the way back toward the colour behind it.
 GENTLE = 0.4
+# The Prince on the sand of the desert (the user's ideas, 2026-11-27). His running steps
+# kick a few grains back off his heel, a landing throws them to both sides and a skid
+# sprays them ahead of his toe: how many, how fast back (or ahead) and up, how fast they
+# fall back and how long they fly at most.
+STEP_KICK, STEP_KICK_BACK, STEP_KICK_UP = (3, 5), (0.7, 1.9), (0.9, 2.0)
+LANDING_KICK, LANDING_KICK_SIDE, LANDING_KICK_UP = (6, 9), (0.6, 2.2), (0.6, 1.6)
+# A landing's grains leave from beyond the ends of his shoes, which would hide them.
+LANDING_KICK_FROM = 7
+SKID_KICK, SKID_KICK_AHEAD, SKID_KICK_UP = (4, 6), (1.5, 3.0), (0.3, 1.0)
+KICK_FALL, KICK_DRAG, KICK_LIFE = 0.35, 0.9, (4, 9)
+# Where his foot comes down it leaves a print in the sand, about half his shoe long: two
+# rows darker than the sand, the far one darkest and shorter. It stays a second, then the
+# sand fills it in from its ends, a pixel each end every PRINT_FILL ticks.
+PRINT_WIDTH, PRINT_SHADOW, PRINT_DARKER = (6, 8), 0.28, 0.15
+PRINT_HOLD, PRINT_FILL = (12, 16), 3
+# A new print only where his foot has moved on this far from the last.
+PRINT_APART = 6
+# A gust's front that has just gone past him blows sand off his legs and feet, from their
+# downwind side: how far past, grains a tick at full strength, from how high up his legs,
+# and their flight.
+SHED_BEHIND = 30
+SHED_GRAINS, SHED_HIGH = (2, 4), 22
+SHED_SPEED, SHED_LIFT, SHED_SETTLE, SHED_LIFE = (2.5, 4.5), (-0.3, 0.2), 0.06, (6, 12)
 DESERT_COLOURS = (*SAND, *FAR_SANDS, *NEAR_SANDS, NEAR_SIDE, FAR_SIDE, FLUNG, FOOT_HIGHLIGHT)
 
 # Every colour the effects use, each shown as the nearest of the room's palette.
@@ -577,6 +605,8 @@ class RuinsAir:
     dunes: object = None
     # {(RGB behind, RGB drawn): RGBA} of the gentler sand, filled as it is wanted.
     gentler: dict = field(default_factory=dict)
+    # {(RGB behind, how much darker): RGBA} of the footprints, filled as it is wanted.
+    darker: dict = field(default_factory=dict)
     # The room's palette as the caves key their tables (colours_of), for the puffs.
     palette_key: tuple = ()
     chasm: bool = False
@@ -595,6 +625,12 @@ class RuinsAir:
         if key not in self.paler:
             self.paler[key] = (*paler(behind, amount, self.palette, allow_same=allow_same), 255)
         return self.paler[key]
+
+    def darker_than(self, behind, amount):
+        key = behind, amount
+        if key not in self.darker:
+            self.darker[key] = (*darker(behind, amount, self.palette), 255)
+        return self.darker[key]
 
     def gentle(self, behind, drawn, amount=GENTLE):
         """The sand drawn over behind, amount of the way back toward it, never behind
@@ -620,6 +656,17 @@ def paler(behind, amount, palette, *, allow_same=False):
     for index in distance.argsort(kind='stable'):
         colour = tuple(int(value) for value in palette[index])
         if sum(colour) > sum(behind) or (allow_same and colour == tuple(behind)):
+            return colour
+    return tuple(behind)
+
+
+def darker(behind, amount, palette):
+    """The palette colour nearest to behind made this share darker, and darker than it."""
+    wanted = numpy.array(behind) * (1 - amount)
+    distance = (((palette - wanted) * (2, 3, 2)) ** 2).sum(axis=1)
+    for index in distance.argsort(kind='stable'):
+        colour = tuple(int(value) for value in palette[index])
+        if sum(colour) < sum(behind):
             return colour
     return tuple(behind)
 
@@ -950,8 +997,8 @@ def horse_shooting_star():
 
 
 def shooter_path(air, kind, rng):
-    """(x, y, dx, dy) of a random shooting star over clear sky, outside the desert."""
-    if air.desert or air.cliff_wind_sky is not None:
+    """(x, y, dx, dy) of a random shooting star over clear sky."""
+    if air.cliff_wind_sky is not None:
         return None
     ys, xs = numpy.nonzero(air.sky[:, SHOOTER_LEFT:WIDTH - SHOOTER_LEFT])
     if not len(xs):
@@ -965,6 +1012,10 @@ def shooter_path(air, kind, rng):
         x, y = float(xs[i] + SHOOTER_LEFT), float(ys[i])
         ends = [(x + dx * travel * share, y + dy * travel * share) for share in (0, 0.25, 0.5, 0.75, 1)]
         if all(0 <= ex < WIDTH and 0 <= ey < HEIGHT and air.sky[int(ey), int(ex)] for ex, ey in ends):
+            # The desert's sky is a thin band over the jagged mountains: all of the way.
+            if air.desert and not all(air.in_sky(*Shooter(kind, x, y, dx, dy).at(step))
+                                      for step in range(int(travel) + 1)):
+                continue
             return x, y, dx, dy
     return None
 
@@ -1397,6 +1448,24 @@ class Blown:
     life: int
     age: int = 0
     bounced: bool = False
+
+
+@dataclass
+class Footprint:
+    """A print of his foot in the sand: its middle, its row, how wide, when it was made
+    and how long it stays whole."""
+
+    x: int
+    y: int
+    width: int
+    born: int
+    hold: int
+
+    def pixels(self, tick):
+        """[x] of the dent this tick, filled in from its ends; empty once gone."""
+        left, age = self.x - self.width // 2, tick - self.born
+        filled = 0 if age < self.hold else 1 + (age - self.hold) // PRINT_FILL
+        return list(range(left + filled, left + self.width - filled))
 
 
 @dataclass
@@ -2427,6 +2496,13 @@ class DesertWind:
     blown: list = field(default_factory=list, init=False)
     streams: list = field(default_factory=list, init=False)
     devils: list = field(default_factory=list, init=False)
+    # The Prince on the sand: his feet last tick (in the strip), the grains he kicks up,
+    # his prints, the sand the wind takes off him, and where his last print is.
+    footing: object = field(default=None, init=False)
+    kicked: list = field(default_factory=list, init=False)
+    prints: list = field(default_factory=list, init=False)
+    shed: list = field(default_factory=list, init=False)
+    last_print: object = field(default=None, init=False)
 
     def __post_init__(self):
         self.width = self.dunes.crest.size
@@ -2462,6 +2538,108 @@ class DesertWind:
         self.run_streams()
         self.advance_blown()
         self.advance_devils()
+        self.advance_prince_sand()
+
+    def on_sand(self, x, floor):
+        x = int(x)
+        return 0 <= x < self.width and 0 <= floor < HEIGHT and bool(self.dunes.sand[floor, x])
+
+    def prince(self, footing, origin=0):
+        """The Prince's feet this tick in the room that starts at origin in the strip, or
+        None where he is not on the desert's sand. Only read."""
+        if footing is not None:
+            footing = replace(footing, x=footing.x + origin, foot=footing.foot + origin)
+        last, self.footing = self.footing, footing
+        if footing is None:
+            self.last_print = None
+            return
+        if not self.on_sand(footing.foot, footing.floor):
+            return
+        if last is not None:
+            for thud in footfalls(last, footing):
+                self.kick(thud, footing.floor)
+            if not (last.grounded or last.falling) and footing.on_floor:
+                # Down from a jump, which the puffs do not count as a landing.
+                self.kick(Thud(footing.foot - 3, footing.foot + 3, footing.floor, footing.floor, LANDING_PUFF),
+                          footing.floor)
+        if footing.on_floor:
+            self.stamp(footing)
+            self.shed_sand(footing)
+
+    def kick(self, thud, floor):
+        """The grains a step, a skid or a landing throws up."""
+        rng = self.rng
+        x = (thud.left + thud.right) / 2
+        if thud.kind is STEP_PUFF:
+            count, side, up = STEP_KICK, STEP_KICK_BACK, STEP_KICK_UP
+        elif thud.kind is SKID_PUFF:
+            count, side, up = SKID_KICK, SKID_KICK_AHEAD, SKID_KICK_UP
+        else:
+            count, side, up = LANDING_KICK, LANDING_KICK_SIDE, LANDING_KICK_UP
+        for _ in range(rng.randint(*count)):
+            way = thud.only or rng.choice((-1, 1))
+            start = x if thud.only else x + way * LANDING_KICK_FROM
+            self.kicked.append(Blown(start + rng.uniform(-1, 1), float(floor - 1), float(floor), 1.0,
+                                     way * rng.uniform(*side), -rng.uniform(*up), KICK_FALL,
+                                     rng.randint(*KICK_LIFE)))
+
+    def stamp(self, footing):
+        """A print where his foot has come down on a new place."""
+        if self.last_print is not None and abs(footing.foot - self.last_print) < PRINT_APART:
+            return
+        self.last_print = footing.foot
+        self.prints.append(Footprint(int(footing.foot), footing.floor, self.rng.randint(*PRINT_WIDTH),
+                                     self.tick, self.rng.randint(*PRINT_HOLD)))
+
+    def shed_sand(self, footing):
+        """Sand off his legs and feet where a gust's front has just gone by him."""
+        rng = self.rng
+        for front, strength in self.fronts(GROUND_FRONT, 'plain'):
+            if 0 <= front - footing.x <= SHED_BEHIND:
+                for _ in range(some(rng, SHED_GRAINS, strength)):
+                    y = footing.floor - 1 - rng.random() ** 1.6 * SHED_HIGH
+                    self.shed.append(Blown(footing.x + rng.uniform(2, 6), y, float(footing.floor), 1.0,
+                                           rng.uniform(*SHED_SPEED), rng.uniform(*SHED_LIFT), SHED_SETTLE,
+                                           rng.randint(*SHED_LIFE)))
+
+    def advance_prince_sand(self):
+        for grains in (self.kicked, self.shed):
+            kept = []
+            for grain in grains:
+                grain.x += grain.dx
+                grain.y += grain.dy
+                grain.dy += grain.settle
+                if grains is self.kicked:
+                    grain.dx *= KICK_DRAG
+                grain.age += 1
+                if grain.age < grain.life and grain.y < grain.start:
+                    kept.append(grain)
+            grains[:] = kept
+        self.prints = [footprint for footprint in self.prints if footprint.pixels(self.tick)]
+
+    def prince_pixels(self):
+        """World (x, y, RGB) of the sand he kicks up and the wind takes off him."""
+        for grain in self.kicked:
+            yield int(round(grain.x)), int(round(grain.y)), NEAR_SANDS[min(2, grain.age * 3 // grain.life)]
+        for grain in self.shed:
+            x, y = int(grain.x), int(grain.y)
+            step = min(2, grain.age * 3 // grain.life)
+            yield x, y, NEAR_SANDS[step]
+            if grain.dx > FAST_GRAIN and step < 2:
+                yield x - 1, y, NEAR_SANDS[step + 1]
+
+    def put_prints(self, canvas, air, origin=0):
+        """The prints: a dent darker than the sand, darkest along its far side."""
+        for footprint in self.prints:
+            xs = footprint.pixels(self.tick)
+            for row, amount, part in ((footprint.y, PRINT_SHADOW, xs[1:-1]), (footprint.y + 1, PRINT_DARKER, xs)):
+                for x in part:
+                    sx = x - origin
+                    if not (0 <= sx < WIDTH and 0 <= row < HEIGHT) or air.is_covered(sx, row):
+                        continue
+                    if not self.on_sand(x, row):
+                        continue
+                    canvas[sx, row] = air.darker_than(tuple(canvas[sx, row][:3]), amount)
 
     def start_gust(self, gust):
         self.desert_gusts.append(gust)
@@ -2719,6 +2897,7 @@ class DesertWind:
             yield from self.breeze_pixels(origin)
         yield from self.devil_pixels(origin)
         yield from self.gust_pixels()
+        yield from self.prince_pixels()
 
     def devil_pixels(self, origin):
         tick = self.tick
@@ -2789,6 +2968,7 @@ class DesertWind:
 
     def put_sand(self, canvas, air, origin=0):
         """The blown sand, each pixel gentler: part of the way back to what it covers."""
+        self.put_prints(canvas, air, origin)
         pixels = ((x - origin, y, colour) for x, y, colour in self.desert_pixels(origin))
         if air.chasm:
             pixels = chain(pixels, chasm_fall_pixels(self.tick, air.dunes.sand),
